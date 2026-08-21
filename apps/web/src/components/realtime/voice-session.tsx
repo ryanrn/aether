@@ -28,7 +28,7 @@ export function VoiceSession() {
   const setMediaConnected = useRealtimeStore((state) => state.setMediaConnected);
   const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
   const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
-  const setShareControls = useRealtimeStore((state) => state.setShareControls);
+  const setRoomControls = useRealtimeStore((state) => state.setRoomControls);
 
   const channelId = selfVoice?.channelId ?? null;
   const muted = selfVoice?.selfMuted ?? false;
@@ -78,8 +78,9 @@ export function VoiceSession() {
          * arvore de canais precisa mostrar quem transmite para quem nem entrou
          * na sala de midia.
          */
-        setShareControls({
-          start: async (preset) => {
+        setRoomControls({
+          setMicrophone: (deviceId) => handle.setMicrophone(deviceId),
+          startShare: async (preset) => {
             const started = await handle.startScreenShare(preset);
             if (started) {
               setLocalSharing(true, handle.localScreenTrack());
@@ -87,7 +88,7 @@ export function VoiceSession() {
             }
             return started;
           },
-          stop: async () => {
+          stopShare: async () => {
             await handle.stopScreenShare();
             setLocalSharing(false);
             // O aviso de "sem audio do sistema" perde o sentido assim que a
@@ -110,7 +111,7 @@ export function VoiceSession() {
       const handle = roomRef.current;
       roomRef.current = null;
       setMediaConnected(false);
-      setShareControls(null);
+      setRoomControls(null);
       setScreenShares([]);
       setLocalSharing(false);
       socket.emit("voice:streaming", false);
@@ -127,7 +128,7 @@ export function VoiceSession() {
     setMediaConnected,
     setScreenShares,
     setLocalSharing,
-    setShareControls,
+    setRoomControls,
   ]);
 
   // 2. mute e deafen passam a ter efeito real sobre a midia

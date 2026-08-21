@@ -27,7 +27,10 @@ import {
   moveChannelAction,
 } from "@/server/actions/channels";
 import { channelAllows, viewerCan } from "@/lib/permissions";
-import { useVoiceParticipants } from "@/lib/stores/realtime-store";
+import {
+  useUnreadCounts,
+  useVoiceParticipants,
+} from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 import { ChannelMembers } from "./channel-members";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
@@ -285,6 +288,7 @@ function ChannelRow({
   const [pending, startTransition] = useTransition();
   // Quem esta na call vem do gateway: e ele que sabe, nao o banco.
   const connected = useVoiceParticipants(channel.id);
+  const unread = useUnreadCounts()[channel.id] ?? 0;
   const Icon = channel.isPrivate ? Lock : channel.type === "VOICE" ? Volume2 : Hash;
 
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");
@@ -312,7 +316,9 @@ function ChannelRow({
               active && !channel.isPrivate && "text-accent-500",
             )}
           />
-          <span className="truncate">{channel.name}</span>
+          <span className={cn("truncate", unread > 0 && "font-semibold text-ink-100")}>
+            {channel.name}
+          </span>
           {channel.isTemporary ? (
             <span
               className="ml-1 shrink-0 rounded-[3px] border border-base-600 px-1 font-mono text-[9px] uppercase text-ink-500"
@@ -321,6 +327,15 @@ function ChannelRow({
               tmp
             </span>
           ) : null}
+          {unread > 0 ? (
+            <span
+              title={`${unread} mensagem${unread > 1 ? "ns" : ""} nao lida${unread > 1 ? "s" : ""}`}
+              className="ml-auto shrink-0 rounded-full bg-accent-600 px-1.5 py-px font-mono text-[10px] font-semibold leading-4 text-base-950"
+            >
+              {unread > 99 ? "99+" : unread}
+            </span>
+          ) : null}
+
           {channel.type === "VOICE" && connected.length > 0 ? (
             <span className="ml-auto shrink-0 font-mono text-[10px] text-ink-500">
               {connected.length}

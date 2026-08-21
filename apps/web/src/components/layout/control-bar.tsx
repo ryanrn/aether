@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  ChevronUp,
   Headphones,
   HeadphoneOff,
   LogOut,
@@ -28,6 +29,12 @@ import {
   PRESET_LIST,
   type SharePresetId,
 } from "@/lib/voice/screen-share";
+import {
+  listMicrophones,
+  readPreferredMicrophone,
+  savePreferredMicrophone,
+  type AudioDevice,
+} from "@/lib/voice/devices";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,8 +75,30 @@ export function ControlBar({
   const [localMuted, setLocalMuted] = useState(false);
   const [localDeafened, setLocalDeafened] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
+  const [micMenuOpen, setMicMenuOpen] = useState(false);
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [micId, setMicId] = useState<string | null>(null);
 
-  const shareControls = useRealtimeStore((state) => state.shareControls);
+  // localStorage nao existe no servidor: so lemos depois de montar.
+  useEffect(() => setMicId(readPreferredMicrophone()), []);
+
+  async function openMicMenu() {
+    const next = !micMenuOpen;
+    setMicMenuOpen(next);
+    // Enumerar a cada abertura, e nao uma vez: aparelho USB pode ter sido
+    // conectado depois que a pagina abriu.
+    if (next) setDevices(await listMicrophones());
+  }
+
+  async function pickMicrophone(deviceId: string) {
+    setMicMenuOpen(false);
+    setMicId(deviceId);
+    savePreferredMicrophone(deviceId);
+    // Sem call ativa a escolha fica guardada e vale na proxima conexao.
+    await roomControls?.setMicrophone(deviceId);
+  }
+
+  const roomControls = useRealtimeStore((state) => state.roomControls);
   const localSharing = useRealtimeStore((state) => state.localSharing);
 
   const muted = selfVoice ? selfVoice.selfMuted : localMuted;
@@ -96,11 +125,11 @@ export function ControlBar({
    * numa call (a tela vai para a sala de midia) e um navegador com captura —
    * que so existe em contexto seguro, ou seja, HTTPS ou localhost.
    */
-  const shareBlocked = !canShare || !shareControls || !canCaptureScreen();
+  const shareBlocked = !canShare || !roomControls || !canCaptureScreen();
 
   async function pickPreset(preset: SharePresetId) {
     setPresetOpen(false);
-    await shareControls?.start(preset);
+    await roomControls?.startShare(preset);
   }
 
   return (
@@ -126,14 +155,68 @@ export function ControlBar({
       <div className="mx-1 h-7 w-px bg-base-700" />
 
       <div className="flex items-center gap-1">
-        <ControlToggle
-          active={!muted}
-          onClick={toggleMute}
-          label={muted ? "Microfone desligado" : "Microfone ligado"}
-          danger={muted}
-        >
-          {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-        </ControlToggle>
+        <div className="relative flex items-center">
+          <ControlToggle
+            active={!muted}
+            onClick={toggleMute}
+            label={muted ? "Microfone desligado" : "Microfone ligado"}
+            danger={muted}
+          >
+            {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </ControlToggle>
+
+          <button
+            type="button"
+            onClick={() => void openMicMenu()}
+            title="Escolher microfone"
+            aria-label="Escolher microfone"
+            className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+
+          {micMenuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Fechar"
+                onClick={() => setMicMenuOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+                <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
+                  microfone
+                </p>
+                {devices.length === 0 ? (
+                  <p className="px-2 pb-2 text-[12px] leading-snug text-ink-500">
+                    Nenhum microfone encontrado. Conecte um e abra de novo.
+                  </p>
+                ) : (
+                  devices.map((device) => (
+                    <button
+                      key={device.deviceId}
+                      type="button"
+                      onClick={() => void pickMicrophone(device.deviceId)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] transition-colors hover:bg-base-800",
+                        device.deviceId === micId
+                          ? "text-accent-300"
+                          : "text-ink-200",
+                      )}
+                    >
+                      <Mic className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{device.label}</span>
+                    </button>
+                  ))
+                )}
+                <p className="border-t border-base-800 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                  Os nomes so aparecem depois de voce permitir o microfone uma
+                  vez.
+                </p>
+              </div>
+            </>
+          ) : null}
+        </div>
 
         <ControlToggle
           active={!deafened}
@@ -155,7 +238,7 @@ export function ControlBar({
             disabled={shareBlocked}
             onClick={() => {
               if (localSharing) {
-                void shareControls?.stop();
+                void roomControls?.stopShare();
                 return;
               }
               setPresetOpen((open) => !open);
@@ -165,7 +248,7 @@ export function ControlBar({
                 ? "Parar de compartilhar"
                 : !canShare
                   ? "Seu cargo nao permite compartilhar tela"
-                  : !shareControls
+                  : !roomControls
                     ? "Entre em um canal de voz para compartilhar"
                     : !canCaptureScreen()
                       ? "Este navegador nao permite captura de tela"

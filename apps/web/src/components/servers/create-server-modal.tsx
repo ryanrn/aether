@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionResult } from "@aether/shared";
 import { createServerAction, joinServerAction } from "@/server/actions/servers";
@@ -29,11 +29,19 @@ function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }
 export function CreateServerModal({
   open,
   onClose,
+  initialTab = "create",
 }: {
   open: boolean;
   onClose: () => void;
+  /** aba aberta ao surgir — quem chama pode mirar direto em "entrar por convite" */
+  initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("create");
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  // Reabrir por outro caminho deve respeitar o novo alvo, nao a aba anterior.
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [open, initialTab]);
 
   const [createState, createFormAction] = useActionState<
     ActionResult<{ serverId: string }> | null,

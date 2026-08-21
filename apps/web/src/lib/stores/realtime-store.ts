@@ -76,12 +76,17 @@ interface RealtimeState {
    * conexao (a sessao no layout) estao em ramos diferentes da arvore. A
    * alternativa seria mais um contexto so para isso.
    */
-  shareControls: {
-    start: (preset: SharePresetId) => Promise<boolean>;
-    stop: () => Promise<void>;
+  roomControls: {
+    startShare: (preset: SharePresetId) => Promise<boolean>;
+    stopShare: () => Promise<void>;
+    setMicrophone: (deviceId: string) => Promise<void>;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
+  /** canal aberto agora — mensagem que chega nele ja nasce lida */
+  activeChannelId: string | null;
+  /** mensagens nao lidas por canal */
+  unread: Record<string, number>;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSelfUserId: (userId: string) => void;
@@ -101,7 +106,7 @@ interface RealtimeState {
   setScreenShares: (shares: RemoteScreenShare[]) => void;
   setLocalSharing: (sharing: boolean, track?: Track | null) => void;
   setFocusedShare: (userId: string | null) => void;
-  setShareControls: (controls: RealtimeState["shareControls"]) => void;
+  setRoomControls: (controls: RealtimeState["roomControls"]) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   receiveMessage: (message: PublicMessage, nonce: string | null) => void;
@@ -113,6 +118,7 @@ interface RealtimeState {
     hasMore: boolean,
   ) => void;
   setHistoryLoading: (channelId: string, loading: boolean) => void;
+  setActiveChannel: (channelId: string | null) => void;
 }
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -148,9 +154,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   localSharing: false,
   localShareTrack: null,
   focusedShareUserId: null,
-  shareControls: null,
+  roomControls: null,
   messages: {},
   history: {},
+  activeChannelId: null,
+  unread: {},
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSelfUserId: (selfUserId) => set({ selfUserId }),
@@ -162,6 +170,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       state.serverId === serverId
         ? { serverId }
         : {
+            unread: {},
+            activeChannelId: null,
             serverId,
             presence: {},
             voice: {},
@@ -228,7 +238,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   setLocalSharing: (localSharing, track) =>
     set({ localSharing, localShareTrack: localSharing ? (track ?? null) : null }),
   setFocusedShare: (focusedShareUserId) => set({ focusedShareUserId }),
-  setShareControls: (shareControls) => set({ shareControls }),
+  setRoomControls: (roomControls) => set({ roomControls }),
 
   updateVoice: (participant) =>
     set((state) => {
@@ -255,6 +265,18 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       },
     })),
 
+  /**
+   * Abrir um canal zera o nao lido dele. O contador so existe para chamar
+   * atencao ao que voce ainda nao viu — manter o numero enquanto a conversa
+   * esta na tela seria ruido.
+   */
+  setActiveChannel: (activeChannelId) =>
+    set((state) => {
+      if (!activeChannelId) return { activeChannelId };
+      const { [activeChannelId]: _read, ...rest } = state.unread;
+      return { activeChannelId, unread: rest };
+    }),
+
   receiveMessage: (message, nonce) =>
     set((state) => {
       const current = state.messages[message.channelId] ?? [];
@@ -263,11 +285,26 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       const withoutPending = nonce
         ? current.filter((item) => item.nonce !== nonce)
         : current;
+      /**
+       * Nao conta como nao lida a mensagem que voce esta vendo, nem a que voce
+       * mesmo escreveu — inclusive de outra aba sua.
+       */
+      const isElsewhere = message.channelId !== state.activeChannelId;
+      const isFromSomeoneElse = message.author.id !== state.selfUserId;
+      const unread =
+        isElsewhere && isFromSomeoneElse
+          ? {
+              ...state.unread,
+              [message.channelId]: (state.unread[message.channelId] ?? 0) + 1,
+            }
+          : state.unread;
+
       return {
         messages: {
           ...state.messages,
           [message.channelId]: mergeById(withoutPending, [message]),
         },
+        unread,
       };
     }),
 
@@ -352,6 +389,10 @@ export function useVoiceParticipants(channelId: string): VoiceParticipant[] {
     () => Object.values(voice).filter((p) => p.channelId === channelId),
     [voice, channelId],
   );
+}
+
+export function useUnreadCounts(): Record<string, number> {
+  return useRealtimeStore((state) => state.unread);
 }
 
 export function useScreenShares(): RemoteScreenShare[] {

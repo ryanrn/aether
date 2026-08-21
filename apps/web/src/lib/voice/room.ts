@@ -12,6 +12,7 @@ import {
 } from "livekit-client";
 import { SHARE_PRESETS, type SharePresetId } from "./screen-share";
 import { mediaDebugEnabled, mediaLog } from "./debug";
+import { readPreferredMicrophone } from "./devices";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -52,6 +53,8 @@ export interface VoiceRoomCallbacks {
 
 export interface VoiceRoomHandle {
   setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
+  /** troca o microfone ativo sem derrubar a call */
+  setMicrophone: (deviceId: string) => Promise<void>;
   /** ensurdecer: para de reproduzir o audio dos outros */
   setDeafened: (deafened: boolean) => void;
   /** abre o seletor nativo do navegador e publica. `false` se o usuario cancelou. */
@@ -94,6 +97,8 @@ export async function connectVoiceRoom({
   // Com ?debug=media na URL, o proprio SFU passa a relatar o que faz.
   if (mediaDebugEnabled()) setLogLevel("debug");
 
+  const preferredMic = readPreferredMicrophone();
+
   const room = new Room({
     // Cancelamento de eco e supressao de ruido no proprio navegador: sem isso,
     // caixa de som aberta devolve a voz dos outros para dentro da call.
@@ -101,6 +106,9 @@ export async function connectVoiceRoom({
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
+      // Preferencia salva da vez anterior. Se o aparelho nao existir mais, o
+      // navegador cai no padrao do sistema em vez de falhar.
+      ...(preferredMic ? { deviceId: preferredMic } : {}),
     },
     /**
      * adaptiveStream DESLIGADO de proposito.
@@ -270,6 +278,19 @@ export async function connectVoiceRoom({
       await room.localParticipant
         .setMicrophoneEnabled(enabled)
         .catch(() => undefined);
+    },
+
+    async setMicrophone(deviceId) {
+      try {
+        // Troca a fonte da faixa ja publicada: ninguem cai da call.
+        await room.switchActiveDevice("audioinput", deviceId);
+        mediaLog("microfone trocado", deviceId);
+      } catch (error) {
+        mediaLog("falha ao trocar microfone", error);
+        callbacks.onError(
+          "Nao foi possivel usar esse microfone. Ele pode estar em uso por outro programa.",
+        );
+      }
     },
 
     setDeafened(next) {

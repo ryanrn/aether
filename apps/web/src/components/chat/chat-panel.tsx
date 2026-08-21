@@ -30,10 +30,21 @@ export function ChatPanel({
   canSend: boolean;
 }) {
   const prependHistory = useRealtimeStore((state) => state.prependHistory);
+  const setActiveChannel = useRealtimeStore((state) => state.setActiveChannel);
 
   useEffect(() => {
     prependHistory(channelId, initialMessages, initialHasMore);
   }, [channelId, initialMessages, initialHasMore, prependHistory]);
+
+  /**
+   * Enquanto este canal esta na tela, mensagem que chega nele nasce lida.
+   * Ao sair, voltamos para "nenhum canal aberto" — senao o canal continuaria
+   * marcando tudo como visto depois que voce foi embora.
+   */
+  useEffect(() => {
+    setActiveChannel(channelId);
+    return () => setActiveChannel(null);
+  }, [channelId, setActiveChannel]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
