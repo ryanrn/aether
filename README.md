@@ -239,10 +239,10 @@ Roteiro manual:
 
 ---
 
-## Limitacoes conhecidas da FASE 6 (parcial — bloco 6a)
+## Limitacoes conhecidas da FASE 6 (parcial — blocos 6a e 6c)
 
-Pronto: expulsar, banir com motivo e duracao, revogar banimento — e o despejo
-em tempo real que isso exigia.
+Pronto: expulsar, banir com motivo e duracao, revogar banimento, o despejo em
+tempo real que isso exigia, e a tela do log de auditoria.
 
 - **O despejo depende do gateway estar no ar.** Se ele nao responder, a
   expulsao vale no banco (que e a fonte de verdade) mas o socket da pessoa so
@@ -255,7 +255,10 @@ em tempo real que isso exigia.
   `serverMuted` e `serverDeafened` do `VoiceState` continuam sempre falsos.
   Bloco 6b.
 - **Mover usuario entre canais de voz** ainda nao existe. Bloco 6b.
-- **O log de auditoria e gravado desde a fase 1, mas nao tem tela.** Bloco 6c.
+- **O log nao tem filtro nem busca.** E uma lista cronologica com "carregar
+  mais"; achar um evento antigo especifico exige rolar.
+- **Acao sem descritor aparece com o nome cru** (ex.: `member.mute`), em vez de
+  virar frase. Some quando o bloco 6b registrar esses eventos.
 - **Excluir mensagem de terceiro** (`MANAGE_MESSAGES`) ainda nao existe.
 - **Sair do servidor** continua sem botao, apesar de a action existir desde a
   fase 2.

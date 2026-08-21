@@ -13,6 +13,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
+import { requireSeedFixture } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -206,17 +207,7 @@ async function main() {
   console.log(`Alvo: ${BASE}`);
   await requireGatewayUp();
 
-  const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
-  const member = await prisma.user.findUnique({ where: { username: "joao" } });
-  if (!owner || !member) {
-    console.log("Usuarios de seed nao encontrados. Rode: npm run db:seed");
-    process.exit(1);
-  }
-  const server = await prisma.server.findFirst({ where: { ownerId: owner.id } });
-  if (!server) {
-    console.log("Servidor de seed nao encontrado. Rode: npm run db:seed");
-    process.exit(1);
-  }
+  const { owner, member, server } = await requireSeedFixture(prisma);
   const foreign = await prisma.server.findFirst({
     where: {
       ownerId: { not: owner.id },

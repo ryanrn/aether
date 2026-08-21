@@ -15,6 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
+import { requireSeedFixture } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -136,17 +137,8 @@ async function main() {
   console.log(`Alvo: ${BASE}`);
   await requireGatewayUp();
 
-  const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
-  const member = await prisma.user.findUnique({ where: { username: "joao" } });
-  const server = await prisma.server.findFirst({ where: { ownerId: owner.id } });
-  const memberRole = await prisma.role.findFirst({
-    where: { serverId: server?.id, isDefault: true },
-    select: { id: true },
-  });
-  if (!owner || !member || !server || !memberRole) {
-    console.log("Seed ausente. Rode: npm run db:seed");
-    process.exit(1);
-  }
+  const { owner, member, server, defaultRole: memberRole } =
+    await requireSeedFixture(prisma);
 
   const allowed = await voiceChannel(server.id, memberRole.id, 0n);
   const denied = await voiceChannel(server.id, memberRole.id, PERM.SCREEN_SHARE);

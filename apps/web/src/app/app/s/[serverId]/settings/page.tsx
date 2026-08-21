@@ -5,6 +5,7 @@ import type { ViewerContext } from "@aether/shared";
 import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
 import { listActiveBans } from "@/server/services/moderation";
+import { listAuditLog } from "@/server/services/audit-log";
 import { viewerCan } from "@/lib/permissions";
 import { SettingsTabs } from "@/components/server-settings/settings-tabs";
 
@@ -43,7 +44,11 @@ export default async function ServerSettingsPage({
   const canManage =
     viewer.isOwner ||
     viewerCan(viewer, "MANAGE_SERVER") ||
-    viewerCan(viewer, "MANAGE_ROLES");
+    viewerCan(viewer, "MANAGE_ROLES") ||
+    // Quem so audita tambem precisa chegar ate aqui: sem isto, ter
+    // VIEW_AUDIT_LOG sem gerenciar nada daria 404 na propria pagina.
+    viewerCan(viewer, "VIEW_AUDIT_LOG") ||
+    viewerCan(viewer, "BAN_MEMBERS");
   if (!canManage) notFound();
 
   const data = await getServerContext(serverId, context);
@@ -56,6 +61,10 @@ export default async function ServerSettingsPage({
   const bans = viewerCan(viewer, "BAN_MEMBERS")
     ? await listActiveBans(serverId)
     : [];
+
+  const audit = viewerCan(viewer, "VIEW_AUDIT_LOG")
+    ? await listAuditLog(serverId)
+    : { entries: [], hasMore: false };
   if (!data) notFound();
 
   return (
@@ -83,6 +92,7 @@ export default async function ServerSettingsPage({
             ownerId={data.server.ownerId}
             viewer={viewer}
             bans={bans}
+            audit={audit}
           />
         </div>
       </div>

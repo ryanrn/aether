@@ -18,6 +18,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
+import { requireSeedFixture } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -132,14 +133,12 @@ async function main() {
   console.log(`Alvo: ${BASE}`);
   await requireGatewayUp();
 
-  const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
-  const member = await prisma.user.findUnique({ where: { username: "joao" } });
-  const server = await prisma.server.findFirst({ where: { ownerId: owner?.id } });
+  const { owner, member, server } = await requireSeedFixture(prisma);
   const channel = await prisma.channel.findFirst({
-    where: { serverId: server?.id, type: "TEXT", isPrivate: false },
+    where: { serverId: server.id, type: "TEXT", isPrivate: false },
   });
-  if (!owner || !member || !server || !channel) {
-    console.log("Seed ausente. Rode: npm run db:seed");
+  if (!channel) {
+    console.log("Canal de texto publico nao encontrado. Rode: npm run db:seed");
     process.exit(1);
   }
 

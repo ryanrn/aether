@@ -15,6 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT, jwtVerify, decodeJwt } from "jose";
 import { io } from "socket.io-client";
+import { requireSeedFixture } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -154,13 +155,7 @@ async function main() {
       : "LiveKit: NAO configurado — so o caminho de degradacao sera testado",
   );
 
-  const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
-  const member = await prisma.user.findUnique({ where: { username: "joao" } });
-  const server = await prisma.server.findFirst({ where: { ownerId: owner.id } });
-  if (!owner || !member || !server) {
-    console.log("Seed ausente. Rode: npm run db:seed");
-    process.exit(1);
-  }
+  const { owner, member, server } = await requireSeedFixture(prisma);
 
   // O dono curto-circuita para todas as permissoes, entao os testes de
   // restricao precisam de um membro comum.
