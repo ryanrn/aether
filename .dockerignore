@@ -1,0 +1,24 @@
+# flyctl launch added from .gitignore
+**/node_modules
+**/.next
+**/dist
+**/build
+**/out
+**/*.tsbuildinfo
+
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+**/*.log
+**/*.zip
+**/npm-debug.log*
+**/yarn-error.log*
+**/.DS_Store
+**/Thumbs.db
+**/.vscode
+**/.idea
+
+**/packages/db/generated
+fly.toml

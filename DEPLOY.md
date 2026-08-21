@@ -51,12 +51,18 @@ fly auth login
 ```
 
 ```bash
-fly launch --no-deploy --copy-config --name aether-gateway --region gru
+fly launch --no-deploy --copy-config --region gru
 ```
 
-O `--copy-config` faz o Fly usar o `fly.toml` que ja esta no repositorio, em
-vez de gerar um novo. Confirme que ele nao criou banco nem Redis — nao
-precisamos.
+O `--copy-config` faz o Fly reaproveitar o `fly.toml` do repositorio. Confirme
+que ele nao criou banco nem Redis — nao precisamos.
+
+Duas coisas esperadas neste passo: o Fly **gera um nome proprio** e ignora
+`--name` (o endereco do gateway nao e voltado ao usuario, entao tanto faz), e
+ele **reescreve o fly.toml**. Depois de rodar, confira que
+`auto_stop_machines = "off"` e `min_machines_running = 1` continuam la — se a
+maquina dormir, a presenca de quem esta online e apagada e a primeira conexao
+espera o processo subir.
 
 Depois os segredos. Use o utilitario em vez de digita-los: ele le do `.env`
 e passa pela entrada padrao do flyctl, entao nenhum valor aparece na tela nem

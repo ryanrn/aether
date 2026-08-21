@@ -24,8 +24,23 @@ const REQUIRED = [
   "LIVEKIT_API_SECRET",
 ];
 
+/**
+ * O nome do app sai do fly.toml. O `fly launch` gera um nome proprio e
+ * ignora o `--name`, entao digitar o nome a mao aqui e convite a errar e
+ * mandar secret para o app errado.
+ */
+function appNameFromFlyToml() {
+  try {
+    const toml = readFileSync("fly.toml", "utf8");
+    const match = toml.match(/^app\s*=\s*['"]([^'"]+)['"]/m);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const appUrl = process.argv[2];
-const flyApp = process.argv[3] ?? "aether-gateway";
+const flyApp = process.argv[3] ?? appNameFromFlyToml() ?? "aether-gateway";
 
 if (!appUrl || !/^https?:\/\//.test(appUrl)) {
   console.error(
