@@ -87,18 +87,22 @@ const payload = {
 
 /**
  * Chamamos via `npx` porque o CLI da Vercel normalmente nao esta instalado
- * global — e no Windows o executavel e `npx.cmd`. Invocar sem `shell: true`
- * evita o aviso DEP0190 e nao concatena argumentos sem escapar.
+ * global. No Windows o alvo e um `.cmd`, e desde a correcao do CVE-2024-27980
+ * o Node recusa executar `.cmd` sem `shell: true` (erro EINVAL).
+ *
+ * Passamos o comando como STRING UNICA em vez de string + array de argumentos:
+ * com array, `shell: true` dispara o aviso DEP0190 porque os argumentos seriam
+ * concatenados sem escape.
+ *
+ * Isso e seguro aqui porque nada vindo de fora entra na linha de comando — os
+ * nomes e ambientes saem de listas fixas no topo deste arquivo, e os VALORES
+ * (que sao os segredos) vao pela entrada padrao, nunca como argumento.
  */
-const NPX = process.platform === "win32" ? "npx.cmd" : "npx";
-
-/** Uma variavel por invocacao do CLI; o valor vai pela entrada padrao. */
 function addVar(name, value, target) {
   return new Promise((resolve) => {
     const child = spawn(
-      NPX,
-      ["--yes", "vercel", "env", "add", name, target, "--force"],
-      { stdio: ["pipe", "ignore", "pipe"] },
+      `npx --yes vercel env add ${name} ${target} --force`,
+      { stdio: ["pipe", "ignore", "pipe"], shell: true },
     );
 
     let stderr = "";
