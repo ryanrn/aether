@@ -6,7 +6,7 @@ import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { MemberRolesModal } from "@/components/members/member-roles-modal";
 import { canManageRole, viewerCan } from "@/lib/permissions";
-import { useRealtime } from "@/components/realtime/realtime-provider";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
 
 /**
  * Painel de membros agrupado por cargo (estilo TeamSpeak/Discord).
@@ -29,7 +29,9 @@ export function MemberPanel({
   viewer: ViewerContext;
 }) {
   const [editing, setEditing] = useState<PublicMember | null>(null);
-  const { statusOf } = useRealtime();
+  // O registro inteiro em vez de um seletor por membro: hook dentro do map
+  // quebraria as regras dos hooks, e a referencia so muda quando a presenca muda.
+  const presence = useRealtimeStore((state) => state.presence);
   const canManageMembers = viewerCan(viewer, "MANAGE_ROLES");
 
   const groups = new Map<string, { color: string; members: PublicMember[] }>();
@@ -69,7 +71,7 @@ export function MemberPanel({
                           userId={member.user.id}
                           name={member.nickname ?? member.user.displayName}
                           src={member.user.avatarUrl}
-                          status={statusOf(member.user.id)}
+                          status={presence[member.user.id] ?? "OFFLINE"}
                           size="xs"
                         />
                         <span className="flex-1 truncate text-[13px] text-ink-300">

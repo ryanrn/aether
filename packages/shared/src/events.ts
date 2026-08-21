@@ -2,6 +2,7 @@ import type {
   PublicMessage,
   PublicUser,
   UserStatus,
+  VoiceParticipant,
   VoiceState,
 } from "./types";
 
@@ -43,6 +44,10 @@ export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }
   | { ok: false; error: string };
 
+export type VoiceJoinAck =
+  | { ok: true; participants: VoiceParticipant[] }
+  | { ok: false; error: string };
+
 export interface ServerToClientEvents {
   /** primeiro evento apos o handshake: confirma quem o gateway achou que voce e */
   ready: (payload: ReadyPayload) => void;
@@ -61,6 +66,20 @@ export interface ServerToClientEvents {
   "message:new": (payload: {
     message: PublicMessage;
     nonce: string | null;
+  }) => void;
+  /** estado completo de voz do servidor, ao entrar */
+  "voice:sync": (payload: {
+    serverId: string;
+    participants: VoiceParticipant[];
+  }) => void;
+  /**
+   * Um participante de voz mudou. `channelId: null` significa que ele SAIU
+   * da voz — um evento so para entrar, sair, trocar de canal e mutar evita
+   * que o cliente precise reconciliar tres fluxos diferentes.
+   */
+  "voice:update": (payload: {
+    serverId: string;
+    participant: VoiceParticipant;
   }) => void;
   /** uma unica mudanca de presenca dentro de um servidor */
   "presence:update": (payload: {
@@ -97,6 +116,22 @@ export interface ClientToServerEvents {
     payload: { channelId: string; before?: string; after?: string },
     ack: (result: MessageHistoryAck) => void,
   ) => void;
+  /**
+   * Conecta em um canal de voz. Ainda SEM midia — a fase 4 acopla o WebRTC.
+   * O gateway e a fonte de verdade de quem esta em qual canal, entao entrar
+   * por aqui e o que faz o nome aparecer sob o canal para todo mundo.
+   */
+  "voice:join": (
+    payload: { channelId: string },
+    ack: (result: VoiceJoinAck) => void,
+  ) => void;
+  /** desconecta da voz, seja qual for o canal */
+  "voice:leave": () => void;
+  /** sinaliza microfone/audio proprio; os demais campos sao de moderacao (fase 6) */
+  "voice:state": (payload: {
+    selfMuted?: boolean;
+    selfDeafened?: boolean;
+  }) => void;
   /** medicao de latencia; o ack responde o timestamp do servidor */
   ping: (ack: (serverTime: number) => void) => void;
 }

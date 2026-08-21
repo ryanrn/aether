@@ -239,26 +239,39 @@ Roteiro manual:
 
 ---
 
-## Limitacoes conhecidas da FASE 3 (parcial — bloco 3a)
+## Limitacoes conhecidas da FASE 3
 
-Pronto: gateway autenticado pelo cookie de sessao e **presenca em tempo real**.
-Chat e voz sao os proximos blocos.
+Pronto: gateway autenticado, presenca em tempo real, **chat de texto** e
+**ocupacao de canal de voz** (quem entrou aparece sob o canal, para todos).
 
-- **Presenca vive na memoria do gateway.** Reiniciar o processo zera quem esta
-  online ate os clientes reconectarem. E de proposito: presenca e efemera e nao
-  merece escrita no Postgres. O `User.status` do banco guarda so a PREFERENCIA
-  (a pessoa escolheu DND), nao quem esta conectado.
-- **Uma instancia so.** O estado em memoria nao e compartilhado entre processos;
-  escalar horizontalmente exige o adapter de Redis do Socket.IO.
+- **Sem audio.** A voz da fase 3 e ocupacao e sinalizacao: entrar, sair, mutar,
+  ensurdecer. Nenhum `getUserMedia`, nenhum WebRTC, nenhuma faixa de audio —
+  isso e a fase 4. Os botoes de microfone ja falam com o gateway, mas o que
+  eles mudam hoje e o icone que os outros veem, nao o som.
+- **Editar e excluir mensagem nao existem.** O modelo tem `editedAt` e
+  `deletedAt`, o historico ja respeita o soft delete, mas nao ha evento de
+  socket nem interface. Ficou fora deste bloco por decisao de escopo.
+- **Canal temporario ainda nao some ao esvaziar.** O gateway ja sabe quando o
+  ultimo saiu; falta o evento que atualiza a arvore de canais no cliente.
+- **Sem indicador de nao-lido.** O socket ja recebe mensagens de todos os
+  canais visiveis, entao o dado existe — falta contar e mostrar.
+- **Sem "esta digitando".**
+- **Mensagem que falha nao tem botao de reenviar** — ela fica marcada com o
+  erro, e reenviar significa copiar e colar.
+- **Presenca e voz vivem na memoria do gateway.** Reiniciar o processo zera
+  quem esta online e quem esta em call ate os clientes reconectarem. E de
+  proposito: esses dados sao efemeros. O `User.status` do banco guarda so a
+  PREFERENCIA (a pessoa escolheu DND), nao quem esta conectado.
+- **Uma instancia so.** O estado em memoria nao e compartilhado entre
+  processos; escalar horizontalmente exige o adapter de Redis do Socket.IO.
+  Mesma conversa do rate limit.
 - **Sala nao se recalcula sozinha.** Se um cargo mudar enquanto voce esta
   conectado, as salas em que o socket ja esta continuam como estavam ate
   reconectar ou trocar de servidor. Escrita permanece protegida (revalida
-  sempre); o que pode ficar velho e a leitura. Correcao prevista para a fase 7,
-  junto com a revalidacao de sessao em conexao ja aberta.
-- **Ainda nao existe seletor de status na interface.** O evento `presence:set`
-  funciona e persiste, mas nenhum botao o dispara — entra junto com o menu de
-  usuario.
-- **Sem chat e sem voz ainda**: blocos 3b e 3c.
+  sempre, a cada mensagem); o que pode ficar velho e a leitura. Correcao
+  prevista para a fase 7, junto com a revalidacao de sessao em conexao aberta.
+- **Ainda nao existe seletor de status na interface.** O evento
+  `presence:set` funciona e persiste, mas nenhum botao o dispara.
 
 ---
 

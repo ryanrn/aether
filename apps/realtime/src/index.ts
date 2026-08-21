@@ -5,6 +5,7 @@ import { env } from "./env";
 import { authenticateHandshake } from "./auth";
 import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
+import { registerVoiceHandlers } from "./handlers/voice";
 import { attachSocket, stats } from "./state";
 import type { AetherServer } from "./types";
 
@@ -35,6 +36,15 @@ const io: AetherServer = new Server(httpServer, {
   // `credentials` e o que faz o navegador anexar o cookie httpOnly de sessao.
   cors: { origin: env.corsOrigin, credentials: true },
   transports: ["websocket", "polling"],
+  /**
+   * Heartbeat explicito. O Engine.IO ja faz isso sozinho, mas com valores
+   * padrao — e padrao implicito e o tipo de coisa que muda numa atualizacao de
+   * dependencia sem ninguem perceber. Aqui esta declarado e mais agressivo que
+   * o default (25s/20s): queda de conexao vira presenca errada na tela alheia,
+   * entao detectar rapido importa.
+   */
+  pingInterval: 10_000,
+  pingTimeout: 8_000,
 });
 
 /**
@@ -69,6 +79,7 @@ io.on("connection", (socket) => {
 
   registerPresenceHandlers(io, socket);
   registerMessageHandlers(io, socket);
+  registerVoiceHandlers(io, socket);
 
   socket.on("disconnect", (reason) => {
     if (!env.isProduction) {

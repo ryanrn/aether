@@ -1,7 +1,8 @@
 # @aether/realtime — gateway WebSocket (FASE 3)
 
 Servico Node separado do Next.js. Roda em `http://localhost:4000`, caminho de
-socket `/ws`, com `GET /health` para monitoramento.
+socket `/ws`, com `GET /health` para monitoramento (devolve tambem contagem de
+sockets, usuarios e pessoas em voz).
 
 ```bash
 npm run dev:realtime      # tsx watch, le o .env da raiz
@@ -12,24 +13,32 @@ npm run dev:realtime      # tsx watch, le o .env da raiz
 - **Handshake autenticado.** O gateway nao tem login proprio: le o mesmo cookie
   httpOnly `aether_session` que o app web grava e valida com a mesma funcao
   (`@aether/access`) — assinatura do JWT, linha `Session` no banco, revogacao e
-  expiracao. Sessao revogada no app nao conecta aqui.
-- **Recusa no middleware**, antes de qualquer handler. Nenhum evento precisa
-  perguntar se o socket esta autenticado.
-- **Encerramento limpo** em SIGINT/SIGTERM (solta a porta e o pool do Postgres).
-- **Presenca por servidor.** Contagem por socket, nao por usuario: tres abas
-  abertas e fechar uma nao deixa a pessoa offline para os outros. Status vive na
-  memoria do gateway; o banco guarda so a preferencia (ONLINE/IDLE/DND).
-- **Salas por permissao.** Ao entrar no servidor o socket entra tambem nas salas
-  dos canais com `VIEW_CHANNEL`, calculadas por `@aether/access`.
+  expiracao. Recusa acontece no middleware, antes de qualquer handler.
+- **Presenca por servidor**, com contagem por socket: tres abas abertas e
+  fechar uma nao deixa a pessoa offline para os outros.
+- **Salas por permissao.** Ao entrar no servidor o socket entra tambem nas
+  salas dos canais com `VIEW_CHANNEL`, calculadas por `@aether/access`.
+- **Chat de texto.** `message:send` grava no Postgres e so entao faz broadcast;
+  `message:history` pagina para tras (rolar) e para frente (recuperar o
+  intervalo perdido numa queda). Cada mensagem revalida `SEND_MESSAGES` no
+  banco — permissao em cache seria o mecanismo pelo qual alguem segue postando
+  num canal do qual ja perdeu acesso.
+- **Rate limit** token bucket por socket (rajada de 8, reposicao de 2/s).
+- **Ocupacao de canal de voz.** `voice:join` / `voice:leave` / `voice:state`,
+  respeitando `CONNECT` e o limite de usuarios do canal. Uma pessoa ocupa no
+  maximo um canal por vez.
+- **Heartbeat explicito** (`pingInterval` 10s, `pingTimeout` 8s) e
+  **encerramento limpo** em SIGINT/SIGTERM, com trava de reentrada — sem ela o
+  `tsx watch` deixava o processo velho segurando a porta.
 
-## Falta (o resto da fase 3)
+## Nao faz (de proposito)
 
-- entrada e saida de canal de voz — o gateway e a fonte de verdade de quem esta
-  em qual canal;
-- chat de texto em tempo real (modelo `Message` ja existe no schema);
-- sinalizacao de estado de voz (mute, deafen, falando, compartilhando tela);
-- canal temporario removido ao esvaziar;
-- estado de voz do proprio usuario saindo do `useState` local da barra inferior.
+- **Nenhuma midia.** Nao existe audio nem video aqui. `voice:*` e sinalizacao
+  de ocupacao e estado; o WebRTC entra na fase 4 e a tela na fase 5.
+- Editar e excluir mensagem — o modelo suporta, os eventos ainda nao existem.
+- Remover canal temporario ao esvaziar — o gateway sabe quando esvaziou, falta
+  o evento que atualiza a arvore no cliente.
+- Moderacao (mutar terceiros, mover entre canais) — fase 6.
 
 ## Decisoes
 
@@ -42,9 +51,19 @@ seja, o JavaScript da pagina nao consegue le-lo para mandar no payload do
 handshake. Isso mantem o token fora do alcance de XSS. O preco e precisar de
 `cors: { credentials: true }` e origem explicita.
 
+**Por que gravar antes de emitir:** se o broadcast viesse primeiro e a escrita
+falhasse, todo mundo teria visto uma mensagem que some no proximo reload. O
+custo sao alguns milissegundos; o beneficio e historico e tela nunca
+discordarem.
+
+**Por que filtrar por sala e nao por evento:** a decisao de quem pode ver
+acontece uma vez, quando o socket entra. Assim nao existe caminho em que um
+`emit` "esquece" de checar permissao — a lista de quem esta na sala ja e a
+resposta.
+
 **Estado em memoria:** por enquanto uma instancia so. Escalar horizontalmente
 vai exigir o adapter de Redis do Socket.IO — mesma conversa do rate limit em
 memoria da fase 1.
 
-Os contratos de evento vao para `packages/shared/src/types.ts` conforme os
-eventos forem existindo de fato.
+Os contratos de evento vivem em `packages/shared/src/events.ts`, para que o app
+web e o gateway nao possam divergir sem quebrar a compilacao.

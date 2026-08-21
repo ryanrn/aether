@@ -20,7 +20,6 @@ import type {
   PublicChannel,
   PublicRole,
   ViewerContext,
-  VoiceParticipant,
 } from "@aether/shared";
 import {
   deleteCategoryAction,
@@ -28,6 +27,7 @@ import {
   moveChannelAction,
 } from "@/server/actions/channels";
 import { channelAllows, viewerCan } from "@/lib/permissions";
+import { useVoiceParticipants } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 import { ChannelMembers } from "./channel-members";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
@@ -49,7 +49,6 @@ export function ChannelSidebar({
   roles,
   viewer,
   channelPermissions,
-  voiceStates = [],
 }: {
   serverId: string;
   categories: PublicCategory[];
@@ -57,7 +56,6 @@ export function ChannelSidebar({
   roles: PublicRole[];
   viewer: ViewerContext;
   channelPermissions: ChannelPermissionMap;
-  voiceStates?: VoiceParticipant[];
 }) {
   const params = useParams<{ channelId?: string }>();
   const activeChannelId = params?.channelId;
@@ -87,7 +85,6 @@ export function ChannelSidebar({
                   serverId={serverId}
                   channel={channel}
                   active={channel.id === activeChannelId}
-                  voiceStates={voiceStates}
                   channelPermissions={channelPermissions}
                   onEdit={() => setChannelModal({ mode: "edit", channelId: channel.id })}
                 />
@@ -153,7 +150,6 @@ export function ChannelSidebar({
                         serverId={serverId}
                         channel={channel}
                         active={channel.id === activeChannelId}
-                        voiceStates={voiceStates}
                         channelPermissions={channelPermissions}
                         onEdit={() =>
                           setChannelModal({ mode: "edit", channelId: channel.id })
@@ -277,19 +273,18 @@ function ChannelRow({
   serverId,
   channel,
   active,
-  voiceStates,
   channelPermissions,
   onEdit,
 }: {
   serverId: string;
   channel: PublicChannel;
   active: boolean;
-  voiceStates: VoiceParticipant[];
   channelPermissions: ChannelPermissionMap;
   onEdit: () => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const connected = voiceStates.filter((state) => state.channelId === channel.id);
+  // Quem esta na call vem do gateway: e ele que sabe, nao o banco.
+  const connected = useVoiceParticipants(channel.id);
   const Icon = channel.isPrivate ? Lock : channel.type === "VOICE" ? Volume2 : Hash;
 
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");

@@ -1,8 +1,14 @@
 "use client";
 
-import { MicOff, MonitorUp, Volume2, VolumeX } from "lucide-react";
+import { MicOff, MonitorUp, PhoneOff, Volume2, VolumeX } from "lucide-react";
 import type { PublicChannel, VoiceParticipant } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
+import { useSocket } from "@/components/realtime/realtime-provider";
+import {
+  useIsConnected,
+  useSelfVoice,
+  useVoiceParticipants,
+} from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,16 +22,71 @@ import { cn } from "@/lib/utils";
  * Identidade propria (nao e o Discord): cards com moldura fina, cantos curtos,
  * nome ancorado no rodape do card em monoespacada, e o estado "falando" como
  * um anel de acento em vez de borda verde grossa.
+ *
+ * FASE 3: a ocupacao e real — quem entra aparece aqui e na arvore de canais
+ * para todos os membros. Ainda SEM audio: nenhum getUserMedia, nenhum WebRTC.
+ * A fase 4 acopla a midia dentro destes mesmos cards.
  */
 export function VoiceStage({
   channel,
-  participants,
   selfUserId,
+  canConnect,
 }: {
   channel: PublicChannel;
-  participants: VoiceParticipant[];
   selfUserId: string;
+  canConnect: boolean;
 }) {
+  const socket = useSocket();
+  const connected = useIsConnected();
+  const participants = useVoiceParticipants(channel.id);
+  const selfVoice = useSelfVoice();
+
+  const isHere = selfVoice?.channelId === channel.id;
+  const full =
+    channel.userLimit !== null &&
+    participants.length >= channel.userLimit &&
+    !isHere;
+  const blocked = !connected || !canConnect || full;
+  const limitLabel = channel.userLimit ? ` / ${channel.userLimit}` : "";
+
+  function toggleConnection() {
+    if (!socket) return;
+    if (isHere) {
+      socket.emit("voice:leave");
+      return;
+    }
+    // O ack existe para o gateway poder recusar (canal cheio, sem CONNECT);
+    // o estado na tela vem do evento voice:update, nao daqui.
+    socket.emit("voice:join", { channelId: channel.id }, () => undefined);
+  }
+
+  const action = (
+    <button
+      type="button"
+      disabled={blocked}
+      onClick={toggleConnection}
+      className={cn(
+        "flex items-center gap-2 rounded-md border px-3.5 py-2 text-[12px] font-medium transition-colors duration-150",
+        isHere
+          ? "border-signal-dnd/40 bg-signal-dnd/10 text-signal-dnd hover:bg-signal-dnd/20"
+          : "border-accent-600/50 bg-accent-600/10 text-accent-300 hover:bg-accent-600/20",
+        blocked && "cursor-not-allowed opacity-40",
+      )}
+    >
+      {isHere ? (
+        <>
+          <PhoneOff className="h-3.5 w-3.5" />
+          Desconectar
+        </>
+      ) : (
+        <>
+          <Volume2 className="h-3.5 w-3.5" />
+          {full ? "Canal cheio" : "Conectar"}
+        </>
+      )}
+    </button>
+  );
+
   if (participants.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
@@ -35,9 +96,9 @@ export function VoiceStage({
         <div className="text-center">
           <p className="text-sm font-medium text-ink-200">{channel.name}</p>
           <p className="mt-1 max-w-[380px] text-balance text-[13px] leading-relaxed text-ink-500">
-            Ninguem conectado. A conexao de voz entra na fase 4 — este palco ja
-            e o container que vai receber o audio e, na fase 5, o
-            compartilhamento de tela.
+            {canConnect
+              ? "Ninguem conectado. Ao entrar, seu nome aparece aqui e abaixo do canal na barra lateral, para todo mundo. O audio entra na fase 4."
+              : "Ninguem conectado. Seu cargo nao permite conectar neste canal."}
           </p>
           {channel.userLimit ? (
             <p className="mt-2 font-mono text-[11px] text-ink-500">
@@ -45,6 +106,7 @@ export function VoiceStage({
             </p>
           ) : null}
         </div>
+        {action}
       </div>
     );
   }
@@ -57,15 +119,25 @@ export function VoiceStage({
         : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className={cn("grid gap-3", columns)}>
-        {participants.map((participant) => (
-          <ParticipantCard
-            key={participant.userId}
-            participant={participant}
-            isSelf={participant.userId === selfUserId}
-          />
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between px-4 pt-4">
+        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-500">
+          {participants.length} conectado{participants.length > 1 ? "s" : ""}
+          {limitLabel}
+        </span>
+        {action}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className={cn("grid gap-3", columns)}>
+          {participants.map((participant) => (
+            <ParticipantCard
+              key={participant.userId}
+              participant={participant}
+              isSelf={participant.userId === selfUserId}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

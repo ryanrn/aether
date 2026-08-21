@@ -10,6 +10,7 @@ import {
   presenceOf,
   setStatus,
   statusOf,
+  voiceOfServer,
 } from "../state";
 
 /**
@@ -59,6 +60,13 @@ export function registerPresenceHandlers(
       for (const channelRoom of await visibleChannelRooms(access)) {
         await socket.join(channelRoom);
       }
+
+      // Estado de voz vai junto: sem isso, quem abre a pagina veria os canais
+      // de voz vazios ate alguem entrar ou sair.
+      socket.emit("voice:sync", {
+        serverId,
+        participants: voiceOfServer(serverId),
+      });
 
       const becamePresent = joinServer(socket.id, serverId);
       // A propria presenca entra na lista antes de responder, senao o cliente

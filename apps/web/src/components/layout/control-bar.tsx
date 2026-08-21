@@ -10,13 +10,19 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  PhoneOff,
   Settings,
 } from "lucide-react";
 import type { UserStatus, ViewerContext } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { viewerCan } from "@/lib/permissions";
-import { useRealtime } from "@/components/realtime/realtime-provider";
+import { useSocket } from "@/components/realtime/realtime-provider";
+import {
+  useConnectionStatus,
+  useRealtimeStore,
+  useSelfVoice,
+} from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,10 +48,36 @@ export function ControlBar({
 }) {
   const params = useParams<{ serverId?: string }>();
   const serverId = params?.serverId;
-  const [muted, setMuted] = useState(false);
-  const [deafened, setDeafened] = useState(false);
   const [pending, startTransition] = useTransition();
-  const { connected, statusOf } = useRealtime();
+  const socket = useSocket();
+  const status = useConnectionStatus();
+  const connected = status === "online";
+  const presence = useRealtimeStore((state) => state.presence);
+  const selfVoice = useSelfVoice();
+
+  /**
+   * Fora de uma call, mic/audio sao preferencia local. Dentro de uma call,
+   * quem manda e o gateway — ele e a fonte de verdade que os outros veem, e
+   * discordar dele deixaria seu icone diferente do que aparece para todos.
+   */
+  const [localMuted, setLocalMuted] = useState(false);
+  const [localDeafened, setLocalDeafened] = useState(false);
+  const muted = selfVoice ? selfVoice.selfMuted : localMuted;
+  const deafened = selfVoice ? selfVoice.selfDeafened : localDeafened;
+
+  function toggleMute() {
+    const next = !muted;
+    setLocalMuted(next);
+    socket?.emit("voice:state", { selfMuted: next });
+  }
+
+  function toggleDeafen() {
+    const next = !deafened;
+    setLocalDeafened(next);
+    // Ensurdecer implica mutar, como no TeamSpeak.
+    if (next) setLocalMuted(true);
+    socket?.emit("voice:state", { selfDeafened: next });
+  }
 
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
 
@@ -56,7 +88,7 @@ export function ControlBar({
           userId={user.id}
           name={user.displayName}
           src={user.avatarUrl}
-          status={statusOf(user.id)}
+          status={presence[user.id] ?? "OFFLINE"}
           size="sm"
         />
         <div className="min-w-0 leading-tight">
@@ -74,7 +106,7 @@ export function ControlBar({
       <div className="flex items-center gap-1">
         <ControlToggle
           active={!muted}
-          onClick={() => setMuted((value) => !value)}
+          onClick={toggleMute}
           label={muted ? "Microfone desligado" : "Microfone ligado"}
           danger={muted}
         >
@@ -83,13 +115,7 @@ export function ControlBar({
 
         <ControlToggle
           active={!deafened}
-          onClick={() =>
-            setDeafened((value) => {
-              // ensurdecer implica mutar, como no TeamSpeak
-              if (!value) setMuted(true);
-              return !value;
-            })
-          }
+          onClick={toggleDeafen}
           label={deafened ? "Audio desativado" : "Audio ativado"}
           danger={deafened}
         >
@@ -111,6 +137,17 @@ export function ControlBar({
         >
           <MonitorUp className="h-4 w-4" />
         </ControlToggle>
+
+        {selfVoice ? (
+          <ControlToggle
+            active={false}
+            danger
+            onClick={() => socket?.emit("voice:leave")}
+            label="Desconectar da voz"
+          >
+            <PhoneOff className="h-4 w-4" />
+          </ControlToggle>
+        ) : null}
       </div>
 
       <div className="ml-auto flex items-center gap-1">
@@ -125,7 +162,11 @@ export function ControlBar({
             connected ? "text-signal-online" : "text-ink-500",
           )}
         >
-          {connected ? "tempo real · ligado" : "tempo real · offline"}
+          {status === "online"
+            ? "tempo real · ligado"
+            : status === "connecting"
+              ? "tempo real · conectando"
+              : "tempo real · offline"}
         </span>
 
         {serverId ? (

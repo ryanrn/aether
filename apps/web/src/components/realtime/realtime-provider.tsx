@@ -1,59 +1,35 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
-  UserStatus,
 } from "@aether/shared";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
 
 /**
- * Conexao com o gateway.
+ * Dono da conexao com o gateway.
  *
- * Um socket por aba, criado uma vez e mantido entre navegacoes — trocar de
- * canal nao derruba a conexao. A entrada no servidor e um efeito separado,
- * porque ela depende do `serverId` e a conexao nao.
+ * Este componente nao guarda estado de aplicacao — ele traduz eventos do
+ * socket para a store Zustand e devolve o socket para quem precisa emitir.
+ * A separacao importa: a conexao tem ciclo de vida de componente, o estado
+ * nao.
  *
  * Nao passamos token nenhum daqui: o cookie de sessao e httpOnly e vai sozinho
- * no handshake, desde que `withCredentials` esteja ligado e a origem esteja
- * liberada no CORS do gateway. E por isso que o token nunca fica ao alcance de
- * um XSS nesta pagina.
+ * no handshake, com `withCredentials`. Por isso o token nunca fica ao alcance
+ * de um XSS nesta pagina.
  */
 
-type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const REALTIME_URL =
   process.env.NEXT_PUBLIC_REALTIME_URL ?? "http://localhost:4000";
 
-interface RealtimeValue {
-  connected: boolean;
-  /** presenca efetiva; quem nao esta no mapa esta offline */
-  presence: Record<string, UserStatus>;
-  statusOf: (userId: string) => UserStatus;
-  setStatus: (status: UserStatus) => void;
-  /** erro de entrada no servidor, se houver — util para nao falhar em silencio */
-  error: string | null;
-}
+const SocketContext = createContext<TypedSocket | null>(null);
 
-const RealtimeContext = createContext<RealtimeValue>({
-  connected: false,
-  presence: {},
-  statusOf: () => "OFFLINE",
-  setStatus: () => undefined,
-  error: null,
-});
-
-export function useRealtime(): RealtimeValue {
-  return useContext(RealtimeContext);
+export function useSocket(): TypedSocket | null {
+  return useContext(SocketContext);
 }
 
 export function RealtimeProvider({
@@ -63,75 +39,129 @@ export function RealtimeProvider({
   serverId: string;
   children: React.ReactNode;
 }) {
-  const socketRef = useRef<TypedSocket | null>(null);
-  const serverIdRef = useRef(serverId);
-  const [connected, setConnected] = useState(false);
-  const [presence, setPresence] = useState<Record<string, UserStatus>>({});
-  const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<TypedSocket | null>(null);
+  /** distingue a primeira conexao de uma reconexao — a segunda precisa recuperar o intervalo */
+  const hadConnected = useRef(false);
 
-  serverIdRef.current = serverId;
-
-  // 1. conexao — vive enquanto o provider viver
+  // 1. conexao: criada uma vez e mantida entre navegacoes de canal
   useEffect(() => {
-    const socket: TypedSocket = io(REALTIME_URL, {
+    const store = useRealtimeStore.getState();
+
+    const instance: TypedSocket = io(REALTIME_URL, {
       path: "/ws",
       withCredentials: true,
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setConnected(true);
-      setError(null);
-    });
-    socket.on("disconnect", () => {
-      setConnected(false);
-      // Presenca e conhecimento do gateway: sem conexao nao sabemos de nada,
-      // e mostrar o ultimo estado conhecido como se fosse atual seria mentira.
-      setPresence({});
-    });
-    socket.on("connect_error", () => {
-      setConnected(false);
+      /**
+       * Backoff exponencial explicito. O socket.io-client ja faz isso por
+       * padrao, mas padrao implicito muda numa atualizacao de dependencia sem
+       * ninguem notar. 1s -> 8s com jitter de 50% para nao sincronizar todos
+       * os clientes num mesmo instante depois de uma queda do gateway.
+       */
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 8000,
+      randomizationFactor: 0.5,
     });
 
-    socket.on("presence:sync", ({ serverId: incoming, entries }) => {
-      if (incoming !== serverIdRef.current) return;
-      setPresence(Object.fromEntries(entries.map((e) => [e.userId, e.status])));
+    instance.on("connect", () => {
+      store.setConnectionStatus("online");
+      store.setError(null);
     });
 
-    socket.on("presence:update", ({ serverId: incoming, entry }) => {
-      if (incoming !== serverIdRef.current) return;
-      setPresence((current) => {
-        if (entry.status === "OFFLINE") {
-          const { [entry.userId]: _gone, ...rest } = current;
-          return rest;
-        }
-        return { ...current, [entry.userId]: entry.status };
-      });
+    instance.on("disconnect", () => {
+      const state = useRealtimeStore.getState();
+      state.setConnectionStatus("offline");
+      state.clearVolatile();
     });
+
+    instance.on("connect_error", () => {
+      useRealtimeStore.getState().setConnectionStatus("offline");
+    });
+
+    instance.on("ready", ({ user }) => {
+      useRealtimeStore.getState().setSelfUserId(user.id);
+    });
+
+    instance.on("presence:sync", ({ serverId: incoming, entries }) => {
+      const state = useRealtimeStore.getState();
+      if (incoming !== state.serverId) return;
+      state.syncPresence(entries);
+    });
+
+    instance.on("presence:update", ({ serverId: incoming, entry }) => {
+      const state = useRealtimeStore.getState();
+      if (incoming !== state.serverId) return;
+      state.updatePresence(entry);
+    });
+
+    instance.on("voice:sync", ({ serverId: incoming, participants }) => {
+      const state = useRealtimeStore.getState();
+      if (incoming !== state.serverId) return;
+      state.syncVoice(participants);
+    });
+
+    instance.on("voice:update", ({ serverId: incoming, participant }) => {
+      const state = useRealtimeStore.getState();
+      if (incoming !== state.serverId) return;
+      state.updateVoice(participant);
+    });
+
+    instance.on("message:new", ({ message, nonce }) => {
+      useRealtimeStore.getState().receiveMessage(message, nonce);
+    });
+
+    setSocket(instance);
 
     return () => {
-      socket.close();
-      socketRef.current = null;
+      instance.removeAllListeners();
+      instance.close();
+      setSocket(null);
     };
   }, []);
 
-  // 2. entrada no servidor — refeita a cada reconexao, senao o socket volta mudo
+  // 2. entrada no servidor, refeita a cada reconexao
   useEffect(() => {
-    const socket = socketRef.current;
     if (!socket) return;
+    useRealtimeStore.getState().enterServer(serverId);
 
     function join() {
+      const reconnecting = hadConnected.current;
+      hadConnected.current = true;
+
       socket?.emit("server:join", serverId, (result) => {
+        const state = useRealtimeStore.getState();
         if (!result.ok) {
-          setError(result.error);
-          setPresence({});
+          state.setError(result.error);
           return;
         }
-        setError(null);
-        setPresence(
-          Object.fromEntries(result.presence.map((e) => [e.userId, e.status])),
-        );
+        state.setError(null);
+        state.syncPresence(result.presence);
+        if (reconnecting) recoverMissedMessages();
       });
+    }
+
+    /**
+     * Recupera o intervalo perdido durante a queda.
+     * Socket.IO reconecta sozinho, mas o que passou enquanto o socket estava
+     * fora nao volta por magica: pedimos, por canal ja visitado, tudo que veio
+     * depois da ultima mensagem que temos.
+     */
+    function recoverMissedMessages() {
+      const state = useRealtimeStore.getState();
+      for (const [channelId, messages] of Object.entries(state.messages)) {
+        const last = [...messages].reverse().find((m) => !m.pending);
+        if (!last) continue;
+        socket?.emit(
+          "message:history",
+          { channelId, after: last.id },
+          (result) => {
+            if (!result.ok) return;
+            useRealtimeStore
+              .getState()
+              .seedMessages(channelId, result.messages);
+          },
+        );
+      }
     }
 
     if (socket.connected) join();
@@ -140,25 +170,10 @@ export function RealtimeProvider({
     return () => {
       socket.off("connect", join);
       if (socket.connected) socket.emit("server:leave", serverId);
-      setPresence({});
     };
-  }, [serverId]);
-
-  const statusOf = useCallback(
-    (userId: string): UserStatus => presence[userId] ?? "OFFLINE",
-    [presence],
-  );
-
-  const setStatus = useCallback((status: UserStatus) => {
-    socketRef.current?.emit("presence:set", status);
-  }, []);
-
-  const value = useMemo<RealtimeValue>(
-    () => ({ connected, presence, statusOf, setStatus, error }),
-    [connected, presence, statusOf, setStatus, error],
-  );
+  }, [socket, serverId]);
 
   return (
-    <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>
+    <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
   );
 }

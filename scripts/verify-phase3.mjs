@@ -35,6 +35,7 @@ function section(name) {
 }
 
 const createdSessions = [];
+const createdChannels = [];
 
 async function sessionCookie(userId, { revoked = false } = {}) {
   const session = await prisma.session.create({
@@ -103,6 +104,36 @@ function joinServer(socket, serverId) {
   });
 }
 
+function sendMessage(socket, payload) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    socket.emit("message:send", payload, (result) => {
+      clearTimeout(timer);
+      resolve(result);
+    });
+  });
+}
+
+function requestHistory(socket, payload) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    socket.emit("message:history", payload, (result) => {
+      clearTimeout(timer);
+      resolve(result);
+    });
+  });
+}
+
+function joinVoice(socket, channelId) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    socket.emit("voice:join", { channelId }, (result) => {
+      clearTimeout(timer);
+      resolve(result);
+    });
+  });
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -165,6 +196,23 @@ async function main() {
     openSockets.push(socket);
     return socket;
   };
+
+  /**
+   * Canal privado SEM nenhum overwrite: invisivel para todos menos dono e
+   * admin. E o caso que prova que a permissao de canal chega ao gateway.
+   */
+  const secretChannel = await prisma.channel.create({
+    data: {
+      serverId: server.id,
+      name: "verify-privado",
+      type: "TEXT",
+      isPrivate: true,
+      position: 999,
+    },
+    select: { id: true },
+  });
+  createdChannels.push(secretChannel.id);
+  const secretChannelId = secretChannel.id;
 
   section("Handshake");
 
@@ -272,6 +320,165 @@ async function main() {
     persisted?.status,
   );
 
+  section("Chat de texto");
+
+  const textChannel = await prisma.channel.findFirst({
+    where: { serverId: server.id, type: "TEXT", isPrivate: false },
+  });
+  const voiceChannel = await prisma.channel.findFirst({
+    where: { serverId: server.id, type: "VOICE", isPrivate: false },
+  });
+  if (!textChannel || !voiceChannel) {
+    console.log("  --    seed sem canal de texto/voz publico; secoes puladas");
+  } else {
+    const heard = waitFor(
+      memberConn.socket,
+      "message:new",
+      (p) => p.message.content === "[verify] ola",
+    );
+    const sent = await sendMessage(ownerConn.socket, {
+      channelId: textChannel.id,
+      content: "[verify] ola",
+      nonce: "n-1",
+    });
+    check("mensagem e aceita", sent?.ok === true, JSON.stringify(sent));
+    const received = await heard;
+    check("o outro usuario recebe em tempo real", received !== null);
+    check(
+      "o nonce volta para reconciliar o envio otimista",
+      received?.nonce === "n-1",
+      JSON.stringify(received?.nonce),
+    );
+    check(
+      "o autor vem completo no payload",
+      received?.message?.author?.id === owner.id &&
+        typeof received?.message?.author?.username === "string",
+      JSON.stringify(received?.message?.author ?? null),
+    );
+    check(
+      "o payload nao vaza o email do autor",
+      received != null && !("email" in (received.message.author ?? {})),
+    );
+
+    const persisted = await prisma.message.findFirst({
+      where: { channelId: textChannel.id, content: "[verify] ola" },
+    });
+    check("mensagem persiste no Postgres", persisted !== null);
+
+    const empty = await sendMessage(ownerConn.socket, {
+      channelId: textChannel.id,
+      content: "   ",
+      nonce: "n-2",
+    });
+    check("mensagem vazia e recusada", empty?.ok === false, JSON.stringify(empty));
+
+    const huge = await sendMessage(ownerConn.socket, {
+      channelId: textChannel.id,
+      content: "x".repeat(5000),
+      nonce: "n-3",
+    });
+    check("mensagem longa demais e recusada", huge?.ok === false);
+
+    const toVoice = await sendMessage(ownerConn.socket, {
+      channelId: voiceChannel.id,
+      content: "[verify] em canal de voz",
+      nonce: "n-4",
+    });
+    check("canal de voz nao aceita mensagem", toVoice?.ok === false);
+
+    const ghost = await sendMessage(ownerConn.socket, {
+      channelId: "cxxxxxxxxxxxxxxxxxxxxxxxx",
+      content: "[verify] canal fantasma",
+      nonce: "n-5",
+    });
+    check("canal inexistente e recusado", ghost?.ok === false);
+
+    if (secretChannelId) {
+      const forbidden = await sendMessage(memberConn.socket, {
+        channelId: secretChannelId,
+        content: "[verify] canal privado",
+        nonce: "n-6",
+      });
+      check(
+        "sem acesso ao canal privado, o envio e recusado",
+        forbidden?.ok === false,
+        JSON.stringify(forbidden),
+      );
+    }
+
+    const history = await requestHistory(ownerConn.socket, {
+      channelId: textChannel.id,
+    });
+    check(
+      "historico devolve a mensagem enviada",
+      history?.ok === true &&
+        history.messages.some((m) => m.content === "[verify] ola"),
+      JSON.stringify(history?.ok),
+    );
+
+    // Capacidade 8 com reposicao de 2/s: uma rajada de 14 tem de esbarrar.
+    let blocked = 0;
+    for (let i = 0; i < 14; i += 1) {
+      const result = await sendMessage(ownerConn.socket, {
+        channelId: textChannel.id,
+        content: `[verify] flood ${i}`,
+        nonce: `f-${i}`,
+      });
+      if (result?.ok === false) blocked += 1;
+    }
+    check("rate limit corta rajada", blocked > 0, `recusadas: ${blocked}`);
+
+    section("Voz (ocupacao, sem midia)");
+
+    const sawJoinVoice = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) =>
+        p.participant.userId === member.id &&
+        p.participant.channelId === voiceChannel.id,
+    );
+    const joinedVoice = await joinVoice(memberConn.socket, voiceChannel.id);
+    check("entra no canal de voz", joinedVoice?.ok === true, JSON.stringify(joinedVoice));
+    check("o outro usuario ve a entrada", (await sawJoinVoice) !== null);
+    check(
+      "a lista de participantes ja vem no ack",
+      joinedVoice?.ok === true &&
+        joinedVoice.participants.some((p) => p.userId === member.id),
+    );
+
+    const sawMute = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) => p.participant.userId === member.id && p.participant.selfMuted === true,
+    );
+    memberConn.socket.emit("voice:state", { selfMuted: true });
+    check("mute proprio propaga", (await sawMute) !== null);
+
+    const toText = await joinVoice(memberConn.socket, textChannel.id);
+    check("canal de texto nao aceita conexao de voz", toText?.ok === false);
+
+    const sawLeaveVoice = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) => p.participant.userId === member.id && p.participant.channelId === null,
+    );
+    memberConn.socket.emit("voice:leave");
+    check("sair da voz propaga", (await sawLeaveVoice) !== null);
+
+    const sawDropVoice = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) => p.participant.userId === member.id && p.participant.channelId === null,
+      3000,
+    );
+    await joinVoice(memberConn.socket, voiceChannel.id);
+    memberConn.socket.disconnect();
+    memberConn.socket.connect();
+    check("queda de conexao tira da voz", (await sawDropVoice) !== null);
+    await sleep(300);
+    await joinServer(memberConn.socket, server.id);
+  }
+
   section("Mesma pessoa em varias abas");
 
   const secondTab = await connect(await sessionCookie(member.id));
@@ -312,6 +519,13 @@ try {
   failed += 1;
   console.log(`\nErro: ${error.message}`);
 } finally {
+  // As mensagens de teste levam prefixo justamente para a limpeza ser cirurgica.
+  await prisma.message
+    .deleteMany({ where: { content: { startsWith: "[verify]" } } })
+    .catch(() => undefined);
+  await prisma.channel
+    .deleteMany({ where: { id: { in: createdChannels } } })
+    .catch(() => undefined);
   await prisma.user
     .updateMany({ where: { username: "joao" }, data: { status: "OFFLINE" } })
     .catch(() => undefined);

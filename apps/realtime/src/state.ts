@@ -1,4 +1,9 @@
-import type { PresenceEntry, UserStatus } from "@aether/shared";
+import type {
+  PresenceEntry,
+  PublicUser,
+  UserStatus,
+  VoiceParticipant,
+} from "@aether/shared";
 
 /**
  * Estado vivo do gateway — presenca de quem esta conectado agora.
@@ -151,5 +156,168 @@ export function stats() {
     sockets: sockets.size,
     users: users.size,
     servers: serverMembers.size,
+    inVoice: voice.size,
   };
+}
+
+/* -------------------------------------------------------------------------
+ * Estado de voz
+ *
+ * Quem esta em qual canal de voz e conhecimento do gateway, nao do banco:
+ * ninguem "esta numa call" de forma persistente. Uma pessoa ocupa no maximo
+ * um canal por vez — entrar em outro move, como no Discord/TeamSpeak.
+ *
+ * Guardamos o socket dono da ocupacao: se a pessoa tem tres abas e a aba que
+ * entrou na voz cai, ela sai da voz mesmo que as outras sigam conectadas.
+ * ------------------------------------------------------------------------- */
+
+interface VoiceEntry {
+  socketId: string;
+  serverId: string;
+  channelId: string;
+  selfMuted: boolean;
+  selfDeafened: boolean;
+  user: PublicUser;
+}
+
+const voice = new Map<string, VoiceEntry>();
+const voiceByServer = new Map<string, Set<string>>();
+
+function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
+  return {
+    userId,
+    channelId: entry.channelId,
+    selfMuted: entry.selfMuted,
+    selfDeafened: entry.selfDeafened,
+    // moderacao entra na fase 6; transmissao na fase 5; "falando" na fase 4
+    serverMuted: false,
+    serverDeafened: false,
+    streaming: false,
+    speaking: false,
+    user: entry.user,
+  };
+}
+
+/** Participante ja formatado, ou `null` se o usuario nao esta em voz. */
+export function voiceParticipant(userId: string): VoiceParticipant | null {
+  const entry = voice.get(userId);
+  return entry ? toParticipant(userId, entry) : null;
+}
+
+/** Forma de "saiu da voz" — channelId nulo, que e como o cliente remove. */
+export function voiceDeparture(
+  userId: string,
+  user: PublicUser,
+): VoiceParticipant {
+  return {
+    userId,
+    channelId: null,
+    selfMuted: false,
+    selfDeafened: false,
+    serverMuted: false,
+    serverDeafened: false,
+    streaming: false,
+    speaking: false,
+    user,
+  };
+}
+
+function unindex(userId: string, serverId: string): void {
+  const set = voiceByServer.get(serverId);
+  if (!set) return;
+  set.delete(userId);
+  if (set.size === 0) voiceByServer.delete(serverId);
+}
+
+/**
+ * Coloca o usuario num canal de voz.
+ * Devolve o servidor de onde ele saiu, quando a entrada moveu a pessoa de um
+ * canal para outro — quem chama precisa avisar os dois lados.
+ */
+export function joinVoice(params: {
+  socketId: string;
+  userId: string;
+  user: PublicUser;
+  serverId: string;
+  channelId: string;
+}): { previousServerId: string | null } {
+  const previous = voice.get(params.userId);
+  const previousServerId =
+    previous && previous.serverId !== params.serverId ? previous.serverId : null;
+  if (previous) unindex(params.userId, previous.serverId);
+
+  voice.set(params.userId, {
+    socketId: params.socketId,
+    serverId: params.serverId,
+    channelId: params.channelId,
+    // Trocar de canal preserva mute/surdo: mexer no microfone de alguem sem
+    // que ela peca e comportamento surpreendente.
+    selfMuted: previous?.selfMuted ?? false,
+    selfDeafened: previous?.selfDeafened ?? false,
+    user: params.user,
+  });
+
+  const set = voiceByServer.get(params.serverId) ?? new Set<string>();
+  set.add(params.userId);
+  voiceByServer.set(params.serverId, set);
+
+  return { previousServerId };
+}
+
+/** Tira o usuario da voz. Devolve o que ele ocupava, para avisar quem viu. */
+export function leaveVoice(
+  userId: string,
+  onlyIfSocket?: string,
+): { serverId: string; channelId: string; user: PublicUser } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+  if (onlyIfSocket && entry.socketId !== onlyIfSocket) return null;
+
+  voice.delete(userId);
+  unindex(userId, entry.serverId);
+  return {
+    serverId: entry.serverId,
+    channelId: entry.channelId,
+    user: entry.user,
+  };
+}
+
+/** Atualiza microfone/audio proprio. Devolve o estado novo, ou null. */
+export function setVoiceFlags(
+  userId: string,
+  patch: { selfMuted?: boolean; selfDeafened?: boolean },
+): { serverId: string; participant: VoiceParticipant } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+
+  if (typeof patch.selfMuted === "boolean") entry.selfMuted = patch.selfMuted;
+  if (typeof patch.selfDeafened === "boolean") {
+    entry.selfDeafened = patch.selfDeafened;
+    // Ensurdecer implica mutar, como no TeamSpeak: quem nao ouve ninguem nao
+    // deve seguir transmitindo sem perceber.
+    if (patch.selfDeafened) entry.selfMuted = true;
+  }
+
+  return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+}
+
+/** Todos os participantes de voz de um servidor. */
+export function voiceOfServer(serverId: string): VoiceParticipant[] {
+  const set = voiceByServer.get(serverId);
+  if (!set) return [];
+  const list: VoiceParticipant[] = [];
+  for (const userId of set) {
+    const entry = voice.get(userId);
+    if (entry) list.push(toParticipant(userId, entry));
+  }
+  return list;
+}
+
+/** Quantas pessoas ocupam o canal — usado para respeitar o limite do canal. */
+export function countInChannel(channelId: string): number {
+  let total = 0;
+  for (const entry of voice.values()) {
+    if (entry.channelId === channelId) total += 1;
+  }
+  return total;
 }

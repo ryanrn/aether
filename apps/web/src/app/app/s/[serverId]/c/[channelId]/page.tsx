@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { Hash, Lock, Volume2 } from "lucide-react";
 import { prisma } from "@aether/db";
-import type { PublicChannel } from "@aether/shared";
-import { requireMember } from "@/server/guards";
 import { getChannelPermissions } from "@aether/access";
-import { has } from "@aether/shared";
+import { has, type PublicChannel, type PublicUser } from "@aether/shared";
+import { requireMember } from "@/server/guards";
+import { listRecentMessages } from "@/server/services/messages";
 import { EmptyState } from "@/components/layout/empty-state";
+import { ChatPanel } from "@/components/chat/chat-panel";
 import { VoiceStage } from "@/components/voice/voice-stage";
 
 /**
@@ -14,6 +15,10 @@ import { VoiceStage } from "@/components/voice/voice-stage";
  * A visibilidade e checada AQUI tambem, nao apenas na arvore: alguem pode
  * chegar por URL direta a um canal privado que nunca apareceu na sidebar.
  * Sem VIEW_CHANNEL o canal responde 404, como se nao existisse.
+ *
+ * O historico do chat vem daqui, no SSR, e nao pelo socket: a pagina ja fala
+ * com o banco, entao carregar as primeiras mensagens junto evita tela vazia
+ * piscando. O socket cuida do que chega depois.
  */
 export default async function ChannelPage({
   params,
@@ -51,6 +56,21 @@ export default async function ChannelPage({
   const publicChannel: PublicChannel = channel;
   const Icon = channel.isPrivate ? Lock : channel.type === "VOICE" ? Volume2 : Hash;
   const canConnect = has(permissions, "CONNECT");
+  const canSend = has(permissions, "SEND_MESSAGES");
+
+  // O email da sessao nao desce para componente de cliente.
+  const selfUser: PublicUser = {
+    id: context.session.user.id,
+    username: context.session.user.username,
+    displayName: context.session.user.displayName,
+    avatarUrl: context.session.user.avatarUrl,
+    status: context.session.user.status,
+  };
+
+  const history =
+    channel.type === "TEXT"
+      ? await listRecentMessages(channel.id)
+      : { messages: [], hasMore: false };
 
   return (
     <>
@@ -71,16 +91,19 @@ export default async function ChannelPage({
       </div>
 
       {channel.type === "TEXT" ? (
-        <EmptyState
-          title={`#${channel.name}`}
-          description="O chat em tempo real entra na fase 3, junto com o gateway WebSocket. O canal ja existe, ja tem permissoes e ja respeita canais privados."
+        <ChatPanel
+          channelId={channel.id}
+          channelName={channel.name}
+          initialMessages={history.messages}
+          initialHasMore={history.hasMore}
+          selfUser={selfUser}
+          canSend={canSend}
         />
       ) : canConnect ? (
-        // participantes ficam vazios ate a fase 4 alimentar o estado de voz
         <VoiceStage
           channel={publicChannel}
-          participants={[]}
-          selfUserId={context.session.user.id}
+          selfUserId={selfUser.id}
+          canConnect={canConnect}
         />
       ) : (
         <EmptyState
