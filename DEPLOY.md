@@ -181,6 +181,23 @@ recusada.
 
 ---
 
+## Estado atual (verificado)
+
+| peca | endereco |
+| --- | --- |
+| App web | https://aether-mocha-phi.vercel.app |
+| Gateway | https://aether-gateway-earnest-dew-229.fly.dev |
+
+Use sempre o endereco **aliased** da Vercel, nao o do deploy especifico
+(`aether-<hash>-...`): o segundo muda a cada `vercel --prod` e quebraria o CORS
+do gateway toda vez.
+
+Verificado contra producao: verify-phase3 42/42, verify-phase4 17/17, CORS
+liberando a origem certa com credenciais, sessao valida atravessando Vercel e
+Fly, e o bundle apontando para o gateway (nenhuma ocorrencia de localhost).
+
+---
+
 ## Verificacao
 
 Com as URLs de producao:
