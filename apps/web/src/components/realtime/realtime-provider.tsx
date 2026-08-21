@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
@@ -42,7 +41,6 @@ export function RealtimeProvider({
   serverId: string;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const [socket, setSocket] = useState<TypedSocket | null>(null);
   /** distingue a primeira conexao de uma reconexao — a segunda recupera o intervalo */
   const hadConnected = useRef(false);
@@ -142,12 +140,21 @@ export function RealtimeProvider({
       /**
        * Fui removido do servidor. O gateway ja tirou este socket das salas, o
        * que corta o acesso; aqui so tiramos a pessoa de uma tela que nao existe
-       * mais para ela. Sem isto ela ficaria olhando uma copia congelada.
+       * mais para ela.
+       *
+       * Carga completa da pagina, e nao navegacao do router, de proposito:
+       * a barra de servidores mora no layout `/app`, COMPARTILHADO entre `/app`
+       * e `/app/s/[serverId]`. Navegar entre as duas nao re-renderiza esse
+       * layout, entao o icone do servidor continuava la — e clicar nele dava
+       * 404. `router.refresh()` junto de `replace()` ainda disputava com a
+       * navegacao.
+       *
+       * Despejo e evento raro; recarregar garante estado limpo e nao ha
+       * beneficio em economizar aqui.
        */
       socketInstance.on("server:evicted", ({ serverId: incoming }) => {
         if (incoming !== useRealtimeStore.getState().serverId) return;
-        router.replace("/app");
-        router.refresh();
+        window.location.assign("/app");
       });
 
       setSocket(socketInstance);
@@ -159,9 +166,7 @@ export function RealtimeProvider({
       instance?.close();
       setSocket(null);
     };
-    // `router` e estavel entre renders no App Router; a conexao continua
-    // sendo criada uma unica vez.
-  }, [router]);
+  }, []);
 
   // 2. entrada no servidor, refeita a cada reconexao
   useEffect(() => {
