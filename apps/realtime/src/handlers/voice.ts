@@ -2,11 +2,13 @@ import { prisma } from "@aether/db";
 import { getChannelPermissions, loadMemberAccess } from "@aether/access";
 import { has, room } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
+import { createRateLimiter } from "../rate-limit";
 import {
   countInChannel,
   joinVoice,
   leaveVoice,
   setVoiceFlags,
+  setVoiceSpeaking,
   voiceDeparture,
   voiceParticipant,
   voiceOfServer,
@@ -23,6 +25,13 @@ import {
  *
  * Uma pessoa ocupa no maximo um canal por vez: entrar em outro move.
  */
+
+/**
+ * O cliente so deve emitir na transicao fala/silencio, mas cliente e coisa que
+ * se pode reescrever. Um limitador generoso corta o abuso sem atrapalhar quem
+ * fala normalmente.
+ */
+const speakingLimiter = createRateLimiter({ capacity: 12, refillPerSecond: 6 });
 
 export function registerVoiceHandlers(
   io: AetherServer,
@@ -127,7 +136,18 @@ export function registerVoiceHandlers(
     if (updated) broadcast(updated.serverId, updated.participant);
   });
 
+  socket.on("voice:speaking", (speaking) => {
+    if (typeof speaking !== "boolean") return;
+    if (!speakingLimiter.take(socket.id)) return;
+
+    // Devolve null quando o estado ja era esse — nao republicamos valor
+    // identico para a sala inteira.
+    const updated = setVoiceSpeaking(userId, speaking);
+    if (updated) broadcast(updated.serverId, updated.participant);
+  });
+
   socket.on("disconnect", () => {
+    speakingLimiter.forget(socket.id);
     // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
     // mesma pessoa nao devem tirar ninguem da call.
     const left = leaveVoice(userId, socket.id);

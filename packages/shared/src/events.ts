@@ -127,6 +127,14 @@ export interface ClientToServerEvents {
   ) => void;
   /** desconecta da voz, seja qual for o canal */
   "voice:leave": () => void;
+  /**
+   * "estou falando agora". Calculado NO CLIENTE a partir do proprio
+   * microfone: o navegador mede o volume localmente e manda so um booleano.
+   * Nenhum audio trafega — isso e sinalizacao, nao midia.
+   *
+   * O cliente emite apenas na TRANSICAO, nunca em fluxo continuo.
+   */
+  "voice:speaking": (speaking: boolean) => void;
   /** sinaliza microfone/audio proprio; os demais campos sao de moderacao (fase 6) */
   "voice:state": (payload: {
     selfMuted?: boolean;

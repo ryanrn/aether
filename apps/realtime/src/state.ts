@@ -177,6 +177,7 @@ interface VoiceEntry {
   channelId: string;
   selfMuted: boolean;
   selfDeafened: boolean;
+  speaking: boolean;
   user: PublicUser;
 }
 
@@ -193,7 +194,8 @@ function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
     serverMuted: false,
     serverDeafened: false,
     streaming: false,
-    speaking: false,
+    // Mutado nunca aparece falando, mesmo que o cliente insista.
+    speaking: entry.speaking && !entry.selfMuted,
     user: entry.user,
   };
 }
@@ -254,6 +256,7 @@ export function joinVoice(params: {
     // que ela peca e comportamento surpreendente.
     selfMuted: previous?.selfMuted ?? false,
     selfDeafened: previous?.selfDeafened ?? false,
+    speaking: false,
     user: params.user,
   });
 
@@ -320,4 +323,19 @@ export function countInChannel(channelId: string): number {
     if (entry.channelId === channelId) total += 1;
   }
   return total;
+}
+
+/**
+ * Marca quem esta falando. Devolve `null` quando nada mudou — assim o gateway
+ * nao republica um estado identico para a sala inteira.
+ */
+export function setVoiceSpeaking(
+  userId: string,
+  speaking: boolean,
+): { serverId: string; participant: VoiceParticipant } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+  if (entry.speaking === speaking) return null;
+  entry.speaking = speaking;
+  return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
 }

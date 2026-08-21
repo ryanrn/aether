@@ -27,14 +27,20 @@ npm run dev:realtime      # tsx watch, le o .env da raiz
 - **Ocupacao de canal de voz.** `voice:join` / `voice:leave` / `voice:state`,
   respeitando `CONNECT` e o limite de usuarios do canal. Uma pessoa ocupa no
   maximo um canal por vez.
+- **Indicador de fala.** `voice:speaking` carrega um booleano calculado no
+  navegador a partir do proprio microfone. O gateway impoe que quem esta
+  mutado nunca apareca falando, republica so na transicao e tem limitador
+  proprio — cliente e coisa que se pode reescrever.
 - **Heartbeat explicito** (`pingInterval` 10s, `pingTimeout` 8s) e
   **encerramento limpo** em SIGINT/SIGTERM, com trava de reentrada — sem ela o
   `tsx watch` deixava o processo velho segurando a porta.
 
 ## Nao faz (de proposito)
 
-- **Nenhuma midia.** Nao existe audio nem video aqui. `voice:*` e sinalizacao
-  de ocupacao e estado; o WebRTC entra na fase 4 e a tela na fase 5.
+- **Nenhuma midia.** Nenhum byte de audio ou video passa por este servico.
+  `voice:*` e sinalizacao: quem esta onde, mutado ou nao, falando ou nao. O
+  microfone e aberto no NAVEGADOR apenas para medir volume localmente; o
+  WebRTC entra na fase 4 e a tela na fase 5.
 - Editar e excluir mensagem — o modelo suporta, os eventos ainda nao existem.
 - Remover canal temporario ao esvaziar — o gateway sabe quando esvaziou, falta
   o evento que atualiza a arvore no cliente.

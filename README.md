@@ -244,10 +244,16 @@ Roteiro manual:
 Pronto: gateway autenticado, presenca em tempo real, **chat de texto** e
 **ocupacao de canal de voz** (quem entrou aparece sob o canal, para todos).
 
-- **Sem audio.** A voz da fase 3 e ocupacao e sinalizacao: entrar, sair, mutar,
-  ensurdecer. Nenhum `getUserMedia`, nenhum WebRTC, nenhuma faixa de audio —
-  isso e a fase 4. Os botoes de microfone ja falam com o gateway, mas o que
-  eles mudam hoje e o icone que os outros veem, nao o som.
+- **Ninguem ouve ninguem.** A voz da fase 3 e ocupacao e sinalizacao: entrar,
+  sair, mutar, ensurdecer, e o indicador de quem esta falando. Nao existe
+  WebRTC, nao existe transporte de audio, ninguem escuta ninguem — isso e a
+  fase 4.
+- **O microfone e aberto, mas so localmente.** Para acender a bordinha de "esta
+  falando" o navegador precisa ouvir voce, entao ele pede permissao de
+  microfone ao entrar numa call. O sinal e analisado na sua maquina
+  (`AnalyserNode`, energia RMS) e o que sai pelo socket e **um booleano**. O
+  audio nao e transmitido, nem gravado, nem guardado. Negar a permissao nao
+  quebra nada: a call continua, so a bordinha nao acende.
 - **Editar e excluir mensagem nao existem.** O modelo tem `editedAt` e
   `deletedAt`, o historico ja respeita o soft delete, mas nao ha evento de
   socket nem interface. Ficou fora deste bloco por decisao de escopo.

@@ -446,13 +446,30 @@ async function main() {
         joinedVoice.participants.some((p) => p.userId === member.id),
     );
 
+    const sawSpeaking = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) =>
+        p.participant.userId === member.id && p.participant.speaking === true,
+    );
+    memberConn.socket.emit("voice:speaking", true);
+    check("indicador de fala propaga", (await sawSpeaking) !== null);
+
     const sawMute = waitFor(
       ownerConn.socket,
       "voice:update",
       (p) => p.participant.userId === member.id && p.participant.selfMuted === true,
     );
     memberConn.socket.emit("voice:state", { selfMuted: true });
-    check("mute proprio propaga", (await sawMute) !== null);
+    const mutePayload = await sawMute;
+    check("mute proprio propaga", mutePayload !== null);
+    // O gateway impoe isso: cliente reescrito nao consegue aparecer falando
+    // enquanto esta mutado.
+    check(
+      "mutado nunca aparece falando",
+      mutePayload?.participant?.speaking === false,
+      JSON.stringify(mutePayload?.participant?.speaking),
+    );
 
     const toText = await joinVoice(memberConn.socket, textChannel.id);
     check("canal de texto nao aceita conexao de voz", toText?.ok === false);

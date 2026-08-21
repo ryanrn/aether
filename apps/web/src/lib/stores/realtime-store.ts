@@ -48,6 +48,8 @@ interface RealtimeState {
   selfUserId: string | null;
   serverId: string | null;
   error: string | null;
+  /** problema de microfone — separado do erro de conexao, causa diferente */
+  voiceError: string | null;
 
   presence: Record<string, UserStatus>;
   voice: Record<string, VoiceParticipant>;
@@ -57,6 +59,7 @@ interface RealtimeState {
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSelfUserId: (userId: string) => void;
   setError: (error: string | null) => void;
+  setVoiceError: (error: string | null) => void;
   /** troca de servidor zera tudo que era daquele servidor */
   enterServer: (serverId: string) => void;
   clearVolatile: () => void;
@@ -103,6 +106,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   selfUserId: null,
   serverId: null,
   error: null,
+  voiceError: null,
   presence: {},
   voice: {},
   messages: {},
@@ -111,6 +115,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSelfUserId: (selfUserId) => set({ selfUserId }),
   setError: (error) => set({ error }),
+  setVoiceError: (voiceError) => set({ voiceError }),
 
   enterServer: (serverId) =>
     set((state) =>

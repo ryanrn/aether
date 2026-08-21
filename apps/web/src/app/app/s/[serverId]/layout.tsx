@@ -8,6 +8,7 @@ import { MemberPanel } from "@/components/layout/member-panel";
 import { TopBar } from "@/components/layout/top-bar";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
+import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
 
 /**
  * Casca do servidor.
@@ -53,6 +54,7 @@ export default async function ServerLayout({
         <TopBar server={data.server} memberCount={data.members.length} viewer={viewer} />
 
         <ConnectionBanner />
+        <VoiceActivityMonitor />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar
