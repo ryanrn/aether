@@ -259,6 +259,9 @@ Pronto: gateway autenticado, presenca em tempo real, **chat de texto** e
   socket nem interface. Ficou fora deste bloco por decisao de escopo.
 - **Canal temporario ainda nao some ao esvaziar.** O gateway ja sabe quando o
   ultimo saiu; falta o evento que atualiza a arvore de canais no cliente.
+- **Aviso sonoro de entrada e saida de call** e sintetizado no navegador
+  (osciladores Web Audio), nao e arquivo de audio. Nao existe controle de
+  volume nem opcao de desligar alem de ficar ensurdecido.
 - **Sem indicador de nao-lido.** O socket ja recebe mensagens de todos os
   canais visiveis, entao o dado existe — falta contar e mostrar.
 - **Sem "esta digitando".**
