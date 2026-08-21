@@ -133,6 +133,15 @@ export function RealtimeProvider({
         state.updateVoice(participant);
       });
 
+      /**
+       * Fui movido de canal por um moderador. As credenciais novas vem junto
+       * porque cada canal e uma sala propria no SFU — sem elas eu ficaria mudo
+       * ate pedir acesso. O canal em si chega pelo voice:update.
+       */
+      socketInstance.on("voice:moved", ({ media }) => {
+        useRealtimeStore.getState().setMedia(media);
+      });
+
       socketInstance.on("message:new", ({ message, nonce }) => {
         useRealtimeStore.getState().receiveMessage(message, nonce);
       });

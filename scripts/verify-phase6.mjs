@@ -220,6 +220,111 @@ async function main() {
   memberConn.socket.off("message:new", leakWatcher);
   check("quem foi despejado NAO recebe mais o chat do servidor", !vazou);
 
+  section("Moderacao de voz");
+
+  const voiceChannel = await prisma.channel.findFirst({
+    where: { serverId: server.id, type: "VOICE", isPrivate: false },
+    select: { id: true, name: true },
+  });
+  const outroVoice = await prisma.channel.findFirst({
+    where: {
+      serverId: server.id,
+      type: "VOICE",
+      isPrivate: false,
+      id: { not: voiceChannel?.id },
+    },
+    select: { id: true },
+  });
+
+  if (!voiceChannel) {
+    console.log("  --    sem canal de voz publico no seed; secao pulada");
+  } else {
+    // O membro foi despejado acima; reconecta para os testes de voz.
+    memberConn.socket.disconnect();
+    memberConn.socket.connect();
+    await sleep(500);
+    await emitWithAck(memberConn.socket, "server:join", server.id);
+    await emitWithAck(memberConn.socket, "voice:join", { channelId: voiceChannel.id });
+
+    const sawMute = waitFor(
+      ownerConn.socket,
+      "voice:update",
+      (p) => p.participant.userId === member.id && p.participant.serverMuted === true,
+      4000,
+    );
+    const muteAck = await emitWithAck(ownerConn.socket, "voice:moderate", {
+      userId: member.id,
+      serverMuted: true,
+    });
+    check("o dono silencia um membro", muteAck?.ok === true, JSON.stringify(muteAck));
+    check("o silenciamento propaga para todos", (await sawMute) !== null);
+
+    // Quem foi silenciado pela moderacao nao pode se dessilenciar sozinho.
+    let selfUndo = false;
+    const undoWatcher = (p) => {
+      if (p.participant.userId === member.id && p.participant.serverMuted === false) {
+        selfUndo = true;
+      }
+    };
+    ownerConn.socket.on("voice:update", undoWatcher);
+    memberConn.socket.emit("voice:state", { selfMuted: false });
+    await sleep(900);
+    ownerConn.socket.off("voice:update", undoWatcher);
+    check("o silenciado nao se liberta pelo proprio controle", !selfUndo);
+
+    const semPermissao = await emitWithAck(memberConn.socket, "voice:moderate", {
+      userId: owner.id,
+      serverMuted: true,
+    });
+    check(
+      "membro comum nao silencia o dono",
+      semPermissao?.ok === false,
+      JSON.stringify(semPermissao),
+    );
+
+    const proprio = await emitWithAck(ownerConn.socket, "voice:moderate", {
+      userId: owner.id,
+      serverMuted: true,
+    });
+    check("ninguem se silencia pela moderacao", proprio?.ok === false);
+
+    const desfaz = await emitWithAck(ownerConn.socket, "voice:moderate", {
+      userId: member.id,
+      serverMuted: false,
+    });
+    check("o dono devolve o microfone", desfaz?.ok === true);
+
+    if (outroVoice) {
+      const sawMove = waitFor(
+        ownerConn.socket,
+        "voice:update",
+        (p) =>
+          p.participant.userId === member.id &&
+          p.participant.channelId === outroVoice.id,
+        4000,
+      );
+      const movedEvent = waitFor(memberConn.socket, "voice:moved", () => true, 4000);
+      const moveAck = await emitWithAck(ownerConn.socket, "voice:move", {
+        userId: member.id,
+        channelId: outroVoice.id,
+      });
+      check("o dono move alguem de canal", moveAck?.ok === true, JSON.stringify(moveAck));
+      check("a mudanca de canal propaga", (await sawMove) !== null);
+      check("quem foi movido recebe credenciais do canal novo", (await movedEvent) !== null);
+
+      const semMover = await emitWithAck(memberConn.socket, "voice:move", {
+        userId: owner.id,
+        channelId: voiceChannel.id,
+      });
+      check("membro comum nao move o dono", semMover?.ok === false);
+    } else {
+      console.log("  --    so ha um canal de voz no seed; teste de mover pulado");
+    }
+
+    memberConn.socket.emit("voice:leave");
+    await sleep(200);
+  }
+
   section("Despejo nao atinge quem nao deveria");
 
   // O dono continua no servidor: despejar o membro nao pode ter mexido nele.

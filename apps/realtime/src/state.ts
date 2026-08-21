@@ -179,6 +179,9 @@ interface VoiceEntry {
   selfDeafened: boolean;
   speaking: boolean;
   streaming: boolean;
+  /** silenciado por moderacao — o proprio usuario nao desfaz */
+  serverMuted: boolean;
+  serverDeafened: boolean;
   user: PublicUser;
 }
 
@@ -191,12 +194,12 @@ function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
     channelId: entry.channelId,
     selfMuted: entry.selfMuted,
     selfDeafened: entry.selfDeafened,
-    // moderacao entra na fase 6; transmissao na fase 5; "falando" na fase 4
-    serverMuted: false,
-    serverDeafened: false,
+    serverMuted: entry.serverMuted,
+    serverDeafened: entry.serverDeafened,
     streaming: entry.streaming,
-    // Mutado nunca aparece falando, mesmo que o cliente insista.
-    speaking: entry.speaking && !entry.selfMuted,
+    // Mutado nunca aparece falando, mesmo que o cliente insista — inclusive
+    // quando o mudo veio da moderacao.
+    speaking: entry.speaking && !entry.selfMuted && !entry.serverMuted,
     user: entry.user,
   };
 }
@@ -260,6 +263,12 @@ export function joinVoice(params: {
     speaking: false,
     // Trocar de canal encerra a transmissao: a track fica na sala anterior.
     streaming: false,
+    /**
+     * Moderacao acompanha a pessoa ao trocar de canal. Zerar aqui deixaria
+     * qualquer silenciado se livrar do mudo so entrando em outro canal.
+     */
+    serverMuted: previous?.serverMuted ?? false,
+    serverDeafened: previous?.serverDeafened ?? false,
     user: params.user,
   });
 
@@ -375,4 +384,44 @@ export function voiceLocation(
 /** Sockets vivos de um usuario — usado para despeja-lo de um servidor. */
 export function socketIdsOf(userId: string): string[] {
   return [...(users.get(userId)?.sockets ?? [])];
+}
+
+/**
+ * Aplica moderacao de voz. Devolve `null` quando nada mudou.
+ *
+ * Ensurdecer implica silenciar, pela mesma razao do lado do usuario: quem nao
+ * ouve ninguem nao deve seguir transmitindo sem perceber.
+ */
+export function setServerVoiceFlags(
+  userId: string,
+  patch: { serverMuted?: boolean; serverDeafened?: boolean },
+): { serverId: string; channelId: string; participant: VoiceParticipant } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+
+  const before = { muted: entry.serverMuted, deafened: entry.serverDeafened };
+
+  if (typeof patch.serverMuted === "boolean") entry.serverMuted = patch.serverMuted;
+  if (typeof patch.serverDeafened === "boolean") {
+    entry.serverDeafened = patch.serverDeafened;
+    if (patch.serverDeafened) entry.serverMuted = true;
+  }
+
+  if (
+    before.muted === entry.serverMuted &&
+    before.deafened === entry.serverDeafened
+  ) {
+    return null;
+  }
+
+  return {
+    serverId: entry.serverId,
+    channelId: entry.channelId,
+    participant: toParticipant(userId, entry),
+  };
+}
+
+/** Socket que detem a ocupacao de voz — necessario para mover a pessoa. */
+export function voiceSocketOf(userId: string): string | null {
+  return voice.get(userId)?.socketId ?? null;
 }

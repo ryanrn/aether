@@ -1,16 +1,22 @@
 import { prisma } from "@aether/db";
-import { getChannelPermissions, loadMemberAccess } from "@aether/access";
+import {
+  canActOnUser,
+  getChannelPermissions,
+  loadMemberAccess,
+} from "@aether/access";
 import { has, room } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
-import { createMediaCredentials } from "../livekit";
+import { applyServerMute, createMediaCredentials } from "../livekit";
 import {
   countInChannel,
   joinVoice,
   leaveVoice,
   setVoiceFlags,
+  setServerVoiceFlags,
   setVoiceSpeaking,
   setVoiceStreaming,
+  voiceSocketOf,
   voiceDeparture,
   voiceLocation,
   voiceParticipant,
@@ -200,6 +206,192 @@ export function registerVoiceHandlers(
 
     const updated = setVoiceStreaming(userId, streaming);
     if (updated) broadcast(updated.serverId, updated.participant);
+  });
+
+  /**
+   * Moderacao de voz sobre outra pessoa.
+   *
+   * A permissao e checada por acao: silenciar exige MUTE_MEMBERS, ensurdecer
+   * exige DEAFEN_MEMBERS. Ter uma nao concede a outra.
+   */
+  socket.on("voice:moderate", async (payload, ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+    const targetId = payload?.userId;
+
+    if (typeof targetId !== "string" || targetId.length === 0) {
+      respond({ ok: false, error: "Usuario invalido" });
+      return;
+    }
+    if (targetId === userId) {
+      respond({ ok: false, error: "Use os proprios controles para se silenciar." });
+      return;
+    }
+
+    const target = voiceLocation(targetId);
+    if (!target) {
+      respond({ ok: false, error: "Essa pessoa nao esta em um canal de voz" });
+      return;
+    }
+
+    try {
+      const access = await loadMemberAccess(target.serverId, userId);
+      if (!access) {
+        respond({ ok: false, error: "Sem permissao" });
+        return;
+      }
+
+      const wantsMute = typeof payload.serverMuted === "boolean";
+      const wantsDeafen = typeof payload.serverDeafened === "boolean";
+      if (!wantsMute && !wantsDeafen) {
+        respond({ ok: false, error: "Nada a alterar" });
+        return;
+      }
+      if (wantsMute && !has(access.permissions, "MUTE_MEMBERS")) {
+        respond({ ok: false, error: "Seu cargo nao permite silenciar" });
+        return;
+      }
+      if (wantsDeafen && !has(access.permissions, "DEAFEN_MEMBERS")) {
+        respond({ ok: false, error: "Seu cargo nao permite ensurdecer" });
+        return;
+      }
+
+      // Mesma hierarquia de expulsar e banir, vinda de @aether/access.
+      if (!(await canActOnUser(access, targetId))) {
+        respond({
+          ok: false,
+          error: "Voce so pode moderar quem tem cargo abaixo do seu",
+        });
+        return;
+      }
+
+      const updated = setServerVoiceFlags(targetId, {
+        serverMuted: payload.serverMuted,
+        serverDeafened: payload.serverDeafened,
+      });
+      if (!updated) {
+        respond({ ok: true });
+        return;
+      }
+
+      /**
+       * A imposicao acontece no SFU, nao na interface: desligamos a faixa de
+       * audio na infraestrutura. O evento abaixo so mantem as telas em dia.
+       */
+      await applyServerMute({
+        channelId: updated.channelId,
+        userId: targetId,
+        muted: updated.participant.serverMuted,
+      });
+
+      broadcast(updated.serverId, updated.participant);
+      respond({ ok: true });
+    } catch (error) {
+      console.error("[gateway] voice:moderate falhou:", error);
+      respond({ ok: false, error: "Falha ao moderar" });
+    }
+  });
+
+  socket.on("voice:move", async (payload, ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+    const targetId = payload?.userId;
+    const channelId = payload?.channelId;
+
+    if (typeof targetId !== "string" || typeof channelId !== "string") {
+      respond({ ok: false, error: "Dados invalidos" });
+      return;
+    }
+
+    const target = voiceLocation(targetId);
+    if (!target) {
+      respond({ ok: false, error: "Essa pessoa nao esta em um canal de voz" });
+      return;
+    }
+    if (target.channelId === channelId) {
+      respond({ ok: true });
+      return;
+    }
+
+    try {
+      const access = await loadMemberAccess(target.serverId, userId);
+      if (!access || !has(access.permissions, "MOVE_MEMBERS")) {
+        respond({ ok: false, error: "Seu cargo nao permite mover pessoas" });
+        return;
+      }
+      if (targetId !== userId && !(await canActOnUser(access, targetId))) {
+        respond({
+          ok: false,
+          error: "Voce so pode mover quem tem cargo abaixo do seu",
+        });
+        return;
+      }
+
+      const channel = await prisma.channel.findFirst({
+        where: { id: channelId, serverId: target.serverId, type: "VOICE" },
+        select: { id: true },
+      });
+      if (!channel) {
+        respond({ ok: false, error: "Canal de voz nao encontrado" });
+        return;
+      }
+
+      /**
+       * O destino e checado com as permissoes de QUEM ESTA SENDO MOVIDO.
+       * Sem isso, mover viraria um jeito de colocar alguem dentro de um canal
+       * que ela nao poderia acessar por conta propria.
+       */
+      const targetAccess = await loadMemberAccess(target.serverId, targetId);
+      const targetBits = targetAccess
+        ? await getChannelPermissions(targetAccess, channelId)
+        : null;
+      if (
+        targetBits === null ||
+        !has(targetBits, "VIEW_CHANNEL") ||
+        !has(targetBits, "CONNECT")
+      ) {
+        respond({
+          ok: false,
+          error: "Essa pessoa nao tem acesso ao canal de destino",
+        });
+        return;
+      }
+
+      const targetSocketId = voiceSocketOf(targetId);
+      const targetSocket = targetSocketId
+        ? io.sockets.sockets.get(targetSocketId)
+        : undefined;
+      if (!targetSocket) {
+        respond({ ok: false, error: "Essa pessoa saiu da call" });
+        return;
+      }
+
+      joinVoice({
+        socketId: targetSocketId as string,
+        userId: targetId,
+        user: targetSocket.data.user,
+        serverId: target.serverId,
+        channelId,
+      });
+
+      /**
+       * Cada canal e uma sala propria no SFU, entao o token antigo nao serve.
+       * Emitimos as credenciais novas junto do aviso para a pessoa nao ficar
+       * muda no intervalo entre ser movida e pedir acesso.
+       */
+      const media = await createMediaCredentials({
+        channelId,
+        userId: targetId,
+        displayName: targetSocket.data.user.displayName,
+        permissions: targetBits,
+      });
+      targetSocket.emit("voice:moved", { channelId, media });
+
+      const participant = voiceParticipant(targetId);
+      if (participant) broadcast(target.serverId, participant);
+      respond({ ok: true });
+    } catch (error) {
+      console.error("[gateway] voice:move falhou:", error);
+      respond({ ok: false, error: "Falha ao mover" });
+    }
   });
 
   socket.on("disconnect", () => {

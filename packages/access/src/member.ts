@@ -71,3 +71,41 @@ export async function loadMemberAccess(
     roleIds,
   };
 }
+
+/**
+ * Hierarquia: quem pode agir sobre quem.
+ *
+ * Mora aqui, e nao no app web, porque a partir da moderacao de voz o GATEWAY
+ * tambem precisa dessa resposta — silenciar alguem de cargo superior tem de
+ * ser recusado no mesmo lugar em que expulsar e recusado. Duas copias da regra
+ * divergem, e hierarquia divergente e escalada de privilegio.
+ *
+ * Regras, iguais as da fase 2:
+ *  - o dono do servidor e intocavel, inclusive para ele mesmo;
+ *  - o dono age sobre todos os demais;
+ *  - os outros so agem sobre cargo ESTRITAMENTE abaixo do seu.
+ */
+export async function canActOnUser(
+  actor: MemberAccess,
+  targetUserId: string,
+): Promise<boolean> {
+  const target = await prisma.serverMember.findUnique({
+    where: {
+      serverId_userId: { serverId: actor.serverId, userId: targetUserId },
+    },
+    include: {
+      server: { select: { ownerId: true } },
+      roles: { include: { role: { select: { position: true } } } },
+    },
+  });
+  if (!target) return false;
+
+  if (target.server.ownerId === targetUserId) return false;
+  if (actor.isOwner) return true;
+
+  const targetHighest = target.roles.reduce(
+    (max, link) => Math.max(max, link.role.position),
+    0,
+  );
+  return targetHighest < actor.highestRolePosition;
+}

@@ -1,7 +1,9 @@
 "use client";
 
-import { Headphones, Mic, MicOff, MonitorUp, VolumeX } from "lucide-react";
-import type { VoiceParticipant } from "@aether/shared";
+import { useState } from "react";
+import { Headphones, Mic, MicOff, MonitorUp, MoreVertical, VolumeX } from "lucide-react";
+import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
+import { VoiceMemberMenu } from "@/components/voice/voice-member-menu";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +13,17 @@ import { cn } from "@/lib/utils";
  * Os indicadores (falando / mutado / surdo / compartilhando) ja estao
  * implementados: a fase 4 apenas passa a alimentar `states` com dados reais.
  */
-export function ChannelMembers({ states }: { states: VoiceParticipant[] }) {
+export function ChannelMembers({
+  states,
+  viewer,
+  voiceChannels,
+}: {
+  states: VoiceParticipant[];
+  viewer: ViewerContext;
+  voiceChannels: PublicChannel[];
+}) {
+  const [openFor, setOpenFor] = useState<string | null>(null);
+
   return (
     <ul className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-base-800 pl-2">
       {states.map((state) => {
@@ -21,7 +33,7 @@ export function ChannelMembers({ states }: { states: VoiceParticipant[] }) {
         return (
           <li
             key={state.userId}
-            className="flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850"
+            className="group/participant relative flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850"
           >
             <Avatar
               userId={state.userId}
@@ -39,6 +51,29 @@ export function ChannelMembers({ states }: { states: VoiceParticipant[] }) {
             >
               {state.user.displayName}
             </span>
+
+            <button
+              type="button"
+              title="Moderar"
+              aria-label={`Moderar ${state.user.displayName}`}
+              onClick={() =>
+                setOpenFor((current) =>
+                  current === state.userId ? null : state.userId,
+                )
+              }
+              className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/participant:opacity-100"
+            >
+              <MoreVertical className="h-3 w-3" />
+            </button>
+
+            {openFor === state.userId ? (
+              <VoiceMemberMenu
+                participant={state}
+                viewer={viewer}
+                voiceChannels={voiceChannels}
+                onClose={() => setOpenFor(null)}
+              />
+            ) : null}
 
             <span className="flex items-center gap-1 text-ink-500">
               {state.streaming ? (

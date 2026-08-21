@@ -101,16 +101,27 @@ export function ControlBar({
   const roomControls = useRealtimeStore((state) => state.roomControls);
   const localSharing = useRealtimeStore((state) => state.localSharing);
 
-  const muted = selfVoice ? selfVoice.selfMuted : localMuted;
-  const deafened = selfVoice ? selfVoice.selfDeafened : localDeafened;
+  /**
+   * Moderacao ganha do proprio controle: quem foi silenciado pelo servidor nao
+   * se desfaz sozinho. O SFU ja impede publicar, mas deixar o botao ligavel
+   * daria a impressao de que voltou a falar.
+   */
+  const serverMuted = selfVoice?.serverMuted ?? false;
+  const serverDeafened = selfVoice?.serverDeafened ?? false;
+
+  const muted = serverMuted || (selfVoice ? selfVoice.selfMuted : localMuted);
+  const deafened =
+    serverDeafened || (selfVoice ? selfVoice.selfDeafened : localDeafened);
 
   function toggleMute() {
+    if (serverMuted) return;
     const next = !muted;
     setLocalMuted(next);
     socket?.emit("voice:state", { selfMuted: next });
   }
 
   function toggleDeafen() {
+    if (serverDeafened) return;
     const next = !deafened;
     setLocalDeafened(next);
     // Ensurdecer implica mutar, como no TeamSpeak.
@@ -168,7 +179,14 @@ export function ControlBar({
           <ControlToggle
             active={!muted}
             onClick={toggleMute}
-            label={muted ? "Microfone desligado" : "Microfone ligado"}
+            disabled={serverMuted}
+            label={
+              serverMuted
+                ? "Silenciado pela moderacao do servidor"
+                : muted
+                  ? "Microfone desligado"
+                  : "Microfone ligado"
+            }
             danger={muted}
           >
             {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -230,7 +248,14 @@ export function ControlBar({
         <ControlToggle
           active={!deafened}
           onClick={toggleDeafen}
-          label={deafened ? "Audio desativado" : "Audio ativado"}
+          disabled={serverDeafened}
+          label={
+            serverDeafened
+              ? "Audio desativado pela moderacao do servidor"
+              : deafened
+                ? "Audio desativado"
+                : "Audio ativado"
+          }
           danger={deafened}
         >
           {deafened ? (

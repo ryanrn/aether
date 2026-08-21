@@ -58,6 +58,10 @@ export interface MediaGrant {
   canShareScreen: boolean;
 }
 
+export type VoiceModerateAck =
+  | { ok: true }
+  | { ok: false; error: string };
+
 export type VoiceJoinAck =
   | {
       ok: true;
@@ -92,6 +96,17 @@ export interface ServerToClientEvents {
   "message:new": (payload: {
     message: PublicMessage;
     nonce: string | null;
+  }) => void;
+  /**
+   * Voce foi movido para outro canal de voz por um moderador.
+   *
+   * Vem com credenciais novas porque cada canal e uma sala propria no SFU: o
+   * token antigo nao vale na sala nova, e emitir aqui evita o cliente ter de
+   * pedir e ficar mudo no intervalo.
+   */
+  "voice:moved": (payload: {
+    channelId: string;
+    media: MediaGrant | null;
   }) => void;
   /** estado completo de voz do servidor, ao entrar */
   "voice:sync": (payload: {
@@ -153,6 +168,23 @@ export interface ClientToServerEvents {
   ) => void;
   /** desconecta da voz, seja qual for o canal */
   "voice:leave": () => void;
+  /**
+   * Moderacao de voz sobre outra pessoa: silenciar ou ensurdecer pelo servidor.
+   * Diferente de `voice:state`, que e sobre voce mesmo.
+   */
+  "voice:moderate": (
+    payload: {
+      userId: string;
+      serverMuted?: boolean;
+      serverDeafened?: boolean;
+    },
+    ack: (result: VoiceModerateAck) => void,
+  ) => void;
+  /** move outra pessoa para outro canal de voz do mesmo servidor */
+  "voice:move": (
+    payload: { userId: string; channelId: string },
+    ack: (result: VoiceModerateAck) => void,
+  ) => void;
   /**
    * "estou falando agora". Calculado NO CLIENTE a partir do proprio
    * microfone: o navegador mede o volume localmente e manda so um booleano.

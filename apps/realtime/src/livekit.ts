@@ -1,4 +1,9 @@
-import { AccessToken, TrackSource } from "livekit-server-sdk";
+import {
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+  TrackType,
+} from "livekit-server-sdk";
 import { has, type PermissionBits } from "@aether/shared";
 import { env } from "./env";
 
@@ -83,4 +88,69 @@ export async function createMediaCredentials(params: {
     canPublish,
     canShareScreen,
   };
+}
+
+/**
+ * Cliente administrativo do SFU.
+ *
+ * Criado sob demanda porque LiveKit e opcional: sem chaves configuradas o
+ * gateway continua funcionando, so sem midia.
+ */
+let roomService: RoomServiceClient | null = null;
+
+function service(): RoomServiceClient | null {
+  const config = env.livekit;
+  if (!config) return null;
+  // A API administrativa fala HTTP; a URL de sinalizacao vem como wss://.
+  roomService ??= new RoomServiceClient(
+    config.url.replace(/^ws/, "http"),
+    config.apiKey,
+    config.apiSecret,
+  );
+  return roomService;
+}
+
+/**
+ * Silencia (ou devolve a voz de) alguem NO PROPRIO SFU.
+ *
+ * Este e o ponto que faz "silenciado pelo servidor" ser diferente de um icone:
+ * a faixa de audio e desligada na infraestrutura, entao um cliente reescrito
+ * nao contorna ligando o microfone de volta. O aviso pelo socket serve para a
+ * interface acompanhar; a imposicao acontece aqui.
+ *
+ * Devolve `false` quando nao foi possivel aplicar — quem chama decide se
+ * segue mesmo assim.
+ */
+export async function applyServerMute(params: {
+  channelId: string;
+  userId: string;
+  muted: boolean;
+}): Promise<boolean> {
+  const client = service();
+  if (!client) return false;
+
+  const room = roomName(params.channelId);
+  try {
+    const participants = await client.listParticipants(room);
+    const target = participants.find((p) => p.identity === params.userId);
+    if (!target) return false;
+
+    const audioTracks = target.tracks.filter(
+      (track) => track.type === TrackType.AUDIO,
+    );
+    if (audioTracks.length === 0) return false;
+
+    for (const track of audioTracks) {
+      await client.mutePublishedTrack(
+        room,
+        params.userId,
+        track.sid,
+        params.muted,
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error("[gateway] falha ao aplicar mudo no SFU:", error);
+    return false;
+  }
 }

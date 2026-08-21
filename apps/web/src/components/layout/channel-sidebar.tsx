@@ -72,6 +72,16 @@ export function ChannelSidebar({
 
   const canCreate = viewerCan(viewer, "CREATE_CHANNEL");
 
+  /**
+   * Destinos do "mover para": todos os canais de voz que ESTE visitante
+   * enxerga. Quem move nao pode mandar alguem para um canal que ele proprio
+   * nao conhece, e o gateway ainda revalida o acesso de quem e movido.
+   */
+  const voiceChannels = [
+    ...looseChannels,
+    ...categories.flatMap((category) => category.channels),
+  ].filter((channel) => channel.type === "VOICE");
+
   function toggle(categoryId: string) {
     setCollapsed((prev) => ({ ...prev, [categoryId]: !prev[categoryId] }));
   }
@@ -89,6 +99,8 @@ export function ChannelSidebar({
                   channel={channel}
                   active={channel.id === activeChannelId}
                   channelPermissions={channelPermissions}
+                  viewer={viewer}
+                  voiceChannels={voiceChannels}
                   onEdit={() => setChannelModal({ mode: "edit", channelId: channel.id })}
                 />
               ))}
@@ -154,6 +166,8 @@ export function ChannelSidebar({
                         channel={channel}
                         active={channel.id === activeChannelId}
                         channelPermissions={channelPermissions}
+                  viewer={viewer}
+                  voiceChannels={voiceChannels}
                         onEdit={() =>
                           setChannelModal({ mode: "edit", channelId: channel.id })
                         }
@@ -277,12 +291,17 @@ function ChannelRow({
   channel,
   active,
   channelPermissions,
+  viewer,
+  voiceChannels,
   onEdit,
 }: {
   serverId: string;
   channel: PublicChannel;
   active: boolean;
   channelPermissions: ChannelPermissionMap;
+  viewer: ViewerContext;
+  /** destinos possiveis do "mover para" */
+  voiceChannels: PublicChannel[];
   onEdit: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -398,7 +417,11 @@ function ChannelRow({
       </div>
 
       {channel.type === "VOICE" && connected.length > 0 ? (
-        <ChannelMembers states={connected} />
+        <ChannelMembers
+          states={connected}
+          viewer={viewer}
+          voiceChannels={voiceChannels}
+        />
       ) : null}
     </li>
   );

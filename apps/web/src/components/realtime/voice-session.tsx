@@ -31,8 +31,17 @@ export function VoiceSession() {
   const setRoomControls = useRealtimeStore((state) => state.setRoomControls);
 
   const channelId = selfVoice?.channelId ?? null;
-  const muted = selfVoice?.selfMuted ?? false;
-  const deafened = selfVoice?.selfDeafened ?? false;
+  /**
+   * Moderacao soma ao proprio controle, nunca substitui.
+   *
+   * O mudo do servidor ja e imposto no SFU, entao desligar o microfone aqui e
+   * redundancia barata — mas o ENSURDECER do servidor so existe no cliente:
+   * nao ha como o SFU impedir alguem de ouvir sem tambem cortar o video. Esta
+   * limitacao esta registrada no README.
+   */
+  const muted = (selfVoice?.selfMuted ?? false) || (selfVoice?.serverMuted ?? false);
+  const deafened =
+    (selfVoice?.selfDeafened ?? false) || (selfVoice?.serverDeafened ?? false);
 
   const roomRef = useRef<VoiceRoomHandle | null>(null);
 

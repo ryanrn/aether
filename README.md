@@ -8,7 +8,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 
 ---
 
-## Estado atual: FASES 1-5 concluidas, FASE 6 em andamento
+## Estado atual: FASES 1-6 concluidas
 
 | Fase | Escopo | Status |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | ✅ pronto |
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
-| 6 | Administracao, moderacao, logs | em andamento |
+| 6 | Administracao, moderacao, logs | ✅ pronto |
 | 7 | Performance, reconexao, seguranca, testes, deploy | pendente |
 
 ---
@@ -239,10 +239,11 @@ Roteiro manual:
 
 ---
 
-## Limitacoes conhecidas da FASE 6 (parcial — blocos 6a e 6c)
+## Limitacoes conhecidas da FASE 6
 
 Pronto: expulsar, banir com motivo e duracao, revogar banimento, o despejo em
-tempo real que isso exigia, e a tela do log de auditoria.
+tempo real que isso exigia, a tela do log de auditoria, e a moderacao de voz
+(silenciar, ensurdecer e mover entre canais).
 
 - **O despejo depende do gateway estar no ar.** Se ele nao responder, a
   expulsao vale no banco (que e a fonte de verdade) mas o socket da pessoa so
@@ -251,10 +252,16 @@ tempo real que isso exigia, e a tela do log de auditoria.
 - **Banimento vencido nao e apagado por rotina.** Ele sai da lista de ativos
   pela consulta e continua na tabela como historico; nao ha processo de
   limpeza rodando.
-- **Silenciar e ensurdecer pelo servidor ainda nao existem** — os campos
-  `serverMuted` e `serverDeafened` do `VoiceState` continuam sempre falsos.
-  Bloco 6b.
-- **Mover usuario entre canais de voz** ainda nao existe. Bloco 6b.
+- **Silenciar e imposto no SFU; ensurdecer nao.** O mudo do servidor desliga a
+  faixa de audio na propria infraestrutura, entao um cliente reescrito nao
+  contorna. Ja o ensurdecer e aplicado no navegador de quem foi ensurdecido:
+  nao ha como o SFU impedir alguem de OUVIR sem tambem cortar o video que ele
+  recebe. Quem reescrever o proprio cliente ainda consegue ouvir.
+- **Moderar exige que a pessoa esteja em um canal de voz.** O estado vive na
+  memoria do gateway, entao nao ha como pre-silenciar quem esta offline, e a
+  moderacao se perde se o gateway reiniciar.
+- **Mover ignora o limite do canal**, de proposito: moderador colocando alguem
+  num canal cheio e caso legitimo.
 - **O log nao tem filtro nem busca.** E uma lista cronologica com "carregar
   mais"; achar um evento antigo especifico exige rolar.
 - **Acao sem descritor aparece com o nome cru** (ex.: `member.mute`), em vez de

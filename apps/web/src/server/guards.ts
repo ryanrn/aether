@@ -4,6 +4,7 @@ import { cache } from "react";
 import { prisma } from "@aether/db";
 import { has, type PermissionKey } from "@aether/shared";
 import {
+  canActOnUser,
   getChannelPermissions,
   loadMemberAccess,
   type MemberAccess,
@@ -149,25 +150,20 @@ export async function assertHierarchy(
 
   const target = await prisma.serverMember.findUnique({
     where: { id: targetMemberId },
-    include: {
-      server: { select: { ownerId: true } },
-      roles: { include: { role: { select: { position: true } } } },
-    },
+    select: { serverId: true, userId: true },
   });
   if (!target || target.serverId !== actor.serverId) {
     throw new NotFoundError("Membro nao encontrado");
   }
 
-  if (target.server.ownerId === target.userId) {
-    throw new ForbiddenError("O dono do servidor nao pode ser alvo desta acao");
-  }
-  if (actor.isOwner) return;
-
-  const targetHighest = target.roles.reduce(
-    (max, link) => Math.max(max, link.role.position),
-    0,
-  );
-  if (targetHighest >= actor.highestRolePosition) {
-    throw new ForbiddenError("Alvo possui cargo igual ou superior ao seu");
+  /**
+   * A regra em si vive em @aether/access porque o gateway tambem precisa dela
+   * (moderacao de voz). Aqui so traduzimos "membro" para "usuario" e
+   * convertemos a resposta em excecao, que e o contrato das actions.
+   */
+  if (!(await canActOnUser(actor, target.userId))) {
+    throw new ForbiddenError(
+      "Voce so pode agir sobre membros de cargo abaixo do seu",
+    );
   }
 }
