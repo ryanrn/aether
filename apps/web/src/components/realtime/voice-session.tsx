@@ -90,6 +90,9 @@ export function VoiceSession() {
           stop: async () => {
             await handle.stopScreenShare();
             setLocalSharing(false);
+            // O aviso de "sem audio do sistema" perde o sentido assim que a
+            // transmissao acaba.
+            setVoiceError(null);
             socket.emit("voice:streaming", false);
           },
         });

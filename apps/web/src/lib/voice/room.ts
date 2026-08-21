@@ -220,13 +220,12 @@ export async function connectVoiceRoom({
 
     async startScreenShare(presetId) {
       const preset = SHARE_PRESETS[presetId];
-      try {
-        await room.localParticipant.setScreenShareEnabled(
+
+      function capture(withAudio: boolean) {
+        return room.localParticipant.setScreenShareEnabled(
           true,
           {
-            // Audio do sistema quando o navegador e a escolha do usuario
-            // permitirem. Se nao houver, o video vai sozinho — nao e erro.
-            audio: true,
+            audio: withAudio,
             contentHint: preset.contentHint,
             resolution: {
               width: preset.width,
@@ -241,21 +240,49 @@ export async function connectVoiceRoom({
             },
           },
         );
-        return true;
-      } catch (error) {
-        // Cancelar o seletor nativo cai aqui, e nao e falha: e escolha.
-        if (
+      }
+
+      /** Cancelar o seletor nativo nao e falha, e escolha — nao insistir. */
+      function isCancellation(error: unknown): boolean {
+        return (
           error instanceof DOMException &&
           (error.name === "NotAllowedError" || error.name === "AbortError")
-        ) {
+        );
+      }
+
+      try {
+        // Primeira tentativa COM audio do sistema: quando funciona, o som do
+        // jogo ou do video vai junto, que e o que se espera.
+        await capture(true);
+        return true;
+      } catch (error) {
+        if (isCancellation(error)) return false;
+
+        /**
+         * Pedir audio e all-or-nothing no getDisplayMedia: se o sistema nao
+         * consegue abrir a fonte de som ("Could not start audio source"), a
+         * captura inteira falha — inclusive o video, que funcionaria.
+         *
+         * Depende do sistema operacional, do navegador e do tipo de superficie
+         * escolhida (tela inteira costuma nao oferecer audio; aba costuma
+         * oferecer). Como nao da para saber antes, tentamos de novo sem audio
+         * em vez de transformar isso em erro para o usuario.
+         */
+        try {
+          await capture(false);
+          callbacks.onError(
+            "Compartilhando sem o audio do sistema — seu navegador nao o disponibilizou. Para levar o som junto, compartilhe uma ABA do navegador.",
+          );
+          return true;
+        } catch (retryError) {
+          if (isCancellation(retryError)) return false;
+          callbacks.onError(
+            retryError instanceof Error
+              ? `Nao foi possivel compartilhar: ${retryError.message}`
+              : "Nao foi possivel compartilhar a tela.",
+          );
           return false;
         }
-        callbacks.onError(
-          error instanceof Error
-            ? `Nao foi possivel compartilhar: ${error.message}`
-            : "Nao foi possivel compartilhar a tela.",
-        );
-        return false;
       }
     },
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, MicOff, WifiOff } from "lucide-react";
+import { Loader2, VolumeX, WifiOff } from "lucide-react";
 import {
   useConnectionStatus,
   useRealtimeStore,
@@ -59,7 +59,7 @@ export function ConnectionBanner() {
       )}
     >
       {voiceError && !offline && !error ? (
-        <MicOff className="h-3.5 w-3.5 shrink-0" />
+        <VolumeX className="h-3.5 w-3.5 shrink-0" />
       ) : offline || error ? (
         <WifiOff className="h-3.5 w-3.5 shrink-0" />
       ) : (
