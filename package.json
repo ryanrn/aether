@@ -1,0 +1,40 @@
+{
+  "name": "aether-comms",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Plataforma de comunicacao em tempo real (voz, tela e texto) — nome definitivo a definir",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "dotenv -e .env -- npm run dev --workspace=@aether/web",
+    "dev:realtime": "dotenv -e .env -- npm run dev --workspace=@aether/realtime",
+    "build": "npm run db:generate && dotenv -e .env -- npm run build --workspace=@aether/web",
+    "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "env:check": "node scripts/check-env.js .env",
+    "db:password": "node scripts/set-db-password.js",
+    "db:diagnose": "node scripts/diagnose-db.js",
+    "db:generate": "dotenv -e .env -- npm run generate --workspace=@aether/db",
+    "db:push": "dotenv -e .env -- npm run push --workspace=@aether/db",
+    "db:migrate": "dotenv -e .env -- npm run migrate --workspace=@aether/db",
+    "db:deploy": "dotenv -e .env -- npm run deploy --workspace=@aether/db",
+    "db:studio": "dotenv -e .env -- npm run studio --workspace=@aether/db",
+    "db:seed": "dotenv -e .env -- npm run seed --workspace=@aether/db"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.2": true,
+    "@prisma/engines@6.19.2": true,
+    "prisma@6.19.2": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.34.5": true
+  }
+}

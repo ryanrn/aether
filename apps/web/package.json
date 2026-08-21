@@ -1,0 +1,34 @@
+{
+  "name": "@aether/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aether/access": "*",
+    "@aether/db": "*",
+    "@aether/shared": "*",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.9",
+    "lucide-react": "^1.33.0",
+    "next": "15.5.23",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.7.3"
+  }
+}

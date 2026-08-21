@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/*
+ * Design system do produto.
+ * Identidade propria: grafite frio azulado + acento turquesa, bordas discretas,
+ * raios curtos, tipografia Inter com detalhes em monoespacada (cara de software
+ * tecnico, nao de rede social).
+ */
+@theme {
+  /* superficies — do mais profundo ao mais elevado */
+  --color-base-950: #06070a;
+  --color-base-900: #0a0c11;
+  --color-base-850: #0e1116;
+  --color-base-800: #12161d;
+  --color-base-750: #171c25;
+  --color-base-700: #1d2430;
+  --color-base-600: #2a3341;
+  --color-base-500: #3b4757;
+
+  /* texto */
+  --color-ink-100: #eef2f7;
+  --color-ink-200: #c9d2de;
+  --color-ink-300: #9aa6b8;
+  --color-ink-400: #6d798c;
+  --color-ink-500: #4e5868;
+
+  /* acento principal */
+  --color-accent-300: #6ff2dc;
+  --color-accent-400: #35e0c4;
+  --color-accent-500: #19d3b4;
+  --color-accent-600: #10ab92;
+  --color-accent-700: #0c8371;
+
+  /* estados */
+  --color-signal-online: #3ecf8e;
+  --color-signal-idle: #f2b45e;
+  --color-signal-dnd: #f2565b;
+  --color-signal-offline: #56606f;
+  --color-signal-live: #f2565b;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.02) inset, 0 8px 24px -12px rgb(0 0 0 / 0.8);
+  --shadow-pop: 0 24px 48px -20px rgb(0 0 0 / 0.9);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-base-950);
+    color: var(--color-ink-200);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent-500) 35%, transparent);
+    color: var(--color-ink-100);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* barra de rolagem discreta, no tom do painel */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-base-600) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-base-600);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-base-500);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  /* textura sutil de painel, evita o "preto chapado" */
+  .surface-grain {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      rgb(255 255 255 / 0.015) 1px,
+      transparent 0
+    );
+    background-size: 4px 4px;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* halo do acento, usado em estados ativos */
+  .ring-accent-soft {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 45%, transparent),
+      0 0 24px -8px var(--color-accent-500);
+  }
+
+  /* anel de "falando" — fase 4 usa a mesma classe */
+  .speaking-ring {
+    box-shadow: 0 0 0 2px var(--color-accent-500), 0 0 16px -4px var(--color-accent-400);
+  }
+
+  .animate-in-fast {
+    animation: aether-fade-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .animate-rise {
+    animation: aether-rise 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes aether-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes aether-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

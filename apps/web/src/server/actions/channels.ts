@@ -1,0 +1,339 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@aether/db";
+import {
+  createCategorySchema,
+  createChannelSchema,
+  renameCategorySchema,
+  updateChannelSchema,
+  channelAccessSchema,
+  type ActionResult,
+} from "@aether/shared";
+import { writeAudit } from "../audit";
+import {
+  requireChannelPermission,
+  requireMember,
+  requirePermission,
+} from "../guards";
+import {
+  createCategory,
+  createChannel,
+  deleteCategory,
+  deleteChannel,
+  getChannelAccess,
+  moveChannel,
+  renameCategory,
+  setChannelAccess,
+  updateChannel,
+} from "../services/channels";
+import { fail, ok, toActionError } from "./action-result";
+
+/**
+ * Actions de canais e categorias.
+ *
+ * Todas seguem o mesmo contrato: guard primeiro (que ja valida se o recurso
+ * pertence ao servidor), depois Zod, depois service, depois auditoria.
+ * O cliente nunca informa quem ele e — isso vem do cookie.
+ */
+
+function refresh(serverId: string) {
+  revalidatePath(`/app/s/${serverId}`, "layout");
+}
+
+export async function createChannelAction(
+  input: unknown,
+): Promise<ActionResult<{ channelId: string }>> {
+  try {
+    const parsed = createChannelSchema.safeParse(input);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return fail(issue?.message ?? "Dados invalidos", String(issue?.path[0] ?? ""));
+    }
+    const data = parsed.data;
+
+    const context = await requirePermission(data.serverId, "CREATE_CHANNEL");
+
+    const result = await createChannel({
+      serverId: data.serverId,
+      name: data.name,
+      type: data.type,
+      categoryId: data.categoryId,
+      isPrivate: data.isPrivate,
+      isTemporary: data.isTemporary,
+      userLimit: data.userLimit,
+      allowedRoleIds: data.isPrivate ? data.allowedRoleIds : [],
+    });
+
+    await writeAudit({
+      serverId: data.serverId,
+      actorId: context.session.user.id,
+      action: "channel.create",
+      targetType: "channel",
+      targetId: result.channelId,
+      metadata: { name: data.name, type: data.type, isPrivate: data.isPrivate },
+    });
+
+    refresh(data.serverId);
+    return ok(result);
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function updateChannelAction(
+  serverId: string,
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = updateChannelSchema.safeParse(input);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return fail(issue?.message ?? "Dados invalidos", String(issue?.path[0] ?? ""));
+    }
+    const data = parsed.data;
+
+    const context = await requireChannelPermission(
+      serverId,
+      data.channelId,
+      "EDIT_CHANNEL",
+    );
+
+    await updateChannel({ ...data, serverId });
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "channel.update",
+      targetType: "channel",
+      targetId: data.channelId,
+      metadata: { name: data.name },
+    });
+
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function deleteChannelAction(
+  serverId: string,
+  channelId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const context = await requireChannelPermission(
+      serverId,
+      channelId,
+      "DELETE_CHANNEL",
+    );
+
+    const channel = await prisma.channel.findFirst({
+      where: { id: channelId, serverId },
+      select: { name: true },
+    });
+
+    await deleteChannel(channelId, serverId);
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "channel.delete",
+      targetType: "channel",
+      targetId: channelId,
+      metadata: { name: channel?.name ?? null },
+    });
+
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function moveChannelAction(
+  serverId: string,
+  channelId: string,
+  direction: "up" | "down",
+): Promise<ActionResult<undefined>> {
+  try {
+    await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
+    await moveChannel(channelId, serverId, direction);
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function setChannelAccessAction(
+  serverId: string,
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = channelAccessSchema.safeParse(input);
+    if (!parsed.success) return fail("Dados invalidos");
+
+    const context = await requireChannelPermission(
+      serverId,
+      parsed.data.channelId,
+      "EDIT_CHANNEL",
+    );
+
+    await setChannelAccess(parsed.data.channelId, serverId, parsed.data.roleIds);
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "channel.update",
+      targetType: "channel",
+      targetId: parsed.data.channelId,
+      metadata: { access: parsed.data.roleIds.length },
+    });
+
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function getChannelAccessAction(
+  serverId: string,
+  channelId: string,
+): Promise<ActionResult<{ roleIds: string[] }>> {
+  try {
+    await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
+    const roleIds = await getChannelAccess(channelId, serverId);
+    return ok({ roleIds });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function createCategoryAction(
+  input: unknown,
+): Promise<ActionResult<{ categoryId: string }>> {
+  try {
+    const parsed = createCategorySchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Dados invalidos", "name");
+    }
+
+    const context = await requirePermission(parsed.data.serverId, "CREATE_CHANNEL");
+    const result = await createCategory(parsed.data.serverId, parsed.data.name);
+
+    await writeAudit({
+      serverId: parsed.data.serverId,
+      actorId: context.session.user.id,
+      action: "channel.create",
+      targetType: "category",
+      targetId: result.categoryId,
+      metadata: { name: parsed.data.name },
+    });
+
+    refresh(parsed.data.serverId);
+    return ok(result);
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function renameCategoryAction(
+  serverId: string,
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = renameCategorySchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Dados invalidos", "name");
+    }
+
+    await requirePermission(serverId, "EDIT_CHANNEL");
+    await renameCategory(parsed.data.categoryId, serverId, parsed.data.name);
+
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function deleteCategoryAction(
+  serverId: string,
+  categoryId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const context = await requirePermission(serverId, "DELETE_CHANNEL");
+    await deleteCategory(categoryId, serverId);
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "channel.delete",
+      targetType: "category",
+      targetId: categoryId,
+    });
+
+    refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Usado pelo modal de edicao para pre-carregar os dados do canal. */
+export async function getChannelForEditAction(
+  serverId: string,
+  channelId: string,
+): Promise<
+  ActionResult<{
+    id: string;
+    name: string;
+    topic: string | null;
+    categoryId: string | null;
+    isPrivate: boolean;
+    isTemporary: boolean;
+    userLimit: number | null;
+    type: "TEXT" | "VOICE";
+    allowedRoleIds: string[];
+  }>
+> {
+  try {
+    await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
+
+    const channel = await prisma.channel.findFirst({
+      where: { id: channelId, serverId },
+      select: {
+        id: true,
+        name: true,
+        topic: true,
+        categoryId: true,
+        isPrivate: true,
+        isTemporary: true,
+        userLimit: true,
+        type: true,
+      },
+    });
+    if (!channel) return fail("Canal nao encontrado");
+
+    const allowedRoleIds = await getChannelAccess(channelId, serverId);
+    return ok({ ...channel, allowedRoleIds });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Sanidade: confirma que o visitante ainda enxerga o canal (usado em navegacao). */
+export async function assertChannelVisibleAction(
+  serverId: string,
+  channelId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    await requireMember(serverId);
+    await requireChannelPermission(serverId, channelId, "VIEW_CHANNEL");
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}

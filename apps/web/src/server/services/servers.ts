@@ -1,0 +1,348 @@
+import "server-only";
+
+import { randomBytes } from "node:crypto";
+import { prisma, ChannelType, type Prisma } from "@aether/db";
+import {
+  DEFAULT_ROLE_TEMPLATES,
+  has,
+  type PublicCategory,
+  type PublicChannel,
+  type PublicMember,
+  type PublicRole,
+  type PublicServer,
+  type UserStatus,
+} from "@aether/shared";
+import { getChannelPermissionMap } from "@aether/access";
+import type { MemberContext } from "../guards";
+
+/**
+ * Camada de dados dos servidores. Sem "use server" e sem checagem de sessao:
+ * quem chama e responsavel por ter passado pelos guards. Isso mantem as
+ * consultas reaproveitaveis pelo gateway realtime (fase 3).
+ */
+
+/** Estrutura de canais criada junto com um servidor novo. */
+const DEFAULT_TREE = [
+  {
+    category: "GERAL",
+    channels: [
+      { name: "geral", type: ChannelType.TEXT },
+      { name: "Lobby", type: ChannelType.VOICE },
+      { name: "Conversa", type: ChannelType.VOICE },
+    ],
+  },
+  {
+    category: "PRIVADO",
+    channels: [{ name: "Sala Administrativa", type: ChannelType.VOICE, isPrivate: true }],
+  },
+] as const;
+
+export function generateInviteCode(): string {
+  // 8 caracteres alfanumericos, sem ambiguidade visual.
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(8);
+  let code = "";
+  for (const byte of bytes) {
+    code += alphabet[byte % alphabet.length];
+  }
+  return code;
+}
+
+/** Cria servidor + cargos padrao + arvore inicial + membro dono, em transacao. */
+export async function createServerForUser(params: {
+  ownerId: string;
+  name: string;
+}): Promise<{ serverId: string }> {
+  return prisma.$transaction(async (tx) => {
+    const server = await tx.server.create({
+      data: {
+        name: params.name,
+        ownerId: params.ownerId,
+        roles: {
+          create: DEFAULT_ROLE_TEMPLATES.map((template) => ({
+            name: template.name,
+            color: template.color,
+            permissions: template.permissions,
+            position: template.position,
+            isDefault: template.isDefault,
+            isOwner: template.isOwner,
+          })),
+        },
+      },
+      include: { roles: true },
+    });
+
+    let categoryPosition = 0;
+    for (const group of DEFAULT_TREE) {
+      const category = await tx.category.create({
+        data: {
+          serverId: server.id,
+          name: group.category,
+          position: categoryPosition++,
+        },
+      });
+
+      await tx.channel.createMany({
+        data: group.channels.map((channel, index) => ({
+          serverId: server.id,
+          categoryId: category.id,
+          name: channel.name,
+          type: channel.type,
+          position: index,
+          isPrivate: "isPrivate" in channel ? channel.isPrivate : false,
+        })),
+      });
+    }
+
+    const ownerRole = server.roles.find((role) => role.isOwner);
+    const defaultRole = server.roles.find((role) => role.isDefault);
+
+    const member = await tx.serverMember.create({
+      data: { serverId: server.id, userId: params.ownerId },
+    });
+
+    const roleLinks: Prisma.MemberRoleCreateManyInput[] = [];
+    if (ownerRole) roleLinks.push({ memberId: member.id, roleId: ownerRole.id });
+    if (defaultRole) roleLinks.push({ memberId: member.id, roleId: defaultRole.id });
+    if (roleLinks.length > 0) {
+      await tx.memberRole.createMany({ data: roleLinks });
+    }
+
+    await tx.invite.create({
+      data: {
+        code: generateInviteCode(),
+        serverId: server.id,
+        creatorId: params.ownerId,
+      },
+    });
+
+    return { serverId: server.id };
+  });
+}
+
+/** Servidores em que o usuario e membro — alimenta a barra lateral. */
+export async function listServersForUser(userId: string): Promise<PublicServer[]> {
+  const memberships = await prisma.serverMember.findMany({
+    where: { userId },
+    orderBy: { joinedAt: "asc" },
+    select: {
+      server: {
+        select: {
+          id: true,
+          name: true,
+          iconUrl: true,
+          ownerId: true,
+          _count: { select: { members: true } },
+        },
+      },
+    },
+  });
+
+  return memberships.map(({ server }) => ({
+    id: server.id,
+    name: server.name,
+    iconUrl: server.iconUrl,
+    ownerId: server.ownerId,
+    memberCount: server._count.members,
+  }));
+}
+
+export interface ServerContext {
+  server: PublicServer;
+  categories: PublicCategory[];
+  /** canais sem categoria */
+  looseChannels: PublicChannel[];
+  members: PublicMember[];
+  /** permissoes efetivas do visitante em cada canal visivel (bitfield serializado) */
+  channelPermissions: Record<string, string>;
+  /** todos os cargos do servidor, do mais alto para o mais baixo */
+  roles: PublicRole[];
+}
+
+function toPublicChannel(channel: {
+  id: string;
+  name: string;
+  topic: string | null;
+  type: ChannelType;
+  categoryId: string | null;
+  position: number;
+  isPrivate: boolean;
+  isTemporary: boolean;
+  userLimit: number | null;
+}): PublicChannel {
+  return {
+    id: channel.id,
+    name: channel.name,
+    topic: channel.topic,
+    type: channel.type,
+    categoryId: channel.categoryId,
+    position: channel.position,
+    isPrivate: channel.isPrivate,
+    isTemporary: channel.isTemporary,
+    userLimit: channel.userLimit,
+  };
+}
+
+/**
+ * Carrega tudo que a tela do servidor precisa.
+ *
+ * O filtro de canais privados acontece AQUI, no servidor: um canal que o
+ * visitante nao pode ver nunca chega a virar JSON. Esconder no cliente seria
+ * apenas cosmetico — bastaria abrir o devtools para enumerar os canais.
+ */
+export async function getServerContext(
+  serverId: string,
+  viewer: MemberContext,
+): Promise<ServerContext | null> {
+  const permissionMap = await getChannelPermissionMap(viewer);
+
+  const server = await prisma.server.findUnique({
+    where: { id: serverId },
+    select: {
+      id: true,
+      name: true,
+      iconUrl: true,
+      ownerId: true,
+      _count: { select: { members: true } },
+      categories: {
+        orderBy: { position: "asc" },
+        select: { id: true, name: true, position: true },
+      },
+      channels: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          topic: true,
+          type: true,
+          categoryId: true,
+          position: true,
+          isPrivate: true,
+          isTemporary: true,
+          userLimit: true,
+        },
+      },
+      roles: {
+        orderBy: { position: "desc" },
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          position: true,
+          isDefault: true,
+          isOwner: true,
+          permissions: true,
+        },
+      },
+      members: {
+        orderBy: { joinedAt: "asc" },
+        select: {
+          id: true,
+          nickname: true,
+          joinedAt: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              status: true,
+            },
+          },
+          roles: {
+            select: {
+              role: {
+                select: {
+                  id: true,
+                  name: true,
+                  color: true,
+                  position: true,
+                  isDefault: true,
+                  isOwner: true,
+                  permissions: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!server) return null;
+
+  const channelsByCategory = new Map<string, PublicChannel[]>();
+  const looseChannels: PublicChannel[] = [];
+  const channelPermissions: Record<string, string> = {};
+
+  for (const channel of server.channels) {
+    const bits = permissionMap.get(channel.id) ?? 0n;
+    // sem VIEW_CHANNEL o canal simplesmente nao existe para este visitante
+    if (!has(bits, "VIEW_CHANNEL")) continue;
+    channelPermissions[channel.id] = bits.toString();
+
+    const publicChannel = toPublicChannel(channel);
+    if (!channel.categoryId) {
+      looseChannels.push(publicChannel);
+      continue;
+    }
+    const list = channelsByCategory.get(channel.categoryId) ?? [];
+    list.push(publicChannel);
+    channelsByCategory.set(channel.categoryId, list);
+  }
+
+  const categories: PublicCategory[] = server.categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    position: category.position,
+    channels: channelsByCategory.get(category.id) ?? [],
+  }));
+
+  const members: PublicMember[] = server.members.map((member) => ({
+    id: member.id,
+    nickname: member.nickname,
+    joinedAt: member.joinedAt.toISOString(),
+    user: {
+      id: member.user.id,
+      username: member.user.username,
+      displayName: member.user.displayName,
+      avatarUrl: member.user.avatarUrl,
+      status: member.user.status as UserStatus,
+    },
+    roles: member.roles
+      .map(({ role }) => ({
+        id: role.id,
+        name: role.name,
+        color: role.color,
+        position: role.position,
+        isDefault: role.isDefault,
+        isOwner: role.isOwner,
+        // bigint nao e serializavel para o client component
+        permissions: role.permissions.toString(),
+      }))
+      .sort((a, b) => b.position - a.position),
+  }));
+
+  return {
+    server: {
+      id: server.id,
+      name: server.name,
+      iconUrl: server.iconUrl,
+      ownerId: server.ownerId,
+      memberCount: server._count.members,
+    },
+    categories,
+    looseChannels,
+    members,
+    channelPermissions,
+    roles: server.roles.map((role) => ({
+      id: role.id,
+      name: role.name,
+      color: role.color,
+      position: role.position,
+      isDefault: role.isDefault,
+      isOwner: role.isOwner,
+      permissions: role.permissions.toString(),
+    })),
+  };
+}

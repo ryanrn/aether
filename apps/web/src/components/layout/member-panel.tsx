@@ -1,0 +1,116 @@
+"use client";
+
+import { useState } from "react";
+import { Crown, Shield } from "lucide-react";
+import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
+import { Avatar } from "@/components/ui/avatar";
+import { MemberRolesModal } from "@/components/members/member-roles-modal";
+import { canManageRole, viewerCan } from "@/lib/permissions";
+import { useRealtime } from "@/components/realtime/realtime-provider";
+
+/**
+ * Painel de membros agrupado por cargo (estilo TeamSpeak/Discord).
+ *
+ * A presenca vem do gateway, nao do banco: `user.status` gravado e apenas a
+ * preferencia do usuario (ele escolheu DND). Quem esta de fato conectado agora
+ * so o socket sabe, entao e o socket que manda no ponto verde.
+ */
+export function MemberPanel({
+  members,
+  roles,
+  ownerId,
+  serverId,
+  viewer,
+}: {
+  members: PublicMember[];
+  roles: PublicRole[];
+  ownerId: string;
+  serverId: string;
+  viewer: ViewerContext;
+}) {
+  const [editing, setEditing] = useState<PublicMember | null>(null);
+  const { statusOf } = useRealtime();
+  const canManageMembers = viewerCan(viewer, "MANAGE_ROLES");
+
+  const groups = new Map<string, { color: string; members: PublicMember[] }>();
+  for (const member of members) {
+    // roles ja vem ordenado por position desc
+    const top = member.roles.find((role) => !role.isDefault) ?? member.roles[0];
+    const key = top?.name ?? "Membros";
+    const group = groups.get(key) ?? { color: top?.color ?? "#9AA6B8", members: [] };
+    group.members.push(member);
+    groups.set(key, group);
+  }
+
+  return (
+    <>
+      <aside className="hidden w-56 shrink-0 flex-col border-l border-base-800 bg-base-900 lg:flex">
+        <div className="flex-1 overflow-y-auto px-2 py-3">
+          {[...groups.entries()].map(([name, group]) => (
+            <section key={name} className="mb-4">
+              <h3
+                className="px-1.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                style={{ color: group.color }}
+              >
+                {name} — {group.members.length}
+              </h3>
+              <ul className="flex flex-col gap-0.5">
+                {group.members.map((member) => {
+                  const isOwnerMember = member.user.id === ownerId;
+                  const editable =
+                    canManageMembers &&
+                    !isOwnerMember &&
+                    member.id !== viewer.memberId;
+
+                  return (
+                    <li key={member.id}>
+                      <div className="group/member flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850">
+                        <Avatar
+                          userId={member.user.id}
+                          name={member.nickname ?? member.user.displayName}
+                          src={member.user.avatarUrl}
+                          status={statusOf(member.user.id)}
+                          size="xs"
+                        />
+                        <span className="flex-1 truncate text-[13px] text-ink-300">
+                          {member.nickname ?? member.user.displayName}
+                        </span>
+
+                        {isOwnerMember ? (
+                          <Crown
+                            className="h-3 w-3 shrink-0 text-signal-idle"
+                            aria-label="Dono do servidor"
+                          />
+                        ) : null}
+
+                        {editable ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(member)}
+                            title="Gerenciar cargos"
+                            className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/member:opacity-100"
+                          >
+                            <Shield className="h-3 w-3" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </aside>
+
+      {editing ? (
+        <MemberRolesModal
+          serverId={serverId}
+          member={editing}
+          roles={roles.filter((role) => canManageRole(viewer, role))}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+    </>
+  );
+}
