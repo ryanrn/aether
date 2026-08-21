@@ -85,7 +85,12 @@ function emitWithAck(socket, event, payload) {
   });
 }
 
-function waitFor(socket, event, predicate = () => true, ms = 2500) {
+/**
+ * Prazo generoso de proposito: contra producao a primeira consulta depois de
+ * um deploy paga o handshake do pool do Postgres, e um teste que reprova por
+ * causa disso vira ruido em vez de sinal.
+ */
+function waitFor(socket, event, predicate = () => true, ms = 6000) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       socket.off(event, handler);
