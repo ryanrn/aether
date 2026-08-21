@@ -3,6 +3,7 @@ import { getChannelPermissions, loadMemberAccess } from "@aether/access";
 import { has, room } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
+import { createMediaCredentials } from "../livekit";
 import {
   countInChannel,
   joinVoice,
@@ -17,11 +18,13 @@ import {
 /**
  * Ocupacao de canal de voz — quem esta em qual call.
  *
- * SEM MIDIA. Nao existe audio aqui: nenhum getUserMedia, nenhum WebRTC,
- * nenhuma faixa. O que este handler faz e ser a FONTE DE VERDADE de quem
- * ocupa qual canal, que e o dado do qual a fase 4 vai depender para saber a
- * quem conectar. O efeito visivel hoje e o nome da pessoa aparecendo sob o
- * canal para todos os membros do servidor.
+ * A MIDIA NAO PASSA POR AQUI. O audio trafega entre o navegador e o SFU
+ * (LiveKit); este handler e a fonte de verdade de QUEM ocupa qual canal e o
+ * emissor do token que da acesso a sala de midia correspondente.
+ *
+ * Separar assim tem uma consequencia boa: o gateway nao vira gargalo de banda,
+ * e a autorizacao continua num lugar so — o token carrega, assinada, a decisao
+ * que o @aether/access tomou.
  *
  * Uma pessoa ocupa no maximo um canal por vez: entrar em outro move.
  */
@@ -111,7 +114,23 @@ export function registerVoiceHandlers(
       const participant = voiceParticipant(userId);
       if (participant) broadcast(channel.serverId, participant);
 
-      respond({ ok: true, participants: voiceOfServer(channel.serverId) });
+      /**
+       * O token sai daqui, depois da checagem de permissao que ja foi feita
+       * acima. As permissoes viram grants assinados: sem SPEAK o token nao
+       * permite publicar microfone, e quem impoe isso passa a ser o SFU.
+       */
+      const media = await createMediaCredentials({
+        channelId,
+        userId,
+        displayName: user.displayName,
+        permissions: bits,
+      });
+
+      respond({
+        ok: true,
+        participants: voiceOfServer(channel.serverId),
+        media,
+      });
     } catch (error) {
       console.error("[gateway] voice:join falhou:", error);
       respond({ ok: false, error: "Falha ao conectar" });

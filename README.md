@@ -8,14 +8,14 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 
 ---
 
-## Estado atual: FASE 2 concluida, FASE 3 iniciada
+## Estado atual: FASES 1-3 concluidas, FASE 4 em andamento
 
 | Fase | Escopo | Status |
 | --- | --- | --- |
 | 1 | Estrutura, autenticacao, usuarios, servidores, interface base | ✅ pronto |
 | 2 | Canais, categorias, cargos, permissoes (CRUD + canais privados) | ✅ pronto |
-| 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | em andamento |
-| 4 | WebRTC: microfone, audio, canais de voz (SFU) | pendente |
+| 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | ✅ pronto |
+| 4 | WebRTC: microfone, audio, canais de voz (SFU) | em andamento |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | pendente |
 | 6 | Administracao, moderacao, logs | pendente |
 | 7 | Performance, reconexao, seguranca, testes, deploy | pendente |

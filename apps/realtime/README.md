@@ -35,12 +35,18 @@ npm run dev:realtime      # tsx watch, le o .env da raiz
   **encerramento limpo** em SIGINT/SIGTERM, com trava de reentrada — sem ela o
   `tsx watch` deixava o processo velho segurando a porta.
 
+- **Token de midia (FASE 4).** O ack de `voice:join` devolve credenciais do
+  SFU (LiveKit). As permissoes do Aether viram grants ASSINADOS: sem `SPEAK` o
+  token nao permite publicar microfone, sem `SCREEN_SHARE` a fonte de tela nem
+  aparece. Quem impoe isso passa a ser o proprio SFU, nao a interface.
+  Sem `LIVEKIT_*` configurado o ack devolve `media: null` e o app segue
+  funcionando sem audio.
+
 ## Nao faz (de proposito)
 
-- **Nenhuma midia.** Nenhum byte de audio ou video passa por este servico.
-  `voice:*` e sinalizacao: quem esta onde, mutado ou nao, falando ou nao. O
-  microfone e aberto no NAVEGADOR apenas para medir volume localmente; o
-  WebRTC entra na fase 4 e a tela na fase 5.
+- **Nenhum byte de midia passa por aqui.** O audio trafega direto entre o
+  navegador e o SFU. Este servico decide QUEM pode entrar e emite o token —
+  por isso nao vira gargalo de banda.
 - Editar e excluir mensagem — o modelo suporta, os eventos ainda nao existem.
 - Remover canal temporario ao esvaziar — o gateway sabe quando esvaziou, falta
   o evento que atualiza a arvore no cliente.

@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useIsConnected,
+  useRealtimeStore,
   useSelfVoice,
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
@@ -23,9 +24,10 @@ import { cn } from "@/lib/utils";
  * nome ancorado no rodape do card em monoespacada, e o estado "falando" como
  * um anel de acento em vez de borda verde grossa.
  *
- * FASE 3: a ocupacao e real — quem entra aparece aqui e na arvore de canais
- * para todos os membros. Ainda SEM audio: nenhum getUserMedia, nenhum WebRTC.
- * A fase 4 acopla a midia dentro destes mesmos cards.
+ * A ocupacao e o audio sao reais: quem entra aparece aqui e na arvore de
+ * canais, e a voz trafega pelo SFU. Este componente NAO toca a midia — quem
+ * conecta a sala e o VoiceSession, montado no layout, para a call sobreviver a
+ * navegacao entre canais.
  */
 export function VoiceStage({
   channel,
@@ -40,6 +42,8 @@ export function VoiceStage({
   const connected = useIsConnected();
   const participants = useVoiceParticipants(channel.id);
   const selfVoice = useSelfVoice();
+  const setMedia = useRealtimeStore((state) => state.setMedia);
+  const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
 
   const isHere = selfVoice?.channelId === channel.id;
   const full =
@@ -53,11 +57,20 @@ export function VoiceStage({
     if (!socket) return;
     if (isHere) {
       socket.emit("voice:leave");
+      setMedia(null);
       return;
     }
-    // O ack existe para o gateway poder recusar (canal cheio, sem CONNECT);
-    // o estado na tela vem do evento voice:update, nao daqui.
-    socket.emit("voice:join", { channelId: channel.id }, () => undefined);
+    socket.emit("voice:join", { channelId: channel.id }, (result) => {
+      if (!result.ok) {
+        // A ocupacao na tela vem do evento voice:update; o ack serve para o
+        // gateway poder recusar (canal cheio, sem CONNECT) e para entregar as
+        // credenciais de midia, que so existem apos a checagem de permissao.
+        setVoiceError(result.error);
+        return;
+      }
+      setVoiceError(null);
+      setMedia(result.media);
+    });
   }
 
   const action = (
@@ -97,7 +110,7 @@ export function VoiceStage({
           <p className="text-sm font-medium text-ink-200">{channel.name}</p>
           <p className="mt-1 max-w-[380px] text-balance text-[13px] leading-relaxed text-ink-500">
             {canConnect
-              ? "Ninguem conectado. Ao entrar, seu nome aparece aqui e abaixo do canal na barra lateral, para todo mundo. O audio entra na fase 4."
+              ? "Ninguem conectado. Ao entrar, seu nome aparece aqui e abaixo do canal na barra lateral, para todo mundo."
               : "Ninguem conectado. Seu cargo nao permite conectar neste canal."}
           </p>
           {channel.userLimit ? (

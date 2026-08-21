@@ -44,8 +44,26 @@ export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }
   | { ok: false; error: string };
 
+/**
+ * Credenciais para o SFU. `null` quando o servidor nao tem LiveKit
+ * configurado — nesse caso a ocupacao de canal funciona e o audio nao existe,
+ * o que a interface precisa saber para nao prometer o que nao entrega.
+ */
+export interface MediaGrant {
+  url: string;
+  token: string;
+  /** o token permite publicar microfone (depende de SPEAK) */
+  canPublish: boolean;
+  /** o token permite publicar tela (depende de SCREEN_SHARE) — fase 5 */
+  canShareScreen: boolean;
+}
+
 export type VoiceJoinAck =
-  | { ok: true; participants: VoiceParticipant[] }
+  | {
+      ok: true;
+      participants: VoiceParticipant[];
+      media: MediaGrant | null;
+    }
   | { ok: false; error: string };
 
 export interface ServerToClientEvents {

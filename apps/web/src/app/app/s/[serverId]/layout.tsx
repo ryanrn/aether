@@ -10,6 +10,7 @@ import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
 import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
 import { VoiceChimes } from "@/components/realtime/voice-chimes";
+import { VoiceSession } from "@/components/realtime/voice-session";
 
 /**
  * Casca do servidor.
@@ -57,6 +58,7 @@ export default async function ServerLayout({
         <ConnectionBanner />
         <VoiceActivityMonitor />
         <VoiceChimes />
+        <VoiceSession />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar

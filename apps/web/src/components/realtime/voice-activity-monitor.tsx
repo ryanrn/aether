@@ -9,7 +9,15 @@ import {
 } from "@/lib/voice/voice-activity";
 
 /**
- * Liga a deteccao de fala enquanto voce estiver em um canal de voz.
+ * Deteccao de fala SEM SFU — caminho de reserva.
+ *
+ * Quando o LiveKit esta configurado, quem informa "estou falando" e a propria
+ * sala de midia (ver voice-session.tsx), e este monitor fica parado. Sem ele,
+ * havia dois streams de microfone abertos ao mesmo tempo: um para publicar e
+ * outro so para medir volume.
+ *
+ * Este arquivo continua existindo porque o app tem de funcionar sem SFU: nesse
+ * caso a bordinha de "falando" segue acendendo, mesmo sem audio.
  *
  * Fica montado no layout do servidor, e nao na pagina do canal, porque a call
  * continua quando voce navega para um canal de texto — como no Discord. Se
@@ -22,8 +30,10 @@ export function VoiceActivityMonitor() {
   const socket = useSocket();
   const selfVoice = useSelfVoice();
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
+  const media = useRealtimeStore((state) => state.media);
 
-  const inVoice = selfVoice?.channelId != null;
+  // Com SFU configurado, o indicador vem de la.
+  const inVoice = selfVoice?.channelId != null && media === null;
   const muted = selfVoice?.selfMuted ?? false;
 
   /**

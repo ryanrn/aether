@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import type {
+  MediaGrant,
   PresenceEntry,
   PublicMessage,
   UserStatus,
@@ -53,6 +54,10 @@ interface RealtimeState {
 
   presence: Record<string, UserStatus>;
   voice: Record<string, VoiceParticipant>;
+  /** credenciais do SFU, validas so enquanto voce esta na call */
+  media: MediaGrant | null;
+  /** a sala de midia esta conectada de fato (nao e o mesmo que estar no canal) */
+  mediaConnected: boolean;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
 
@@ -69,6 +74,8 @@ interface RealtimeState {
 
   syncVoice: (participants: VoiceParticipant[]) => void;
   updateVoice: (participant: VoiceParticipant) => void;
+  setMedia: (media: MediaGrant | null) => void;
+  setMediaConnected: (connected: boolean) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   receiveMessage: (message: PublicMessage, nonce: string | null) => void;
@@ -109,6 +116,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   voiceError: null,
   presence: {},
   voice: {},
+  media: null,
+  mediaConnected: false,
   messages: {},
   history: {},
 
@@ -121,7 +130,15 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set((state) =>
       state.serverId === serverId
         ? { serverId }
-        : { serverId, presence: {}, voice: {}, messages: {}, history: {} },
+        : {
+            serverId,
+            presence: {},
+            voice: {},
+            media: null,
+            mediaConnected: false,
+            messages: {},
+            history: {},
+          },
     ),
 
   /**
@@ -129,7 +146,10 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
    * ultimo estado na tela seria apresentar como atual algo que nao e.
    * Mensagens ficam: elas sao historico, nao estado vivo.
    */
-  clearVolatile: () => set({ presence: {}, voice: {} }),
+  clearVolatile: () =>
+    // O token de midia morre junto: ele foi emitido para uma entrada em canal
+    // que nao vale mais.
+    set({ presence: {}, voice: {}, media: null, mediaConnected: false }),
 
   syncPresence: (entries) =>
     set({
@@ -152,12 +172,20 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       voice: Object.fromEntries(participants.map((p) => [p.userId, p])),
     }),
 
+  setMedia: (media) => set({ media }),
+  setMediaConnected: (mediaConnected) => set({ mediaConnected }),
+
   updateVoice: (participant) =>
     set((state) => {
       // channelId nulo e a forma de "saiu da voz"
       if (participant.channelId === null) {
         const { [participant.userId]: _gone, ...rest } = state.voice;
-        return { voice: rest };
+        // Se quem saiu fui eu — por qualquer motivo, inclusive ter sido
+        // desconectado — o token nao serve mais.
+        const leftMyself = participant.userId === state.selfUserId;
+        return leftMyself
+          ? { voice: rest, media: null, mediaConnected: false }
+          : { voice: rest };
       }
       return {
         voice: { ...state.voice, [participant.userId]: participant },
@@ -269,6 +297,10 @@ export function useVoiceParticipants(channelId: string): VoiceParticipant[] {
     () => Object.values(voice).filter((p) => p.channelId === channelId),
     [voice, channelId],
   );
+}
+
+export function useMediaConnected(): boolean {
+  return useRealtimeStore((state) => state.mediaConnected);
 }
 
 /** Estado de voz do proprio usuario — alimenta a barra de controles. */

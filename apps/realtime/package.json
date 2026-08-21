@@ -14,6 +14,7 @@
     "@aether/access": "*",
     "@aether/db": "*",
     "@aether/shared": "*",
+    "livekit-server-sdk": "^2.18.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

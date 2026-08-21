@@ -14,6 +14,7 @@
     "@aether/shared": "*",
     "clsx": "^2.1.1",
     "jose": "^6.2.9",
+    "livekit-client": "^2.22.0",
     "lucide-react": "^1.33.0",
     "next": "15.5.23",
     "react": "19.2.8",
