@@ -178,6 +178,7 @@ interface VoiceEntry {
   selfMuted: boolean;
   selfDeafened: boolean;
   speaking: boolean;
+  streaming: boolean;
   user: PublicUser;
 }
 
@@ -193,7 +194,7 @@ function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
     // moderacao entra na fase 6; transmissao na fase 5; "falando" na fase 4
     serverMuted: false,
     serverDeafened: false,
-    streaming: false,
+    streaming: entry.streaming,
     // Mutado nunca aparece falando, mesmo que o cliente insista.
     speaking: entry.speaking && !entry.selfMuted,
     user: entry.user,
@@ -257,6 +258,8 @@ export function joinVoice(params: {
     selfMuted: previous?.selfMuted ?? false,
     selfDeafened: previous?.selfDeafened ?? false,
     speaking: false,
+    // Trocar de canal encerra a transmissao: a track fica na sala anterior.
+    streaming: false,
     user: params.user,
   });
 
@@ -338,4 +341,33 @@ export function setVoiceSpeaking(
   if (entry.speaking === speaking) return null;
   entry.speaking = speaking;
   return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+}
+
+/** Marca quem esta compartilhando tela. `null` quando nada mudou. */
+export function setVoiceStreaming(
+  userId: string,
+  streaming: boolean,
+): { serverId: string; participant: VoiceParticipant } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+  if (entry.streaming === streaming) return null;
+  entry.streaming = streaming;
+  return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+}
+
+/** Quantas pessoas transmitem no canal — a interface monta o grid com isto. */
+export function countStreaming(channelId: string): number {
+  let total = 0;
+  for (const entry of voice.values()) {
+    if (entry.channelId === channelId && entry.streaming) total += 1;
+  }
+  return total;
+}
+
+/** Onde o usuario esta em voz, com o servidor — evita consultar o banco so por isso. */
+export function voiceLocation(
+  userId: string,
+): { serverId: string; channelId: string } | null {
+  const entry = voice.get(userId);
+  return entry ? { serverId: entry.serverId, channelId: entry.channelId } : null;
 }

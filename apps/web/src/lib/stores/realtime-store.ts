@@ -9,6 +9,9 @@ import type {
   UserStatus,
   VoiceParticipant,
 } from "@aether/shared";
+import type { Track } from "livekit-client";
+import type { RemoteScreenShare } from "@/lib/voice/room";
+import type { SharePresetId } from "@/lib/voice/screen-share";
 
 /**
  * Estado global de tempo real: presenca, voz e mensagens.
@@ -58,6 +61,25 @@ interface RealtimeState {
   media: MediaGrant | null;
   /** a sala de midia esta conectada de fato (nao e o mesmo que estar no canal) */
   mediaConnected: boolean;
+  /** compartilhamentos de tela recebidos na sala */
+  screenShares: RemoteScreenShare[];
+  /** o proprio usuario esta transmitindo */
+  localSharing: boolean;
+  /** faixa local, para voce conferir o que esta enviando */
+  localShareTrack: Track | null;
+  /** qual compartilhamento esta em destaque; null = o primeiro disponivel */
+  focusedShareUserId: string | null;
+  /**
+   * Comandos de midia, publicados pela sessao enquanto ela existe.
+   *
+   * Ficam na store porque quem dispara (a barra de controles) e quem detem a
+   * conexao (a sessao no layout) estao em ramos diferentes da arvore. A
+   * alternativa seria mais um contexto so para isso.
+   */
+  shareControls: {
+    start: (preset: SharePresetId) => Promise<boolean>;
+    stop: () => Promise<void>;
+  } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
 
@@ -76,6 +98,10 @@ interface RealtimeState {
   updateVoice: (participant: VoiceParticipant) => void;
   setMedia: (media: MediaGrant | null) => void;
   setMediaConnected: (connected: boolean) => void;
+  setScreenShares: (shares: RemoteScreenShare[]) => void;
+  setLocalSharing: (sharing: boolean, track?: Track | null) => void;
+  setFocusedShare: (userId: string | null) => void;
+  setShareControls: (controls: RealtimeState["shareControls"]) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   receiveMessage: (message: PublicMessage, nonce: string | null) => void;
@@ -118,6 +144,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   voice: {},
   media: null,
   mediaConnected: false,
+  screenShares: [],
+  localSharing: false,
+  localShareTrack: null,
+  focusedShareUserId: null,
+  shareControls: null,
   messages: {},
   history: {},
 
@@ -148,8 +179,17 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
    */
   clearVolatile: () =>
     // O token de midia morre junto: ele foi emitido para uma entrada em canal
-    // que nao vale mais.
-    set({ presence: {}, voice: {}, media: null, mediaConnected: false }),
+    // que nao vale mais. As tracks tambem, porque pertencem a sala que caiu.
+    set({
+      presence: {},
+      voice: {},
+      media: null,
+      mediaConnected: false,
+      screenShares: [],
+      localSharing: false,
+      localShareTrack: null,
+      focusedShareUserId: null,
+    }),
 
   syncPresence: (entries) =>
     set({
@@ -174,6 +214,21 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
 
   setMedia: (media) => set({ media }),
   setMediaConnected: (mediaConnected) => set({ mediaConnected }),
+  setScreenShares: (screenShares) =>
+    set((state) => ({
+      screenShares,
+      // Se o destaque saiu do ar, volta para o automatico em vez de ficar
+      // apontando para uma transmissao que acabou.
+      focusedShareUserId: screenShares.some(
+        (share) => share.userId === state.focusedShareUserId,
+      )
+        ? state.focusedShareUserId
+        : null,
+    })),
+  setLocalSharing: (localSharing, track) =>
+    set({ localSharing, localShareTrack: localSharing ? (track ?? null) : null }),
+  setFocusedShare: (focusedShareUserId) => set({ focusedShareUserId }),
+  setShareControls: (shareControls) => set({ shareControls }),
 
   updateVoice: (participant) =>
     set((state) => {
@@ -297,6 +352,10 @@ export function useVoiceParticipants(channelId: string): VoiceParticipant[] {
     () => Object.values(voice).filter((p) => p.channelId === channelId),
     [voice, channelId],
   );
+}
+
+export function useScreenShares(): RemoteScreenShare[] {
+  return useRealtimeStore((state) => state.screenShares);
 }
 
 export function useMediaConnected(): boolean {

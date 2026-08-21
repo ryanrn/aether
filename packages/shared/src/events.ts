@@ -153,6 +153,12 @@ export interface ClientToServerEvents {
    * O cliente emite apenas na TRANSICAO, nunca em fluxo continuo.
    */
   "voice:speaking": (speaking: boolean) => void;
+  /**
+   * "estou compartilhando tela". O video em si vai pelo SFU; isto aqui e so a
+   * sinalizacao, porque a arvore de canais precisa mostrar o indicador para
+   * quem NAO esta na sala de midia — e o SFU so conhece a propria sala.
+   */
+  "voice:streaming": (streaming: boolean) => void;
   /** sinaliza microfone/audio proprio; os demais campos sao de moderacao (fase 6) */
   "voice:state": (payload: {
     selfMuted?: boolean;

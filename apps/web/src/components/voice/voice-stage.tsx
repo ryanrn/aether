@@ -7,9 +7,11 @@ import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useIsConnected,
   useRealtimeStore,
+  useScreenShares,
   useSelfVoice,
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
+import { ScreenShareView } from "@/components/voice/screen-share-view";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,6 +44,8 @@ export function VoiceStage({
   const connected = useIsConnected();
   const participants = useVoiceParticipants(channel.id);
   const selfVoice = useSelfVoice();
+  const shares = useScreenShares();
+  const localSharing = useRealtimeStore((state) => state.localSharing);
   const setMedia = useRealtimeStore((state) => state.setMedia);
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
 
@@ -124,6 +128,13 @@ export function VoiceStage({
     );
   }
 
+  /**
+   * Com alguem transmitindo, a tela vira o assunto principal e os
+   * participantes descem para uma faixa compacta. Sem isso, os cards
+   * disputariam espaco com o video justamente quando o video importa.
+   */
+  const sharing = shares.length > 0 || localSharing;
+
   const columns =
     participants.length === 1
       ? "grid-cols-1"
@@ -141,13 +152,26 @@ export function VoiceStage({
         {action}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className={cn("grid gap-3", columns)}>
+      {sharing ? <ScreenShareView /> : null}
+
+      <div
+        className={cn(
+          sharing
+            ? "shrink-0 overflow-x-auto px-4 pb-4"
+            : "flex-1 overflow-y-auto p-4",
+        )}
+      >
+        <div
+          className={cn(
+            sharing ? "flex gap-2" : cn("grid gap-3", columns),
+          )}
+        >
           {participants.map((participant) => (
             <ParticipantCard
               key={participant.userId}
               participant={participant}
               isSelf={participant.userId === selfUserId}
+              compact={sharing}
             />
           ))}
         </div>
@@ -159,9 +183,11 @@ export function VoiceStage({
 function ParticipantCard({
   participant,
   isSelf,
+  compact = false,
 }: {
   participant: VoiceParticipant;
   isSelf: boolean;
+  compact?: boolean;
 }) {
   const muted = participant.selfMuted || participant.serverMuted;
   const deafened = participant.selfDeafened || participant.serverDeafened;
@@ -171,6 +197,7 @@ function ParticipantCard({
     <div
       className={cn(
         "group relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-base-900 transition-all duration-150",
+        compact && "w-32 shrink-0",
         speaking
           ? "border-accent-600/70 shadow-[0_0_0_1px_var(--color-accent-600),0_0_28px_-14px_var(--color-accent-500)]"
           : "border-base-700",
@@ -181,7 +208,7 @@ function ParticipantCard({
         userId={participant.userId}
         name={participant.user.displayName}
         src={participant.user.avatarUrl}
-        size="lg"
+        size={compact ? "sm" : "lg"}
         speaking={speaking}
       />
 

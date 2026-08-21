@@ -8,7 +8,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 
 ---
 
-## Estado atual: FASES 1-4 concluidas
+## Estado atual: FASES 1-4 concluidas, FASE 5 em andamento
 
 | Fase | Escopo | Status |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 2 | Canais, categorias, cargos, permissoes (CRUD + canais privados) | ✅ pronto |
 | 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | ✅ pronto |
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
-| 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | pendente |
+| 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | em andamento |
 | 6 | Administracao, moderacao, logs | pendente |
 | 7 | Performance, reconexao, seguranca, testes, deploy | pendente |
 
@@ -236,6 +236,27 @@ Roteiro manual:
 - O botao **Convidar** so aparece para quem tem a permissao `CREATE_INVITE` —
   e a action revalida a permissao no servidor, entao chamar a action direto
   sem permissao tambem falha.
+
+---
+
+## Limitacoes conhecidas da FASE 5
+
+Compartilhamento de tela publicado pelo SFU, com destaque, miniaturas, tela
+cheia e picture-in-picture.
+
+- **Qualidade nao tem trava artificial.** Sao tres perfis (Leitura, Equilibrado,
+  Movimento) que mudam resolucao, quadros e sobretudo o `contentHint` — que
+  decide o que sacrificar quando a banda aperta: nitidez ou fluidez. O teto real
+  e o seu upload, a CPU e o plano do SFU.
+- **Audio do sistema depende do navegador e da escolha do usuario.** Pedimos,
+  mas em muitos casos o navegador so oferece audio ao compartilhar uma ABA. Sem
+  ele, o video vai sozinho — nao e erro.
+- **Sem controle de volume por transmissao.** O audio da tela toca junto com o
+  resto da sala.
+- **Nao ha limite de quantas pessoas transmitem ao mesmo tempo.** O grid
+  aguenta, a banda de quem assiste talvez nao.
+- **Trocar de canal encerra a transmissao** — a faixa pertence a sala anterior.
+- **Sem gravacao** e sem historico de quem transmitiu (fase 6, junto do log).
 
 ---
 

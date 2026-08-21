@@ -26,6 +26,9 @@ export function VoiceSession() {
   const media = useRealtimeStore((state) => state.media);
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
   const setMediaConnected = useRealtimeStore((state) => state.setMediaConnected);
+  const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
+  const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
+  const setShareControls = useRealtimeStore((state) => state.setShareControls);
 
   const channelId = selfVoice?.channelId ?? null;
   const muted = selfVoice?.selfMuted ?? false;
@@ -51,6 +54,13 @@ export function VoiceSession() {
           socket.emit("voice:speaking", speaking);
         },
         onConnectionChange: (connected) => setMediaConnected(connected),
+        onScreenSharesChange: (shares) => setScreenShares(shares),
+        onLocalShareEnded: () => {
+          // Cobre tambem o "parar de compartilhar" da barra do navegador, que
+          // nao passa pela nossa interface.
+          setLocalSharing(false);
+          socket.emit("voice:streaming", false);
+        },
         onError: (message) => setVoiceError(message),
       },
     })
@@ -61,6 +71,28 @@ export function VoiceSession() {
         }
         roomRef.current = handle;
         setVoiceError(null);
+
+        /**
+         * Publica os comandos de tela enquanto a sessao existe. O indicador
+         * para os outros passa pelo NOSSO gateway, e nao pelo SFU, porque a
+         * arvore de canais precisa mostrar quem transmite para quem nem entrou
+         * na sala de midia.
+         */
+        setShareControls({
+          start: async (preset) => {
+            const started = await handle.startScreenShare(preset);
+            if (started) {
+              setLocalSharing(true, handle.localScreenTrack());
+              socket.emit("voice:streaming", true);
+            }
+            return started;
+          },
+          stop: async () => {
+            await handle.stopScreenShare();
+            setLocalSharing(false);
+            socket.emit("voice:streaming", false);
+          },
+        });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -75,12 +107,25 @@ export function VoiceSession() {
       const handle = roomRef.current;
       roomRef.current = null;
       setMediaConnected(false);
+      setShareControls(null);
+      setScreenShares([]);
+      setLocalSharing(false);
+      socket.emit("voice:streaming", false);
       void handle?.disconnect();
       // Sair da call sem apagar o indicador deixaria voce "falando" para
       // sempre na tela dos outros.
       socket.emit("voice:speaking", false);
     };
-  }, [channelId, media, socket, setVoiceError, setMediaConnected]);
+  }, [
+    channelId,
+    media,
+    socket,
+    setVoiceError,
+    setMediaConnected,
+    setScreenShares,
+    setLocalSharing,
+    setShareControls,
+  ]);
 
   // 2. mute e deafen passam a ter efeito real sobre a midia
   useEffect(() => {

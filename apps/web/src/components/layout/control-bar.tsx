@@ -23,6 +23,11 @@ import {
   useRealtimeStore,
   useSelfVoice,
 } from "@/lib/stores/realtime-store";
+import {
+  canCaptureScreen,
+  PRESET_LIST,
+  type SharePresetId,
+} from "@/lib/voice/screen-share";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,6 +67,11 @@ export function ControlBar({
    */
   const [localMuted, setLocalMuted] = useState(false);
   const [localDeafened, setLocalDeafened] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
+
+  const shareControls = useRealtimeStore((state) => state.shareControls);
+  const localSharing = useRealtimeStore((state) => state.localSharing);
+
   const muted = selfVoice ? selfVoice.selfMuted : localMuted;
   const deafened = selfVoice ? selfVoice.selfDeafened : localDeafened;
 
@@ -80,6 +90,18 @@ export function ControlBar({
   }
 
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
+
+  /**
+   * Compartilhar exige tres coisas ao mesmo tempo: permissao do cargo, estar
+   * numa call (a tela vai para a sala de midia) e um navegador com captura —
+   * que so existe em contexto seguro, ou seja, HTTPS ou localhost.
+   */
+  const shareBlocked = !canShare || !shareControls || !canCaptureScreen();
+
+  async function pickPreset(preset: SharePresetId) {
+    setPresetOpen(false);
+    await shareControls?.start(preset);
+  }
 
   return (
     <footer className="flex h-14 shrink-0 items-center gap-3 border-t border-base-800 bg-base-900 px-3">
@@ -126,17 +148,63 @@ export function ControlBar({
           )}
         </ControlToggle>
 
-        <ControlToggle
-          active={false}
-          disabled
-          label={
-            canShare
-              ? "Compartilhar tela — disponivel na fase 5"
-              : "Voce nao tem permissao para compartilhar tela"
-          }
-        >
-          <MonitorUp className="h-4 w-4" />
-        </ControlToggle>
+        <div className="relative">
+          <ControlToggle
+            active={localSharing}
+            danger={localSharing}
+            disabled={shareBlocked}
+            onClick={() => {
+              if (localSharing) {
+                void shareControls?.stop();
+                return;
+              }
+              setPresetOpen((open) => !open);
+            }}
+            label={
+              localSharing
+                ? "Parar de compartilhar"
+                : !canShare
+                  ? "Seu cargo nao permite compartilhar tela"
+                  : !shareControls
+                    ? "Entre em um canal de voz para compartilhar"
+                    : !canCaptureScreen()
+                      ? "Este navegador nao permite captura de tela"
+                      : "Compartilhar tela"
+            }
+          >
+            <MonitorUp className="h-4 w-4" />
+          </ControlToggle>
+
+          {presetOpen && !localSharing ? (
+            <>
+              {/* clique fora fecha, sem prender o foco da pagina */}
+              <button
+                type="button"
+                aria-label="Fechar"
+                onClick={() => setPresetOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div className="absolute bottom-11 left-0 z-50 w-64 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+                <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
+                  qualidade
+                </p>
+                {PRESET_LIST.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => void pickPreset(preset.id)}
+                    className="flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-base-800"
+                  >
+                    <span className="text-[13px] text-ink-100">{preset.label}</span>
+                    <span className="text-[11px] leading-snug text-ink-500">
+                      {preset.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
 
         {selfVoice ? (
           <ControlToggle

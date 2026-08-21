@@ -10,7 +10,9 @@ import {
   leaveVoice,
   setVoiceFlags,
   setVoiceSpeaking,
+  setVoiceStreaming,
   voiceDeparture,
+  voiceLocation,
   voiceParticipant,
   voiceOfServer,
 } from "../state";
@@ -162,6 +164,41 @@ export function registerVoiceHandlers(
     // Devolve null quando o estado ja era esse — nao republicamos valor
     // identico para a sala inteira.
     const updated = setVoiceSpeaking(userId, speaking);
+    if (updated) broadcast(updated.serverId, updated.participant);
+  });
+
+  socket.on("voice:streaming", async (streaming) => {
+    if (typeof streaming !== "boolean") return;
+
+    const location = voiceLocation(userId);
+    if (!location) return;
+
+    /**
+     * Ligar o indicador exige SCREEN_SHARE de verdade.
+     *
+     * O token do SFU ja impede publicar a track sem essa permissao, entao
+     * ninguem transmite de fato. Mas o indicador e outra coisa: sem checar,
+     * um cliente reescrito poderia se anunciar "transmitindo" para o servidor
+     * inteiro. Interface que mente e bug, mesmo sem dado vazando.
+     *
+     * Desligar nunca precisa de permissao — parar de transmitir e sempre
+     * legitimo, e exigir permissao para parar deixaria alguem preso ao
+     * indicador aceso apos perder o cargo.
+     */
+    if (streaming) {
+      try {
+        const access = await loadMemberAccess(location.serverId, userId);
+        const bits = access
+          ? await getChannelPermissions(access, location.channelId)
+          : null;
+        if (bits === null || !has(bits, "SCREEN_SHARE")) return;
+      } catch (error) {
+        console.error("[gateway] voice:streaming falhou:", error);
+        return;
+      }
+    }
+
+    const updated = setVoiceStreaming(userId, streaming);
     if (updated) broadcast(updated.serverId, updated.participant);
   });
 

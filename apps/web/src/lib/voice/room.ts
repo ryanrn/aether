@@ -4,27 +4,47 @@ import {
   Room,
   RoomEvent,
   Track,
+  type LocalTrackPublication,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client";
+import { SHARE_PRESETS, type SharePresetId } from "./screen-share";
 
 /**
  * Conexao com a sala de midia (SFU).
  *
  * Este modulo NAO decide nada: ele recebe um token que ja carrega, assinado,
- * o que o usuario pode fazer. Se o token nao permite publicar microfone, a
- * chamada falha no proprio SFU — nao dependemos de a interface se comportar.
+ * o que o usuario pode fazer. Se o token nao permite publicar tela, a chamada
+ * falha no proprio SFU — nao dependemos de a interface se comportar.
  *
  * O audio remoto e reproduzido por elementos <audio> criados aqui e presos a
- * um container fora da arvore do React. Deixar o React montar/desmontar esses
- * elementos causaria cortes no som a cada re-render.
+ * um container fora da arvore do React: deixar o React montar e desmontar
+ * esses elementos causaria cortes no som a cada re-render.
+ *
+ * O VIDEO segue o caminho oposto — as tracks sao entregues por callback e quem
+ * decide onde desenhar e a interface, porque um mesmo compartilhamento aparece
+ * em dois lugares ao mesmo tempo (miniatura e destaque).
  */
+
+export interface RemoteScreenShare {
+  userId: string;
+  displayName: string;
+  track: RemoteTrack;
+}
 
 export interface VoiceRoomCallbacks {
   /** o proprio usuario comecou/parou de falar — segue para o nosso gateway */
   onSpeakingChange: (speaking: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
+  /** alguem comecou ou parou de compartilhar tela na sala */
+  onScreenSharesChange: (shares: RemoteScreenShare[]) => void;
+  /**
+   * A transmissao local terminou. Inclui o caso de a pessoa clicar em "parar
+   * de compartilhar" na barra do proprio navegador, que nao passa pela nossa
+   * interface.
+   */
+  onLocalShareEnded: () => void;
   onError: (message: string) => void;
 }
 
@@ -32,6 +52,11 @@ export interface VoiceRoomHandle {
   setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
   /** ensurdecer: para de reproduzir o audio dos outros */
   setDeafened: (deafened: boolean) => void;
+  /** abre o seletor nativo do navegador e publica. `false` se o usuario cancelou. */
+  startScreenShare: (preset: SharePresetId) => Promise<boolean>;
+  stopScreenShare: () => Promise<void>;
+  /** faixa local de tela, para a previa de quem esta transmitindo */
+  localScreenTrack: () => Track | null;
   disconnect: () => Promise<void>;
 }
 
@@ -71,37 +96,60 @@ export async function connectVoiceRoom({
   });
 
   const sink = audioContainer();
-  const attached = new Map<string, HTMLMediaElement[]>();
+  const attachedAudio = new Map<string, HTMLMediaElement[]>();
   let deafened = false;
+
+  /** Compartilhamentos remotos ativos, por identidade do participante. */
+  const screenShares = new Map<string, RemoteScreenShare>();
+
+  function publishScreenShares() {
+    callbacks.onScreenSharesChange([...screenShares.values()]);
+  }
 
   room.on(
     RoomEvent.TrackSubscribed,
     (
       track: RemoteTrack,
-      _publication: RemoteTrackPublication,
+      publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
-      if (track.kind !== Track.Kind.Audio) return;
-      const element = track.attach();
-      element.muted = deafened;
-      // `autoplay` sem interacao pode ser bloqueado; a entrada na call e um
-      // clique, entao o contexto de gesto ja existe quando chegamos aqui.
-      sink.appendChild(element);
-      const list = attached.get(participant.identity) ?? [];
-      list.push(element);
-      attached.set(participant.identity, list);
+      if (track.kind === Track.Kind.Audio) {
+        // Audio de tela vem junto do compartilhamento e toca como qualquer
+        // outro audio da sala — nao ha nada a desenhar.
+        const element = track.attach();
+        element.muted = deafened;
+        sink.appendChild(element);
+        const list = attachedAudio.get(participant.identity) ?? [];
+        list.push(element);
+        attachedAudio.set(participant.identity, list);
+        return;
+      }
+
+      if (publication.source !== Track.Source.ScreenShare) return;
+
+      screenShares.set(participant.identity, {
+        userId: participant.identity,
+        displayName: participant.name || participant.identity,
+        track,
+      });
+      publishScreenShares();
     },
   );
 
-  room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
-    for (const element of track.detach()) element.remove();
-  });
+  room.on(
+    RoomEvent.TrackUnsubscribed,
+    (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
+      for (const element of track.detach()) element.remove();
+      if (screenShares.delete(participant.identity)) publishScreenShares();
+    },
+  );
 
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    for (const element of attached.get(participant.identity) ?? []) {
+    for (const element of attachedAudio.get(participant.identity) ?? []) {
       element.remove();
     }
-    attached.delete(participant.identity);
+    attachedAudio.delete(participant.identity);
+    if (screenShares.delete(participant.identity)) publishScreenShares();
   });
 
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -110,6 +158,20 @@ export async function connectVoiceRoom({
     );
     callbacks.onSpeakingChange(speaking);
   });
+
+  /**
+   * Parar pela barra do navegador nao passa pela nossa interface. Sem escutar
+   * isto, o indicador ficaria aceso para sempre e o botao continuaria dizendo
+   * "parar de compartilhar".
+   */
+  room.on(
+    RoomEvent.LocalTrackUnpublished,
+    (publication: LocalTrackPublication) => {
+      if (publication.source === Track.Source.ScreenShare) {
+        callbacks.onLocalShareEnded();
+      }
+    },
+  );
 
   room.on(RoomEvent.Disconnected, () => callbacks.onConnectionChange(false));
   room.on(RoomEvent.Reconnected, () => callbacks.onConnectionChange(true));
@@ -151,16 +213,71 @@ export async function connectVoiceRoom({
 
     setDeafened(next) {
       deafened = next;
-      for (const elements of attached.values()) {
+      for (const elements of attachedAudio.values()) {
         for (const element of elements) element.muted = next;
       }
     },
 
+    async startScreenShare(presetId) {
+      const preset = SHARE_PRESETS[presetId];
+      try {
+        await room.localParticipant.setScreenShareEnabled(
+          true,
+          {
+            // Audio do sistema quando o navegador e a escolha do usuario
+            // permitirem. Se nao houver, o video vai sozinho — nao e erro.
+            audio: true,
+            contentHint: preset.contentHint,
+            resolution: {
+              width: preset.width,
+              height: preset.height,
+              frameRate: preset.frameRate,
+            },
+          },
+          {
+            screenShareEncoding: {
+              maxBitrate: preset.maxBitrate,
+              maxFramerate: preset.frameRate,
+            },
+          },
+        );
+        return true;
+      } catch (error) {
+        // Cancelar o seletor nativo cai aqui, e nao e falha: e escolha.
+        if (
+          error instanceof DOMException &&
+          (error.name === "NotAllowedError" || error.name === "AbortError")
+        ) {
+          return false;
+        }
+        callbacks.onError(
+          error instanceof Error
+            ? `Nao foi possivel compartilhar: ${error.message}`
+            : "Nao foi possivel compartilhar a tela.",
+        );
+        return false;
+      }
+    },
+
+    async stopScreenShare() {
+      await room.localParticipant
+        .setScreenShareEnabled(false)
+        .catch(() => undefined);
+    },
+
+    localScreenTrack() {
+      const publication = room.localParticipant.getTrackPublication(
+        Track.Source.ScreenShare,
+      );
+      return publication?.track ?? null;
+    },
+
     async disconnect() {
-      for (const elements of attached.values()) {
+      for (const elements of attachedAudio.values()) {
         for (const element of elements) element.remove();
       }
-      attached.clear();
+      attachedAudio.clear();
+      screenShares.clear();
       await room.disconnect();
     },
   };
