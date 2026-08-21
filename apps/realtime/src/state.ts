@@ -371,3 +371,8 @@ export function voiceLocation(
   const entry = voice.get(userId);
   return entry ? { serverId: entry.serverId, channelId: entry.channelId } : null;
 }
+
+/** Sockets vivos de um usuario — usado para despeja-lo de um servidor. */
+export function socketIdsOf(userId: string): string[] {
+  return [...(users.get(userId)?.sockets ?? [])];
+}

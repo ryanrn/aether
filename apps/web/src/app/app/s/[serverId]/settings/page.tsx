@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { ViewerContext } from "@aether/shared";
 import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
+import { listActiveBans } from "@/server/services/moderation";
 import { viewerCan } from "@/lib/permissions";
 import { SettingsTabs } from "@/components/server-settings/settings-tabs";
 
@@ -46,6 +47,15 @@ export default async function ServerSettingsPage({
   if (!canManage) notFound();
 
   const data = await getServerContext(serverId, context);
+
+  /**
+   * Banimentos so sao consultados por quem pode ve-los. Carregar sempre seria
+   * uma consulta a mais em toda visita as configuracoes, para uma aba que a
+   * maioria nao abre.
+   */
+  const bans = viewerCan(viewer, "BAN_MEMBERS")
+    ? await listActiveBans(serverId)
+    : [];
   if (!data) notFound();
 
   return (
@@ -72,6 +82,7 @@ export default async function ServerSettingsPage({
             members={data.members}
             ownerId={data.server.ownerId}
             viewer={viewer}
+            bans={bans}
           />
         </div>
       </div>

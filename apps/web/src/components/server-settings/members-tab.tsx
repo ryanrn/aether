@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Crown, Shield } from "lucide-react";
+import { Ban, Crown, Shield, UserMinus } from "lucide-react";
 import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MemberRolesModal } from "@/components/members/member-roles-modal";
-import { canManageRole } from "@/lib/permissions";
+import { MemberModerationModal } from "@/components/members/member-moderation-modal";
+import { canManageRole, viewerCan } from "@/lib/permissions";
 
 export function MembersTab({
   serverId,
@@ -22,7 +23,14 @@ export function MembersTab({
   viewer: ViewerContext;
 }) {
   const [editing, setEditing] = useState<PublicMember | null>(null);
+  const [moderating, setModerating] = useState<{
+    member: PublicMember;
+    mode: "kick" | "ban";
+  } | null>(null);
   const manageable = roles.filter((role) => canManageRole(viewer, role));
+
+  const canKick = viewerCan(viewer, "KICK_MEMBERS");
+  const canBan = viewerCan(viewer, "BAN_MEMBERS");
 
   return (
     <section className="flex flex-col gap-2">
@@ -86,16 +94,42 @@ export function MembersTab({
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    {editable ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditing(member)}
-                      >
-                        <Shield className="h-3.5 w-3.5" />
-                        Cargos
-                      </Button>
-                    ) : null}
+                    <div className="flex justify-end gap-1">
+                      {editable ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditing(member)}
+                        >
+                          <Shield className="h-3.5 w-3.5" />
+                          Cargos
+                        </Button>
+                      ) : null}
+
+                      {/* A hierarquia ja e imposta no servidor; aqui apenas
+                          nao oferecemos o que sera recusado. */}
+                      {editable && canKick ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Expulsar do servidor"
+                          onClick={() => setModerating({ member, mode: "kick" })}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
+
+                      {editable && canBan ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Banir do servidor"
+                          onClick={() => setModerating({ member, mode: "ban" })}
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );
@@ -105,9 +139,19 @@ export function MembersTab({
       </div>
 
       <p className="text-[12px] text-ink-500">
-        Expulsar, banir e silenciar entram na fase 6 (moderacao), junto com o log
-        de auditoria — que ja esta sendo gravado desde a fase 1.
+        Voce so age sobre membros de cargo abaixo do seu, e o dono do servidor e
+        intocavel. Silenciar pelo servidor e mover entre canais de voz entram no
+        proximo bloco.
       </p>
+
+      {moderating ? (
+        <MemberModerationModal
+          serverId={serverId}
+          member={moderating.member}
+          mode={moderating.mode}
+          onClose={() => setModerating(null)}
+        />
+      ) : null}
 
       {editing ? (
         <MemberRolesModal

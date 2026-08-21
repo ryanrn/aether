@@ -69,6 +69,14 @@ export type VoiceJoinAck =
 export interface ServerToClientEvents {
   /** primeiro evento apos o handshake: confirma quem o gateway achou que voce e */
   ready: (payload: ReadyPayload) => void;
+  /**
+   * Voce foi removido deste servidor (expulso ou banido).
+   *
+   * Existe porque o socket entra nas salas do servidor e nunca recalcula: sem
+   * este aviso, quem foi expulso continuaria recebendo o chat ate recarregar a
+   * pagina — o que e falha de acesso, nao so tela desatualizada.
+   */
+  "server:evicted": (payload: { serverId: string; reason: string }) => void;
   /** estado completo de presenca de um servidor, ao entrar */
   "presence:sync": (payload: {
     serverId: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
@@ -41,6 +42,7 @@ export function RealtimeProvider({
   serverId: string;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [socket, setSocket] = useState<TypedSocket | null>(null);
   /** distingue a primeira conexao de uma reconexao — a segunda recupera o intervalo */
   const hadConnected = useRef(false);
@@ -137,6 +139,17 @@ export function RealtimeProvider({
         useRealtimeStore.getState().receiveMessage(message, nonce);
       });
 
+      /**
+       * Fui removido do servidor. O gateway ja tirou este socket das salas, o
+       * que corta o acesso; aqui so tiramos a pessoa de uma tela que nao existe
+       * mais para ela. Sem isto ela ficaria olhando uma copia congelada.
+       */
+      socketInstance.on("server:evicted", ({ serverId: incoming }) => {
+        if (incoming !== useRealtimeStore.getState().serverId) return;
+        router.replace("/app");
+        router.refresh();
+      });
+
       setSocket(socketInstance);
     })();
 
@@ -146,7 +159,9 @@ export function RealtimeProvider({
       instance?.close();
       setSocket(null);
     };
-  }, []);
+    // `router` e estavel entre renders no App Router; a conexao continua
+    // sendo criada uma unica vez.
+  }, [router]);
 
   // 2. entrada no servidor, refeita a cada reconexao
   useEffect(() => {

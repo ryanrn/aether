@@ -119,6 +119,15 @@ export function ControlBar({
   }
 
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
+  /**
+   * Mesma condicao da TopBar. Sem isto a engrenagem aparecia para todo mundo e
+   * levava a um 404 — o 404 esta correto (nao revelamos que a pagina existe),
+   * mas oferecer uma porta que nao abre e problema de interface.
+   */
+  const canManageServer =
+    viewer.isOwner ||
+    viewerCan(viewer, "MANAGE_SERVER") ||
+    viewerCan(viewer, "MANAGE_ROLES");
 
   /**
    * Compartilhar exige tres coisas ao mesmo tempo: permissao do cargo, estar
@@ -320,7 +329,7 @@ export function ControlBar({
               : "tempo real · offline"}
         </span>
 
-        {serverId ? (
+        {serverId && canManageServer ? (
           <Link
             href={`/app/s/${serverId}/settings`}
             title="Configuracoes do servidor"

@@ -243,9 +243,12 @@ model Ban {
   issuedById String
   issuedBy   User     @relation("BanIssuer", fields: [issuedById], references: [id])
   reason     String?
+  /// Banimento temporario. Nulo = permanente.
+  expiresAt  DateTime?
   createdAt  DateTime @default(now())
 
   @@unique([serverId, userId])
+  @@index([serverId, expiresAt])
 }
 
 model AuditLog {

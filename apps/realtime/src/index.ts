@@ -7,6 +7,7 @@ import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { attachSocket, stats } from "./state";
+import { handleInternalRequest } from "./internal";
 import type { AetherServer } from "./types";
 
 /**
@@ -19,6 +20,19 @@ import type { AetherServer } from "./types";
  */
 
 const httpServer = createServer((request, response) => {
+  /**
+   * Porta de servico do app web (expulsar/banir precisam tirar o socket das
+   * salas na hora). Fica antes do /health porque tem autenticacao propria.
+   */
+  if (request.url?.startsWith("/internal/")) {
+    void handleInternalRequest(io, request, response).catch((error) => {
+      console.error("[gateway] rota interna falhou:", error);
+      response.writeHead(500);
+      response.end();
+    });
+    return;
+  }
+
   // Endpoint de saude — usado por deploy/monitor para saber se o processo vive.
   if (request.url === "/health") {
     response.writeHead(200, { "content-type": "application/json" });

@@ -192,3 +192,57 @@ export type JoinServerInput = z.infer<typeof joinServerSchema>;
 export type CreateChannelInput = z.infer<typeof createChannelSchema>;
 export type UpdateChannelInput = z.infer<typeof updateChannelSchema>;
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
+
+// ---------------------------------------------------------------------------
+// FASE 6 — moderacao
+// ---------------------------------------------------------------------------
+
+/**
+ * Duracoes oferecidas para banimento. Lista fechada em vez de campo livre:
+ * o valor vira `expiresAt` no banco, e aceitar numero arbitrario do cliente
+ * abriria espaco para banimento de mil anos por acidente de digitacao.
+ */
+export const BAN_DURATIONS = [
+  { id: "permanent", label: "Permanente", hours: null },
+  { id: "1d", label: "1 dia", hours: 24 },
+  { id: "7d", label: "7 dias", hours: 24 * 7 },
+  { id: "30d", label: "30 dias", hours: 24 * 30 },
+] as const;
+
+export type BanDurationId = (typeof BAN_DURATIONS)[number]["id"];
+
+export const banDurationSchema = z.enum([
+  "permanent",
+  "1d",
+  "7d",
+  "30d",
+]);
+
+/** Motivo e opcional, mas quando existe fica no log de auditoria. */
+export const moderationReasonSchema = z
+  .string()
+  .trim()
+  .max(500, "Motivo longo demais")
+  .optional();
+
+export const kickMemberSchema = z.object({
+  memberId: z.string().min(1),
+  reason: moderationReasonSchema,
+});
+
+export const banMemberSchema = z.object({
+  memberId: z.string().min(1),
+  reason: moderationReasonSchema,
+  duration: banDurationSchema,
+});
+
+export const unbanSchema = z.object({
+  userId: z.string().min(1),
+});
+
+/** Converte a duracao escolhida na data de vencimento. `null` = permanente. */
+export function banExpiryFrom(duration: BanDurationId): Date | null {
+  const found = BAN_DURATIONS.find((option) => option.id === duration);
+  if (!found || found.hours === null) return null;
+  return new Date(Date.now() + found.hours * 60 * 60 * 1000);
+}

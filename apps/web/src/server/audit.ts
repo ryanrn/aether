@@ -21,6 +21,7 @@ export type AuditAction =
   | "role.delete"
   | "member.kick"
   | "member.ban"
+  | "member.unban"
   | "member.move"
   | "member.mute";
 
