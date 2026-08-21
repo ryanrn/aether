@@ -8,7 +8,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 
 ---
 
-## Estado atual: FASES 1-4 concluidas, FASE 5 em andamento
+## Estado atual: FASES 1-5 concluidas, FASE 6 em andamento
 
 | Fase | Escopo | Status |
 | --- | --- | --- |
@@ -16,8 +16,8 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 2 | Canais, categorias, cargos, permissoes (CRUD + canais privados) | ✅ pronto |
 | 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | ✅ pronto |
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
-| 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | em andamento |
-| 6 | Administracao, moderacao, logs | pendente |
+| 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
+| 6 | Administracao, moderacao, logs | em andamento |
 | 7 | Performance, reconexao, seguranca, testes, deploy | pendente |
 
 ---
@@ -236,6 +236,29 @@ Roteiro manual:
 - O botao **Convidar** so aparece para quem tem a permissao `CREATE_INVITE` —
   e a action revalida a permissao no servidor, entao chamar a action direto
   sem permissao tambem falha.
+
+---
+
+## Limitacoes conhecidas da FASE 6 (parcial — bloco 6a)
+
+Pronto: expulsar, banir com motivo e duracao, revogar banimento — e o despejo
+em tempo real que isso exigia.
+
+- **O despejo depende do gateway estar no ar.** Se ele nao responder, a
+  expulsao vale no banco (que e a fonte de verdade) mas o socket da pessoa so
+  cai quando ela recarregar. Preferimos degradar assim a desfazer uma acao de
+  moderacao ja concluida.
+- **Banimento vencido nao e apagado por rotina.** Ele sai da lista de ativos
+  pela consulta e continua na tabela como historico; nao ha processo de
+  limpeza rodando.
+- **Silenciar e ensurdecer pelo servidor ainda nao existem** — os campos
+  `serverMuted` e `serverDeafened` do `VoiceState` continuam sempre falsos.
+  Bloco 6b.
+- **Mover usuario entre canais de voz** ainda nao existe. Bloco 6b.
+- **O log de auditoria e gravado desde a fase 1, mas nao tem tela.** Bloco 6c.
+- **Excluir mensagem de terceiro** (`MANAGE_MESSAGES`) ainda nao existe.
+- **Sair do servidor** continua sem botao, apesar de a action existir desde a
+  fase 2.
 
 ---
 
