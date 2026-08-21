@@ -165,6 +165,28 @@ depois). Aponte para o banco de producao com essa consciencia.
 
 ---
 
+## Uma maquina, sempre
+
+O `fly deploy` sobe DUAS maquinas por padrao quando a organizacao tem metodo
+de pagamento (alta disponibilidade). Para este servico isso quebra:
+
+- presenca, ocupacao de voz e rate limit vivem na memoria do processo;
+- com duas maquinas o balanceador divide as conexoes e existem dois universos
+  de presenca — quem cai na maquina A nao ve quem caiu na B;
+- e falha de forma INTERMITENTE, porque as vezes os dois caem na mesma.
+
+Depois de qualquer deploy que recrie maquinas, confira e corrija:
+
+```bash
+fly status
+```
+
+```bash
+fly scale count 1
+```
+
+---
+
 ## Limitacoes conhecidas deste deploy
 
 - **Uma instancia de gateway, sem hibernar.** Presenca, ocupacao de voz e rate

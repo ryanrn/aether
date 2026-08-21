@@ -211,12 +211,23 @@ async function main() {
       media?.url,
     );
 
-    // Assinatura: o token so vale se foi emitido com o nosso API secret.
+    /**
+     * Assinatura: o token so vale se foi emitido com o nosso API secret.
+     *
+     * A tolerancia de relogio existe porque quem assina (o gateway) e quem
+     * verifica (esta maquina) sao computadores diferentes. Sem ela, um relogio
+     * local atrasado reprova um token perfeitamente valido — e a mensagem
+     * "nbf claim timestamp check failed" nao aponta para a causa.
+     *
+     * A diferenca real e medida e reportada abaixo, entao um relogio muito
+     * errado aparece em vez de ficar escondido pela tolerancia.
+     */
     let verified = null;
     try {
       const result = await jwtVerify(
         media.token,
         new TextEncoder().encode(process.env.LIVEKIT_API_SECRET),
+        { clockTolerance: 300 },
       );
       verified = result.payload;
     } catch (error) {
@@ -242,8 +253,33 @@ async function main() {
     check("o token permite ouvir", grant.canSubscribe === true);
     check(
       "o token expira",
-      typeof payload.exp === "number" && payload.exp > Date.now() / 1000,
+      typeof payload.exp === "number" &&
+        typeof payload.nbf === "number" &&
+        payload.exp > payload.nbf,
     );
+
+    /**
+     * Relogio: quem assina o token e o servidor. Se o relogio DESTA maquina
+     * estiver muito fora, o token parece invalido aqui mesmo estando correto
+     * la — e o mesmo desvio costuma quebrar chamadas a outros servicos de
+     * formas obscuras. Melhor gritar do que deixar a tolerancia esconder.
+     */
+    const skew = Math.round(payload.nbf - Date.now() / 1000);
+    if (Math.abs(skew) > 30) {
+      const direcao = skew > 0 ? "ATRASADO" : "adiantado";
+      console.log(
+        "  aviso  relogio local esta " +
+          Math.abs(skew) +
+          "s " +
+          direcao +
+          " em relacao ao servidor",
+      );
+      console.log(
+        "         Windows: Configuracoes > Hora e idioma > Sincronizar agora",
+      );
+    } else {
+      check("relogio local e do servidor estao proximos", true);
+    }
     check(
       "o cliente nao pode reescrever os proprios metadados",
       grant.canUpdateOwnMetadata !== true,
