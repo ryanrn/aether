@@ -3,6 +3,7 @@
 import {
   Room,
   RoomEvent,
+  setLogLevel,
   Track,
   type LocalTrackPublication,
   type RemoteTrack,
@@ -10,6 +11,7 @@ import {
   type RemoteParticipant,
 } from "livekit-client";
 import { SHARE_PRESETS, type SharePresetId } from "./screen-share";
+import { mediaDebugEnabled, mediaLog } from "./debug";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -66,7 +68,14 @@ function audioContainer(): HTMLElement {
   if (existing) return existing;
   const element = document.createElement("div");
   element.id = "aether-audio-sink";
-  element.style.display = "none";
+  /**
+   * Escondido SEM display:none. Navegadores podem suspender a reproducao de
+   * elementos de midia dentro de subarvores com display:none — o sintoma e
+   * exatamente "o audio toca um segundo e para". Fora da tela e com tamanho
+   * minimo o elemento continua sendo reproduzido normalmente.
+   */
+  element.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
   document.body.appendChild(element);
   return element;
 }
@@ -82,6 +91,9 @@ export async function connectVoiceRoom({
   canPublish: boolean;
   callbacks: VoiceRoomCallbacks;
 }): Promise<VoiceRoomHandle> {
+  // Com ?debug=media na URL, o proprio SFU passa a relatar o que faz.
+  if (mediaDebugEnabled()) setLogLevel("debug");
+
   const room = new Room({
     // Cancelamento de eco e supressao de ruido no proprio navegador: sem isso,
     // caixa de som aberta devolve a voz dos outros para dentro da call.
@@ -90,8 +102,18 @@ export async function connectVoiceRoom({
       noiseSuppression: true,
       autoGainControl: true,
     },
-    // Adapta o bitrate a rede de quem recebe em vez de derrubar a faixa.
-    adaptiveStream: true,
+    /**
+     * adaptiveStream DESLIGADO de proposito.
+     *
+     * Ele pausa faixas de video conforme a visibilidade do elemento anexado.
+     * Como anexamos por um caminho proprio (o mesmo compartilhamento aparece
+     * no destaque e na miniatura), qualquer divergencia na medicao vira
+     * "a tela do outro nunca aparece" — sem erro, sem log, so nao aparece.
+     *
+     * O custo e alguma banda a mais; o beneficio e um modo de falha a menos
+     * num recurso que precisa simplesmente funcionar.
+     */
+    adaptiveStream: false,
     dynacast: true,
   });
 
@@ -113,20 +135,44 @@ export async function connectVoiceRoom({
       publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
+      mediaLog("faixa recebida", {
+        de: participant.identity,
+        tipo: track.kind,
+        origem: publication.source,
+      });
+
       if (track.kind === Track.Kind.Audio) {
         // Audio de tela vem junto do compartilhamento e toca como qualquer
         // outro audio da sala — nao ha nada a desenhar.
         const element = track.attach();
         element.muted = deafened;
         sink.appendChild(element);
+        /**
+         * O attach do LiveKit ja tenta tocar, mas o navegador pode recusar
+         * silenciosamente. Insistir aqui e barato e transforma "nao sai som"
+         * numa mensagem no console em vez de um misterio.
+         */
+        void element.play().catch((error: unknown) => {
+          mediaLog("navegador recusou reproduzir", error);
+          callbacks.onError(
+            "O navegador bloqueou o audio. Clique na pagina para liberar.",
+          );
+        });
         const list = attachedAudio.get(participant.identity) ?? [];
         list.push(element);
         attachedAudio.set(participant.identity, list);
         return;
       }
 
-      if (publication.source !== Track.Source.ScreenShare) return;
+      /**
+       * Qualquer video que chegue aqui e compartilhamento de tela: este app
+       * nunca publica camera. Filtrar por `publication.source` era fragil —
+       * se a origem ainda nao estivesse resolvida no momento da inscricao, a
+       * faixa era descartada em silencio e nao havia nova chance.
+       */
+      if (track.kind !== Track.Kind.Video) return;
 
+      mediaLog("compartilhamento de tela recebido", participant.identity);
       screenShares.set(participant.identity, {
         userId: participant.identity,
         displayName: participant.name || participant.identity,
@@ -184,7 +230,22 @@ export async function connectVoiceRoom({
     }
   });
 
+  room.on(RoomEvent.ConnectionStateChanged, (state) =>
+    mediaLog("estado da conexao", state),
+  );
+  room.on(RoomEvent.TrackPublished, (publication, participant) =>
+    mediaLog("faixa publicada por outro", {
+      de: participant.identity,
+      origem: publication.source,
+      inscrito: publication.isSubscribed,
+    }),
+  );
+  room.on(RoomEvent.LocalTrackPublished, (publication) =>
+    mediaLog("minha faixa publicada", publication.source),
+  );
+
   await room.connect(url, token);
+  mediaLog("conectado a sala", room.name);
   callbacks.onConnectionChange(true);
 
   // Politica de autoplay: precisa acontecer dentro do gesto que originou a
