@@ -85,16 +85,20 @@ const payload = {
   NEXT_PUBLIC_REALTIME_URL: gatewayUrl.replace(/\/$/, ""),
 };
 
+/**
+ * Chamamos via `npx` porque o CLI da Vercel normalmente nao esta instalado
+ * global — e no Windows o executavel e `npx.cmd`. Invocar sem `shell: true`
+ * evita o aviso DEP0190 e nao concatena argumentos sem escapar.
+ */
+const NPX = process.platform === "win32" ? "npx.cmd" : "npx";
+
 /** Uma variavel por invocacao do CLI; o valor vai pela entrada padrao. */
 function addVar(name, value, target) {
   return new Promise((resolve) => {
     const child = spawn(
-      "vercel",
-      ["env", "add", name, target, "--force"],
-      {
-        stdio: ["pipe", "ignore", "pipe"],
-        shell: process.platform === "win32",
-      },
+      NPX,
+      ["--yes", "vercel", "env", "add", name, target, "--force"],
+      { stdio: ["pipe", "ignore", "pipe"] },
     );
 
     let stderr = "";
@@ -127,7 +131,9 @@ for (const [name, value] of Object.entries(payload)) {
 
 if (failed > 0) {
   console.log(
-    "\nSe a falha for 'command not found', rode `npx vercel login` e `npx vercel link` antes.",
+    "\nSe a falha mencionar autenticacao ou projeto, rode antes:" +
+      "\n  npx vercel login" +
+      "\n  npx vercel link",
   );
   process.exit(1);
 }
