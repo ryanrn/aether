@@ -99,24 +99,54 @@ Deve responder `{"ok":true,...}`.
 
 ## App web (Vercel)
 
-O `vercel.json` na raiz ja fixa a regiao `gru1` e o comando de build.
+O painel da Vercel so oferece importar de um repositorio Git. Como o projeto e
+local, use o CLI — mesmo caminho do Fly, sem publicar codigo em lugar nenhum.
 
-**Por que existe um `build:ci` separado:** o `build` normal injeta o `.env` da
-raiz via `dotenv-cli`, e esse arquivo nao existe na Vercel — o build falharia
-antes de comecar. O `build:ci` le as variaveis do ambiente da propria Vercel.
+```bash
+npx vercel login
+```
 
-Variaveis a configurar no painel:
+```bash
+npx vercel link
+```
 
-| variavel | valor |
+Responda que e um projeto novo e aceite o diretorio atual (a RAIZ do monorepo,
+nao `apps/web`).
+
+Agora as variaveis, antes do deploy:
+
+```bash
+node scripts/vercel-env.mjs https://SEU-GATEWAY.fly.dev
+```
+
+**A ordem importa.** Variaveis `NEXT_PUBLIC_*` sao embutidas no bundle em tempo
+de BUILD. Definir `NEXT_PUBLIC_REALTIME_URL` depois do deploy nao muda nada ate
+o proximo build — o navegador continuaria tentando `localhost:4000`.
+
+```bash
+npx vercel --prod
+```
+
+### O que o vercel.json resolve
+
+- `buildCommand: npm run build:ci` — o `build` normal injeta o `.env` da raiz
+  via dotenv-cli, e esse arquivo nao existe na Vercel; o build falharia antes de
+  comecar.
+- `outputDirectory: apps/web/.next` — em monorepo a saida do Next nao fica na
+  raiz. Sem isso o build passa e o deploy falha com "no output directory".
+- `regions: gru1` — as Server Actions falam com o banco, que esta em Sao Paulo.
+
+### Variaveis
+
+| variavel | de onde vem |
 | --- | --- |
-| `DATABASE_URL` | a do Supabase, com `connection_limit=5` |
-| `DIRECT_URL` | a conexao direta (porta 5432) |
-| `AUTH_SECRET` | **o mesmo** do gateway |
-| `NEXT_PUBLIC_APP_URL` | `https://SEU-APP.vercel.app` |
-| `NEXT_PUBLIC_REALTIME_URL` | `https://aether-gateway.fly.dev` |
+| `AUTH_SECRET` | o mesmo do gateway — e ele que valida o ticket |
+| `DATABASE_URL` | Supabase, com `connection_limit=5` |
+| `DIRECT_URL` | conexao direta (porta 5432) |
+| `NEXT_PUBLIC_REALTIME_URL` | endereco do gateway no Fly |
 
-`NEXT_PUBLIC_REALTIME_URL` e o que o navegador usa para abrir o WebSocket. Sem
-ela o cliente cai no padrao `http://localhost:4000` e nada conecta.
+`NEXT_PUBLIC_APP_URL` **nao** entra aqui: o app web nao a usa. Quem le essa
+variavel e o gateway, para saber qual origem liberar no CORS.
 
 ---
 
