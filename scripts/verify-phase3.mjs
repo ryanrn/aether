@@ -77,6 +77,39 @@ function connect(cookie) {
   });
 }
 
+/**
+ * Ticket de handshake: mesmo segredo, publico proprio e `jti` unico.
+ * Espelha packages/access/src/tickets.ts.
+ */
+async function mintTicket(userId, sessionId, { audience = "aether-socket" } = {}) {
+  return new SignJWT({ sid: sessionId, jti: Math.random().toString(16).slice(2) })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setIssuer("aether")
+    .setAudience(audience)
+    .setExpirationTime("300s")
+    .sign(secret);
+}
+
+/** Conecta usando ticket no handshake, sem cookie nenhum. */
+function connectWithTicket(ticket) {
+  return new Promise((resolve) => {
+    const socket = io(BASE, {
+      path: "/ws",
+      transports: ["websocket"],
+      auth: { ticket },
+      reconnection: false,
+      timeout: 5000,
+    });
+    socket.once("connect", () => resolve({ ok: true, socket }));
+    socket.once("connect_error", (error) => {
+      socket.close();
+      resolve({ ok: false, error: error.message });
+    });
+  });
+}
+
 /** Espera um evento que satisfaca o predicado, com prazo. */
 function waitFor(socket, event, predicate = () => true, ms = 4000) {
   return new Promise((resolve) => {
@@ -254,6 +287,45 @@ async function main() {
     ready != null && !("email" in (ready.user ?? {})),
     JSON.stringify(ready?.user ?? null),
   );
+
+  section("Ticket de handshake (caminho de producao)");
+
+  const ticketSession = await prisma.session.create({
+    data: { userId: owner.id, expiresAt: new Date(Date.now() + 3600e3) },
+  });
+  createdSessions.push(ticketSession.id);
+
+  const ticket = await mintTicket(owner.id, ticketSession.id);
+  const byTicket = await connectWithTicket(ticket);
+  check("ticket valido conecta sem cookie", byTicket.ok, byTicket.error);
+  if (byTicket.ok) {
+    track(byTicket.socket);
+    byTicket.socket.close();
+  }
+
+  // Uso unico: o gateway lembra do jti pelo tempo de vida do ticket.
+  const replay = await connectWithTicket(ticket);
+  checkRejected("o MESMO ticket nao serve duas vezes", replay);
+
+  // Um cookie de sessao tem publico "aether-app"; nao pode valer como ticket.
+  const wrongAudience = await mintTicket(owner.id, ticketSession.id, {
+    audience: "aether-app",
+  });
+  const asTicket = await connectWithTicket(wrongAudience);
+  checkRejected("token de sessao nao vale como ticket", asTicket);
+
+  const revokedTicketSession = await prisma.session.create({
+    data: {
+      userId: owner.id,
+      expiresAt: new Date(Date.now() + 3600e3),
+      revokedAt: new Date(),
+    },
+  });
+  createdSessions.push(revokedTicketSession.id);
+  const revokedTicket = await connectWithTicket(
+    await mintTicket(owner.id, revokedTicketSession.id),
+  );
+  checkRejected("ticket de sessao revogada e recusado", revokedTicket);
 
   section("Entrada no servidor");
 

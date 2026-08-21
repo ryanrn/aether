@@ -6,6 +6,7 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
 } from "@aether/shared";
+import { createSocketTicketAction } from "@/server/actions/realtime";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 
 /**
@@ -13,12 +14,13 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
  *
  * Este componente nao guarda estado de aplicacao — ele traduz eventos do
  * socket para a store Zustand e devolve o socket para quem precisa emitir.
- * A separacao importa: a conexao tem ciclo de vida de componente, o estado
- * nao.
  *
- * Nao passamos token nenhum daqui: o cookie de sessao e httpOnly e vai sozinho
- * no handshake, com `withCredentials`. Por isso o token nunca fica ao alcance
- * de um XSS nesta pagina.
+ * Autenticacao: pedimos ao servidor um TICKET curto e de uso unico e o
+ * enviamos no handshake. Em desenvolvimento o cookie de sessao tambem
+ * funciona (app e gateway sao o mesmo site em localhost), mas em producao eles
+ * ficam em dominios diferentes e o navegador nao envia cookie SameSite=Lax
+ * para outro site. O ticket atravessa essa fronteira sem afrouxar o cookie da
+ * aplicacao inteira.
  */
 
 export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -40,81 +42,108 @@ export function RealtimeProvider({
   children: React.ReactNode;
 }) {
   const [socket, setSocket] = useState<TypedSocket | null>(null);
-  /** distingue a primeira conexao de uma reconexao — a segunda precisa recuperar o intervalo */
+  /** distingue a primeira conexao de uma reconexao — a segunda recupera o intervalo */
   const hadConnected = useRef(false);
 
   // 1. conexao: criada uma vez e mantida entre navegacoes de canal
   useEffect(() => {
-    const store = useRealtimeStore.getState();
+    let instance: TypedSocket | null = null;
+    let cancelled = false;
 
-    const instance: TypedSocket = io(REALTIME_URL, {
-      path: "/ws",
-      withCredentials: true,
-      /**
-       * Backoff exponencial explicito. O socket.io-client ja faz isso por
-       * padrao, mas padrao implicito muda numa atualizacao de dependencia sem
-       * ninguem notar. 1s -> 8s com jitter de 50% para nao sincronizar todos
-       * os clientes num mesmo instante depois de uma queda do gateway.
-       */
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 8000,
-      randomizationFactor: 0.5,
-    });
+    /**
+     * Deixa um ticket novo em maos para a PROXIMA tentativa. O socket.io
+     * reconecta sozinho e de forma sincrona — nao da para buscar credencial no
+     * meio da tentativa, entao ela precisa estar pronta antes.
+     */
+    async function stageNextTicket(target: TypedSocket) {
+      const ticket = await createSocketTicketAction();
+      if (ticket) target.auth = { ticket };
+    }
 
-    instance.on("connect", () => {
-      store.setConnectionStatus("online");
-      store.setError(null);
-    });
+    void (async () => {
+      const ticket = await createSocketTicketAction();
+      if (cancelled) return;
 
-    instance.on("disconnect", () => {
-      const state = useRealtimeStore.getState();
-      state.setConnectionStatus("offline");
-      state.clearVolatile();
-    });
+      instance = io(REALTIME_URL, {
+        path: "/ws",
+        // Mantido para o caminho de desenvolvimento, onde o cookie basta.
+        withCredentials: true,
+        auth: ticket ? { ticket } : {},
+        /**
+         * Backoff exponencial explicito. O socket.io-client ja faz isso por
+         * padrao, mas padrao implicito muda numa atualizacao de dependencia
+         * sem ninguem notar. 1s -> 8s com jitter de 50% para nao sincronizar
+         * todos os clientes num mesmo instante depois de uma queda.
+         */
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 8000,
+        randomizationFactor: 0.5,
+      });
 
-    instance.on("connect_error", () => {
-      useRealtimeStore.getState().setConnectionStatus("offline");
-    });
+      const socketInstance = instance;
 
-    instance.on("ready", ({ user }) => {
-      useRealtimeStore.getState().setSelfUserId(user.id);
-    });
+      socketInstance.on("connect", () => {
+        const state = useRealtimeStore.getState();
+        state.setConnectionStatus("online");
+        state.setError(null);
+        // O ticket usado agora ja foi consumido; prepara o proximo.
+        void stageNextTicket(socketInstance);
+      });
 
-    instance.on("presence:sync", ({ serverId: incoming, entries }) => {
-      const state = useRealtimeStore.getState();
-      if (incoming !== state.serverId) return;
-      state.syncPresence(entries);
-    });
+      socketInstance.on("disconnect", () => {
+        const state = useRealtimeStore.getState();
+        state.setConnectionStatus("offline");
+        state.clearVolatile();
+      });
 
-    instance.on("presence:update", ({ serverId: incoming, entry }) => {
-      const state = useRealtimeStore.getState();
-      if (incoming !== state.serverId) return;
-      state.updatePresence(entry);
-    });
+      socketInstance.on("connect_error", () => {
+        useRealtimeStore.getState().setConnectionStatus("offline");
+        // Recusa pode ser ticket expirado ou ja usado: renova antes da
+        // proxima tentativa do backoff.
+        void stageNextTicket(socketInstance);
+      });
 
-    instance.on("voice:sync", ({ serverId: incoming, participants }) => {
-      const state = useRealtimeStore.getState();
-      if (incoming !== state.serverId) return;
-      state.syncVoice(participants);
-    });
+      socketInstance.on("ready", ({ user }) => {
+        useRealtimeStore.getState().setSelfUserId(user.id);
+      });
 
-    instance.on("voice:update", ({ serverId: incoming, participant }) => {
-      const state = useRealtimeStore.getState();
-      if (incoming !== state.serverId) return;
-      state.updateVoice(participant);
-    });
+      socketInstance.on("presence:sync", ({ serverId: incoming, entries }) => {
+        const state = useRealtimeStore.getState();
+        if (incoming !== state.serverId) return;
+        state.syncPresence(entries);
+      });
 
-    instance.on("message:new", ({ message, nonce }) => {
-      useRealtimeStore.getState().receiveMessage(message, nonce);
-    });
+      socketInstance.on("presence:update", ({ serverId: incoming, entry }) => {
+        const state = useRealtimeStore.getState();
+        if (incoming !== state.serverId) return;
+        state.updatePresence(entry);
+      });
 
-    setSocket(instance);
+      socketInstance.on("voice:sync", ({ serverId: incoming, participants }) => {
+        const state = useRealtimeStore.getState();
+        if (incoming !== state.serverId) return;
+        state.syncVoice(participants);
+      });
+
+      socketInstance.on("voice:update", ({ serverId: incoming, participant }) => {
+        const state = useRealtimeStore.getState();
+        if (incoming !== state.serverId) return;
+        state.updateVoice(participant);
+      });
+
+      socketInstance.on("message:new", ({ message, nonce }) => {
+        useRealtimeStore.getState().receiveMessage(message, nonce);
+      });
+
+      setSocket(socketInstance);
+    })();
 
     return () => {
-      instance.removeAllListeners();
-      instance.close();
+      cancelled = true;
+      instance?.removeAllListeners();
+      instance?.close();
       setSocket(null);
     };
   }, []);

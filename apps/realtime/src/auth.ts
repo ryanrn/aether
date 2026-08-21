@@ -1,19 +1,38 @@
-import { resolveSessionToken, SESSION_COOKIE } from "@aether/access";
+import {
+  loadSession,
+  resolveSessionToken,
+  verifySocketTicket,
+  SESSION_COOKIE,
+  SOCKET_TICKET_TTL_SECONDS,
+} from "@aether/access";
 import type { SocketData } from "@aether/shared";
 
 /**
  * Autenticacao do handshake WebSocket.
  *
- * O gateway NAO tem login proprio. Ele le o mesmo cookie httpOnly que o app
- * web grava e valida com a mesma funcao (@aether/access): assinatura do JWT,
- * linha `Session` no banco, revogacao e expiracao. Consequencia pratica: um
- * logout no app impede nova conexao aqui, e nao existe um segundo caminho de
- * autenticacao para manter em dia.
+ * O gateway NAO tem login proprio. Ele aceita duas provas de identidade, e as
+ * duas terminam na mesma validacao de sessao no banco:
  *
- * Por que cookie e nao token no `auth` do Socket.IO: o cookie e httpOnly, ou
- * seja, JavaScript da pagina nao consegue ler o token para mandar no payload.
- * Isso e proposital — mantem o token fora do alcance de XSS.
+ *  1. TICKET (producao). O app emite, sob demanda, um ticket curto e de uso
+ *     unico. E o caminho que atravessa dominios diferentes — em producao o app
+ *     fica em um dominio e o gateway em outro, e o navegador nao envia cookie
+ *     SameSite=Lax para outro site.
+ *
+ *  2. COOKIE (desenvolvimento). Em localhost app e gateway sao o mesmo site,
+ *     entao o cookie chega sozinho e nao ha ticket a buscar.
+ *
+ * Em ambos os casos a linha `Session` e conferida no banco: revogar login
+ * derruba o acesso pelos dois caminhos.
+ *
+ * Por que nao afrouxar o cookie para SameSite=None: isso jogaria fora a
+ * protecao contra CSRF que o Lax da de graca em TODA a aplicacao, para
+ * resolver um problema de um unico endpoint.
  */
+
+export interface SocketCredentials {
+  cookieHeader: string | undefined;
+  ticket: unknown;
+}
 
 /** Parser minimo de Cookie: evita uma dependencia para ler um unico valor. */
 export function readCookie(
@@ -36,19 +55,56 @@ export function readCookie(
 }
 
 /**
+ * Tickets ja usados, lembrados apenas enquanto poderiam ser reaproveitados.
+ *
+ * E o que torna o uso unico real em vez de uma promessa: sem isto, um ticket
+ * capturado valeria por todo o seu tempo de vida. Funciona porque ha uma
+ * instancia de gateway; ao escalar horizontalmente isto vai para o Redis,
+ * junto com presenca e rate limit.
+ */
+const usedTickets = new Map<string, number>();
+let lastSweep = Date.now();
+
+function consumeTicket(jti: string): boolean {
+  const now = Date.now();
+
+  if (now - lastSweep > 60_000) {
+    lastSweep = now;
+    for (const [id, expiresAt] of usedTickets) {
+      if (expiresAt < now) usedTickets.delete(id);
+    }
+  }
+
+  if (usedTickets.has(jti)) return false;
+  usedTickets.set(jti, now + SOCKET_TICKET_TTL_SECONDS * 1000);
+  return true;
+}
+
+/**
  * Retorna os dados da conexao, ou `null` para recusar o handshake.
- * Recusar sem detalhe e intencional: o cliente nao precisa saber se o token
- * era invalido, expirado ou revogado.
+ * Recusar sem detalhe e intencional: o cliente nao precisa saber se a prova
+ * era invalida, expirada, revogada ou ja usada.
  */
 export async function authenticateHandshake(
-  cookieHeader: string | undefined,
+  credentials: SocketCredentials,
 ): Promise<SocketData | null> {
-  const token = readCookie(cookieHeader, SESSION_COOKIE);
-  if (!token) return null;
-
-  const session = await resolveSessionToken(token);
+  const session = await resolveCredentials(credentials);
   if (!session) return null;
 
   const { email: _email, ...user } = session.user;
   return { userId: user.id, sessionId: session.sessionId, user };
+}
+
+async function resolveCredentials({ cookieHeader, ticket }: SocketCredentials) {
+  if (typeof ticket === "string" && ticket.length > 0) {
+    const claims = await verifySocketTicket(ticket);
+    if (!claims) return null;
+    // O consumo acontece ANTES de ir ao banco: um ticket repetido nao deve nem
+    // gerar consulta.
+    if (!consumeTicket(claims.jti)) return null;
+    return loadSession(claims.sid, claims.sub);
+  }
+
+  const token = readCookie(cookieHeader, SESSION_COOKIE);
+  return resolveSessionToken(token);
 }

@@ -1,0 +1,38 @@
+# Gateway WebSocket do Aether na Fly.io.
+#
+# Regiao GRU (Sao Paulo) de proposito: o gateway consulta o Postgres a cada
+# mensagem enviada, e o banco Supabase esta em sa-east-1. Colocar o gateway
+# nos EUA faria cada mensagem pagar a viagem Brasil -> EUA -> Brasil.
+#
+# O audio NAO passa por aqui: ele vai do navegador direto para o SFU. Esta
+# maquina cuida de sinalizacao, presenca e chat.
+
+app = "aether-gateway"
+primary_region = "gru"
+
+[build]
+  dockerfile = "apps/realtime/Dockerfile"
+
+[env]
+  REALTIME_PORT = "4000"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # Presenca, ocupacao de voz e rate limit vivem na MEMORIA deste processo.
+  # Deixar a maquina dormir apagaria quem esta online; subir uma segunda
+  # criaria dois universos de presenca. Ambos exigiriam o adapter de Redis.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

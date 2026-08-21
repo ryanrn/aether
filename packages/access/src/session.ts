@@ -28,8 +28,24 @@ export async function resolveSessionToken(
   const claims = await verifySessionToken(token);
   if (!claims) return null;
 
+  return loadSession(claims.sid, claims.sub);
+}
+
+/**
+ * Carrega e valida a sessao pela linha do banco.
+ *
+ * Separado de `resolveSessionToken` porque existe mais de uma forma de provar
+ * quem voce e — cookie de sessao e ticket de socket — e as duas terminam na
+ * MESMA validacao: linha existe, nao revogada, nao expirada, e pertence a quem
+ * o portador diz ser. Duplicar essa checagem seria criar um caminho onde
+ * revogar login deixa de funcionar.
+ */
+export async function loadSession(
+  sessionId: string,
+  expectedUserId: string,
+): Promise<AuthenticatedSession | null> {
   const session = await prisma.session.findUnique({
-    where: { id: claims.sid },
+    where: { id: sessionId },
     include: {
       user: {
         select: {
@@ -48,9 +64,9 @@ export async function resolveSessionToken(
     !session ||
     session.revokedAt !== null ||
     session.expiresAt.getTime() < Date.now() ||
-    // o token precisa apontar para o dono real da linha: sem isso, um token
-    // antigo continuaria valendo se a linha fosse reaproveitada.
-    session.userId !== claims.sub
+    // o portador precisa apontar para o dono real da linha: sem isso, um
+    // token antigo continuaria valendo se a linha fosse reaproveitada.
+    session.userId !== expectedUserId
   ) {
     return null;
   }

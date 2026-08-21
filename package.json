@@ -11,6 +11,7 @@
     "dev": "dotenv -e .env -- npm run dev --workspace=@aether/web",
     "dev:realtime": "dotenv -e .env -- npm run dev --workspace=@aether/realtime",
     "build": "npm run db:generate && dotenv -e .env -- npm run build --workspace=@aether/web",
+    "build:ci": "prisma generate --schema packages/db/prisma/schema.prisma && npm run build --workspace=@aether/web",
     "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "env:check": "node scripts/check-env.js .env",

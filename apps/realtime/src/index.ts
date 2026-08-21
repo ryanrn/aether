@@ -54,7 +54,10 @@ const io: AetherServer = new Server(httpServer, {
  */
 io.use(async (socket, next) => {
   try {
-    const data = await authenticateHandshake(socket.handshake.headers.cookie);
+    const data = await authenticateHandshake({
+      cookieHeader: socket.handshake.headers.cookie,
+      ticket: socket.handshake.auth?.ticket,
+    });
     if (!data) {
       next(new Error("unauthorized"));
       return;
