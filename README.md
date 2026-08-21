@@ -8,14 +8,14 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 
 ---
 
-## Estado atual: FASES 1-3 concluidas, FASE 4 em andamento
+## Estado atual: FASES 1-4 concluidas
 
 | Fase | Escopo | Status |
 | --- | --- | --- |
 | 1 | Estrutura, autenticacao, usuarios, servidores, interface base | ✅ pronto |
 | 2 | Canais, categorias, cargos, permissoes (CRUD + canais privados) | ✅ pronto |
 | 3 | Gateway WebSocket, presenca, entrada/saida de canal, chat | ✅ pronto |
-| 4 | WebRTC: microfone, audio, canais de voz (SFU) | em andamento |
+| 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | pendente |
 | 6 | Administracao, moderacao, logs | pendente |
 | 7 | Performance, reconexao, seguranca, testes, deploy | pendente |
@@ -236,6 +236,28 @@ Roteiro manual:
 - O botao **Convidar** so aparece para quem tem a permissao `CREATE_INVITE` —
   e a action revalida a permissao no servidor, entao chamar a action direto
   sem permissao tambem falha.
+
+---
+
+## Limitacoes conhecidas da FASE 4
+
+Audio confirmado funcionando entre dois clientes: entrar, falar, ouvir, mutar,
+ensurdecer e sair.
+
+- **So funciona em localhost por enquanto.** O LiveKit Cloud faz o relay da
+  midia, mas o app (Next e gateway) roda na sua maquina. Usar com outras
+  pessoas exige deploy — e a fase 7.
+- **Sem seletor de dispositivo.** Usa o microfone padrao do sistema; trocar de
+  entrada ou de saida exige mexer no sistema operacional.
+- **Sem volume por usuario** e sem mute administrativo — o `serverMuted` do
+  `VoiceState` existe e e sempre falso.
+- **Sem indicador de qualidade de conexao** (ping, perda de pacote).
+- **Compartilhamento de tela ainda nao existe**, mas o token ja autoriza a
+  fonte `screen_share` para quem tem a permissao. E a fase 5.
+- **Reconexao do SFU nao foi exercitada** em queda real de rede; o LiveKit
+  reconecta sozinho, mas isso nao foi testado aqui.
+- **Uma sala por canal, uma instancia de gateway.** A conta do LiveKit Cloud
+  tem limites de banda; video consome bem mais que voz.
 
 ---
 
