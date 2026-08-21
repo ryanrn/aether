@@ -25,8 +25,10 @@ voz.
 ### 1. Aumentar o limite de conexoes do banco
 
 O `DATABASE_URL` do Supabase vem com `connection_limit=1`. Isso serializa as
-consultas — e o gateway faz uma por mensagem. Suba para pelo menos `5` na
-variavel usada em producao:
+consultas — e o gateway faz uma por mensagem enviada.
+
+No **gateway** isso e corrigido automaticamente pelo `scripts/fly-secrets.mjs`.
+Na **Vercel** voce ajusta a mao ao colar a variavel:
 
 ```
 ...?pgbouncer=true&connection_limit=5
@@ -56,17 +58,24 @@ O `--copy-config` faz o Fly usar o `fly.toml` que ja esta no repositorio, em
 vez de gerar um novo. Confirme que ele nao criou banco nem Redis — nao
 precisamos.
 
-Depois, os segredos (nunca vao para o repositorio):
+Depois os segredos. Use o utilitario em vez de digita-los: ele le do `.env`
+e passa pela entrada padrao do flyctl, entao nenhum valor aparece na tela nem
+no historico do terminal.
 
 ```bash
-fly secrets set AUTH_SECRET="..." DATABASE_URL="..." NEXT_PUBLIC_APP_URL="https://SEU-APP.vercel.app" LIVEKIT_URL="wss://..." LIVEKIT_API_KEY="..." LIVEKIT_API_SECRET="..."
+node scripts/fly-secrets.mjs https://SEU-APP.vercel.app
 ```
 
-> `AUTH_SECRET` tem de ser **exatamente o mesmo** do app web: e ele que valida
-> o ticket de handshake. Segredos diferentes = ninguem conecta.
+Ele tambem sobe o `connection_limit` de 1 para 5 na URL de producao — com 1 as
+consultas serializam, e o gateway faz uma por mensagem enviada.
+
+> `AUTH_SECRET` tem de ser **exatamente o mesmo** nos dois lados: e ele que
+> valida o ticket de handshake. Segredos diferentes = ninguem conecta.
 >
-> `NEXT_PUBLIC_APP_URL` aqui nao e sobre o Next — o gateway usa esse valor como
-> **origem liberada no CORS**. Se estiver errado, o navegador recusa a conexao.
+> A URL passada como argumento vira a **origem liberada no CORS** do gateway.
+> Se estiver errada, o navegador recusa toda conexao. Na primeira vez voce
+> ainda nao tem a URL da Vercel — passe um valor provisorio e rode o comando de
+> novo depois, com o endereco real.
 
 ```bash
 fly deploy
