@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | pendente |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1 prontos) |
 
 ---
 
@@ -177,6 +177,390 @@ npm run dev                 # http://localhost:3000
 
 ---
 
+## App desktop (Windows)
+
+```bash
+npm run dev:desktop      # abre a janela apontando para a producao
+npm run build:desktop    # gera apps/desktop/dist/Aether Setup X.Y.Z.exe
+```
+
+**A casca NAO empacota o site.** O Next roda no servidor (Server Actions,
+SSR), entao nao existe versao estatica para embutir — e mesmo que existisse,
+embutir significaria reinstalar a cada correcao. O app carrega
+`https://aether-mocha-phi.vercel.app`, entao um deploy chega sem ninguem baixar
+nada. E o mesmo desenho que Discord e Slack usam.
+
+**Electron, e nao Tauri.** O Tauri geraria um instalador de ~5MB em vez de
+78MB, mas exige Rust e MSVC Build Tools (varios GB de ferramenta) e usa o
+WebView2 do SISTEMA — o mesmo motor cujo `getDisplayMedia` falha ao capturar
+audio em algumas maquinas Windows. O Electron traz o Chromium proprio e tem
+uma API de captura loopback especifica, que e um caminho de codigo diferente.
+
+**Instalador, e nao portable**, por tres motivos concretos: o app e publicado
+varias vezes por semana (portable exigiria reenviar o .exe a cada correcao),
+atalho e icone aparecem sozinhos, e instalado ha caminho para auto-update
+depois.
+
+### Seletor de tela proprio
+
+Uma janela nossa, com miniaturas de cada tela e janela, abas separando as duas
+e uma chave para levar o som. E o mesmo caminho que o Discord usa:
+`desktopCapturer.getSources()` devolve as fontes com miniatura, a interface
+desenha, e a captura so comeca depois da escolha.
+
+Nasceu de um bug: a primeira versao passava `sources[0]` direto para o
+callback, apostando que `useSystemPicker: true` faria o Windows abrir o
+seletor nativo antes. Nesta combinacao de Electron e Windows isso nao
+acontece, e o "plano B" virou o comportamento de sempre — clicar em
+compartilhar ia direto para a tela inteira, sem perguntar nada.
+
+Detalhes que valem saber:
+
+- **As miniaturas viram data URL no processo PRINCIPAL.** O renderer do
+  seletor nao recebe `desktopCapturer` — se recebesse, aquela janela poderia
+  enumerar telas por conta propria, e ela so precisa desenhar o que mandaram.
+- **O nome da fonte entra por `textContent`, nunca `innerHTML`.** Titulo de
+  janela e texto escolhido por OUTRO programa da maquina.
+- **CSP restritiva no HTML** (`default-src 'none'`): a janela nao carrega nada
+  da rede, e a regra existe para continuar assim quando alguem mexer nela.
+- **Os handlers de IPC sao registrados ANTES do `loadFile`.** O renderer pede
+  as fontes assim que carrega; com o registro depois, o pedido chegava antes
+  do handler existir e a grade ficava vazia. Aconteceu.
+- **A chave de som fica AQUI, e nao herda a do app web.** No navegador aquela
+  preferencia se auto-desliga quando a captura de som falha; herdar isso no
+  desktop faria o loopback do Electron — o motivo de existir esta versao —
+  nunca ser exercitado.
+
+### Limitacoes conhecidas
+
+- **O executavel NAO e assinado.** Na primeira execucao o Windows mostra
+  "editor desconhecido" e pede confirmacao. Assinar exige um certificado pago.
+- **Buildar exige o Modo de Desenvolvedor do Windows LIGADO.** O
+  electron-builder baixa um pacote de ferramentas que contem symlinks do
+  macOS, e criar symlink no Windows exige privilegio. Ironicamente os dois
+  arquivos que falham (`libcrypto.dylib`, `libssl.dylib`) sao inuteis num
+  build para Windows, mas o extrator aborta assim mesmo.
+  Ligar em: `ms-settings:developers`.
+- **`npmRebuild: false` no electron-builder.yml nao e otimizacao, e
+  necessidade.** Sem isso ele roda "install production dependencies" no
+  diretorio do app, e num monorepo com workspaces isso PODA o node_modules da
+  raiz — levando Next, Vitest e Prisma junto. Aconteceu uma vez durante a
+  implementacao.
+- **A versao do Electron esta FIXA** (`33.4.11`, sem `^`) em
+  `apps/desktop/package.json`. Com workspaces o binario fica na raiz, e o
+  electron-builder so descobre a versao se ela estiver fixa ali.
+- **Nao ha auto-update ainda.** Atualizar a casca (nao o site) exige baixar o
+  instalador novo. Como o site vem da rede, isso so importa quando o codigo do
+  proprio Electron mudar.
+- **So Windows x64.** macOS e Linux exigem buildar em cada sistema, ou CI.
+- **O loopback de audio do Electron FUNCIONA** na maquina onde o navegador
+  falhava. Verificado em 22/08/2026 pelo caminho real (seletor incluso):
+  `{ ok: true, video: 1, audio: 1 }`, e 4 de 4 repeticoes com som.
+
+  Duas conclusoes erradas foram registradas antes desta, e ambas vinham de
+  falhas TRANSITORIAS (`NotReadableError / Could not start audio source`)
+  quando algo segurava o dispositivo de audio no momento do teste. Repetir e
+  o que separou "esta maquina nao suporta" de "naquele instante nao deu".
+
+  Dois erros de API no caminho, que valem como aviso:
+  `loopbackWithSilence` NAO existe (validos: `loopback` e `loopbackWithMute`),
+  e passar `audio: undefined` tambem e recusado — a chave precisa ser OMITIDA
+  quando nao ha som.
+
+- **O renderer TAMBEM precisa pedir audio, nao basta o handler devolver.**
+  Verificado com um teste de tres casos: com o renderer mandando
+  `audio: false` e o handler devolvendo `loopback`, chegam ZERO faixas de som.
+  So funciona quando os dois pedem.
+
+  Por isso `isDesktopApp()` existe: no desktop o app web pede audio SEMPRE, e
+  quem decide e a chave do seletor. Sem isso, a chave do seletor seria enfeite
+  para quem tivesse a preferencia do app desligada — que e exatamente o estado
+  de quem ja apanhou do navegador, porque ela se auto-desliga na falha.
+
+- **O loopback falha de verdade — e de forma permanente — quando a saida de
+  audio PADRAO do Windows e um dongle sem fio.** Reportado em 22/08/2026:
+  compartilhar com um fone Logitech PRO X2 ligado por cabo P2 funcionava; o
+  MESMO fone no receptor USB 2,4GHz sem fio dava `Could not start audio
+  source` sempre. Um segundo teste, trocando a saida padrao do Windows EM
+  TEMPO REAL durante uma transmissao ja no ar, confirmou: com "High
+  Definition Audio Device" (onboard) o outro lado ouvia o som; com o PRO X2
+  sem fio como padrao, nao ouvia. E limitacao do driver do dongle em abrir
+  captura WASAPI em modo loopback, nao um bug de logica — a mesma falha
+  acontece via `getDisplayMedia` do navegador.
+
+  **Isso NAO se resolve com um seletor de saida de audio dentro do app.** O
+  loopback do Chromium (e o do Electron, que usa o mesmo mecanismo) sempre
+  captura da saida que o WINDOWS considera padrao no momento — nenhuma API
+  exposta pelo `setDisplayMediaRequestHandler` deixa escolher um dispositivo
+  especifico e diferente do padrao. Resolver isso de verdade exigiria um
+  modulo nativo falando WASAPI diretamente (contornando a abstracao do
+  Chromium), o que e obra muito maior que uma tela de configuracao. O
+  contorno real, hoje, e trocar a saida padrao do Windows para o dispositivo
+  com fio/onboard antes de compartilhar com som.
+
+  O que ERA um bug de verdade, e foi corrigido: no desktop pedimos audio
+  SEMPRE (ver acima), entao cada nova tentativa de compartilhar caia no
+  MESMO erro de novo, para sempre — nao havia como a tela nem sair sem som.
+  A causa: a preferencia que se autodesliga na falha
+  (`saveShareAudioPreference`) e do NAVEGADOR (localStorage) e nunca chega a
+  valer no desktop, porque la a chave que importa e a do seletor proprio
+  (`picker-prefs.json`, no processo principal). Agora
+  `apps/web/src/lib/voice/room.ts` avisa o Electron pela ponte
+  `window.aetherDesktop.reportAudioCaptureFailed()`
+  (`apps/desktop/src/preload.js` → `desktop:audio-capture-failed` →
+  `disableAudioPreference()` em `apps/desktop/src/picker.js`) quando a
+  captura falha por causa do som. Na proxima vez o seletor ja abre com "levar
+  som" desmarcado e a tela funciona de primeira.
+
+## Configuracoes do app (diferente das do servidor)
+
+Havia DUAS engrenagens fazendo a mesma coisa — as duas abriam as
+configuracoes do servidor — e nenhuma para o proprio usuario. Agora:
+
+| onde | o que abre |
+| --- | --- |
+| barra de cima, ao lado de "Convidar" | configuracoes do SERVIDOR |
+| barra de baixo, ao lado do seu nome | suas configuracoes (e o avatar tambem) |
+
+O modal tem menu lateral, e nao abas no topo: a lista deve crescer (aparencia,
+atalhos, notificacoes) sem virar uma fileira apertada.
+
+- **Minha conta** — foto, nome de exibicao e o apelido no servidor atual. Era
+  um modal proprio; virou aba, porque dois lugares para editar a mesma coisa e
+  o mesmo problema das duas engrenagens.
+- **Voz e video** — escolha de microfone e um TESTE com medidor de nivel ao
+  vivo. Existe porque antes descobrir que o microfone estava mudo exigia
+  entrar numa call e perguntar para alguem.
+
+### Limitacoes conhecidas
+
+- **O teste de microfone e um botao, nao liga sozinho.** Ninguem deve ter o
+  microfone aberto sem ter pedido. O stream fecha quando a tela sai — o audio
+  nao e gravado, nem enviado, nem guardado.
+- **`mic-level.ts` e separado de `voice-activity.ts` de proposito**, apesar de
+  os dois lerem RMS do microfone: um reporta BOOLEANO nas transicoes (vai pelo
+  socket para os outros), o outro devolve nivel CONTINUO que nunca sai da
+  maquina. Unificar acoplaria uma medicao de interface a um evento de rede.
+- **A escolha do alto-falante troca a saida ao vivo**, sem derrubar a call:
+  `setSinkId` e aplicado a todos os `<audio>` ja anexados (microfone dos
+  outros e som de tela) e guardado para as faixas que chegarem depois. E
+  Chromium-only — no Firefox o metodo nao existe e a tela diz isso em vez de
+  fingir que funcionou.
+
+  **Isso NAO conserta o som do compartilhamento de tela em fone sem fio.**
+  Sao mecanismos opostos: aqui e para ONDE tocamos o que chega; la e de ONDE
+  capturamos o som para ENVIAR — e o loopback sempre le da saida PADRAO do
+  Windows, coisa que nenhuma API do Electron deixa escolher (ver a secao do
+  app desktop).
+- **Ainda nao ha sensibilidade manual nem push-to-talk.** O volume de cada
+  pessoa continua no menu dela, na arvore de canais.
+- **O medidor multiplica o RMS por 4.** Voz normal fica em 0,02–0,15 de RMS;
+  sem isso a barra mal sairia do lugar e pareceria microfone quebrado.
+
+## AETHER Activity (cartao de atividade)
+
+O que a pessoa esta fazendo agora, num cartao que abre ao clicar nela — na
+arvore de canais ou no painel de membros.
+
+**Nao existe um "objeto de presenca" novo por tras disto, de proposito.** Tudo
+que o cartao mostra ja viajava em tempo real: `presence` da o online/ausente, e
+`VoiceState` ja carregava canal, mudo, surdo, tela e falando. Inventar uma
+segunda fonte para os mesmos fatos criaria duas verdades sobre a mesma pessoa —
+e quando divergissem, nao haveria qual acreditar. E o mesmo motivo pelo qual a
+autorizacao mora so em `@aether/access`.
+
+O unico campo novo e `joinedAt`, em `VoiceState`. Carimbado pelo GATEWAY, nunca
+pelo cliente: relogio de navegador erra, e um cliente poderia dizer que esta ali
+ha oito horas.
+
+Onde fica:
+
+- `packages/shared/src/types.ts` — `joinedAt` em `VoiceState`
+- `apps/realtime/src/state.ts` — carimbo na entrada
+- `apps/web/src/components/profile/user-activity-card.tsx` — o cartao
+- `channel-members.tsx` e `member-panel.tsx` — quem abre
+- `tests/unit/voice-activity.test.ts` — as regras do relogio
+
+### Limitacoes conhecidas do AETHER Activity
+
+- **"Assistindo a transmissao de alguem" NAO existe.** Estava no rascunho
+  original, mas ninguem rastreia quem esta OLHANDO qual tela: o SFU sabe quem
+  publica, nao quem assiste. Mostrar isso exigiria um evento novo de
+  sinalizacao, e ficou de fora desta versao em vez de ser simulado.
+- **Nada de jogo, musica ou status personalizado.** E a "2.0" do rascunho:
+  depende de integracao externa (um jogo dizendo ao AETHER o que esta
+  rodando), que e trabalho de outra natureza.
+- **Trocar de canal REINICIA o relogio; reconectar no mesmo canal preserva.**
+  A segunda regra existe porque uma queda de rede chama `joinVoice` de novo — e
+  zerar ali faria o tempo voltar do zero por um soluco que a pessoa nem viu.
+  Testado nos dois sentidos.
+- **O relogio vem do gateway, que guarda voz em MEMORIA.** Reiniciar o gateway
+  zera o tempo de todo mundo, porque ninguem "esta numa call" de forma
+  persistente. E a mesma limitacao ja documentada da fase 3.
+- **Aberto pela arvore de canais, o cartao FECHA se a pessoa sair da voz** — a
+  lista inteira desmonta junto com ela. Pelo painel de membros isso nao
+  acontece. Nao e travamento: verificado, sem erro no console.
+- **O cartao nao se reposiciona se a janela for redimensionada com ele
+  aberto.** Ele se ajusta para caber na ABERTURA; depois disso, fica. Mesmo
+  comportamento do menu de moderacao, que ja era assim.
+- **A contagem de pessoas no canal e derivada no cliente**, contando quem a
+  store conhece naquele canal. Bate com a arvore de canais porque as duas leem
+  a mesma fonte.
+
+## Deteccao de jogo (so no app desktop)
+
+"Jogando Hollow Knight" no cartao de atividade, como o Discord faz.
+
+**Nao existe banco de dados de jogos, e nao precisa** — cada loja ja diz o que
+instalou, e cada uma diz de um jeito:
+
+- **Steam** instala sempre em `steamapps/common/<Pasta do Jogo>/`, entao o
+  caminho do processo ja identifica o jogo; o `appmanifest_*.acf` ao lado
+  converte a pasta no nome oficial — e de la que sai o apostrofo certo de
+  "Marvel's Spider-Man Remastered", que a pasta nao tem.
+- **Epic** nao tem convencao de pasta nenhuma: o GTA V que motivou este
+  suporte estava em `E:\GTAV`, sem nada no caminho que dissesse "Epic". Em
+  compensacao ela guarda um manifesto JSON por jogo em
+  `C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests/*.item`, com
+  `DisplayName` JA PRONTO e `InstallLocation` — melhor estruturado que o da
+  Steam. Casamos por caminho de instalacao.
+
+Isso cobre qualquer jogo dessas duas lojas, inclusive os instalados depois.
+
+**Privacidade e o que decide o desenho.** O casamento acontece no processo
+principal do Electron, e a lista de processos NUNCA sai da maquina — o unico
+dado que atravessa a ponte (e dai para o gateway) e o nome do jogo ja
+identificado. Tudo que nao casa com a regra da Steam e descartado sem sair
+dali. Por isso tambem **comeca desligada**: ninguem tem a propria lista de
+programas lida sem ter pedido.
+
+O gateway trata o nome como TEXTO DE CLIENTE — corta em `GAME_NAME_MAX` e nao
+persiste. Nao ha lista de jogos validos para conferir contra, e inventar uma so
+criaria cadastro para manter; o dano possivel de um nome mentiroso e alguem
+dizer que joga o que nao joga.
+
+Onde fica:
+
+- `apps/desktop/src/game-detect.js` — deteccao e casamento
+- `apps/desktop/src/main.js` / `preload.js` — a ponte e a preferencia
+- `apps/web/src/lib/desktop/game-activity.ts` — o lado da pagina
+- `apps/web/src/components/realtime/game-activity-monitor.tsx` — leva ao gateway
+- `packages/shared/src/events.ts` — `game`/`gameSince` em `PresenceEntry`
+- `tests/unit/game-detect.test.ts` e `scripts/verify-game-activity.mjs`
+
+### Limitacoes conhecidas da deteccao de jogo
+
+- **So Steam e Epic.** GOG, Battle.net, Xbox e jogos avulsos ainda nao sao
+  detectados — cada loja guarda o catalogo de um jeito, e cobrir mais uma e
+  escrever mais uma regra. A alternativa geral seria uma tela de "adicionar
+  jogo" manual.
+- **Um jogo instalado pelas DUAS lojas conta como Steam.** A regra da Steam e
+  avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
+- **O cache dos manifestos da Epic e invalidado pela data da PASTA**, nao por
+  tempo. Instalar ou desinstalar mexe na pasta e forca a releitura. Uma leitura
+  VAZIA nunca vira cache, de proposito: a Epic reescreve os manifestos ao
+  instalar ou verificar um jogo, e cachear o vazio desse instante travaria a
+  deteccao ate a pasta mudar outra vez.
+- **So no app de desktop, e so no Windows.** Navegador nao enumera processos —
+  no site a secao aparece explicando isso, em vez de um botao morto.
+- **O icone vem do EXECUTAVEL**, via `app.getFileIcon` — sem CDN, sem banco de
+  imagens, sem consultar a internet, e funciona igual para qualquer loja. Nao e
+  a arte de capa que outros apps mostram: aquilo vem do catalogo deles.
+
+  Entre os processos do mesmo jogo escolhemos o de MAIOR data URL, e isso nao e
+  chute: medido no GTA V, o `PlayGTAV.exe` devolve 550 bytes (praticamente um
+  icone generico) e o `GTA5.exe` devolve 4126 bytes em 48x48. Pegar o primeiro
+  daria o pior dos dois.
+
+  O icone atravessa o gateway como data URL e e renderizado na tela dos
+  OUTROS — por isso passa por `safeGameIcon`, que so aceita PNG, JPEG e WEBP em
+  base64, com teto de tamanho. **SVG e recusado de proposito**: SVG e
+  documento, aceita `<script>`, e nenhum icone precisa ser SVG.
+- **Sem detalhes de dentro do jogo** (placar, fase, grupo). Isso exigiria que
+  os jogos integrassem com um SDK NOSSO, o que nenhum vai fazer. E a diferenca
+  entre a deteccao por processo e o Rich Presence de verdade.
+- **O que a loja instala mas nao e jogo precisa de lista de exclusao.**
+  Descoberto na primeira deteccao real: veio `wallpaper_engine` junto do jogo.
+  A Epic tem o caso equivalente na Unreal Engine, que ela distribui pela mesma
+  via dos jogos. A lista esta em `NAO_SAO_JOGOS` e cobre os casos conhecidos —
+  outro app pode escapar ate ser adicionado.
+- **Verifica a cada 15s**, entao abrir ou fechar um jogo leva ate 15 segundos
+  para refletir. Medido nesta maquina: ~300ms por verificacao com `wmic`,
+  contra ~1600ms do PowerShell — por isso `wmic` vem primeiro.
+- **`wmic` foi removido por padrao no Windows 11 24H2+**, e por isso existe a
+  reserva em PowerShell. Nessas maquinas cada verificacao custa ~5x mais.
+- **Mais de um jogo aberto mostra so um** — o primeiro em ordem alfabetica.
+  Escolha estavel, nao "a melhor": sem ordenar, o nome ficaria alternando entre
+  os dois a cada verificacao.
+- **Nao persiste.** Reiniciar o gateway limpa o jogo de todo mundo, como a
+  presenca.
+- **A varredura de processos em si nao tem teste automatizado**, e nem daria:
+  dublar `execFile` testaria o duble. O que esta coberto por teste e a logica
+  que decide — caminho -> nome, o que nao e jogo, leitura do manifesto.
+
+  A ponte IPC foi verificada rodando o `main.js` e o `preload.js` REAIS, com o
+  Electron apontado para uma pagina de teste local que relata por HTTP (o
+  Electron no Windows nao entrega o console para um terminal com pipe). Sete
+  verificacoes, incluindo a cadeia inteira ate o nome do jogo chegar na pagina.
+  Se for repetir: o app usa trava de instancia unica, entao passe
+  `--user-data-dir` proprio ou a instancia de teste sai na hora com o app
+  aberto.
+
+## Testes automatizados
+
+Suite unitaria (fase 7a). **Nao precisa de banco, servidor nem gateway** — roda
+em cerca de um segundo, offline:
+
+```bash
+npm test
+```
+
+```bash
+npm run test:watch
+```
+
+O Vitest apaga os tipos sem conferir, entao a suite tem um passo proprio de
+typecheck:
+
+```bash
+npm run typecheck:tests
+```
+
+O que ela cobre: o bitfield de permissoes e a resolucao de overwrites, a
+hierarquia de quem pode moderar quem, a separacao entre cookie de sessao e
+ticket de socket, o hash de senha, os dois rate limits, os schemas que
+transformam entrada, e as recusas do upload de icone (tamanho e tipo real por
+bytes). E logica pura — o caminho de ponta a ponta continua sendo dos
+`verify-phase*.mjs`.
+
+### Regressao de integracao
+
+Os `verify-phase*.mjs` falam HTTP e WebSocket de verdade, contra o banco de
+verdade. Precisam dos servicos no ar:
+
+```bash
+npx dotenv -e .env -- node scripts/verify-phase3.mjs
+```
+
+**Feche as abas do app antes**, ou a cobertura fica incompleta. A presenca conta
+por USUARIO, nao por socket: com uma aba de `joao` aberta, o `server:join` do
+script nao o torna presente — ele ja era — e o gateway, corretamente, nao
+anuncia nada. Duas assercoes da fase 3 dependem disso.
+
+Quando ha cliente conectado, o script avisa no topo e **pula** essas duas,
+nomeando-as com `--`, em vez de reprova-las. Falhar ali descreveria uma aba
+aberta, nao um defeito; e barrar as outras quarenta por causa de duas trocaria
+um resultado enganoso por resultado nenhum.
+
+`scripts/verify-phase7b.mjs` testa a revalidacao de sessao e o recalculo de
+salas (fase 7b). Mais lento que os demais de proposito: a secao de sessao
+espera ate 40s pelo intervalo real do guarda do gateway — nao ha como provar
+que um timer dispara sem esperar o timer disparar.
+
+```bash
+npx dotenv -e .env -- node scripts/verify-phase7b.mjs
+```
+
 ## Como testar a FASE 2
 
 Verificacao automatica (com o dev server rodando em outro terminal):
@@ -239,6 +623,431 @@ Roteiro manual:
 
 ---
 
+## Backup do banco
+
+```bash
+npm run backup           # gera backups/aether-<carimbo>.json
+npm run backup:verify    # PROVA que restaura — roda isto, nao so o de cima
+npm run restore -- backups/aether-....json
+```
+
+**Backup de DADOS, nao de schema.** A estrutura ja esta versionada em
+`packages/db/prisma/migrations` — duplicar isso num dump criaria duas verdades
+sobre a mesma coisa, e no dia de restaurar ninguem saberia qual seguir.
+
+O caminho de volta completo:
+
+1. `npx prisma migrate deploy` — recria a estrutura a partir do git, ja com o
+   RLS da migracao `20260823000000_rls_e_revoke`;
+2. `npm run restore -- <arquivo>` — devolve os dados.
+
+### O que o `backup:verify` prova
+
+Backup nao testado e crenca, nao capacidade. Sao dois modos de falhar, e cada
+um tem sua verificacao:
+
+- **Ordem** — para cada uma das 22 chaves estrangeiras, a tabela pai vem antes
+  da filha. Verificado como PROPRIEDADE contra o grafo real de FKs, e nao
+  "restaurei e nao deu erro": uma tabela vazia por acaso passaria pelo segundo
+  teste sem exercitar ordem nenhuma.
+- **Fidelidade** — dump, restauracao num schema descartavel do proprio banco, e
+  comparacao canonica. As 13 tabelas voltam identicas.
+- **O bitfield de permissoes** ganha teste proprio, inclusive com um valor
+  acima de 2^53. `permissions`, `allow` e `deny` sao `BigInt`, e
+  `JSON.stringify` LANCA em BigInt: errar ali nao corrompe "um dado", corrompe
+  quem pode o que.
+
+O teste roda num schema descartavel do banco de producao (criado e derrubado na
+hora), e nao num projeto novo. Nao cria infraestrutura e ainda assim exercita
+Postgres de verdade.
+
+**Um bug real saiu daqui**, e nao de leitura de codigo: o Postgres nao converte
+texto para ENUM sozinho num INSERT parametrizado (`column "status" is of type
+"UserStatus" but expression is of type text`). O `restore.mjs` passou a
+converter as colunas de enum explicitamente.
+
+### Limitacoes conhecidas do backup
+
+- **O Supabase Storage NAO entra.** Fotos de perfil e icones de servidor vivem
+  fora do banco; o dump tem a URL, nao a imagem. Restaurar o banco num projeto
+  novo deixaria os avatares quebrados.
+- **E manual.** Nao ha agendamento: se ninguem rodar, nao ha backup. O plano do
+  Supabase e o FREE, onde a retencao propria e curta.
+- **`backups/` esta no `.gitignore`, e isso nao e detalhe.** O dump carrega o
+  `passwordHash` de todo mundo e a tabela de sessoes — um backup versionado e
+  um vazamento com historico.
+- **A trava do `restore` e por contagem de usuarios**, nao por identidade do
+  banco: ele recusa restaurar onde ja ha gente, e `--force` passa por cima.
+  Nao ha nada que impeca apontar para o banco errado com `--force`.
+- **Tabela criada por migracao FUTURA nao ganha RLS sozinha.** O
+  `ALTER DEFAULT PRIVILEGES` cobre os grants, mas RLS e por tabela. Um gatilho
+  de evento resolveria; nao foi feito porque seria maquinaria que alguem teria
+  de entender depois, para um caso que o Security Advisor do Supabase ja
+  denuncia. O habito vale mais: rodar o advisor apos mexer no schema.
+
+## A API REST do Supabase esta FECHADA (RLS)
+
+O Supabase nao expoe o banco so pela conexao Postgres que o Prisma usa: ele
+tambem publica uma API REST automatica (PostgREST) na internet, aberta com a
+chave `anon` — que o Supabase trata como PUBLICA por design, feita para ser
+embutida em navegador.
+
+**Estava tudo aberto, e nao era teorico.** Verificado em 23/08/2026 chamando a
+API de fora: `GET /rest/v1/User` respondia `200` com a chave `anon`, e o papel
+`anon` tinha SELECT, INSERT e DELETE nas 14 tabelas, todas com RLS desligado.
+Ou seja: quem tivesse a chave lia `passwordHash`, lia sessoes e mensagens, e
+podia APAGAR o banco inteiro. O que segurava era a chave nao estar publicada em
+lugar nenhum — e isso e sorte, nao seguranca.
+
+A correcao tem duas camadas, na migracao `fecha_api_publica_rls_e_revoke`:
+
+1. `REVOKE` de tabelas, sequencias e funcoes para `anon`/`authenticated`, mais
+   `ALTER DEFAULT PRIVILEGES` para tabela nova ja nascer sem grant;
+2. `ENABLE ROW LEVEL SECURITY` nas 14 tabelas — rede de seguranca, porque o
+   Supabase reconcede grants em algumas operacoes.
+
+**Nao existe policy nenhuma, e isso e o certo aqui:** RLS ligado sem policy
+significa NEGAR TUDO, e este app nunca usa PostgREST. O Advisor passa a marcar
+"RLS Enabled No Policy" em nivel INFO — que descreve exatamente o desenho, e
+nao um problema.
+
+O app nao sente nada porque o Prisma conecta como `postgres`, DONO das tabelas,
+e dono nao e afetado por RLS nem por grant. Confirmado depois de aplicar:
+`GET /rest/v1/User` com a chave `anon` responde `401 permission denied`, o
+DELETE tambem, e as 123 assercoes de regressao (fases 2 a 7b e jogo) seguem
+passando.
+
+Se um dia alguem precisar do PostgREST, o caminho e escrever policies
+deliberadas — nunca desligar o RLS.
+
+## Limitacoes conhecidas das IMAGENS (icone de servidor e foto de perfil)
+
+Fora do roteiro das 7 fases: e uma divida da FASE 1 ("upload de avatar e icone
+nao existe") paga fora de ordem, a pedido. Pronto: enviar, substituir e
+remover o icone, com o resultado aparecendo na barra de servidores.
+
+Onde mora: bucket `server-icons` no MESMO projeto Supabase que ja hospeda o
+banco — nenhum fornecedor novo. O bucket e **publico para leitura** (e assim
+que icone de servidor e servido em qualquer produto do genero) e a **escrita
+passa so pela service_role key**, que ignora RLS por completo. Nao ha policy
+de INSERT nenhuma, de proposito: quem autoriza a escrita e a Server Action
+(`requirePermission MANAGE_SERVER`) antes de chamar o Storage; o Supabase nao
+tem Auth proprio aqui para uma RLS decidir coisa alguma.
+
+Duas camadas recusam arquivo indevido, e as duas foram verificadas: o servidor
+detecta o tipo pelos **bytes reais** do arquivo (o `Content-Type` e escolhido
+pelo cliente, entao um .exe renomeado para .png passaria se confiassemos
+nele), e o proprio bucket recusa mime fora da lista mesmo com a service_role.
+
+- **Arquivo antigo nunca e apagado.** Cada envio ganha um nome aleatorio novo,
+  entao substituir ou remover deixa o anterior orfao no bucket. Apagar
+  exigiria guardar o path (nao so a URL publica) e mais uma chamada de rede
+  que pode falhar, por um espaco que custa centavos. Se um dia incomodar, e
+  uma rotina de limpeza, nao uma mudanca de arquitetura.
+- **Sem corte, sem redimensionamento, sem compressao.** Um PNG de 2MB e
+  servido como 2MB para todo mundo que abre o app. O Supabase tem
+  transformacao de imagem sob demanda, mas so no plano pago.
+- **SVG e recusado de proposito.** E formato de imagem, mas carrega script —
+  servido de um bucket publico vira XSS.
+- **Avatar de usuario continua sem upload.** Este bloco cobriu so o icone de
+  servidor; o `avatarUrl` do usuario segue caindo nas iniciais.
+- **Sem as variaveis, o upload responde "nao configurado"** e nada mais
+  quebra. Isso foi verificado: o app sobe e funciona igual sem
+  `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`.
+- **O teste automatizado cobre as recusas, nao o sucesso.** As dez assercoes
+  em `tests/unit/server-icon-upload.test.ts` rodam offline: tamanho, tipo real
+  por bytes, SVG, e falha-fechada sem credencial. O caminho de sucesso exigiria
+  a service_role key e rede — foi verificado a mao, contra o bucket real e
+  pela interface, mas nao entra na suite.
+
+## Limitacoes conhecidas dos AJUSTES DE USO (arvore em tempo real, volumes)
+
+Fora do roteiro das 7 fases: pedidos que sairam do uso real com pessoas na
+call. Pronto: a arvore de canais atualiza sozinha, volume por pessoa, e volume
+do audio de tela.
+
+### Foto de perfil
+
+Cada pessoa troca a propria foto e o proprio nome de exibicao pelo modal que
+abre ao clicar no seu avatar, na barra inferior. Bucket `avatars` proprio, e
+nao `server-icons` com outro prefixo: um bucket chamado "icones de servidor"
+guardando foto de usuario confunde depois, e separar da limites e limpeza
+independentes.
+
+As duas imagens passam pelo MESMO caminho de upload (`uploadImage` em
+`server/storage.ts`). Duas copias da validacao divergiriam, e bastaria uma
+esquecer o sniff de bytes para o bucket publico aceitar arquivo disfarcado.
+
+- **As actions de perfil nao aceitam `userId`.** O id vem do cookie de sessao.
+  Aceitar do cliente seria abrir "editar o perfil de qualquer um" atras de um
+  campo de formulario.
+- **Trocar a foto so atualiza a SUA tela na hora.** As outras pessoas veem a
+  foto nova no proximo carregamento delas. O `revalidatePath` vale por sessao,
+  e nao existe evento de socket para isso. Diferente do canal (que ganhou
+  `server:changed`), foto de perfil atravessa TODOS os servidores da pessoa, e
+  um evento global seria bem mais superficie por um ganho cosmetico.
+- **Mensagens antigas ficam com a foto antiga** ate a pagina ser recarregada:
+  o historico vem do banco com o avatar embutido no momento da consulta.
+- **Nao ha auditoria.** O log e por servidor, e trocar a propria foto nao
+  pertence a nenhum.
+- **Arquivo antigo continua orfao no bucket**, mesma escolha do icone.
+- **Nao existe apelido por servidor** (o item F do combinado). O nome de
+  exibicao e um so, e vale em todos.
+- **O caminho de sucesso segue sem teste automatizado** — os vinte testes de
+  `server-icon-upload.test.ts` cobrem as recusas dos dois buckets. Upload e
+  remocao foram verificados a mao, contra o Storage real e pela interface.
+
+### Arvore de canais em tempo real
+
+O sintoma que motivou: um canal criado agora so aparecia para os outros depois
+de um F5. A fase 7b ja resolvia a metade de SEGURANCA (o socket entra na sala
+do canal novo na hora), mas a LISTA e renderizada pelo Next e nada avisava o
+cliente para pedi-la de novo.
+
+O evento `server:changed` NAO carrega o que mudou, de proposito. Mandar a
+arvore pelo socket exigiria o gateway recalcular e serializar permissao por
+usuario — uma segunda copia da regra de autorizacao, que e exatamente o que
+este projeto nao faz. O cliente recebe o sinal e pede ao Next para
+re-renderizar; a regra continua morando num lugar so, e por isso tambem e
+seguro emitir para a sala inteira: quem nao pode ver um canal re-renderiza e
+recebe a mesma arvore de antes.
+
+- **Debounce de 300ms.** Reordenar canal e uma sequencia de cliques; sem ele,
+  cada seta viraria um re-render para todo mundo no servidor.
+- **Cada mudanca custa um recalculo de salas para todos os conectados**, mesmo
+  quando so a ORDEM mudou. Preferi isso a ter dois caminhos (um "so cosmetico"
+  e um "de permissao"), porque esquecer qual usar em uma action nova daria
+  sala velha — e sala velha e falha de acesso, nao tela desatualizada.
+- **A barra de SERVIDORES nao atualiza**, so a de canais. Entrar ou sair de um
+  servidor continua exigindo recarregar.
+
+### Apelido por servidor
+
+O nome que vale so num servidor. O campo `nickname` ja existia no schema desde
+a fase 2 e ja era EXIBIDO (painel de membros, telas de moderacao) — o que
+faltava era o caminho para defini-lo. A permissao `MANAGE_NICKNAMES` tambem ja
+estava no bitfield e nos cargos padrao, sem uso.
+
+Duas regras de acesso, e a diferenca importa:
+
+- **o proprio apelido**: qualquer membro muda, pelo modal do proprio perfil
+  (clique no seu avatar na barra inferior). E o proprio nome dele.
+- **o apelido dos outros**: exige `MANAGE_NICKNAMES` E passa pela hierarquia,
+  no modal de gerenciar o membro. Sem a hierarquia, alguem com a permissao
+  renomearia o dono do servidor.
+
+Ficou no modal de cargos, e nao no de moderacao, de proposito: la se expulsa e
+bane, e misturar edicao com acao destrutiva e pedir clique errado.
+
+- **O apelido NAO aparece no chat nem na voz.** Mensagem e participante de voz
+  carregam `PublicUser`, que nao tem contexto de servidor; levar o apelido ate
+  la exigiria o gateway resolver "apelido deste usuario neste servidor" a cada
+  mensagem — uma consulta a mais no caminho mais quente do produto. Aparece no
+  painel de membros, nas telas de moderacao e nas configuracoes.
+- **Apelido vazio APAGA** (volta ao nome de exibicao). Guardar string vazia
+  deixaria o membro sem nome nenhum na lista.
+- **A action filtra por `serverId` no `updateMany`**, alem do guard: sem isso,
+  mandar o `memberId` de um membro de OUTRO servidor renomearia ele.
+- **Quem nao tem `MANAGE_NICKNAMES` nao ve o campo** no modal do membro. A
+  action recusa de qualquer forma — a interface so evita oferecer o que sera
+  negado.
+
+### Trocar a qualidade sem parar a transmissao
+
+A setinha ao lado do botao de compartilhar (mesmo vocabulario que o microfone
+ja usa para trocar de aparelho) abre os tres perfis enquanto voce transmite. O
+perfil ativo aparece marcado.
+
+Por que nao parar e recomecar: isso reabriria o seletor nativo do Chrome,
+obrigando a escolher a janela de novo no meio da conversa. O `restartTrack()`
+do LiveKit tem o mesmo problema — para captura de tela ele chama
+`getDisplayMedia` outra vez.
+
+Entao mexemos nos tres lugares que aceitam mudanca ao vivo, e cada um e
+independente do outro:
+
+1. `contentHint` da MediaStreamTrack — decide o que o codificador sacrifica
+   quando a banda aperta (nitidez ou fluidez). E o que mais muda a sensacao de
+   qualidade.
+2. `applyConstraints` — reduz resolucao e quadros na propria captura.
+3. Parametros do `RTCRtpSender` — o teto de bitrate do encoder.
+
+- **`applyConstraints` pode ser recusado** em alguns navegadores para faixa de
+  tela. Quando isso acontece, os outros dois passos ainda valem e a qualidade
+  muda de verdade — so nao na resolucao. Nao vira erro na tela: avisar "falhou"
+  quando a transmissao mudou seria mentira. Fica no log de midia (`?debug=media`).
+- **Nao da para SUBIR alem do que a captura entrega.** Se a fonte foi aberta a
+  30fps, pedir 60 nao inventa quadros; a constraint e um teto, nao um piso.
+  Trocar para um perfil mais alto que a captura original pode nao mudar nada
+  visivelmente.
+- **Os outros nao sao avisados**, de proposito: para eles nada mudou — a mesma
+  pessoa segue transmitindo a mesma faixa. Nao ha evento de socket nem
+  mudanca de `localSharing`.
+- **Nao foi exercitado com transmissao real.** Testar exige `getDisplayMedia`,
+  que precisa de gesto do usuario e de uma tela de verdade — fora do alcance do
+  navegador automatizado. O typecheck cobre o contrato e a barra de controles
+  foi verificada renderizando; o efeito na imagem ficou para o teste de uso.
+
+### Volume por pessoa e volume da tela
+
+Preferencia LOCAL, guardada no `localStorage`: e o volume com que EU ouço os
+outros. Nao passa pelo gateway nem pelo banco — se passasse, mexer no volume
+de alguem afetaria o que os outros escutam.
+
+- **O teto e 100%, nao da para amplificar.** `HTMLMediaElement.volume` aceita
+  0..1 por especificacao; acima disso lanca IndexSizeError. Amplificar exigiria
+  rotear todo o audio por um GainNode da Web Audio API — este projeto ja apanhou
+  de reproducao de audio (ver o comentario sobre `display:none` em
+  `lib/voice/room.ts`), e trocar "consigo abaixar quem esta alto" por "posso ter
+  quebrado o audio de todo mundo" nao compensa. Para equilibrar vozes
+  desiguais, abaixe a mais alta.
+- **Um controle so para o audio de TODAS as telas**, nao um por transmissao.
+  Na pratica uma pessoa compartilha por vez; um slider por miniatura seria mais
+  interface do que utilidade.
+- **O volume nao viaja entre navegadores.** Trocar de maquina recomeça em 100%.
+- **Nada disso foi exercitado numa call real de duas pessoas.** Os quinze
+  testes de `tests/unit/volumes.test.ts` cobrem a logica pura (corte de faixa,
+  persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
+  depende de duas pessoas numa call e foi deixado para o teste de uso.
+
+## Limitacoes conhecidas da FASE 7c-1 (rate limit distribuido e ticket)
+
+Pronto: o rate limit do app web e o consumo unico de ticket do gateway agora
+funcionam com Redis quando `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`
+estao definidos, e caem para memoria quando nao estao — do mesmo jeito que o
+LiveKit e opcional no gateway desde a fase 4.
+
+Uma correcao ao levantamento da fase 7a: eu havia listado o **rate limit do
+gateway** como divida de Redis. Nao e. Ele e chaveado por `socket.id`, e um
+socket vive em exatamente uma instancia — o balde ja e naturalmente local e
+continua correto com N maquinas. Distribuir seria trabalho sem efeito.
+
+Por que HTTP (REST do Upstash) e nao um cliente Redis: o app web roda em
+funcoes SERVERLESS. Conexao TCP persistente ali estoura o pool a cada cold
+start. A API REST e stateless. Nenhuma dependencia nova entrou — a chamada e
+por `fetch`, mesmo estilo do `storage.ts` e do `realtime-notify.ts`.
+
+Os dois usam script Lua, e nao sequencia de comandos, porque as duas operacoes
+precisam ser ATOMICAS: com comandos separados, duas requisicoes concorrentes
+leem o mesmo estado antes de qualquer uma escrever — a corrida exata que um
+limite de tentativas e um consumo unico existem para impedir.
+
+- **As duas falhas tem politicas OPOSTAS, de proposito.** Rate limit com Redis
+  fora do ar **libera** (fail-open): e defesa em profundidade, e derrubar o
+  login inteiro por causa de um cache seria pior que o risco. Consumo de
+  ticket **recusa** (fail-closed): responder "acho que nao foi usado" abriria
+  a janela de replay que o mecanismo existe para fechar, e o custo de recusar
+  e so uma reconexao.
+- **Sem as variaveis, o furo da fase 1 continua aberto em producao.** O codigo
+  esta pronto, mas ate o Upstash ser provisionado e as variaveis subirem, a
+  Vercel segue com contador por instancia — ou seja, quase nenhuma protecao
+  contra forca bruta no login.
+- **A semantica da janela deslizante no Redis nao e testada de verdade.** Os
+  doze testes de `rate-limit-redis.test.ts` dublam o `fetch` e cobrem o
+  CONTRATO (um EVAL atomico, prefixo de chave, autenticacao, e as tres formas
+  de falha). O algoritmo em si e testado contra a implementacao em memoria,
+  que espelha a mesma regra. Um duble que interpretasse Lua estaria testando o
+  duble.
+- **`rateLimit()` virou assincrona.** Os cinco pontos de chamada ganharam
+  `await`. O custo de uma ida ao Redis por tentativa de login e irrelevante
+  perto do scrypt que vem logo depois.
+- **Presenca, ocupacao de voz e o adapter do Socket.IO continuam em memoria.**
+  E a 7c-2, e e a parte que de fato destrava a segunda maquina de gateway. O
+  `fly.toml` segue com `min_machines_running = 1` por isso.
+- **Nada disso foi exercitado contra um Redis real ainda** — nao ha instancia
+  provisionada. O caminho sem Redis (o de hoje) esta coberto pelos testes e
+  pela regressao de integracao.
+
+## Limitacoes conhecidas da FASE 7b (revalidacao de sessao e recalculo de salas)
+
+Pronto: o gateway revalida periodicamente (30s) a linha `Session` de cada
+socket aberto e derruba quem foi deslogado, revogado ou expirou — antes disso
+o handshake conferia sessao uma unica vez e valia para sempre. E uma segunda
+rota interna, `/internal/resync-rooms`, que recalcula as salas de canal de
+todo mundo presente num servidor sem tirar ninguem dele; ligada em
+`updateRoleAction`, `deleteRoleAction`, `assignRoleAction`,
+`unassignRoleAction`, `createChannelAction`, `updateChannelAction` e
+`setChannelAccessAction` — tudo que muda o que alguem PODE VER sem mudar se
+ele CONTINUA membro. `leaveServerAction` ganhou o `evictFromGateway` que ja
+existia para kick/ban e nunca tinha sido ligado nela — sair do servidor tinha
+exatamente o mesmo furo que expulsar tinha antes da fase 6b.
+
+- **30s de janela para a revalidacao de sessao.** Quem faz logout continua
+  com o socket funcional por ate meio minuto. Escolhido de proposito: mais
+  apertado martelaria o Postgres por uma consulta que, no dia a dia, quase
+  nunca teria o que fazer.
+- **Recalculo de salas e server-wide, nao por usuario.** Mudar um cargo
+  resincroniza TODO MUNDO presente no servidor, nao so quem tem aquele cargo.
+  Mais simples e mais barato do que rastrear, em cada ponto de chamada, quem
+  o cargo ou o overwrite alcança — o custo e uma consulta a mais por pessoa
+  conectada, que so acontece quando um admin mexe em cargo ou canal.
+- **A mudanca de leitura continua silenciosa para quem perde acesso.** Tirar
+  VIEW_CHANNEL de alguem para de entregar o canal pelo socket na hora, mas a
+  arvore de canais que a interface mostra (renderizada pelo layout do Next,
+  nao pelo socket) so atualiza no proximo refresh ou navegacao — mesma
+  limitacao de "leitura pode ficar velha" que a fase 3 ja documentava, agora
+  com o buraco de seguranca fechado e so a tela sobrando desatualizada.
+- **`createRoleAction` nao resincroniza.** Cargo recem-criado nasce com as
+  mesmas permissoes de um membro comum e ainda nao foi atribuido a ninguem —
+  nao ha o que recalcular no momento em que ele nasce.
+- **`moveChannelAction`, `deleteChannelAction`, `deleteCategoryAction`,
+  `renameCategoryAction` e `createCategoryAction` tambem nao resincronizam**,
+  de proposito: nenhum deles muda quem enxerga o que. Excluir canal deixa uma
+  sala vazia e inerte no adapter do Socket.IO ate o socket cair — sem risco,
+  so memoria residual insignificante.
+- **Se o gateway estiver fora do ar, a acao no banco vale mesmo assim** — a
+  mesma filosofia do `evictFromGateway` desde a fase 6: quem foi afetado
+  sente o efeito ao reconectar, e nao vale a pena travar uma acao ja
+  concluida esperando o gateway responder.
+- **Sem teste para os pontos de chamada dentro das Server Actions.** O novo
+  `scripts/verify-phase7b.mjs` testa a rota interna do gateway direto (como o
+  verify-phase6 ja fazia para `/internal/evict`), nao as Server Actions que a
+  chamam — elas nao se chamam de fora do navegador.
+
+## Limitacoes conhecidas da FASE 7a (testes unitarios)
+
+Pronto: Vitest na raiz, 77 testes em 7 arquivos, sem dependencia de servico no
+ar. A suite ja pagou o custo dela: encontrou um caminho em que
+`verifyPassword()` aceitava QUALQUER senha quando o hash guardado tinha salt e
+hash vazios (`scrypt$16384$8$1$$`) — o scrypt derivava um buffer de comprimento
+zero e `timingSafeEqual` de dois buffers vazios e verdadeiro. Nao era alcancavel
+pelo fluxo normal, porque `hashPassword()` sempre gera 16 bytes de salt e 64 de
+hash; passava a ser com um registro truncado, um seed errado ou um futuro
+usuario sem senha. Corrigido.
+
+- **E suite unitaria, e so isso.** Nao toca banco, HTTP, WebSocket nem
+  interface. Cobertura de ponta a ponta continua sendo dos `verify-phase*.mjs`,
+  que seguem sendo rodados a mao.
+- **`canActOnUser` roda com o Prisma dublado.** Os testes cobrem o RAMO DE
+  DECISAO da hierarquia (dono intocavel, dono age sobre todos, os demais so
+  sobre cargo estritamente abaixo), nao a consulta em si. Se o `include` dos
+  cargos mudar de forma, o teste continua verde e quem pega e o verify-phase2.
+- **Handlers do gateway e server actions nao tem teste unitario.** Os dois
+  dependem de socket e de request reais; testa-los exigiria dublar Socket.IO ou
+  o runtime do Next, e um duble desses e mais codigo de mentira do que de
+  verdade. Ficou de fora por decisao, nao por esquecimento.
+- **`clientKey()` nao e testavel** fora do escopo de request do Next. O stub de
+  `next/headers` lanca erro se alguem tentar, para a lacuna nao virar teste
+  falso-verde.
+- **Sem medicao de cobertura.** Nenhum relatorio configurado; o que existe foi
+  escolhido a dedo, nao guiado por percentual.
+- **A suite ainda nao roda em CI** — isso e a fase 7e. Hoje depende de alguem
+  lembrar de rodar `npm test`.
+- **O contrato do rate limit esta testado, a protecao continua furada.** Os
+  testes fixam o comportamento do algoritmo em memoria; em producao, na Vercel,
+  cada instancia serverless tem o proprio contador, entao o bloqueio de forca
+  bruta no login vale muito menos do que a fase 1 documentou. Fecha na 7c.
+- **Com aba do app aberta, a fase 3 roda com 40 de 42 assercoes.** As duas de
+  presenca ("ficar online", "fechar a ULTIMA aba") sao puladas e nomeadas. Os
+  scripts 4, 5 e 6 apenas avisam: neles nenhuma assercao quebra
+  comprovadamente por conexao alheia, mas 4 e 5 contam ocupacao de voz e 6
+  conta sockets despejados, entao o aviso existe para o dia em que o resultado
+  parecer estranho.
+- **`fechar UMA aba nao marca o usuario como offline` fica vacuo** quando ha
+  cliente alheio conectado: e uma assercao negativa, e nesse cenario ela nao
+  teria como falhar. Continua rodando porque passa pelo mesmo caminho, mas nao
+  prova nada ali.
+
 ## Limitacoes conhecidas da FASE 6
 
 Pronto: expulsar, banir com motivo e duracao, revogar banimento, o despejo em
@@ -281,9 +1090,46 @@ cheia e picture-in-picture.
   Movimento) que mudam resolucao, quadros e sobretudo o `contentHint` — que
   decide o que sacrificar quando a banda aperta: nitidez ou fluidez. O teto real
   e o seu upload, a CPU e o plano do SFU.
-- **Audio do sistema depende do navegador e da escolha do usuario.** Pedimos,
-  mas em muitos casos o navegador so oferece audio ao compartilhar uma ABA. Sem
-  ele, o video vai sozinho — nao e erro.
+- **Audio do sistema depende da superficie escolhida e da chave no seletor.**
+  No Windows o navegador oferece "compartilhar tambem o audio do sistema" para
+  ABA e TELA INTEIRA, mas nao para uma janela avulsa. Sem audio, o video vai
+  sozinho — nao e erro, e um aviso.
+
+  **`getDisplayMedia` e TUDO-OU-NADA com audio.** Nao existe "som se der, mas
+  nao falhe": quando o sistema recusa abrir a captura de som ("Could not start
+  audio source" — outro programa segurando o audio em modo exclusivo, driver,
+  ou o proprio navegador), o pedido INTEIRO falha, video junto.
+
+  Ate 22/08/2026 o codigo lidava com isso tentando de novo sem audio, o que
+  REABRIA o seletor nativo do Chrome (agora sem a opcao de som). Corrigido em
+  duas partes:
+
+  1. A escolha "levar o som do sistema" agora e uma chave no menu de
+     compartilhar, decidida ANTES do seletor abrir. Quando o sistema recusa o
+     som, ela e desligada e LEMBRADA — a proxima tentativa ja sai sem som e
+     funciona de primeira, sem seletor repetido.
+  2. A captura acontece UMA vez. O video e publicado primeiro e o audio e
+     melhor-esforco: perder o som nunca derruba a transmissao, que era o que
+     acontecia antes.
+
+  Consequencia aceita: quem tem o som bloqueado pelo sistema descobre na
+  primeira tentativa, com uma mensagem explicando, e precisa clicar de novo.
+  Preferimos isso a um segundo seletor aparecendo sem aviso.
+
+  **Ha maquinas onde o som da TELA simplesmente nao funciona, e nao ha o que
+  o app faca.** Verificado em 22/08/2026 num Windows com Brave: a chamada CRUA
+  `navigator.mediaDevices.getDisplayMedia({video:true, audio:true})`, sem uma
+  linha de codigo nosso no caminho, falha com
+  `NotReadableError / Could not start audio source`. O loopback de audio do
+  sistema depende de WASAPI, driver e navegador — nada disso passa por aqui.
+
+  O caminho que funciona nessas maquinas e compartilhar uma ABA do navegador:
+  captura de aba usa outro mecanismo de audio, independente do loopback do
+  sistema. A mensagem de erro aponta para isso.
+
+  Diagnostico util quando alguem reclamar: peca para rodar a chamada crua no
+  console. Se ela falhar, o problema esta fora do app e nenhuma mudanca de
+  codigo resolve.
 - **Sem controle de volume por transmissao.** O audio da tela toca junto com o
   resto da sala.
 - **Nao ha limite de quantas pessoas transmitem ao mesmo tempo.** O grid
@@ -386,6 +1232,7 @@ Pronto: gateway autenticado, presenca em tempo real, **chat de texto** e
 - ~~Canais e cargos sem CRUD~~ — resolvido na fase 2.
 - **Rate limit em memoria**: funciona com uma instancia. Ao escalar
   horizontalmente precisa migrar para Redis (a interface ja isola isso).
-- **Upload de avatar e icone de servidor** ainda nao existe; os campos estao no
-  banco e a UI ja cai no avatar gerado por iniciais.
+- ~~Upload de icone de servidor~~ — resolvido (ver secao propria abaixo).
+- **Upload de avatar de usuario** ainda nao existe; o campo esta no banco e a
+  UI cai no avatar gerado por iniciais.
 - **Sem testes automatizados** ainda (fase 7).
