@@ -249,9 +249,29 @@ Detalhes que valem saber:
 - **A versao do Electron esta FIXA** (`33.4.11`, sem `^`) em
   `apps/desktop/package.json`. Com workspaces o binario fica na raiz, e o
   electron-builder so descobre a versao se ela estiver fixa ali.
-- **Nao ha auto-update ainda.** Atualizar a casca (nao o site) exige baixar o
-  instalador novo. Como o site vem da rede, isso so importa quando o codigo do
-  proprio Electron mudar.
+- **A casca se atualiza sozinha a partir da 0.1.3** (`electron-updater`). Quem
+  estiver em versao anterior precisa instalar a 0.1.3 na mao UMA vez — nao da
+  para atualizar quem nao tem o atualizador.
+
+  Publicar versao nova:
+
+  ```bash
+  # 1. sobe a versao em apps/desktop/package.json
+  # 2. GH_TOKEN="$(gh auth token)" npm run release --workspace=@aether/desktop
+  # 3. o electron-builder cria a release como RASCUNHO; tirar do rascunho:
+  #    gh release edit v0.1.X --repo ryanrn/aether-releases --draft=false
+  ```
+
+  O passo 3 e facil de esquecer e falha em silencio: rascunho e invisivel para
+  o atualizador, e o app simplesmente nunca acha a versao nova.
+
+  **As versoes vao para um repositorio PUBLICO separado** (`aether-releases`),
+  enquanto o codigo fica privado. Release de repo privado exige token para
+  baixar, e token embutido num programa distribuido e token publicado.
+
+  O download e automatico; a INSTALACAO nao. Reiniciar o app no meio de uma
+  call para aplicar update seria pior que o problema resolvido — entao ele
+  pergunta, e quem nao quiser agora recebe no proximo fechamento.
 - **So Windows x64.** macOS e Linux exigem buildar em cada sistema, ou CI.
 - **O loopback de audio do Electron FUNCIONA** na maquina onde o navegador
   falhava. Verificado em 22/08/2026 pelo caminho real (seletor incluso):

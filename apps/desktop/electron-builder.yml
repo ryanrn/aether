@@ -13,17 +13,30 @@ directories:
   buildResources: build
 
 # Só o que a casca precisa. O app em si vem da rede.
+#
+# `node_modules` entrou por UMA razao: o `electron-updater` roda DENTRO do app.
+# O electron-builder poda sozinho para as dependencias de producao, e a unica
+# declarada e ele — o resto continua de fora.
 files:
   - src/**/*
   - package.json
+  - node_modules/**/*
 
-# A casca NAO tem dependencia de runtime: e Electron puro, e o app vem da rede.
-#
 # Sem estas duas linhas, o electron-builder roda um "install production
 # dependencies" no diretorio do app — e num monorepo com workspaces isso PODA o
 # node_modules da raiz, levando junto Next, Vitest e Prisma. Aconteceu uma vez.
 npmRebuild: false
 buildDependenciesFromSource: false
+
+# Para onde o `npm run release` publica, e de onde o app baixa atualizacao.
+#
+# Repositorio SEPARADO e publico, enquanto o codigo fica privado: release de
+# repo privado exige token para baixar, e embutir token num programa
+# distribuido e o mesmo que publicar o token.
+publish:
+  provider: github
+  owner: ryanrn
+  repo: aether-releases
 
 win:
   target:

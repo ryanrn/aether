@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
 const { criarVigia } = require("./game-detect");
+const { instalarAtualizador } = require("./updater");
 
 /**
  * Casca desktop do Aether.
@@ -290,6 +291,9 @@ if (!app.requestSingleInstanceLock()) {
 
     instalarDeteccaoDeJogo();
     createWindow();
+
+    // Depois da janela: a verificacao nao pode atrasar a abertura do app.
+    instalarAtualizador();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

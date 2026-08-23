@@ -6,6 +6,29 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 
 ---
 
+## v0.1.3 — 23 de agosto de 2026
+
+**O app passa a se atualizar sozinho.**
+
+### Novidades
+
+- **Atualizacao automatica.** O app verifica se ha versao nova, baixa em
+  segundo plano e avisa quando estiver pronta. Voce escolhe a hora de
+  reiniciar — nada te tira de uma call no meio, e quem deixar para depois
+  recebe a atualizacao no proximo fechamento.
+
+  **Esta e a ultima vez que voce precisa baixar o instalador na mao.** Quem
+  estiver na 0.1.2 ou anterior instala esta uma vez; dali em diante e sozinho.
+
+### Limitacoes desta versao
+
+- **So Windows.** macOS e Linux precisariam ser compilados em cada sistema.
+- O instalador continua sem assinatura digital, entao o Windows mostra "editor
+  desconhecido" na primeira execucao.
+- Se o GitHub estiver fora do ar ou nao houver internet, a verificacao falha em
+  silencio e o app funciona normalmente — atualizar nunca atrapalha quem so
+  quer conversar.
+
 ## v0.1.2 — 22 de agosto de 2026
 
 **AETHER Activity: veja o que cada pessoa esta fazendo, sem perguntar.**
