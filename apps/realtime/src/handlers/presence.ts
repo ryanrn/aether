@@ -113,10 +113,23 @@ export function registerPresenceHandlers(
   });
 
   socket.on("presence:set", async (status) => {
-    if (!isUserStatus(status) || status === "OFFLINE") return;
+    if (!isUserStatus(status)) return;
 
     const affected = setStatus(userId, status);
     for (const serverId of affected) announce(io, serverId, userId, status);
+
+    /**
+     * OFFLINE aqui e INVISIVEL: a pessoa segue conectada e recebendo tudo, mas
+     * aparece apagada para os outros. Antes era recusado — dava para ficar
+     * ausente, nunca invisivel.
+     *
+     * E o unico status que NAO persiste, de proposito. No banco, `OFFLINE`
+     * quer dizer "nunca escolheu", e e o que faz `attachSocket` promover para
+     * ONLINE ao conectar. Gravar invisivel ali tornaria os dois casos
+     * indistinguiveis, e alguem ficaria invisivel para sempre sem entender por
+     * que. Invisivel vale para a sessao; a proxima comeca visivel.
+     */
+    if (status === "OFFLINE") return;
 
     // O banco guarda a PREFERENCIA, para o proximo login comecar igual.
     // Escrita so em mudanca deliberada — nao ha volume aqui.

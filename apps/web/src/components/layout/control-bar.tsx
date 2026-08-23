@@ -13,10 +13,14 @@ import {
   PhoneOff,
   Settings,
 } from "lucide-react";
-import type { UserStatus, ViewerContext } from "@aether/shared";
+import type { PublicChannel, UserStatus, ViewerContext } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { AppSettingsModal } from "@/components/settings/app-settings-modal";
+import {
+  SelfUserCard,
+  type SelfCardAnchor,
+} from "@/components/profile/self-user-card";
 import { viewerCan } from "@/lib/permissions";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
@@ -54,6 +58,7 @@ export function ControlBar({
   serverId: currentServerId,
   memberId,
   nickname,
+  voiceChannels,
 }: {
   user: {
     id: string;
@@ -67,6 +72,8 @@ export function ControlBar({
   serverId: string;
   memberId: string;
   nickname: string | null;
+  /** canais de voz — o cartao resolve o NOME do canal em que voce esta */
+  voiceChannels: PublicChannel[];
 }) {
   const [pending, startTransition] = useTransition();
   const socket = useSocket();
@@ -84,6 +91,7 @@ export function ControlBar({
   const [localDeafened, setLocalDeafened] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selfCard, setSelfCard] = useState<SelfCardAnchor | null>(null);
   const [shareAudio, setShareAudio] = useState(true);
   /** No desktop o seletor do Electron tem a chave de som; duas confundiriam. */
   const [noDesktop, setNoDesktop] = useState(false);
@@ -189,10 +197,21 @@ export function ControlBar({
        */
       className="absolute bottom-5 left-1/2 z-30 flex w-max -translate-x-1/2 items-center gap-2 rounded-lg border border-base-800 bg-base-800/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm"
     >
+      {/*
+        O nome abre o CARTAO, nao as configuracoes.
+        Antes ia direto para uma tela inteira — e o que se quer ao clicar no
+        proprio nome, na maioria das vezes, e olhar a call ou trocar o status.
+        As configuracoes seguem a um clique, de dentro do cartao.
+      */}
       <button
         type="button"
-        onClick={() => setProfileOpen(true)}
-        title="Suas configuracoes"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setSelfCard((atual) =>
+            atual ? null : { x: rect.left, y: rect.top - 340 },
+          );
+        }}
+        title="Voce"
         className="flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 text-left transition-opacity hover:opacity-80"
       >
         <Avatar
@@ -211,6 +230,16 @@ export function ControlBar({
           </p>
         </div>
       </button>
+
+      {selfCard ? (
+        <SelfUserCard
+          user={user}
+          voiceChannels={voiceChannels}
+          anchor={selfCard}
+          onClose={() => setSelfCard(null)}
+          onOpenSettings={() => setProfileOpen(true)}
+        />
+      ) : null}
 
       <AppSettingsModal
         open={profileOpen}

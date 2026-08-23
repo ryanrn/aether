@@ -88,6 +88,10 @@ export default async function ServerLayout({
               viewer={viewer}
               serverId={serverId}
               memberId={context.memberId}
+              voiceChannels={[
+                ...data.looseChannels,
+                ...data.categories.flatMap((category) => category.channels),
+              ].filter((channel) => channel.type === "VOICE")}
               nickname={
                 data.members.find((member) => member.id === context.memberId)
                   ?.nickname ?? null

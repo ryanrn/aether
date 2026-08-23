@@ -245,9 +245,17 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   updatePresence: (entry) =>
     set((state) => {
       const { [entry.userId]: _semJogo, ...atividadeSemEste } = state.activity;
-      // Quem ficou offline sai dos DOIS mapas: senao continuaria "jogando"
-      // para sempre na tela dos outros depois de fechar o app.
-      if (entry.status === "OFFLINE") {
+      /**
+       * Quem ficou offline sai dos DOIS mapas: senao continuaria "jogando"
+       * para sempre na tela dos outros depois de fechar o app.
+       *
+       * MENOS voce mesmo. Para os outros, OFFLINE quer dizer "foi embora";
+       * para voce, quer dizer INVISIVEL — segue conectado, so aparece apagado.
+       * Apagar a propria entrada fazia o seletor de status cair no padrao e
+       * mostrar "Disponivel" um segundo depois de escolher "Invisivel".
+       */
+      const souEu = entry.userId === state.selfUserId;
+      if (entry.status === "OFFLINE" && !souEu) {
         const { [entry.userId]: _gone, ...rest } = state.presence;
         return { presence: rest, activity: atividadeSemEste };
       }
