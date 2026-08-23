@@ -111,9 +111,27 @@ const payload = {
   NODE_ENV: "production",
 };
 
+/**
+ * Redis (fase 7c). Opcional e em par: o gateway usa para o consumo UNICO de
+ * ticket valer entre instancias. Sem ele, a lembranca fica na memoria do
+ * processo — correto com uma maquina, e a segunda reabriria a janela de
+ * replay de ticket.
+ */
+const REDIS_KEYS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
+const redisMissing = REDIS_KEYS.filter((key) => !env[key]);
+if (redisMissing.length === 0) {
+  for (const key of REDIS_KEYS) payload[key] = env[key];
+}
+
 console.log(`App Fly:  ${flyApp}`);
 console.log(`Origem liberada no CORS:  ${payload.NEXT_PUBLIC_APP_URL}`);
 if (bumped) console.log("connection_limit ajustado para 5 na URL de producao.");
+if (redisMissing.length > 0) {
+  console.log(
+    `Redis nao configurado (falta ${redisMissing.join(", ")}) — o consumo unico`
+      + " de ticket ficara em memoria (ok com UMA maquina de gateway).",
+  );
+}
 console.log(`\nEnviando ${Object.keys(payload).length} secrets (valores nao sao exibidos):`);
 for (const key of Object.keys(payload)) console.log(`  - ${key}`);
 

@@ -144,9 +144,21 @@ npx vercel --prod
 | `DATABASE_URL` | Supabase, com `connection_limit=5` |
 | `DIRECT_URL` | conexao direta (porta 5432) |
 | `NEXT_PUBLIC_REALTIME_URL` | endereco do gateway no Fly |
+| `SUPABASE_URL` | URL do projeto Supabase (icone de servidor) |
+| `SUPABASE_SERVICE_ROLE_KEY` | chave service_role, no painel do Supabase |
 
 `NEXT_PUBLIC_APP_URL` **nao** entra aqui: o app web nao a usa. Quem le essa
 variavel e o gateway, para saber qual origem liberar no CORS.
+
+As duas ultimas sao **opcionais**: sem elas o app sobe igual e so o upload de
+icone responde que nao esta configurado. O `scripts/vercel-env.mjs` so as envia
+quando as duas estao preenchidas no `.env` — meia configuracao falharia na hora
+do upload, longe da causa.
+
+> A `SUPABASE_SERVICE_ROLE_KEY` **ignora Row Level Security por completo**.
+> Ela nao tem prefixo `NEXT_PUBLIC_` de proposito: se vazasse para o bundle do
+> navegador, daria acesso irrestrito ao banco inteiro. Quem autoriza o upload e
+> a Server Action (`requirePermission MANAGE_SERVER`), nao uma policy.
 
 ---
 

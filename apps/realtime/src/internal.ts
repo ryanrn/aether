@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { prisma } from "@aether/db";
 import { room } from "@aether/shared";
 import { env } from "./env";
+import { resyncServerRooms } from "./rooms";
 import type { AetherServer } from "./types";
 import { leaveVoice, socketIdsOf, voiceDeparture } from "./state";
 
@@ -10,9 +11,20 @@ import { leaveVoice, socketIdsOf, voiceDeparture } from "./state";
  * Porta de servico entre o app web e o gateway.
  *
  * Por que existe: o socket entra nas salas de um servidor quando a pessoa
- * entra nele, e nunca recalcula. Ao expulsar ou banir alguem, apagar a linha
- * no banco nao basta — a pessoa continuaria recebendo o chat pelo socket ate
- * recarregar a pagina. Isso e acesso indevido, nao interface desatualizada.
+ * entra nele, e nunca recalcula sozinho. Duas rotas, duas gravidades:
+ *
+ *  - `/internal/evict` — a pessoa deixou de ser membro (kick, ban, saiu).
+ *    Tira o socket de TODAS as salas do servidor e avisa a interface dele.
+ *  - `/internal/resync-rooms` — a pessoa continua membro, mas o que ela pode
+ *    VER mudou (cargo editado, cargo atribuido, canal virou privado, acesso
+ *    de canal privado mudou). Recalcula so as salas de canal, sem tirar
+ *    ninguem do servidor nem avisar a interface — a mudanca de leitura e
+ *    silenciosa, do mesmo jeito que ela ja era invisivel antes.
+ *
+ * Sem a primeira, apagar a linha no banco nao bastava — a pessoa continuaria
+ * recebendo o chat pelo socket ate recarregar a pagina: acesso indevido, nao
+ * interface desatualizada. Sem a segunda, o mesmo valia para qualquer
+ * mudanca de permissao que nao fosse remocao total.
  *
  * Quem chama e o servidor do Next, nunca o navegador. A autenticacao e o
  * AUTH_SECRET que os dois lados ja compartilham para validar sessao — sem
@@ -116,26 +128,60 @@ export async function handleInternalRequest(
     return true;
   }
 
-  if (request.method !== "POST" || request.url !== "/internal/evict") {
+  if (request.method !== "POST") {
     json(response, 404, { ok: false });
     return true;
   }
 
-  try {
-    const body = (await readJsonBody(request)) as {
-      serverId?: unknown;
-      userId?: unknown;
-    };
-    if (typeof body.serverId !== "string" || typeof body.userId !== "string") {
-      json(response, 400, { ok: false, error: "serverId e userId sao obrigatorios" });
-      return true;
-    }
+  if (request.url === "/internal/evict") {
+    try {
+      const body = (await readJsonBody(request)) as {
+        serverId?: unknown;
+        userId?: unknown;
+      };
+      if (typeof body.serverId !== "string" || typeof body.userId !== "string") {
+        json(response, 400, { ok: false, error: "serverId e userId sao obrigatorios" });
+        return true;
+      }
 
-    const affected = await evict(io, body.serverId, body.userId);
-    json(response, 200, { ok: true, sockets: affected });
-  } catch (error) {
-    console.error("[gateway] /internal/evict falhou:", error);
-    json(response, 500, { ok: false });
+      const affected = await evict(io, body.serverId, body.userId);
+      json(response, 200, { ok: true, sockets: affected });
+    } catch (error) {
+      console.error("[gateway] /internal/evict falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
   }
+
+  if (request.url === "/internal/resync-rooms") {
+    try {
+      const body = (await readJsonBody(request)) as { serverId?: unknown };
+      if (typeof body.serverId !== "string") {
+        json(response, 400, { ok: false, error: "serverId e obrigatorio" });
+        return true;
+      }
+
+      await resyncServerRooms(io, body.serverId);
+
+      /**
+       * Avisa a interface DEPOIS de recalcular as salas, nunca antes: o
+       * cliente vai pedir a arvore nova ao Next, e ela precisa concordar com
+       * as salas em que o socket de fato esta. Na ordem inversa, alguem
+       * poderia ver um canal na lista um instante antes de entrar na sala
+       * dele — e clicar num canal que ainda nao entrega mensagem.
+       */
+      io.to(room.server(body.serverId)).emit("server:changed", {
+        serverId: body.serverId,
+      });
+
+      json(response, 200, { ok: true });
+    } catch (error) {
+      console.error("[gateway] /internal/resync-rooms falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  json(response, 404, { ok: false });
   return true;
 }

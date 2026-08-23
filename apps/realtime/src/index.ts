@@ -8,6 +8,7 @@ import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { attachSocket, stats } from "./state";
 import { handleInternalRequest } from "./internal";
+import { startSessionGuard } from "./session-guard";
 import type { AetherServer } from "./types";
 
 /**
@@ -109,6 +110,8 @@ io.on("connection", (socket) => {
   }
 });
 
+const stopSessionGuard = startSessionGuard(io);
+
 httpServer.listen(env.port, () => {
   console.log(`[gateway] ouvindo em http://localhost:${env.port}/ws`);
   console.log(`[gateway] origem liberada para cookie: ${env.corsOrigin}`);
@@ -127,6 +130,8 @@ async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[gateway] ${signal} recebido, encerrando...`);
+
+  stopSessionGuard();
 
   // Sem isso, uma conexao keep-alive ociosa segura a porta ate o timeout dela.
   httpServer.closeAllConnections();

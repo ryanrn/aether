@@ -46,6 +46,15 @@ export async function verifyPassword(
   if (!Number.isFinite(N) || !Number.isFinite(r) || !Number.isFinite(p)) {
     return false;
   }
+  /**
+   * Salt ou hash vazios sao recusados ANTES de derivar qualquer coisa.
+   * Com `expected` vazio, o scrypt seria chamado com keylen 0, devolveria um
+   * buffer vazio, e timingSafeEqual(vazio, vazio) e TRUE — um registro
+   * corrompido assim aceitaria QUALQUER senha. Nao acontece pelo caminho
+   * normal (hashPassword sempre gera 16 bytes de salt e 64 de hash), mas
+   * "so acontece se o dado estiver estranho" nao e defesa em codigo de login.
+   */
+  if (salt.length === 0 || expected.length === 0) return false;
 
   const derived = await scrypt(password.normalize("NFKC"), salt, expected.length, {
     N,

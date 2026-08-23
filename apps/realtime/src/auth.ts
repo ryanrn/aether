@@ -5,7 +5,7 @@ import {
   SESSION_COOKIE,
   SOCKET_TICKET_TTL_SECONDS,
 } from "@aether/access";
-import type { SocketData } from "@aether/shared";
+import { readRedisConfig, redisEval, type SocketData } from "@aether/shared";
 
 /**
  * Autenticacao do handshake WebSocket.
@@ -58,14 +58,17 @@ export function readCookie(
  * Tickets ja usados, lembrados apenas enquanto poderiam ser reaproveitados.
  *
  * E o que torna o uso unico real em vez de uma promessa: sem isto, um ticket
- * capturado valeria por todo o seu tempo de vida. Funciona porque ha uma
- * instancia de gateway; ao escalar horizontalmente isto vai para o Redis,
- * junto com presenca e rate limit.
+ * capturado valeria por todo o seu tempo de vida.
+ *
+ * Com Redis configurado, a lembranca e COMPARTILHADA entre instancias — que e
+ * o que faz o uso unico continuar valendo com mais de uma maquina de gateway.
+ * Sem Redis, cai para memoria: correto com uma instancia (o caso de hoje),
+ * e a segunda maquina reabriria a janela de replay.
  */
 const usedTickets = new Map<string, number>();
 let lastSweep = Date.now();
 
-function consumeTicket(jti: string): boolean {
+function consumeTicketInMemory(jti: string): boolean {
   const now = Date.now();
 
   if (now - lastSweep > 60_000) {
@@ -78,6 +81,43 @@ function consumeTicket(jti: string): boolean {
   if (usedTickets.has(jti)) return false;
   usedTickets.set(jti, now + SOCKET_TICKET_TTL_SECONDS * 1000);
   return true;
+}
+
+/**
+ * `SET key 1 NX PX ttl` — grava so se ainda nao existir, e expira sozinho.
+ * Uma operacao atomica: duas instancias apresentando o mesmo ticket ao mesmo
+ * tempo, so uma escreve. Um GET seguido de SET teria a corrida exata que o
+ * consumo unico existe para impedir.
+ */
+const CONSUME_TICKET_LUA = `
+if redis.call('SET', KEYS[1], '1', 'NX', 'PX', ARGV[1]) then
+  return 1
+end
+return 0
+`;
+
+async function consumeTicket(jti: string): Promise<boolean> {
+  const config = readRedisConfig();
+  if (!config) return consumeTicketInMemory(jti);
+
+  try {
+    const result = await redisEval(
+      config,
+      CONSUME_TICKET_LUA,
+      [`ticket:${jti}`],
+      [SOCKET_TICKET_TTL_SECONDS * 1000],
+    );
+    return result === 1;
+  } catch (error) {
+    /**
+     * Fail-CLOSED, ao contrario do rate limit. Aqui a duvida e "este ticket ja
+     * foi usado?", e responder "acho que nao" com o Redis fora do ar abriria a
+     * janela de replay que este codigo existe para fechar. O custo de recusar
+     * e uma reconexao: o cliente ja pede um ticket novo a cada tentativa.
+     */
+    console.error("[gateway] Redis indisponivel ao consumir ticket:", error);
+    return false;
+  }
 }
 
 /**
@@ -101,7 +141,7 @@ async function resolveCredentials({ cookieHeader, ticket }: SocketCredentials) {
     if (!claims) return null;
     // O consumo acontece ANTES de ir ao banco: um ticket repetido nao deve nem
     // gerar consulta.
-    if (!consumeTicket(claims.jti)) return null;
+    if (!(await consumeTicket(claims.jti))) return null;
     return loadSession(claims.sid, claims.sub);
   }
 
