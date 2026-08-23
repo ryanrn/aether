@@ -83,7 +83,7 @@ export function FriendsList({
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-white/[0.06] px-5">
-        <h1 className="shrink-0 text-[14px] font-bold text-ink-100">
+        <h1 className="shrink-0 text-[16px] font-bold text-ink-100">
           {secao === "solicitacoes" ? "Solicitacoes" : "Amigos"}
         </h1>
 
@@ -106,7 +106,7 @@ export function FriendsList({
             setFormAberto(true);
             inputRef.current?.focus();
           }}
-          className="shrink-0 rounded-[4px] bg-accent-500 px-3 py-1 text-[12px] font-bold text-white transition-colors duration-150 hover:bg-accent-400"
+          className="shrink-0 rounded-[5px] bg-accent-500 px-3.5 py-1.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400"
         >
           Adicionar amigo
         </button>
@@ -114,20 +114,28 @@ export function FriendsList({
 
       {formAberto ? <AddFriend inputRef={inputRef} /> : null}
 
-      <div className="shrink-0 border-b border-white/[0.06] px-5 py-2">
-        <div className="flex items-center gap-2 rounded-[6px] border border-white/[0.06] bg-white/[0.03] px-3 py-[7px]">
-          <Search className="h-4 w-4 shrink-0 text-ink-600" strokeWidth={1.75} />
+      <div className="shrink-0 border-b border-white/[0.06] px-5 pb-3">
+        <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5">
+          <Search className="h-[18px] w-[18px] shrink-0 text-ink-600" strokeWidth={1.75} />
           <input
             value={busca}
             onChange={(evento) => setBusca(evento.target.value)}
             placeholder="Buscar"
             aria-label="Buscar na lista"
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-100 outline-none placeholder:text-ink-600"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink-100 outline-none placeholder:text-ink-600"
           />
         </div>
       </div>
 
+      {/*
+        Teto de largura na COLUNA inteira — formulario, busca e lista na mesma
+        medida. Sem ele, numa tela larga o campo de adicionar amigo esticava
+        mais de mil pixels: nome de usuario tem 24 caracteres, e um campo
+        daquele tamanho para digitar isso e o que faz a tela parecer vazia e
+        distante, mesmo com o conteudo todo certo.
+      */}
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        <div className="mx-auto w-full max-w-[960px]">
         {total === 0 ? (
           <Vazio secao={secao} aba={aba} temBusca={busca.trim().length > 0} />
         ) : (
@@ -142,6 +150,7 @@ export function FriendsList({
             ),
           )
         )}
+        </div>
       </div>
     </section>
   );
@@ -162,7 +171,7 @@ function Aba({
       onClick={onClick}
       aria-pressed={ativa}
       className={cn(
-        "rounded-[4px] px-3 py-1 text-[12px] font-bold transition-colors duration-150",
+        "rounded-[5px] px-3 py-1.5 text-[13px] font-bold transition-colors duration-150",
         ativa
           ? "bg-white/[0.03] text-ink-100"
           : "text-ink-300 hover:bg-white/[0.03] hover:text-ink-100",
@@ -175,7 +184,7 @@ function Aba({
 
 function Categoria({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="px-5 pb-1.5 pt-4 text-[11px] font-bold text-ink-600">
+    <h2 className="px-5 pb-2 pt-5 text-[12px] font-bold uppercase tracking-[0.04em] text-ink-600">
       {children}
     </h2>
   );
@@ -199,7 +208,7 @@ function Vazio({
         : "Sua lista esta vazia. Peca o nome de usuario de alguem e mande o convite acima.";
 
   return (
-    <p className="mx-5 mt-6 rounded-[10px] border border-dashed border-white/[0.06] px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
+    <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-white/[0.06] px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
       {texto}
     </p>
   );
@@ -236,8 +245,8 @@ function AddFriend({
   }
 
   return (
-    <div className="mx-5 my-3 shrink-0 rounded-[10px] border border-white/[0.06] bg-base-850 p-4">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-100">
+    <div className="mx-auto my-4 w-full max-w-[960px] shrink-0 rounded-[10px] border border-white/[0.06] bg-base-850 px-5 py-4">
+      <h2 className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink-100">
         Adicionar amigo
       </h2>
 
@@ -255,7 +264,7 @@ function AddFriend({
           spellCheck={false}
           aria-label="Nome de usuario"
           className={cn(
-            "min-w-0 flex-1 rounded-[6px] border bg-base-950 px-3 py-2 text-[13px] text-ink-100",
+            "min-w-0 flex-1 rounded-[6px] border bg-base-950 px-3.5 py-2.5 text-[14px] text-ink-100",
             "outline-none transition-colors duration-150 placeholder:text-ink-600",
             erro ? "border-signal-dnd" : "border-white/[0.06] focus:border-accent-500",
           )}
@@ -263,7 +272,7 @@ function AddFriend({
         <button
           type="submit"
           disabled={pendente || nome.trim().length === 0}
-          className="flex shrink-0 items-center gap-1.5 rounded-[6px] bg-accent-500 px-4 py-2 text-[12px] font-bold text-white transition-colors duration-150 hover:bg-accent-400 disabled:opacity-40"
+          className="flex shrink-0 items-center gap-2 rounded-[6px] bg-accent-500 px-5 py-2.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400 disabled:opacity-40"
         >
           {pendente ? (
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
@@ -274,12 +283,12 @@ function AddFriend({
         </button>
       </form>
 
-      {erro ? <p className="mt-2 text-[11px] text-signal-dnd">{erro}</p> : null}
+      {erro ? <p className="mt-2 text-[12px] text-signal-dnd">{erro}</p> : null}
       {aviso ? (
-        <p className="mt-2 text-[11px] text-signal-online">{aviso}</p>
+        <p className="mt-2 text-[12px] text-signal-online">{aviso}</p>
       ) : null}
 
-      <p className="mt-2 text-[11px] leading-[1.4] text-ink-500">
+      <p className="mt-2.5 text-[12px] leading-[1.5] text-ink-500">
         Precisa ser o nome exato. Nao ha busca de pessoas aqui de proposito —
         uma lista de quem tem conta seria uma lista de alvos.
       </p>
@@ -316,7 +325,7 @@ function Linha({ item }: { item: PublicFriendship }) {
   }
 
   return (
-    <div className="group mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.03]">
+    <div className="group mx-2 flex items-center gap-3.5 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-white/[0.03]">
       <Avatar
         userId={item.user.id}
         name={item.user.displayName}
@@ -329,16 +338,16 @@ function Linha({ item }: { item: PublicFriendship }) {
       />
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-bold text-ink-100">
+        <p className="truncate text-[15px] font-bold text-ink-100">
           {item.user.displayName}
         </p>
         {jogo?.game ? (
-          <p className="flex items-center gap-1.5 truncate text-[12px] text-ink-300">
-            <Monitor className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-ink-300">
+            <Monitor className="h-4 w-4 shrink-0" strokeWidth={1.75} />
             <span className="truncate">{jogo.game}</span>
           </p>
         ) : (
-          <p className="truncate text-[12px] text-ink-300">{LEGENDA[status]}</p>
+          <p className="mt-0.5 truncate text-[13px] text-ink-300">{LEGENDA[status]}</p>
         )}
       </div>
 
@@ -411,7 +420,7 @@ function BotaoAcao({
       disabled={pendente}
       onClick={onClick}
       className={cn(
-        "grid h-8 w-8 place-items-center rounded-full border border-white/[0.06] bg-base-850 text-ink-300",
+        "grid h-9 w-9 place-items-center rounded-full border border-white/[0.06] bg-base-850 text-ink-300",
         "transition-colors duration-150 disabled:opacity-40",
         perigo
           ? "hover:bg-signal-dnd hover:text-white"

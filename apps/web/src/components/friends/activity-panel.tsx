@@ -27,13 +27,13 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
       aria-label="Ativo agora"
       className="flex w-[260px] shrink-0 flex-col border-l border-white/[0.06] bg-base-900"
     >
-      <h2 className="shrink-0 px-4 pb-2.5 pt-4 text-[13px] font-bold text-ink-100">
+      <h2 className="shrink-0 px-4 pb-3 pt-4 text-[14px] font-bold text-ink-100">
         Ativo agora
       </h2>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {jogando.length === 0 ? (
-          <p className="rounded-[10px] border border-dashed border-white/[0.06] px-3 py-6 text-center text-[11px] leading-relaxed text-ink-500">
+          <p className="rounded-[10px] border border-dashed border-white/[0.06] px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
             Quando alguem da sua lista abrir um jogo, ele aparece aqui.
           </p>
         ) : (
@@ -66,7 +66,7 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   if (!jogo?.game) return null;
 
   return (
-    <article className="mb-2.5 rounded-[10px] border border-white/[0.06] bg-base-850 p-3">
+    <article className="mb-3 rounded-[10px] border border-white/[0.06] bg-base-850 p-3.5">
       <header className="flex items-center gap-2.5">
         <Avatar
           userId={amigo.user.id}
@@ -79,29 +79,29 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
           ring="border-base-850"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-bold text-ink-100">
+          <p className="truncate text-[13px] font-bold text-ink-100">
             {amigo.user.displayName}
           </p>
-          <p className="truncate text-[11px] text-ink-300">
+          <p className="truncate text-[12px] text-ink-300">
             Jogando {jogo.game}
             {grosso ? ` — ${grosso}` : ""}
           </p>
         </div>
       </header>
 
-      <div className="mt-2.5 flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-base-950 p-2">
+      <div className="mt-3 flex items-center gap-3 rounded-lg border border-white/[0.06] bg-base-950 p-2.5">
         <GameArt
           cover={jogo.cover}
           icon={jogo.icon}
-          className="h-10 w-10 rounded-[6px]"
-          iconClassName="h-[18px] w-[18px]"
+          className="h-11 w-11 rounded-[6px]"
+          iconClassName="h-5 w-5"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-bold text-ink-100">
+          <p className="truncate text-[13px] font-bold text-ink-100">
             {jogo.game}
           </p>
           {decorrido ? (
-            <p className="truncate text-[11px] tabular-nums text-ink-500">
+            <p className="mt-0.5 truncate text-[12px] tabular-nums text-ink-500">
               {decorrido} jogado
             </p>
           ) : null}
