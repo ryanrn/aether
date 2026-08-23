@@ -38,6 +38,17 @@ const OPTIONAL_FROM_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
  * significa quase nenhuma protecao contra forca bruta.
  */
 const OPTIONAL_REDIS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
+
+/**
+ * Envio de e-mail (recuperacao de senha). Opcionais e em PAR: sem os dois, o
+ * pedido de redefinicao responde igual — a resposta e constante de proposito,
+ * para nao revelar quem tem conta — e o e-mail simplesmente nao sai.
+ *
+ * Foi exatamente esse o modo de falha em desenvolvimento: o servidor tinha
+ * subido antes da chave existir no .env, e o pedido respondia "enviado" sem
+ * enviar nada. Em producao a consequencia seria a mesma, e silenciosa.
+ */
+const OPTIONAL_EMAIL = ["RESEND_API_KEY", "EMAIL_FROM"];
 const TARGETS = ["production", "preview", "development"];
 
 const gatewayUrl = process.argv[2];
@@ -112,6 +123,16 @@ if (storageMissing.length === 0) {
 const redisMissing = OPTIONAL_REDIS.filter((key) => !env[key]);
 if (redisMissing.length === 0) {
   for (const key of OPTIONAL_REDIS) payload[key] = env[key];
+}
+
+const emailMissing = OPTIONAL_EMAIL.filter((key) => !env[key]);
+if (emailMissing.length === 0) {
+  for (const key of OPTIONAL_EMAIL) payload[key] = env[key];
+} else {
+  console.log(
+    `aviso: ${emailMissing.join(" e ")} ausente(s) no .env — a recuperacao de\n` +
+      "       senha vai responder normalmente em producao e NAO enviar e-mail.",
+  );
 }
 
 /**
