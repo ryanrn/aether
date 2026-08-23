@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AETHER — laboratorio de design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ===========================================================================
+   TOKENS — a proposta de design vive aqui.
+   Tudo abaixo e consequencia. Se estes valores forem para o globals.css do
+   app, o resto acompanha.
+   =========================================================================== */
+:root {
+  /* Superficies. Menos "preto de terminal", mais azul-noite com vida. */
+  --bg-deep:    #07080f;
+  --bg-base:    #0b0d17;
+
+  /* VIDRO: o material novo. Translucido de verdade, nao cinza fingindo. */
+  --glass:      rgba(255, 255, 255, 0.045);
+  --glass-hi:   rgba(255, 255, 255, 0.075);
+  --glass-line: rgba(255, 255, 255, 0.09);
+  --glass-glow: rgba(255, 255, 255, 0.14);
+
+  /* Texto */
+  --ink-100: #f2f5fb;
+  --ink-200: #ccd4e4;
+  --ink-300: #97a1b8;
+  --ink-400: #6b768f;
+  --ink-500: #4d5670;
+
+  /* Acento DUPLO: turquesa (o de sempre) + violeta.
+     Gradiente entre dois tons e o que da cara de app de jogo — um tom so,
+     chapado, e cara de painel administrativo. */
+  --a1:      #22e0c8;
+  --a1-soft: #6ff2e0;
+  --a2:      #8b5cf6;
+  --a2-soft: #b794ff;
+
+  --signal-on:  #3ee88e;
+  --signal-idle:#ffc45e;
+  --signal-dnd: #ff5f6b;
+
+  /* RAIOS — a mudanca mais visivel. Antes: 4/6/8/12. Agora bolha. */
+  --r-sm:   10px;
+  --r-md:   16px;
+  --r-lg:   22px;
+  --r-xl:   28px;
+  --r-full: 999px;
+
+  --blur: 22px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Rubik, system-ui, sans-serif;
+  background: var(--bg-deep);
+  color: var(--ink-200);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* As manchas de cor ao fundo. Existem por uma razao funcional, nao decorativa:
+   vidro precisa de algo atras para desfocar. Sobre preto chapado, blur nao
+   produz efeito nenhum e o "vidro" vira so um cinza. */
+.aurora { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
+.aurora span {
+  position: absolute; border-radius: 50%; filter: blur(90px); opacity: .5;
+}
+.aurora .b1 { width: 480px; height: 480px; background: #1d7d6e; top: -140px; left: -100px; }
+.aurora .b2 { width: 420px; height: 420px; background: #5b3fa8; bottom: -160px; left: 26%; opacity:.45; }
+.aurora .b3 { width: 380px; height: 380px; background: #1f5f8a; top: 18%; right: -120px; opacity:.4; }
+
+.app {
+  position: relative; z-index: 1;
+  height: 100vh; display: flex; gap: 10px; padding: 10px;
+}
+
+/* Painel de vidro — o bloco de construcao de tudo. */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 1px 0 0 rgba(255,255,255,.06) inset, 0 20px 50px -24px rgba(0,0,0,.9);
+}
+
+/* ---------- barra de servidores: bolhas ---------- */
+.rail { width: 74px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
+.orb {
+  width: 50px; height: 50px; border-radius: var(--r-full);
+  display: grid; place-items: center; cursor: pointer;
+  font-weight: 700; font-size: 15px; color: var(--ink-100);
+  background: var(--glass-hi); border: 1px solid var(--glass-line);
+  transition: border-radius .28s cubic-bezier(.34,1.56,.64,1), transform .2s, box-shadow .25s;
+  position: relative;
+}
+.orb:hover { transform: translateY(-2px); box-shadow: 0 8px 22px -8px rgba(34,224,200,.5); }
+/* Bolha que "derrete" em quadrado arredondado quando ativa — o gesto que o
+   Discord usa e que da a sensacao de app, nao de site. */
+.orb.on {
+  border-radius: var(--r-md);
+  background: linear-gradient(140deg, var(--a1), var(--a2));
+  border-color: transparent; color: #04121a;
+  box-shadow: 0 10px 26px -8px rgba(34,224,200,.6);
+}
+.orb.on::before {
+  content:""; position:absolute; left:-13px; top:50%; transform:translateY(-50%);
+  width:4px; height:26px; border-radius: var(--r-full); background: var(--ink-100);
+}
+.orb.add { color: var(--a1); font-size: 22px; font-weight: 400; }
+.rail-sep { width: 26px; height: 1px; background: var(--glass-line); }
+
+/* ---------- coluna de canais ---------- */
+.side { width: 232px; display: flex; flex-direction: column; overflow: hidden; }
+.side-top { padding: 15px 16px 12px; border-bottom: 1px solid var(--glass-line); }
+.brand { font-family: "Chakra Petch", sans-serif; font-weight: 700; font-size: 11px;
+         letter-spacing: .22em; color: var(--ink-400); }
+.srv { font-size: 14px; font-weight: 600; color: var(--ink-100); margin-top: 3px; }
+.side-body { flex: 1; overflow-y: auto; padding: 12px 10px; }
+.cat { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+       color: var(--ink-500); padding: 12px 8px 6px; }
+
+/* Canal como PILULA. Antes era retangulo de 6px. */
+.chan {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 11px; border-radius: var(--r-full);
+  font-size: 13px; color: var(--ink-300); cursor: pointer;
+  transition: background .18s, color .18s, transform .18s;
+}
+.chan:hover { background: var(--glass); color: var(--ink-100); transform: translateX(2px); }
+.chan.on {
+  background: linear-gradient(100deg, rgba(34,224,200,.16), rgba(139,92,246,.16));
+  color: var(--ink-100); border: 1px solid rgba(34,224,200,.28);
+  padding: 7px 10px;
+}
+.chan .ic { width: 15px; height: 15px; opacity: .8; }
+.chan .badge {
+  margin-left: auto; background: var(--signal-dnd); color: #fff;
+  font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: var(--r-full);
+}
+
+/* quem esta na call, aninhado */
+.inchan { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 26px;
+          border-radius: var(--r-full); cursor: pointer; }
+.inchan:hover { background: var(--glass); }
+.inchan img, .inchan .av { width: 22px; height: 22px; }
+.inchan span { font-size: 12px; color: var(--ink-300); }
+
+/* ---------- avatares: circulos com anel ---------- */
+.av {
+  width: 34px; height: 34px; border-radius: var(--r-full);
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  color: #05121a; flex-shrink: 0; position: relative;
+}
+.av.g1 { background: linear-gradient(140deg,#22e0c8,#3b82f6); }
+.av.g2 { background: linear-gradient(140deg,#8b5cf6,#ec4899); }
+.av.g3 { background: linear-gradient(140deg,#f59e0b,#ef4444); }
+.av.g4 { background: linear-gradient(140deg,#10b981,#22e0c8); }
+.av.g5 { background: linear-gradient(140deg,#6366f1,#8b5cf6); }
+/* anel de "falando": o feedback que mais aparece num app de voz */
+.av.talk { box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--signal-on), 0 0 18px rgba(62,232,142,.55); }
+.dot {
+  position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px;
+  border-radius: var(--r-full); border: 2.5px solid var(--bg-base);
+}
+.dot.on { background: var(--signal-on); }
+.dot.off { background: #4d5670; }
+
+/* ---------- area central ---------- */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main-top { padding: 14px 20px; border-bottom: 1px solid var(--glass-line);
+            display: flex; align-items: center; gap: 12px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--r-full);
+  background: var(--glass-hi); border: 1px solid var(--glass-line);
+  font-size: 11px; color: var(--ink-300);
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-radius: var(--r-full); border: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: #04121a;
+  background: linear-gradient(120deg, var(--a1), var(--a1-soft));
+  box-shadow: 0 8px 22px -8px rgba(34,224,200,.65);
+  transition: transform .18s, box-shadow .18s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px -8px rgba(34,224,200,.8); }
+.btn.ghost { background: var(--glass-hi); color: var(--ink-200); border: 1px solid var(--glass-line); box-shadow:none; }
+
+.stage { flex: 1; display: grid; place-items: center; padding: 24px; }
+.stage-in { text-align: center; max-width: 380px; }
+.stage-orb {
+  width: 84px; height: 84px; margin: 0 auto 20px; border-radius: var(--r-full);
+  display: grid; place-items: center;
+  background: linear-gradient(140deg, rgba(34,224,200,.22), rgba(139,92,246,.22));
+  border: 1px solid var(--glass-glow);
+  box-shadow: 0 0 40px -6px rgba(34,224,200,.4);
+}
+.stage h2 { font-size: 19px; font-weight: 600; color: var(--ink-100); margin-bottom: 8px; }
+.stage p { font-size: 13px; color: var(--ink-400); line-height: 1.65; }
+
+/* ---------- painel de membros ---------- */
+.members { width: 212px; display: flex; flex-direction: column; overflow: hidden; }
+.members-body { flex: 1; overflow-y: auto; padding: 14px 10px; }
+.role { font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+        padding: 12px 8px 7px; }
+.mem { display: flex; align-items: center; gap: 10px; padding: 7px 9px;
+       border-radius: var(--r-md); cursor: pointer; transition: background .18s; }
+.mem:hover { background: var(--glass); }
+.mem .nm { font-size: 13px; color: var(--ink-200); }
+.mem .sub { font-size: 11px; color: var(--ink-500); }
+
+/* ---------- barra de controles: botoes em bolha ---------- */
+.dock {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px;
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  border-radius: var(--r-full); z-index: 5;
+}
+.ctl {
+  width: 42px; height: 42px; border-radius: var(--r-full);
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--glass-hi); border: 1px solid var(--glass-line);
+  color: var(--ink-200); transition: transform .18s, background .18s, box-shadow .2s;
+}
+.ctl:hover { transform: translateY(-2px); background: rgba(255,255,255,.12); }
+.ctl.live { background: linear-gradient(140deg, var(--a1), var(--a2)); color: #04121a; border-color: transparent;
+            box-shadow: 0 8px 22px -8px rgba(34,224,200,.7); }
+.ctl.off { background: rgba(255,95,107,.16); border-color: rgba(255,95,107,.3); color: var(--signal-dnd); }
+.dock-me { display: flex; align-items: center; gap: 9px; padding-right: 6px; }
+.dock-me .nm { font-size: 12.5px; font-weight: 500; color: var(--ink-100); line-height: 1.25; }
+.dock-me .tag { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-500); }
+.dock-sep { width: 1px; height: 26px; background: var(--glass-line); margin: 0 3px; }
+
+/* ---------- cartao de atividade ---------- */
+.card {
+  position: absolute; right: 232px; top: 96px; width: 274px; z-index: 6;
+  border-radius: var(--r-xl); overflow: hidden;
+}
+.card-top { height: 62px; background: linear-gradient(120deg, rgba(34,224,200,.5), rgba(139,92,246,.5)); }
+.card-body { padding: 0 16px 16px; margin-top: -26px; }
+.card .av { width: 56px; height: 56px; font-size: 16px; border: 3px solid rgba(11,13,23,.85); }
+.card h3 { font-size: 15px; font-weight: 600; color: var(--ink-100); margin-top: 10px; }
+.card .tag { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-500); }
+.card-sec { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--glass-line); }
+.card-lbl { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .13em;
+            text-transform: uppercase; color: var(--ink-500); margin-bottom: 9px; }
+.game { display: flex; align-items: center; gap: 11px; padding: 9px;
+        border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); }
+.game-ic { width: 38px; height: 38px; border-radius: var(--r-sm);
+           background: linear-gradient(140deg,#0f766e,#134e4a); display: grid; place-items: center;
+           font-size: 15px; flex-shrink: 0; }
+.game .t { font-size: 13px; color: var(--ink-100); font-weight: 500; }
+.game .s { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-400); margin-top: 2px; }
+.card .btn { width: 100%; justify-content: center; margin-top: 12px; }
+
+.row { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12.5px; color: var(--ink-300); }
+
+::-webkit-scrollbar { width: 7px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: var(--r-full); }
+
+/* Etiqueta do laboratorio — deixa claro que isto NAO e o app rodando. */
+.lab {
+  position: fixed; top: 12px; right: 14px; z-index: 50;
+  font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .1em;
+  padding: 6px 12px; border-radius: var(--r-full);
+  background: rgba(139,92,246,.2); border: 1px solid rgba(139,92,246,.4); color: var(--a2-soft);
+}
+</style>
+</head>
+<body>
+
+<div class="aurora"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
+<div class="lab">PROTOTIPO · porta 5174</div>
+
+<div class="app">
+
+  <!-- servidores -->
+  <nav class="rail glass">
+    <div class="orb on">A</div>
+    <div class="orb" style="background:linear-gradient(140deg,#f59e0b,#ef4444);color:#1a0a04">TE</div>
+    <div class="rail-sep"></div>
+    <div class="orb add">+</div>
+  </nav>
+
+  <!-- canais -->
+  <aside class="side glass">
+    <div class="side-top">
+      <div class="brand">AETHER</div>
+      <div class="srv">SERVER TESTE AETHER</div>
+    </div>
+    <div class="side-body">
+      <div class="cat">Geral</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>geral</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>teste<span class="badge">3</span></div>
+
+      <div class="cat">Gaming 🎮</div>
+      <div class="chan on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Sala 1</div>
+      <div class="inchan"><div class="av g1 talk" style="width:22px;height:22px;font-size:9px">RY</div><span>Ryan</span></div>
+      <div class="inchan"><div class="av g2" style="width:22px;height:22px;font-size:9px">GU</div><span>Gui Torres</span></div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Sala 2</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>PRIVADO</div>
+    </div>
+  </aside>
+
+  <!-- centro -->
+  <main class="main glass">
+    <div class="main-top">
+      <div class="srv" style="font-size:14px">Sala 1</div>
+      <div class="chip">👥 2 conectados</div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn ghost">Convidar</button>
+        <button class="btn">Entrar na call</button>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-in">
+        <div class="stage-orb">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#6ff2e0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+        </div>
+        <h2>Sala 1 esta esperando</h2>
+        <p>Entre na call para falar com quem esta aqui. Sua tela e seu microfone continuam seus ate voce decidir.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- membros -->
+  <aside class="members glass">
+    <div class="members-body">
+      <div class="role" style="color:#ffc45e">Owner — 1</div>
+      <div class="mem"><div class="av g1">RY<span class="dot on"></span></div><div><div class="nm">ryu do aether</div><div class="sub">Jogando GTA V</div></div></div>
+
+      <div class="role" style="color:#b794ff">Admin — 2</div>
+      <div class="mem"><div class="av g2">GU<span class="dot on"></span></div><div class="nm">Gui Torres</div></div>
+      <div class="mem"><div class="av g5">MA<span class="dot off"></span></div><div class="nm">masoquista157</div></div>
+
+      <div class="role" style="color:#6ff2e0">Member — 2</div>
+      <div class="mem"><div class="av g4">TE<span class="dot off"></span></div><div class="nm">teste</div></div>
+      <div class="mem"><div class="av g3">JO<span class="dot off"></span></div><div class="nm">Joao</div></div>
+    </div>
+  </aside>
+
+  <!-- cartao de atividade -->
+  <div class="card glass">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="av g1" style="width:56px;height:56px;font-size:16px">RY<span class="dot on" style="width:14px;height:14px"></span></div>
+      <h3>ryu do aether</h3>
+      <div class="tag">@ryan · Ryan</div>
+      <div class="row"><span style="width:8px;height:8px;border-radius:99px;background:var(--signal-on)"></span>Online</div>
+
+      <div class="card-sec">
+        <div class="card-lbl">atividade</div>
+        <div class="game">
+          <div class="game-ic">🎮</div>
+          <div><div class="t">Grand Theft Auto V</div><div class="s">🕐 01:24:12</div></div>
+        </div>
+        <div class="row" style="margin-top:11px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+          Sala 1 · 2 pessoas
+        </div>
+        <button class="btn">Entrar no canal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- controles -->
+  <div class="dock glass">
+    <div class="dock-me">
+      <div class="av g1" style="width:34px;height:34px">RY<span class="dot on"></span></div>
+      <div><div class="nm">Ryan</div><div class="tag">@ryan</div></div>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="ctl live" title="Microfone">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+    </div>
+    <div class="ctl" title="Audio">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17v-5a9 9 0 0 1 18 0v5"/><path d="M21 18a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2z"/><path d="M3 18a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg>
+    </div>
+    <div class="ctl" title="Compartilhar tela">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></svg>
+    </div>
+    <div class="ctl off" title="Sair da call">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 13.3a11 11 0 0 0 4 2.6l1.5-1.5a1.5 1.5 0 0 1 1.6-.3c1 .4 2.2.6 3.4.6a1.5 1.5 0 0 1 1.5 1.5v2.4a1.5 1.5 0 0 1-1.5 1.5A18.5 18.5 0 0 1 3.4 3.5 1.5 1.5 0 0 1 4.9 2h2.4a1.5 1.5 0 0 1 1.5 1.5c0 1.2.2 2.3.6 3.4a1.5 1.5 0 0 1-.3 1.6z"/><path d="M2 2l20 20"/></svg>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="ctl" title="Configuracoes">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H7a1.7 1.7 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V7a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

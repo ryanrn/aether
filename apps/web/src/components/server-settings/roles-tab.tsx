@@ -106,7 +106,7 @@ function CreateRoleButton({ serverId }: { serverId: string }) {
       const result = await createRoleAction({
         serverId,
         name: name.trim(),
-        color: "#9AA6B8",
+        color: "#6B7280",
       });
       if (result.ok) setName("");
       else setError(result.error);

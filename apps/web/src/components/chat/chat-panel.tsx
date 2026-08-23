@@ -47,7 +47,14 @@ export function ChatPanel({
   }, [channelId, setActiveChannel]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    /**
+     * O espaco embaixo NAO e respiro: e a area que a HUD flutuante ocupa.
+     *
+     * Ela mora no palco com `position: absolute`, ou seja, fora do fluxo — sem
+     * reservar isto, o campo de mensagem fica DEBAIXO dela. Medido: a HUD tem
+     * 54px de altura e flutua a 20px do fundo, entao 80px cobrem com folga.
+     */
+    <div className="flex min-h-0 flex-1 flex-col pb-20">
       <MessageList
         channelId={channelId}
         channelName={channelName}

@@ -21,7 +21,7 @@ export function ServerRail({ servers }: { servers: PublicServer[] }) {
     <>
       <nav
         aria-label="Servidores"
-        className="flex w-[72px] shrink-0 flex-col items-center gap-2 border-r border-base-800 bg-base-900 py-3"
+        className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-base-800 bg-base-900 py-3"
       >
         {servers.map((server) => {
           const active = server.id === activeId;
@@ -34,17 +34,15 @@ export function ServerRail({ servers }: { servers: PublicServer[] }) {
             >
               <span
                 className={cn(
-                  "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-accent-500 transition-all duration-200",
+                  "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
                   active ? "h-7" : "group-hover:h-3.5",
                 )}
               />
               <span
                 className={cn(
-                  "grid h-11 w-11 place-items-center overflow-hidden text-[13px] font-semibold text-ink-100",
-                  "border transition-all duration-200",
-                  active
-                    ? "rounded-md border-accent-600/50 ring-accent-soft"
-                    : "rounded-lg border-base-700 group-hover:rounded-md group-hover:border-base-600",
+                  "grid h-11 w-11 place-items-center overflow-hidden rounded-xl text-[13px] font-semibold text-ink-100",
+                  "transition-all duration-150",
+                  active ? "bg-base-800" : "group-hover:scale-105",
                 )}
                 style={
                   server.iconUrl
@@ -68,7 +66,7 @@ export function ServerRail({ servers }: { servers: PublicServer[] }) {
         })}
 
         {servers.length > 0 ? (
-          <span className="my-1 h-px w-8 bg-base-700" />
+          <span className="h-px w-8 bg-base-700" />
         ) : null}
 
         <button
@@ -76,8 +74,8 @@ export function ServerRail({ servers }: { servers: PublicServer[] }) {
           onClick={() => setModalOpen(true)}
           title="Adicionar servidor"
           className={cn(
-            "grid h-11 w-11 place-items-center rounded-lg border border-dashed border-base-600 text-ink-400",
-            "transition-all duration-200 hover:rounded-md hover:border-accent-600/60 hover:text-accent-400",
+            "grid h-11 w-11 place-items-center rounded-xl bg-base-800 text-ink-300",
+            "transition-colors duration-150 hover:text-ink-100",
           )}
         >
           <Plus className="h-5 w-5" />

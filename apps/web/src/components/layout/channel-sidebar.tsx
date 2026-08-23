@@ -11,6 +11,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  Settings,
   Trash2,
   Volume2,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { ChannelMembers } from "./channel-members";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
 import { CategoryFormModal } from "@/components/channels/category-form-modal";
+import { InviteButton } from "@/components/servers/invite-button";
 
 /**
  * Arvore de canais no estilo TeamSpeak: categorias colapsaveis e, abaixo de
@@ -74,6 +76,12 @@ export function ChannelSidebar({
   >(null);
 
   const canCreate = viewerCan(viewer, "CREATE_CHANNEL");
+  const canInvite = viewerCan(viewer, "CREATE_INVITE");
+  /** Mesma regra que a barra de topo usava antes de ser dissolvida. */
+  const canManageServer =
+    viewerCan(viewer, "MANAGE_SERVER") ||
+    viewerCan(viewer, "MANAGE_ROLES") ||
+    viewer.isOwner;
 
   /**
    * Destinos do "mover para": todos os canais de voz que ESTE visitante
@@ -91,7 +99,35 @@ export function ChannelSidebar({
 
   return (
     <>
-      <aside className="flex w-60 shrink-0 flex-col border-r border-base-800 bg-base-900">
+      <aside className="flex w-[220px] shrink-0 flex-col border-r border-base-800 bg-base-900">
+        {/*
+          Cabecalho proprio, de 48px. Antes o nome do servidor vivia numa barra
+          que atravessava a tela inteira por cima das quatro colunas; agora cada
+          coluna comeca no topo e tem o seu. E o que permite a HUD flutuar
+          dentro do centro, em vez de existir um rodape global.
+        */}
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-base-800 px-4">
+          <h2 className="min-w-0 flex-1 truncate text-[13px] font-bold uppercase tracking-[0.04em] text-ink-100">
+            {serverName}
+          </h2>
+          {/*
+            "Convidar" mora AQUI, e nao no cabecalho do palco como no desenho.
+            Motivo: o cabecalho do palco so existe com um canal aberto, e
+            convidar e acao de SERVIDOR — na tela "selecione um canal" o botao
+            simplesmente sumiria. Coluna do servidor, acao do servidor.
+          */}
+          {canInvite ? <InviteButton serverId={serverId} compact /> : null}
+          {canManageServer ? (
+            <Link
+              href={`/app/s/${serverId}/settings`}
+              title="Configuracoes do servidor"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-100"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          ) : null}
+        </div>
+
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {looseChannels.length > 0 ? (
             <ul className="mb-3 flex flex-col gap-0.5">

@@ -6,7 +6,14 @@ import { getOrCreateInviteAction } from "@/server/actions/servers";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 
-export function InviteButton({ serverId }: { serverId: string }) {
+export function InviteButton({
+  serverId,
+  compact = false,
+}: {
+  serverId: string;
+  /** so o icone — para caber no cabecalho estreito da coluna de canais */
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,10 +47,22 @@ export function InviteButton({ serverId }: { serverId: string }) {
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={openModal}>
-        <UserPlus className="h-3.5 w-3.5" />
-        Convidar
-      </Button>
+      {compact ? (
+        <button
+          type="button"
+          onClick={openModal}
+          title="Convidar pessoas"
+          aria-label="Convidar pessoas"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-100"
+        >
+          <UserPlus className="h-4 w-4" />
+        </button>
+      ) : (
+        <Button size="sm" variant="outline" onClick={openModal}>
+          <UserPlus className="h-3.5 w-3.5" />
+          Convidar
+        </Button>
+      )}
 
       <Modal
         open={open}

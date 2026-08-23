@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AETHER — laboratorio de design v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ===========================================================================
+   TOKENS v2 — depois do feedback.
+   O resumo da mudanca: o neon saiu, a hierarquia entrou.
+   =========================================================================== */
+:root {
+  /* (10) Escuro, mas NAO preto. O preto puro cria contraste duro com o texto
+     claro e cansa; #0F1115 e escuro o suficiente sem ser buraco. */
+  --bg-deep:  #0F1115;
+  --bg-base:  #131620;
+  --bg-lift:  #171B26;
+
+  /* (3) Vidro mais discreto, e as bordas separam por opacidade — nunca por
+     linha dura. Regiao se distingue por elevacao, nao por risco. */
+  --glass:      rgba(255, 255, 255, 0.032);
+  --glass-hi:   rgba(255, 255, 255, 0.055);
+  --line:       rgba(255, 255, 255, 0.06);
+  --line-hi:    rgba(255, 255, 255, 0.10);
+
+  /* (1) Acento dessaturado. Era #22e0c8 (neon puro); agora um teal profundo
+     que mantem a identidade sem gritar. So aparece em estado ATIVO e detalhe. */
+  --a1:      #2A9D8F;
+  --a1-hi:   #3DAA9D;
+  --a1-dim:  #1B998B;
+  --a1-ghost: rgba(42, 157, 143, 0.14);
+
+  /* (2/4) O violeta tambem desceu: de #8b5cf6 para ametista escura. */
+  --a2:      #6D5B9E;
+  --a2-hi:   #8878B5;
+
+  /* (7) Escala de cinza com degrau real entre os passos. Nada de branco puro:
+     o topo e #E6E9F0, nao #FFF. */
+  --ink-100: #E6E9F0;
+  --ink-200: #BFC6D4;
+  --ink-300: #8E97A8;
+  --ink-400: #69717F;
+  --ink-500: #4C535F;
+
+  /* (4) Cargos: aco, ametista, ambar queimado. Indicam hierarquia sem virar
+     bala colorida. */
+  --role-owner: #B0813F;
+  --role-admin: #7E6B9E;
+  --role-mod:   #5B7C99;
+  --role-member:#6B7A8F;
+
+  --signal-on:  #4A9E6F;
+  --signal-idle:#B08A45;
+  --signal-dnd: #9E4B52;
+
+  --r-sm: 10px; --r-md: 16px; --r-lg: 20px; --r-xl: 26px; --r-full: 999px;
+
+  /* (3) Sombra suave e larga, opacidade baixa. Eleva sem desenhar contorno. */
+  --sh-1: 0 2px 10px -4px rgba(0,0,0,.5);
+  --sh-2: 0 8px 30px -12px rgba(0,0,0,.6);
+  --sh-3: 0 18px 50px -20px rgba(0,0,0,.75);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Rubik, system-ui, sans-serif;
+  /* (2) Gradiente quase imperceptivel: escuro neutro com um respiro indigo
+     num canto so. A cor da personalidade vem dos DETALHES, nao do fundo. */
+  background:
+    radial-gradient(1100px 700px at 88% 4%, #1A1B2E 0%, transparent 58%),
+    radial-gradient(900px 600px at 4% 96%, #141C22 0%, transparent 55%),
+    var(--bg-deep);
+  color: var(--ink-300);
+  height: 100vh; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { height: 100vh; display: flex; gap: 9px; padding: 9px; }
+
+/* (3) Vidro leve: desfoque mais suave, fundo escuro semi-transparente. */
+.panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.012)), rgba(19,22,32,.72);
+  backdrop-filter: blur(16px) saturate(115%);
+  -webkit-backdrop-filter: blur(16px) saturate(115%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+/* ---------- servidores ---------- */
+.rail { width: 70px; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 11px 0; }
+.orb {
+  width: 46px; height: 46px; border-radius: var(--r-full);
+  display: grid; place-items: center; cursor: pointer;
+  font-weight: 600; font-size: 14px; color: var(--ink-300);
+  background: var(--glass-hi); border: 1px solid var(--line);
+  transition: border-radius .3s cubic-bezier(.34,1.4,.64,1), transform .2s, color .2s;
+  position: relative;
+}
+.orb:hover { color: var(--ink-100); transform: translateY(-1px); }
+/* Ativo: sem gradiente berrante — fundo fantasma do acento e anel discreto. */
+.orb.on {
+  border-radius: var(--r-md);
+  background: var(--a1-ghost); border-color: rgba(42,157,143,.42);
+  color: var(--a1-hi); box-shadow: var(--sh-1);
+}
+.orb.on::before {
+  content:""; position:absolute; left:-11px; top:50%; transform:translateY(-50%);
+  width:3px; height:22px; border-radius: var(--r-full); background: var(--a1);
+}
+.orb.add { color: var(--ink-400); font-size: 21px; font-weight: 300; }
+.orb.add:hover { color: var(--a1-hi); }
+.rail-sep { width: 22px; height: 1px; background: var(--line); }
+
+/* ---------- canais ---------- */
+.side { width: 226px; display: flex; flex-direction: column; overflow: hidden; }
+.side-top { padding: 15px 16px 13px; border-bottom: 1px solid var(--line); }
+.brand { font-family: "Chakra Petch", sans-serif; font-weight: 600; font-size: 10px;
+         letter-spacing: .24em; color: var(--ink-500); }
+/* (7) Nome do servidor: bold, tracking apertado. E o topo da hierarquia. */
+.srv { font-size: 14.5px; font-weight: 700; letter-spacing: -.015em; color: var(--ink-100); margin-top: 4px; }
+.side-body { flex: 1; overflow-y: auto; padding: 11px 9px; }
+.cat { font-size: 9.5px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase;
+       color: var(--ink-500); padding: 14px 9px 7px; }
+
+/* (7) Canal: peso medium, cor secundaria. Nunca compete com o servidor. */
+.chan {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 11px; border-radius: var(--r-full);
+  font-size: 13px; font-weight: 500; color: var(--ink-400); cursor: pointer;
+  transition: background .16s, color .16s;
+}
+.chan:hover { background: var(--glass); color: var(--ink-200); }
+.chan.on {
+  background: var(--a1-ghost); color: var(--ink-100);
+  border: 1px solid rgba(42,157,143,.26); padding: 6px 10px;
+}
+.chan.on .ic { color: var(--a1-hi); }
+.chan .ic { width: 15px; height: 15px; flex-shrink: 0; }
+.chan .badge {
+  margin-left: auto; background: rgba(158,75,82,.9); color: #F0DDDE;
+  font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: var(--r-full);
+}
+.inchan { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 25px;
+          border-radius: var(--r-full); cursor: pointer; }
+.inchan:hover { background: var(--glass); }
+/* (7) Quem esta falando ganha peso e cor; quem esta quieto fica regular. */
+.inchan span { font-size: 12px; font-weight: 400; color: var(--ink-400); }
+.inchan.talking span { font-weight: 600; color: var(--ink-100); }
+
+/* ---------- avatares ---------- */
+/* (9) Fundo NEUTRO + anel na cor do cargo. Antes era fundo colorido inteiro,
+   que competia com tudo e parecia adesivo. */
+.av {
+  width: 32px; height: 32px; border-radius: var(--r-full);
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 600;
+  color: var(--ink-200); background: var(--bg-lift);
+  flex-shrink: 0; position: relative;
+  box-shadow: 0 0 0 2px var(--ring, transparent);
+}
+.av.owner  { --ring: var(--role-owner); }
+.av.admin  { --ring: var(--role-admin); }
+.av.mod    { --ring: var(--role-mod); }
+.av.member { --ring: var(--role-member); }
+/* (6) Anel de fala contido: sem halo forte, so o anel e um brilho baixo. */
+.av.talk { box-shadow: 0 0 0 2px var(--signal-on), 0 0 12px -2px rgba(74,158,111,.45); }
+.dot {
+  position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+  border-radius: var(--r-full); border: 2.5px solid var(--bg-base);
+}
+.dot.on { background: var(--signal-on); }
+.dot.off { background: #3F4653; }
+
+/* ---------- centro ---------- */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main-top { padding: 13px 19px; border-bottom: 1px solid var(--line);
+            display: flex; align-items: center; gap: 11px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: var(--r-full);
+  background: var(--glass); border: 1px solid var(--line);
+  font-size: 11px; font-weight: 500; color: var(--ink-400);
+}
+
+/* (8) Tres niveis, deliberadamente diferentes em PESO e nao so em cor. */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-radius: var(--r-full); cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  border: 1px solid transparent; transition: background .18s, border-color .18s, color .18s;
+}
+.btn.primary { background: var(--a1); color: #06120F; box-shadow: var(--sh-1); }
+.btn.primary:hover { background: var(--a1-hi); }
+.btn.ghost { background: transparent; border-color: var(--line-hi); color: var(--ink-300); font-weight: 500; }
+.btn.ghost:hover { background: var(--glass); color: var(--ink-100); }
+.btn.danger { background: rgba(158,75,82,.16); border-color: rgba(158,75,82,.34); color: #C97F85; }
+.btn.danger:hover { background: rgba(158,75,82,.26); }
+
+.stage { flex: 1; display: grid; place-items: center; padding: 24px; }
+.stage-in { text-align: center; max-width: 340px; }
+/* (6) Estado vazio contido: glow de baixa opacidade e blur grande. */
+.stage-orb {
+  width: 72px; height: 72px; margin: 0 auto 18px; border-radius: var(--r-full);
+  display: grid; place-items: center;
+  background: rgba(42,157,143,.07);
+  border: 1px solid rgba(42,157,143,.18);
+  box-shadow: 0 0 44px -14px rgba(42,157,143,.35);
+}
+.stage h2 { font-size: 17px; font-weight: 600; color: var(--ink-200); margin-bottom: 7px; letter-spacing: -.01em; }
+.stage p { font-size: 12.5px; font-weight: 400; color: var(--ink-500); line-height: 1.7; }
+
+/* ---------- membros ---------- */
+.members { width: 206px; display: flex; flex-direction: column; overflow: hidden; }
+.members-body { flex: 1; overflow-y: auto; padding: 14px 9px; }
+/* (9) Separacao por ESPACO, nao por linha. */
+.group { margin-bottom: 22px; }
+.group:last-child { margin-bottom: 0; }
+.role { font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+        padding: 0 9px 9px; }
+.mem { display: flex; align-items: center; gap: 10px; padding: 6px 9px;
+       border-radius: var(--r-md); cursor: pointer; transition: background .16s; }
+.mem:hover { background: var(--glass); }
+/* (7) Ativo semibold e claro; inativo regular e apagado. */
+.mem .nm { font-size: 12.5px; font-weight: 400; color: var(--ink-400); }
+.mem.online .nm { font-weight: 600; color: var(--ink-200); }
+.mem .sub { font-size: 10.5px; font-weight: 400; color: var(--ink-500); margin-top: 1px; }
+
+/* ---------- controles ---------- */
+.dock {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 17px;
+  display: flex; align-items: center; gap: 7px; padding: 8px 11px;
+  border-radius: var(--r-full); z-index: 5;
+}
+.ctl {
+  width: 39px; height: 39px; border-radius: var(--r-full);
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--glass-hi); border: 1px solid var(--line);
+  color: var(--ink-300); transition: background .18s, color .18s;
+}
+.ctl:hover { background: rgba(255,255,255,.09); color: var(--ink-100); }
+.ctl.live { background: var(--a1-ghost); border-color: rgba(42,157,143,.4); color: var(--a1-hi); }
+.ctl.off { background: rgba(158,75,82,.14); border-color: rgba(158,75,82,.3); color: #B96B72; }
+.dock-me { display: flex; align-items: center; gap: 9px; padding-right: 5px; }
+.dock-me .nm { font-size: 12.5px; font-weight: 600; color: var(--ink-100); line-height: 1.3; }
+.dock-me .tag { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-500); }
+.dock-sep { width: 1px; height: 24px; background: var(--line); margin: 0 3px; }
+
+/* ---------- cartao ---------- */
+.card {
+  position: absolute; right: 226px; top: 92px; width: 266px; z-index: 6;
+  border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--sh-3);
+}
+/* (2) Faixa contida: nada de gradiente berrante no topo do cartao. */
+.card-top { height: 56px; background: linear-gradient(120deg, rgba(42,157,143,.28), rgba(109,91,158,.26)); }
+.card-body { padding: 0 15px 15px; margin-top: -24px; }
+.card .av { width: 52px; height: 52px; font-size: 15px; box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 5px var(--role-owner); }
+.card h3 { font-size: 14.5px; font-weight: 700; letter-spacing: -.015em; color: var(--ink-100); margin-top: 10px; }
+.card .tag { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-500); margin-top: 2px; }
+.card-sec { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+.card-lbl { font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .14em;
+            text-transform: uppercase; color: var(--ink-500); margin-bottom: 9px; }
+.game { display: flex; align-items: center; gap: 11px; padding: 9px;
+        border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--line); }
+.game-ic { width: 36px; height: 36px; border-radius: var(--r-sm); background: var(--bg-lift);
+           display: grid; place-items: center; flex-shrink: 0; border: 1px solid var(--line); }
+.game .t { font-size: 12.5px; font-weight: 600; color: var(--ink-200); }
+.game .s { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-500); margin-top: 2px; }
+.card .btn { width: 100%; justify-content: center; margin-top: 11px; }
+.row { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12px; font-weight: 500; color: var(--ink-400); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.07); border-radius: var(--r-full); }
+
+.lab {
+  position: fixed; top: 11px; right: 13px; z-index: 50;
+  font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .1em;
+  padding: 5px 11px; border-radius: var(--r-full);
+  background: var(--glass-hi); border: 1px solid var(--line); color: var(--ink-500);
+}
+.lab a { color: var(--ink-400); text-decoration: none; }
+.lab a:hover { color: var(--a1-hi); }
+</style>
+</head>
+<body>
+
+<div class="lab">v2 · <a href="/v1.html">ver v1</a></div>
+
+<div class="app">
+
+  <nav class="rail panel">
+    <div class="orb on">A</div>
+    <div class="orb">TE</div>
+    <div class="rail-sep"></div>
+    <div class="orb add">+</div>
+  </nav>
+
+  <aside class="side panel">
+    <div class="side-top">
+      <div class="brand">AETHER</div>
+      <div class="srv">SERVER TESTE AETHER</div>
+    </div>
+    <div class="side-body">
+      <div class="cat">Geral</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>geral</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>teste<span class="badge">3</span></div>
+
+      <div class="cat">Gaming</div>
+      <div class="chan on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Sala 1</div>
+      <div class="inchan talking"><div class="av talk" style="width:21px;height:21px;font-size:8.5px">RY</div><span>Ryan</span></div>
+      <div class="inchan"><div class="av admin" style="width:21px;height:21px;font-size:8.5px">GU</div><span>Gui Torres</span></div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Sala 2</div>
+      <div class="chan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="3"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>PRIVADO</div>
+    </div>
+  </aside>
+
+  <main class="main panel">
+    <div class="main-top">
+      <div class="srv" style="font-size:14px">Sala 1</div>
+      <div class="chip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        2 conectados
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn ghost">Convidar</button>
+        <button class="btn primary">Entrar na call</button>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-in">
+        <div class="stage-orb">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3DAA9D" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+        </div>
+        <h2>Sala 1 esta esperando</h2>
+        <p>Entre na call para falar com quem esta aqui. Seu microfone e sua tela continuam seus ate voce decidir.</p>
+      </div>
+    </div>
+  </main>
+
+  <aside class="members panel">
+    <div class="members-body">
+      <div class="group">
+        <div class="role" style="color:var(--role-owner)">Owner — 1</div>
+        <div class="mem online"><div class="av owner">RY<span class="dot on"></span></div><div><div class="nm">ryu do aether</div><div class="sub">Grand Theft Auto V</div></div></div>
+      </div>
+      <div class="group">
+        <div class="role" style="color:var(--role-admin)">Administrator — 2</div>
+        <div class="mem online"><div class="av admin">GU<span class="dot on"></span></div><div class="nm">Gui Torres</div></div>
+        <div class="mem"><div class="av admin">MA<span class="dot off"></span></div><div class="nm">masoquista157</div></div>
+      </div>
+      <div class="group">
+        <div class="role" style="color:var(--role-mod)">Moderator — 1</div>
+        <div class="mem"><div class="av mod">ZO<span class="dot off"></span></div><div class="nm">zombie</div></div>
+      </div>
+      <div class="group">
+        <div class="role" style="color:var(--role-member)">Member — 2</div>
+        <div class="mem"><div class="av member">TE<span class="dot off"></span></div><div class="nm">teste</div></div>
+        <div class="mem"><div class="av member">JO<span class="dot off"></span></div><div class="nm">Joao</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="card panel">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="av owner" style="width:52px;height:52px;font-size:15px">RY<span class="dot on" style="width:13px;height:13px"></span></div>
+      <h3>ryu do aether</h3>
+      <div class="tag">@ryan · Ryan</div>
+      <div class="row"><span style="width:7px;height:7px;border-radius:99px;background:var(--signal-on)"></span>Online</div>
+
+      <div class="card-sec">
+        <div class="card-lbl">atividade</div>
+        <div class="game">
+          <div class="game-ic">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8E97A8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h4M8 10v4M15 13h.01M18 11h.01"/><rect x="2" y="6" width="20" height="12" rx="5"/></svg>
+          </div>
+          <div><div class="t">Grand Theft Auto V</div><div class="s">01:24:12</div></div>
+        </div>
+        <div class="row">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+          Sala 1 · 2 pessoas
+        </div>
+        <button class="btn primary">Entrar no canal</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock panel">
+    <div class="dock-me">
+      <div class="av owner">RY<span class="dot on"></span></div>
+      <div><div class="nm">Ryan</div><div class="tag">@ryan</div></div>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="ctl live" title="Microfone">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+    </div>
+    <div class="ctl" title="Audio">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17v-5a9 9 0 0 1 18 0v5"/><path d="M21 18a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2z"/><path d="M3 18a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg>
+    </div>
+    <div class="ctl" title="Compartilhar tela">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></svg>
+    </div>
+    <div class="ctl off" title="Sair da call">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 13.3a11 11 0 0 0 4 2.6l1.5-1.5a1.5 1.5 0 0 1 1.6-.3c1 .4 2.2.6 3.4.6a1.5 1.5 0 0 1 1.5 1.5v2.4a1.5 1.5 0 0 1-1.5 1.5A18.5 18.5 0 0 1 3.4 3.5 1.5 1.5 0 0 1 4.9 2h2.4a1.5 1.5 0 0 1 1.5 1.5c0 1.2.2 2.3.6 3.4a1.5 1.5 0 0 1-.3 1.6z"/><path d="M2 2l20 20"/></svg>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="ctl" title="Configuracoes">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 13H3.3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 11 3.6v-.3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.2 1.1z"/></svg>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

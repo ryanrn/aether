@@ -57,14 +57,14 @@ export function MemberPanel({
     // roles ja vem ordenado por position desc
     const top = member.roles.find((role) => !role.isDefault) ?? member.roles[0];
     const key = top?.name ?? "Membros";
-    const group = groups.get(key) ?? { color: top?.color ?? "#9AA6B8", members: [] };
+    const group = groups.get(key) ?? { color: top?.color ?? "#6B7280", members: [] };
     group.members.push(member);
     groups.set(key, group);
   }
 
   return (
     <>
-      <aside className="hidden w-56 shrink-0 flex-col border-l border-base-800 bg-base-900 lg:flex">
+      <aside className="hidden w-[200px] shrink-0 flex-col border-l border-base-800 bg-base-900 lg:flex">
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {[...groups.entries()].map(([name, group]) => (
             <section key={name} className="mb-4">
@@ -115,7 +115,15 @@ export function MemberPanel({
                             status={presence[member.user.id] ?? "OFFLINE"}
                             size="xs"
                           />
-                          <span className="min-w-0 flex-1 truncate text-[13px] text-ink-300">
+                          {/*
+                            A cor do cargo vai no NOME, nunca no fundo do
+                            avatar: fundo colorido inteiro compete com tudo na
+                            coluna e vira adesivo.
+                          */}
+                          <span
+                            className="min-w-0 flex-1 truncate text-[12px] font-medium"
+                            style={{ color: group.color }}
+                          >
                             {member.nickname ?? member.user.displayName}
                           </span>
                         </button>

@@ -30,7 +30,8 @@
     "db:seed": "dotenv -e .env -- npm run seed --workspace=@aether/db",
     "backup": "dotenv -e .env -- node scripts/backup.mjs",
     "backup:verify": "dotenv -e .env -- node scripts/verify-backup.mjs",
-    "restore": "dotenv -e .env -- node scripts/restore.mjs"
+    "restore": "dotenv -e .env -- node scripts/restore.mjs",
+    "design": "node design-lab/serve.mjs"
   },
   "devDependencies": {
     "dotenv-cli": "^11.0.0",

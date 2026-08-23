@@ -180,12 +180,20 @@ export function ControlBar({
   }
 
   return (
-    <footer className="flex h-14 shrink-0 items-center gap-3 border-t border-base-800 bg-base-900 px-3">
+    <footer
+      /**
+       * HUD, nao rodape. Ancorada no PALCO (o <main> e `relative`), flutuando
+       * a 20px do fundo e centrada — nao presa a borda da janela nem ocupando
+       * a largura toda. `z-30` a mantem sobre o conteudo do canal; `w-max`
+       * impede que ela estique.
+       */
+      className="absolute bottom-5 left-1/2 z-30 flex w-max -translate-x-1/2 items-center gap-2 rounded-lg border border-base-800 bg-base-800/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm"
+    >
       <button
         type="button"
         onClick={() => setProfileOpen(true)}
         title="Suas configuracoes"
-        className="flex min-w-0 items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-base-800"
+        className="flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 text-left transition-opacity hover:opacity-80"
       >
         <Avatar
           userId={user.id}
@@ -211,7 +219,7 @@ export function ControlBar({
         server={{ id: currentServerId, memberId, nickname }}
       />
 
-      <div className="mx-1 h-7 w-px bg-base-700" />
+      <div className="mx-0.5 h-6 w-px bg-base-700" />
 
       <div className="flex items-center gap-1">
         <div className="relative flex items-center">
@@ -435,7 +443,13 @@ export function ControlBar({
         ) : null}
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1">
+        {/*
+          O estado do tempo real virou um PONTO. Escrito por extenso
+          ("tempo real · ligado") ele sozinho era mais largo que todos os
+          botoes somados, e numa HUD flutuante largura e o recurso escasso.
+          A informacao continua inteira no title.
+        */}
         <span
           title={
             connected
@@ -443,21 +457,19 @@ export function ControlBar({
               : "Sem conexao com o gateway — presenca e chat ficam parados"
           }
           className={cn(
-            "mr-2 hidden font-mono text-[10px] uppercase tracking-[0.12em] sm:inline",
-            connected ? "text-signal-online" : "text-ink-500",
+            "mr-1 h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+            status === "online"
+              ? "bg-signal-online"
+              : status === "connecting"
+                ? "bg-signal-idle"
+                : "bg-ink-500",
           )}
-        >
-          {status === "online"
-            ? "tempo real · ligado"
-            : status === "connecting"
-              ? "tempo real · conectando"
-              : "tempo real · offline"}
-        </span>
+        />
 
         {/*
-          Esta engrenagem e do APP, nao do servidor. A do servidor mora na
-          barra de cima, ao lado de "Convidar" — antes as duas faziam a MESMA
-          coisa, e uma delas era caminho repetido sem nada a mais.
+          Esta engrenagem e do APP, nao do servidor. A do servidor mora no
+          cabecalho da coluna de canais — antes as duas faziam a MESMA coisa,
+          e uma delas era caminho repetido sem nada a mais.
         */}
         <ControlToggle
           active={false}
@@ -504,13 +516,13 @@ function ControlToggle({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "grid h-9 w-9 place-items-center rounded-md border transition-colors duration-150",
+        "grid h-8 w-8 place-items-center rounded-full transition-colors duration-150",
         danger
-          ? "border-signal-dnd/30 bg-signal-dnd/12 text-signal-dnd hover:bg-signal-dnd/20"
+          ? "bg-signal-dnd/12 text-signal-dnd hover:bg-signal-dnd/20"
           : active
-            ? "border-base-600 bg-base-800 text-ink-100 hover:bg-base-750"
-            : "border-transparent text-ink-400 hover:bg-base-800 hover:text-ink-100",
-        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+            ? "bg-accent-500 text-white hover:bg-accent-400"
+            : "bg-white/[0.04] text-ink-300 hover:bg-white/[0.08] hover:text-ink-100",
+        disabled && "cursor-not-allowed opacity-40 hover:bg-white/[0.04]",
       )}
     >
       {children}

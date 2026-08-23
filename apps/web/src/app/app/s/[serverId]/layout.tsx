@@ -5,7 +5,6 @@ import { getServerContext } from "@/server/services/servers";
 import { ChannelSidebar } from "@/components/layout/channel-sidebar";
 import { ControlBar } from "@/components/layout/control-bar";
 import { MemberPanel } from "@/components/layout/member-panel";
-import { TopBar } from "@/components/layout/top-bar";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
 import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
@@ -53,9 +52,13 @@ export default async function ServerLayout({
 
   return (
     <RealtimeProvider serverId={serverId}>
+      {/*
+        Quatro colunas de altura inteira, sem barra atravessando o topo.
+        A barra global saiu de proposito: com ela, a HUD tinha de ser um rodape
+        de largura total, e o palco central nunca era uma regiao propria. Agora
+        cada coluna tem o seu cabecalho de 48px e a HUD flutua DENTRO do centro.
+      */}
       <div className="flex h-dvh min-w-0 flex-1 flex-col">
-        <TopBar server={data.server} memberCount={data.members.length} viewer={viewer} />
-
         <ConnectionBanner />
         <VoiceActivityMonitor />
         <GameActivityMonitor />
@@ -73,7 +76,24 @@ export default async function ServerLayout({
             channelPermissions={data.channelPermissions}
           />
 
-          <main className="flex min-w-0 flex-1 flex-col bg-base-950">{children}</main>
+          {/*
+            `relative` existe para a HUD: ela ancora NESTE palco, e nao na
+            janela. Ficar presa a janela era o que a transformava em rodape.
+          */}
+          <main className="relative flex min-w-0 flex-1 flex-col bg-base-950">
+            {children}
+
+            <ControlBar
+              user={context.session.user}
+              viewer={viewer}
+              serverId={serverId}
+              memberId={context.memberId}
+              nickname={
+                data.members.find((member) => member.id === context.memberId)
+                  ?.nickname ?? null
+              }
+            />
+          </main>
 
           <MemberPanel
             members={data.members}
@@ -91,16 +111,6 @@ export default async function ServerLayout({
           />
         </div>
 
-        <ControlBar
-          user={context.session.user}
-          viewer={viewer}
-          serverId={serverId}
-          memberId={context.memberId}
-          nickname={
-            data.members.find((member) => member.id === context.memberId)
-              ?.nickname ?? null
-          }
-        />
       </div>
     </RealtimeProvider>
   );

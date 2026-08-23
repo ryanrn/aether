@@ -14,48 +14,71 @@
  *  - `font-mono` (JetBrains Mono) nos rotulos tecnicos em versalete.
  */
 @theme {
-  /* superficies — do mais profundo ao mais elevado */
-  --color-base-950: #06070a;
-  --color-base-900: #0a0c11;
-  --color-base-850: #0e1116;
-  --color-base-800: #12161d;
-  --color-base-750: #171c25;
-  --color-base-700: #1d2430;
-  --color-base-600: #2a3341;
-  --color-base-500: #3b4757;
+  /*
+   * Superficies — do mais profundo ao mais elevado.
+   *
+   * O fundo NAO e preto puro (#0B0D10, nao #000): preto chapado contra texto
+   * claro cria contraste duro e cansa em sessao longa. Os passos 700 e 600
+   * existem sobretudo como BORDA — 39 e 16 usos respectivamente — e por isso
+   * ficam calibrados para ler como linha discreta sobre o 900, e nao como
+   * outra superficie.
+   */
+  --color-base-950: #0b0d10;
+  --color-base-900: #111318;
+  --color-base-850: #16191f;
+  --color-base-800: #1e2128;
+  --color-base-750: #23272f;
+  --color-base-700: #2a2e38;
+  --color-base-600: #363b45;
+  --color-base-500: #464c58;
 
-  /* texto */
-  --color-ink-100: #eef2f7;
-  --color-ink-200: #c9d2de;
-  --color-ink-300: #9aa6b8;
-  --color-ink-400: #6d798c;
-  --color-ink-500: #4e5868;
+  /*
+   * Texto. O topo e #F0F1F5, nao branco puro — pelo mesmo motivo do fundo.
+   * Cinco degraus com distancia real entre eles: hierarquia se faz com peso
+   * E cor, e sem degrau visivel tudo vira a mesma coisa.
+   */
+  --color-ink-100: #f0f1f5;
+  --color-ink-200: #c5cad3;
+  --color-ink-300: #8a8f98;
+  --color-ink-400: #6a6f79;
+  --color-ink-500: #4a4f58;
 
-  /* acento principal */
-  --color-accent-300: #6ff2dc;
-  --color-accent-400: #35e0c4;
-  --color-accent-500: #19d3b4;
-  --color-accent-600: #10ab92;
-  --color-accent-700: #0c8371;
+  /*
+   * Acento: azul acinzentado, nao mais turquesa neon.
+   *
+   * O turquesa de antes (#19d3b4) era saturado demais para aparecer em 82
+   * lugares — cor forte usada em tudo deixa de significar "aqui" e vira ruido.
+   * Este tom carrega a identidade sem competir com o conteudo.
+   */
+  --color-accent-300: #7fb3cb;
+  --color-accent-400: #5a9ab8;
+  --color-accent-500: #3b82a0;
+  --color-accent-600: #316b85;
+  --color-accent-700: #27556a;
 
-  /* estados */
-  --color-signal-online: #3ecf8e;
-  --color-signal-idle: #f2b45e;
-  --color-signal-dnd: #f2565b;
-  --color-signal-offline: #56606f;
-  --color-signal-live: #f2565b;
+  /* Estados, todos dessaturados na mesma medida do acento. */
+  --color-signal-online: #3daa7a;
+  --color-signal-idle: #c9a96e;
+  --color-signal-dnd: #b5424a;
+  --color-signal-offline: #4a4f58;
+  --color-signal-live: #b5424a;
 
   --font-sans: var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-brand: var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
+  /*
+   * Raios com nome de FUNCAO, nao de tamanho: icone, botao, cartao, painel.
+   * Antes iam de 4 a 12 e o app inteiro parecia quadrado; agora o menor ja
+   * nasce em 6, que e onde a borda deixa de parecer corte.
+   */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
   --radius-lg: 12px;
 
-  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.02) inset, 0 8px 24px -12px rgb(0 0 0 / 0.8);
-  --shadow-pop: 0 24px 48px -20px rgb(0 0 0 / 0.9);
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 8px 32px -12px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 8px 32px rgb(0 0 0 / 0.4);
 }
 
 @layer base {
