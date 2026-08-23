@@ -18,6 +18,8 @@ import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useElapsed } from "@/lib/use-elapsed";
+import { GameArt } from "@/components/profile/game-art";
 
 /**
  * AETHER Activity — o cartao de perfil com o que a pessoa esta fazendo agora.
@@ -65,30 +67,6 @@ const STATUS_COLOR: Record<UserStatus, string> = {
  * Um intervalo de 1s so enquanto o cartao esta aberto: e um contador visivel,
  * e parar de contar enquanto alguem olha seria pior que nao mostrar.
  */
-function useElapsed(startedAt: string | null): string | null {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!startedAt) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [startedAt]);
-
-  if (!startedAt) return null;
-  const start = new Date(startedAt).getTime();
-  if (Number.isNaN(start)) return null;
-
-  const seconds = Math.max(0, Math.floor((now - start) / 1000));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const rest = seconds % 60;
-  const pad = (value: number) => String(value).padStart(2, "0");
-
-  // Abaixo de uma hora o campo de hora so ocuparia espaco dizendo "00".
-  return hours > 0
-    ? `${hours}:${pad(minutes)}:${pad(rest)}`
-    : `${pad(minutes)}:${pad(rest)}`;
-}
 
 export function UserActivityCard({
   user,
@@ -270,7 +248,12 @@ export function UserActivityCard({
               */}
               {game ? (
                 <div className="mb-2 flex items-start gap-2">
-                  <ArteDoJogo cover={game.cover} icon={game.icon} />
+                  <GameArt
+                    cover={game.cover}
+                    icon={game.icon}
+                    className="h-14 w-10 rounded-[4px]"
+                    iconClassName="h-3.5 w-3.5"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-[13px] text-ink-100">
                       Jogando {game.game}
@@ -356,50 +339,4 @@ export function UserActivityCard({
     </>,
     document.body,
   );
-}
-
-/**
- * A imagem do jogo, em cadeia de fallback.
- *
- *   1. capa do IGDB  — 264x374, arte de verdade
- *   2. icone do executavel — 48px, extraido na maquina de quem joga
- *   3. icone generico do AETHER
- *
- * O passo 3 nao e enfeite: e a garantia de que nunca aparece imagem quebrada.
- * E por isso a falha de CARREGAMENTO tambem cai na cadeia — uma capa que
- * responde 404 (o CDN mudou, a URL envelheceu no cache) e indistinguivel de
- * nao ter capa, do ponto de vista de quem esta olhando a tela.
- */
-function ArteDoJogo({
-  cover,
-  icon,
-}: {
-  cover: string | null;
-  icon: string | null;
-}) {
-  const [capaFalhou, setCapaFalhou] = useState(false);
-
-  // Capa nova depois de uma que falhou merece nova chance.
-  useEffect(() => setCapaFalhou(false), [cover]);
-
-  if (cover && !capaFalhou) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- CDN externo, fora do otimizador
-      <img
-        src={cover}
-        alt=""
-        onError={() => setCapaFalhou(true)}
-        className="h-14 w-10 shrink-0 rounded-[4px] object-cover"
-      />
-    );
-  }
-
-  if (icon) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- data URL, nao ha o que otimizar
-      <img src={icon} alt="" className="h-8 w-8 shrink-0 rounded-[4px]" />
-    );
-  }
-
-  return <Gamepad2 className="mt-[3px] h-3.5 w-3.5 shrink-0 text-accent-400" />;
 }

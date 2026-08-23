@@ -472,6 +472,37 @@ npx dotenv -e .env -- node scripts/verify-friends-live.mjs
 Na interface: o botao **Amigos** no topo da barra de servidores, com um ponto
 vermelho quando ha pedido esperando voce.
 
+### O layout de tres paineis
+
+```
+ 64px        244px            flexivel              260px
+ servidores  navegacao        lista de amigos       "Ativo agora"
+```
+
+Fixos e lado a lado; nenhum flutua sobre o outro, nenhum vira tela separada.
+Duas escolhas merecem explicacao:
+
+**O formulario de adicionar mora DENTRO da lista**, e nao numa tela propria.
+Quem acaba de mandar um pedido ve a lista mudar no mesmo lugar em que ja estava
+olhando, em vez de voltar de uma tela vazia para conferir se funcionou.
+
+**Em "Solicitacoes" o agrupamento e recebido/enviado, nunca online/offline.**
+Nao e estetica: a presenca de um amigo so viaja entre AMIGOS, entao quem ainda
+e um pedido pendente aparece sempre como offline ali. Agrupar por isso diria
+"fulano esta offline" quando a verdade e "ainda nao da para saber" — o
+comportamento de privacidade esta certo, e a tela e que estava mentindo sobre
+ele.
+
+O painel direito so mostra quem esta REALMENTE jogando. Nao ha lista de
+"amigos online" repetida: isso ja e o painel do meio, e repetir a mesma
+informacao em duas colunas gasta 260px sem dizer nada novo.
+
+**O que NAO foi construido, de proposito:** "Nitro", "Loja", "Missoes",
+mensagens diretas, aba "Bloqueado" e o botao de mensagem no hover. Nenhum
+desses recursos existe no Aether. Construir a casca de um recurso inexistente
+entrega um botao que nao faz nada — que e demonstracao visual, e este projeto
+mira o contrario. Entram conforme passarem a existir.
+
 ### Limitacoes conhecidas dos amigos
 
 - **Nao ha bloquear.** Recusar um pedido **apaga** a linha em vez de marcar

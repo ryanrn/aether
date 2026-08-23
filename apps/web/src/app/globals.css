@@ -42,6 +42,11 @@
   --color-ink-300: #8a8f98;
   --color-ink-400: #6a6f79;
   --color-ink-500: #4a4f58;
+  /**
+   * O tom mais apagado que ainda e legivel: rotulo de secao, placeholder,
+   * separador escrito. Abaixo disto o texto vira ruido cinza sobre cinza.
+   */
+  --color-ink-600: #3a3f48;
 
   /*
    * Acento: azul acinzentado, nao mais turquesa neon.
