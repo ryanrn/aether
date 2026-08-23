@@ -647,20 +647,28 @@ olhando a tela.
 ```bash
 npx vitest run tests/unit/game-metadata.test.ts
 npx dotenv -e .env -- npx tsx scripts/verify-igdb.mjs
+npx dotenv -e .env -- npx tsx scripts/verify-igdb-live.mjs   # precisa do gateway no ar
 ```
 
-O segundo roda por `tsx` (e nao `node`) porque importa os modulos TypeScript do
-gateway de verdade. Sem credencial ele **nao pula em silencio**: confere a
-tabela e o caminho de fallback, que e o que esta valendo, e diz o que ficou por
+Os dois ultimos rodam por `tsx` (e nao `node`) porque importam os modulos
+TypeScript do gateway de verdade, em vez de uma reimplementacao.
+
+Sem credencial, o `verify-igdb` **nao pula em silencio**: confere a tabela e o
+caminho de fallback — que e o que passa a valer — e diz o que ficou por
 conferir.
+
+O `verify-igdb-live` e o que prova que o GATEWAY liga as pecas, e nao so que
+os modulos funcionam isolados. Ele percorre o que a pessoa percorre: o anuncio
+imediato sem capa, o segundo anuncio com a capa, o cache gravado, a troca de
+jogo sem herdar a arte do anterior. Essa classe de defeito — peca certa,
+ligacao errada — ja apareceu duas vezes neste projeto.
 
 ### Limitacoes conhecidas da capa de jogo
 
-- **A busca no IGDB ainda nao foi exercitada contra o servico real** — falta o
-  `TWITCH_CLIENT_SECRET`. O que esta provado hoje: o fallback, o cache, a
-  resiliencia a credencial recusada (401) e a forma da tabela. O casamento com
-  jogos reais esta escrito em `scripts/verify-igdb.mjs` e roda assim que a
-  chave existir.
+- **O app da Twitch precisa ser do tipo CONFIDENCIAL.** Cliente publico nao
+  recebe Client Secret — por definicao — e o fluxo *client credentials* nao
+  funciona sem ele. Se o botao "Novo Segredo" nao aparecer no console da
+  Twitch, e porque o tipo esta como "Publico".
 - **A capa vai como URL, nao embutida.** O navegador de QUEM OLHA busca a
   imagem no `images.igdb.com`, entao o IGDB ve o IP de quem esta vendo a
   atividade. Embutir obrigaria o servidor a baixar e reencodar a capa de todo
