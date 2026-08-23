@@ -46,15 +46,17 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  sessions       Session[]
-  passwordResets PasswordReset[]
-  memberships    ServerMember[]
-  ownedServers   Server[]        @relation("ServerOwner")
-  messages       Message[]
-  createdInvites Invite[]
-  auditEntries   AuditLog[]      @relation("AuditActor")
-  bans           Ban[]           @relation("BannedUser")
-  issuedBans     Ban[]           @relation("BanIssuer")
+  sessions           Session[]
+  passwordResets     PasswordReset[]
+  friendsAsRequester Friendship[]    @relation("FriendshipRequester")
+  friendsAsAddressee Friendship[]    @relation("FriendshipAddressee")
+  memberships        ServerMember[]
+  ownedServers       Server[]        @relation("ServerOwner")
+  messages           Message[]
+  createdInvites     Invite[]
+  auditEntries       AuditLog[]      @relation("AuditActor")
+  bans               Ban[]           @relation("BannedUser")
+  issuedBans         Ban[]           @relation("BanIssuer")
 
   @@index([status])
 }
@@ -285,4 +287,37 @@ model PasswordReset {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+/// Amizade entre duas contas.
+///
+/// UMA linha por par, nao duas. Duas linhas (uma por direcao) obrigariam a
+/// manter as duas em acordo a cada mudanca, e duas verdades sobre a mesma
+/// relacao e como uma delas fica para tras.
+///
+/// A consequencia e que `requesterId`/`addresseeId` guardam QUEM PEDIU, e nao
+/// uma hierarquia: depois de aceito os dois lados sao iguais, e toda consulta
+/// de "meus amigos" precisa olhar as duas colunas.
+///
+/// O par unico e por direcao. Impedir o par invertido exigiria ordenar os ids
+/// na gravacao, o que tornaria "quem pediu" irrecuperavel — entao quem checa
+/// se ja existe relacao nos dois sentidos e a action, antes de criar.
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String
+  requester   User             @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User             @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
 }

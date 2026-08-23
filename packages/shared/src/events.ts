@@ -204,6 +204,30 @@ export interface ServerToClientEvents {
     serverId: string;
     entry: PresenceEntry;
   }) => void;
+  /**
+   * Presenca de um AMIGO, pela sala pessoal.
+   *
+   * Evento separado de `presence:update` por uma razao de privacidade, nao de
+   * organizacao: aquele carrega `serverId`, e mandar isso a um amigo que nao e
+   * membro revelaria que o servidor existe — inclusive servidores privados.
+   * Aqui vai so a pessoa e o que ela esta fazendo.
+   *
+   * O que NAO vai junto, tambem de proposito: em qual canal de voz ela esta.
+   * Isso continua sendo `voice:update`, restrito a sala do servidor, porque
+   * canal de voz so faz sentido para quem e membro dali.
+   */
+  "friend:presence": (payload: { entry: PresenceEntry }) => void;
+  /** presenca de todos os amigos online, ao conectar */
+  "friend:sync": (payload: { entries: PresenceEntry[] }) => void;
+  /**
+   * A LISTA de amizades mudou (pedido novo, aceite, recusa, remocao).
+   *
+   * Nao carrega o que mudou, pelo mesmo motivo de `server:changed`: a lista e
+   * renderizada no servidor, e mandar o conteudo pelo socket faria o gateway
+   * montar uma segunda versao da mesma consulta. O cliente recebe o sinal e
+   * pede a lista nova ao Next.
+   */
+  "friend:changed": () => void;
 }
 
 export interface ClientToServerEvents {
@@ -311,6 +335,15 @@ export interface SocketData {
 export const room = {
   server: (serverId: string) => `server:${serverId}`,
   channel: (channelId: string) => `channel:${channelId}`,
+  /**
+   * Sala pessoal: todo socket entra na sua propria ao conectar.
+   *
+   * Existe porque amizade nao passa por servidor. Presenca so trafegava em
+   * `server:<id>`, entao dois amigos sem servidor em comum nunca se veriam
+   * online. Enderecar a pessoa (e nao o servidor) resolve isso sem inventar
+   * um "servidor de amigos" fantasma.
+   */
+  user: (userId: string) => `user:${userId}`,
 } as const;
 
 /** Estado de voz publicado pelo gateway (fase 3c preenche de verdade). */

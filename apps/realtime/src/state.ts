@@ -31,6 +31,15 @@ interface UserPresence {
   gameIcon: string | null;
   /** sockets vivos deste usuario */
   sockets: Set<string>;
+  /**
+   * Ids dos amigos aceitos, carregados do banco ao conectar.
+   *
+   * Fica em memoria porque a presenca muda muito mais do que a lista de
+   * amigos: consultar o banco a cada "fulano ficou ausente" seria uma query
+   * por evento. Quando a lista muda de verdade, o app web avisa por
+   * `/internal/friends-changed` e ela e recarregada — ver `internal.ts`.
+   */
+  friends: Set<string>;
   /** servidores onde este usuario esta visivel, com quantos sockets em cada um */
   servers: Map<string, number>;
 }
@@ -60,6 +69,7 @@ export function attachSocket(
     gameSince: null,
     gameIcon: null,
     sockets: new Set([socketId]),
+    friends: new Set(),
     servers: new Map(),
   });
 }
@@ -199,6 +209,45 @@ export function presenceOf(serverId: string): PresenceEntry[] {
   for (const userId of members) {
     const user = users.get(userId);
     if (user) entries.push(toPresenceEntry(userId, user));
+  }
+  return entries;
+}
+
+/**
+ * Guarda a lista de amigos de quem acabou de conectar (ou de quem teve a lista
+ * alterada). Silenciosamente ignorada se o usuario ja desconectou — a consulta
+ * ao banco e assincrona e pode terminar depois da queda do socket.
+ */
+export function setFriends(userId: string, friendIds: string[]): void {
+  const user = users.get(userId);
+  if (!user) return;
+  user.friends = new Set(friendIds);
+}
+
+/** Amigos conhecidos deste usuario. Vazio quando ele nao esta conectado. */
+export function friendsOf(userId: string): string[] {
+  return [...(users.get(userId)?.friends ?? [])];
+}
+
+/** O usuario tem algum socket vivo? */
+export function isConnected(userId: string): boolean {
+  return users.has(userId);
+}
+
+/**
+ * Presenca dos amigos que estao online AGORA.
+ *
+ * Quem esta offline simplesmente nao aparece na lista — e o mesmo contrato do
+ * `presenceOf`, e evita mandar uma entrada "OFFLINE" para cada amigo que nunca
+ * conectou hoje.
+ */
+export function presenceOfFriends(userId: string): PresenceEntry[] {
+  const user = users.get(userId);
+  if (!user) return [];
+  const entries: PresenceEntry[] = [];
+  for (const friendId of user.friends) {
+    const amigo = users.get(friendId);
+    if (amigo) entries.push(toPresenceEntry(friendId, amigo));
   }
   return entries;
 }

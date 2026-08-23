@@ -389,6 +389,114 @@ atalhos, notificacoes) sem virar uma fileira apertada.
 - **O medidor multiplica o RMS por 4.** Voz normal fica em 0,02–0,15 de RMS;
   sem isso a barra mal sairia do lugar e pareceria microfone quebrado.
 
+## Amigos
+
+Adicionar pessoas sem depender de servidor em comum. E o unico lugar do app
+onde duas contas se enxergam fora de um servidor — e por isso a parte mais
+delicada nao foi a tela, foi decidir **o que exatamente um amigo passa a ver**.
+
+### O modelo: uma linha por par
+
+`Friendship` guarda `requesterId`, `addresseeId` e `status`. **Uma linha por
+par, nao duas.** Duas linhas (uma por direcao) obrigariam a manter as duas em
+acordo a cada mudanca, e duas verdades sobre a mesma relacao terminam com uma
+delas para tras.
+
+A consequencia e que depois de aceito **nao ha mais lado**: `requesterId` so
+diz quem pediu (que e o que decide de que lado aparece o botao "aceitar"), e
+toda consulta de "meus amigos" precisa olhar **as duas colunas**. Isso mora em
+`packages/access/src/friends.ts`, num lugar so, porque o gateway precisa da
+mesma resposta que o app web — regra de quem-ve-quem duplicada e falha de
+privacidade, nao tela desatualizada.
+
+O indice unico do banco e **por direcao**. Ele nao barra o par invertido: quem
+barra e a action, que consulta os dois sentidos antes de criar. Existe um teste
+que prova justamente isso (`verify-friends.mjs`), para ninguem remover a
+checagem da action achando que o banco cobre.
+
+### A sala pessoal, e por que a presenca de amigo e um evento separado
+
+Presenca so trafegava em `server:<id>`. Dois amigos sem servidor em comum nunca
+se veriam online. Agora todo socket entra tambem na propria sala `user:<id>`,
+e e por ela que chega o que e endereçado a PESSOA.
+
+**O evento `friend:presence` e separado do `presence:update` por privacidade,
+nao por organizacao.** O de servidor carrega `serverId`; entregar isso a um
+amigo que nao e membro contaria que aquele servidor existe — inclusive
+servidores privados. O de amigo leva exatamente cinco campos: `userId`,
+`status`, `game`, `gameSince`, `gameIcon`. Ha um teste que falha se algum
+outro campo aparecer.
+
+**O que um amigo NAO ve:** em qual canal de voz voce esta. Isso continua em
+`voice:update`, restrito a sala do servidor, porque canal de voz so faz
+sentido para quem e membro dali. Se voces dividem um servidor, voce ve pela
+via de sempre — como membro, nao como amigo.
+
+### Adicionar so por nome exato
+
+Nao existe busca de pessoas, nem listagem, nem sugestao. Um endpoint de
+procurar gente vira um catalogo de quem tem conta aqui, e catalogo assim serve
+para montar lista de alvo.
+
+**Dizemos quando o nome nao existe** — diferente da recuperacao de senha, que
+responde igual dos dois jeitos. A diferenca e deliberada: la o dado e o e-mail,
+que identifica a pessoa fora daqui; aqui e o nome de usuario, que ja aparece
+para qualquer um que divida um servidor com ela. E engolir o erro faria todo
+erro de digitacao virar um pedido que nunca chega, sem jeito de perceber — o
+recurso ficaria quebrado na pratica para proteger o que ja e publico.
+
+O que sobra de risco e varrer nomes para descobrir quais existem. Contra isso
+ha rate limit **por IP e por conta**: so por IP daria para varrer trocando de
+rede.
+
+### Invisivel agora esconde o jogo de verdade
+
+Antes, quem escolhia "Invisivel" aparecia apagado, mas **o nome do jogo
+continuava viajando pela rede** — invisibilidade so na tela de quem usa o
+cliente oficial. Agora o gateway zera `game`, `gameSince` e `gameIcon` no que
+sai, tanto para servidor quanto para amigo. O dado nem sai do processo.
+
+Isso nao muda nada na SUA tela: o cartao de atividade so le a atividade dos
+outros, nunca a propria.
+
+### Como testar
+
+```bash
+# regras do banco (indice, check, cascade) — nao precisa de servico no ar
+npx dotenv -e .env -- node scripts/verify-friends.mjs
+
+# roteamento ao vivo — precisa do gateway (npm run dev:realtime)
+npx dotenv -e .env -- node scripts/verify-friends-live.mjs
+```
+
+Na interface: o botao **Amigos** no topo da barra de servidores, com um ponto
+vermelho quando ha pedido esperando voce.
+
+### Limitacoes conhecidas dos amigos
+
+- **Nao ha bloquear.** Recusar um pedido **apaga** a linha em vez de marcar
+  "recusado". Guardar a recusa significaria guardar para sempre que fulano
+  disse nao a sicrano, e impedir pedido futuro — o que ja seria bloqueio. Por
+  enquanto, contra insistencia so ha o rate limit (20 por hora, por IP e por
+  conta).
+- **Nao ha mensagem direta.** Amizade hoje serve para ver quem esta online e
+  entrar junto num servidor que os dois tenham. Conversa continua sendo por
+  canal de servidor.
+- **A lista de amigos do gateway fica em memoria.** Aceitar um pedido so passa
+  a valer porque o app web avisa em `/internal/friends-changed`. Se o gateway
+  estiver fora do ar nesse instante, os dois continuam amigos no banco, mas a
+  presenca de um so aparece para o outro na proxima reconexao. Mesmo desenho
+  (e mesma limitacao) do `/internal/evict`.
+- **Com mais de uma instancia do gateway isso quebra**, como o resto da
+  presenca: a sala `user:<id>` e local ao processo. Precisa do adapter de
+  Redis junto com o restante do estado vivo.
+- **O status inicial da lista vem do banco, nao de quem esta online.** Ao
+  abrir a tela, quem aparece e a preferencia guardada ate o primeiro
+  `friend:sync` chegar — fracao de segundo, mas existe.
+- **Nao ha limite de quantidade de amigos.** Uma conta pode acumular quantos
+  quiser; o custo aparece no `friend:presence`, que percorre a lista a cada
+  mudanca de status.
+
 ## AETHER Activity (cartao de atividade)
 
 O que a pessoa esta fazendo agora, num cartao que abre ao clicar nela — na
@@ -613,6 +721,19 @@ que um timer dispara sem esperar o timer disparar.
 ```bash
 npx dotenv -e .env -- node scripts/verify-phase7b.mjs
 ```
+
+Os de amizade sao dois porque cobrem camadas diferentes: `verify-friends.mjs`
+so precisa do banco (indice unico, `CHECK` de nao-ser-amigo-de-si-mesmo,
+cascade), e `verify-friends-live.mjs` precisa do gateway no ar — e onde se
+prova que a presenca chega ao amigo **sem** `serverId` e sem canal de voz.
+
+```bash
+npx dotenv -e .env -- node scripts/verify-friends.mjs
+npx dotenv -e .env -- node scripts/verify-friends-live.mjs
+```
+
+Os dois criam usuarios descartaveis e os apagam no fim; nenhum toca em conta
+real.
 
 ## Como testar a FASE 2
 

@@ -5,12 +5,15 @@ import {
   isUserStatus,
   room,
   safeGameIcon,
+  type PresenceEntry,
   type UserStatus,
 } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { visibleChannelRooms } from "../rooms";
 import {
   detachSocket,
+  friendsOf,
+  isConnected,
   joinServer,
   leaveServer,
   presenceEntryOf,
@@ -29,30 +32,65 @@ import {
  * banco, via loadMemberAccess — o mesmo calculo que o app web usa.
  */
 
+/**
+ * A presenca de alguem no formato que os OUTROS podem ver.
+ *
+ * Duas coisas acontecem aqui, e as duas importam:
+ *
+ * 1. O jogo vem do ESTADO, nao do parametro: quem chama so tem opiniao sobre o
+ *    status. Sem isto, todo anuncio apagaria da tela dos outros o jogo de quem
+ *    esta jogando — bastaria mudar para "Ausente".
+ *
+ * 2. Invisivel esconde o jogo. `OFFLINE` vindo de alguem conectado quer dizer
+ *    INVISIVEL, e aparecer apagado enquanto o nome do jogo continua viajando
+ *    pela rede nao e invisibilidade — e invisibilidade so na tela de quem usa
+ *    o cliente oficial. Quem escolheu sumir sumiu, e o dado nem sai daqui.
+ */
+function entryVisivel(userId: string, status: UserStatus): PresenceEntry {
+  const atual = presenceEntryOf(userId);
+  const invisivel = status === "OFFLINE";
+  return {
+    userId,
+    status,
+    game: invisivel ? null : atual?.game ?? null,
+    gameSince: invisivel ? null : atual?.gameSince ?? null,
+    gameIcon: invisivel ? null : atual?.gameIcon ?? null,
+  };
+}
+
 function announce(
   io: AetherServer,
   serverId: string,
   userId: string,
   status: UserStatus,
 ): void {
-  /**
-   * O jogo vem do estado, e nao do parametro: quem chama aqui so tem opiniao
-   * sobre o STATUS. Sem isto, todo anuncio de presenca apagaria da tela dos
-   * outros o jogo de quem esta jogando — bastaria mudar para "Ausente".
-   *
-   * No `disconnect` a entrada ja saiu do mapa, e ai o `null` esta certo: quem
-   * desconectou nao esta mais jogando aos olhos de ninguem.
-   */
-  const atual = presenceEntryOf(userId);
   io.to(room.server(serverId)).emit("presence:update", {
     serverId,
-    entry: {
-      userId,
-      status,
-      game: atual?.game ?? null,
-      gameSince: atual?.gameSince ?? null,
-      gameIcon: atual?.gameIcon ?? null,
-    },
+    entry: entryVisivel(userId, status),
+  });
+}
+
+/**
+ * Manda a presenca para os amigos, pelas salas pessoais deles.
+ *
+ * Evento SEPARADO do de servidor, e isso e a decisao de privacidade central
+ * desta funcionalidade: `presence:update` carrega `serverId`, e entregar isso
+ * a um amigo que nao e membro contaria que aquele servidor existe. Amigo ve a
+ * pessoa; nao ve onde ela esta.
+ *
+ * `friendIds` vem por parametro em vez de ser lido aqui porque no `disconnect`
+ * a entrada do usuario ja saiu do mapa — a lista precisa ter sido capturada
+ * antes.
+ */
+function announceToFriends(
+  io: AetherServer,
+  userId: string,
+  status: UserStatus,
+  friendIds: string[],
+): void {
+  if (friendIds.length === 0) return;
+  io.to(friendIds.map(room.user)).emit("friend:presence", {
+    entry: entryVisivel(userId, status),
   });
 }
 
@@ -117,6 +155,9 @@ export function registerPresenceHandlers(
 
     const affected = setStatus(userId, status);
     for (const serverId of affected) announce(io, serverId, userId, status);
+    // Amigo ve o status mesmo sem servidor em comum — e essa e a unica coisa
+    // que ele ve por este caminho.
+    announceToFriends(io, userId, status, friendsOf(userId));
 
     /**
      * OFFLINE aqui e INVISIVEL: a pessoa segue conectada e recebendo tudo, mas
@@ -168,18 +209,35 @@ export function registerPresenceHandlers(
     const mudou = setGame(userId, nome, icone);
     if (!mudou) return;
 
+    const visivel = entryVisivel(userId, statusOf(userId));
     for (const serverId of mudou.servers) {
       io.to(room.server(serverId)).emit("presence:update", {
         serverId,
-        entry: mudou.entry,
+        entry: visivel,
       });
     }
+    announceToFriends(io, userId, statusOf(userId), friendsOf(userId));
   });
 
   socket.on("disconnect", () => {
+    /**
+     * A lista de amigos e lida ANTES de desmontar: `detachSocket` apaga a
+     * entrada do usuario quando cai o ultimo socket dele, e ai nao haveria
+     * mais a quem avisar. Foi por isso que `announceToFriends` recebe os ids
+     * por parametro em vez de busca-los sozinha.
+     */
+    const amigos = friendsOf(userId);
     const { vacatedServers } = detachSocket(socket.id);
     for (const serverId of vacatedServers) {
       announce(io, serverId, userId, "OFFLINE");
+    }
+    /**
+     * So avisa os amigos quando o ULTIMO socket caiu. Fechar uma das tres abas
+     * nao e ficar offline — e o mesmo criterio que `joinServer`/`leaveServer`
+     * ja aplicam por servidor.
+     */
+    if (!isConnected(userId)) {
+      announceToFriends(io, userId, "OFFLINE", amigos);
     }
   });
 }

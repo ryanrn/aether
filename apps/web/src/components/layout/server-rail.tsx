@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { useParams, usePathname } from "next/navigation";
+import { Plus, Users } from "lucide-react";
 import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
@@ -12,9 +12,18 @@ import { CreateServerModal } from "@/components/servers/create-server-modal";
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
  * na borda esquerda (nao por preenchimento) para manter a interface calma.
  */
-export function ServerRail({ servers }: { servers: PublicServer[] }) {
+export function ServerRail({
+  servers,
+  pendingRequests = 0,
+}: {
+  servers: PublicServer[];
+  /** pedidos de amizade esperando VOCE decidir — o ponto no botao de amigos */
+  pendingRequests?: number;
+}) {
   const params = useParams<{ serverId?: string }>();
   const activeId = params?.serverId;
+  const pathname = usePathname();
+  const emAmigos = pathname === "/app/amigos";
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
@@ -23,6 +32,44 @@ export function ServerRail({ servers }: { servers: PublicServer[] }) {
         aria-label="Servidores"
         className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-base-800 bg-base-900 py-3"
       >
+        {/**
+         * Amigos primeiro, e separado dos servidores por uma linha: nao e um
+         * servidor, e ficar no meio deles sugeriria que fosse.
+         */}
+        <Link
+          href="/app/amigos"
+          title="Amigos"
+          className="group relative flex w-full justify-center"
+        >
+          <span
+            className={cn(
+              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+              emAmigos ? "h-7" : "group-hover:h-3.5",
+            )}
+          />
+          <span
+            className={cn(
+              "grid h-11 w-11 place-items-center rounded-xl transition-all duration-150",
+              emAmigos
+                ? "bg-base-800 text-ink-100"
+                : "bg-base-800 text-ink-300 group-hover:scale-105 group-hover:text-ink-100",
+            )}
+          >
+            <Users className="h-5 w-5" />
+          </span>
+          {pendingRequests > 0 ? (
+            <span
+              aria-label={`${pendingRequests} pedido(s) de amizade`}
+              className="absolute -right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-signal-dnd px-1 text-[10px] font-semibold text-ink-100"
+              style={{ right: "0.6rem" }}
+            >
+              {pendingRequests > 9 ? "9+" : pendingRequests}
+            </span>
+          ) : null}
+        </Link>
+
+        <span className="h-px w-8 bg-base-700" />
+
         {servers.map((server) => {
           const active = server.id === activeId;
           return (

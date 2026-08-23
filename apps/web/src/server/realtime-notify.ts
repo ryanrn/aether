@@ -25,7 +25,7 @@ const GATEWAY_URL =
  */
 async function callInternal(
   path: string,
-  params: Record<string, string>,
+  params: Record<string, unknown>,
   errorLabel: string,
 ): Promise<void> {
   const secret = process.env.AUTH_SECRET;
@@ -76,4 +76,20 @@ export async function resyncGatewayRooms(params: {
   serverId: string;
 }): Promise<void> {
   await callInternal("/internal/resync-rooms", params, "o recalculo de salas");
+}
+
+/**
+ * Avisa o gateway que a lista de amizades destas pessoas mudou.
+ *
+ * Necessario porque o gateway guarda os amigos EM MEMORIA — sem isso, aceitar
+ * um pedido so passaria a valer na proxima vez que os dois reconectassem, e a
+ * pessoa recem-aceita ficaria offline na tela do amigo por horas.
+ *
+ * Sempre com os DOIS lados: amizade e simetrica, e atualizar so quem clicou
+ * deixaria o outro com a lista velha.
+ */
+export async function notifyFriendsChanged(params: {
+  userIds: string[];
+}): Promise<void> {
+  await callInternal("/internal/friends-changed", params, "a mudanca de amizade");
 }

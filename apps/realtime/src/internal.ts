@@ -1,11 +1,19 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { prisma } from "@aether/db";
+import { loadFriendIds } from "@aether/access";
 import { room } from "@aether/shared";
 import { env } from "./env";
 import { resyncServerRooms } from "./rooms";
 import type { AetherServer } from "./types";
-import { leaveVoice, socketIdsOf, voiceDeparture } from "./state";
+import {
+  isConnected,
+  leaveVoice,
+  presenceOfFriends,
+  setFriends,
+  socketIdsOf,
+  voiceDeparture,
+} from "./state";
 
 /**
  * Porta de servico entre o app web e o gateway.
@@ -20,6 +28,10 @@ import { leaveVoice, socketIdsOf, voiceDeparture } from "./state";
  *    de canal privado mudou). Recalcula so as salas de canal, sem tirar
  *    ninguem do servidor nem avisar a interface — a mudanca de leitura e
  *    silenciosa, do mesmo jeito que ela ja era invisivel antes.
+ *  - `/internal/friends-changed` — a lista de amizades de alguem mudou. O
+ *    gateway guarda os amigos em memoria para nao consultar o banco a cada
+ *    mudanca de presenca; sem este aviso, aceitar um pedido so passaria a
+ *    valer na proxima reconexao dos dois.
  *
  * Sem a primeira, apagar a linha no banco nao bastava — a pessoa continuaria
  * recebendo o chat pelo socket ate recarregar a pagina: acesso indevido, nao
@@ -177,6 +189,47 @@ export async function handleInternalRequest(
       json(response, 200, { ok: true });
     } catch (error) {
       console.error("[gateway] /internal/resync-rooms falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  if (request.url === "/internal/friends-changed") {
+    try {
+      const body = (await readJsonBody(request)) as { userIds?: unknown };
+      const ids = Array.isArray(body.userIds)
+        ? body.userIds.filter((id): id is string => typeof id === "string")
+        : [];
+      if (ids.length === 0) {
+        json(response, 400, { ok: false, error: "userIds e obrigatorio" });
+        return true;
+      }
+
+      let atualizados = 0;
+      for (const userId of ids) {
+        /**
+         * Quem nao esta conectado nao tem estado em memoria para corrigir — e
+         * vai carregar a lista nova no proximo `connection` de qualquer jeito.
+         */
+        if (!isConnected(userId)) continue;
+        setFriends(userId, await loadFriendIds(userId));
+        /**
+         * Os dois eventos, e nesta ordem. `friend:changed` faz a tela pedir a
+         * lista nova ao Next (que e quem sabe montar "pendente"/"aceito");
+         * `friend:sync` reentrega a presenca de quem esta online agora, porque
+         * um amigo recem-aceito ja pode estar conectado ha horas e nunca mais
+         * emitiria um evento por conta propria.
+         */
+        io.to(room.user(userId)).emit("friend:changed");
+        io.to(room.user(userId)).emit("friend:sync", {
+          entries: presenceOfFriends(userId),
+        });
+        atualizados += 1;
+      }
+
+      json(response, 200, { ok: true, atualizados });
+    } catch (error) {
+      console.error("[gateway] /internal/friends-changed falhou:", error);
       json(response, 500, { ok: false });
     }
     return true;

@@ -120,6 +120,8 @@ interface RealtimeState {
   clearVolatile: () => void;
 
   syncPresence: (entries: PresenceEntry[]) => void;
+  /** mesmo dado, mas SOMANDO ao que ja existe — ver a implementacao */
+  mergePresence: (entries: PresenceEntry[]) => void;
   updatePresence: (entry: PresenceEntry) => void;
 
   syncVoice: (participants: VoiceParticipant[]) => void;
@@ -240,6 +242,36 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             { game: e.game as string, since: e.gameSince, icon: e.gameIcon },
           ]),
       ),
+    }),
+
+  /**
+   * Igual ao `syncPresence`, mas SOMA em vez de substituir.
+   *
+   * Existe por causa do `friend:sync`, que chega pela sala pessoal e pode
+   * chegar enquanto voce esta dentro de um servidor. Usar `syncPresence` ali
+   * apagaria a presenca do servidor inteiro e deixaria na tela so os amigos —
+   * todo mundo apareceria offline ate o proximo evento de cada um.
+   *
+   * Os dois mapas convivem sem conflito: para quem e amigo E membro, os dois
+   * caminhos carregam o mesmo estado, vindo do mesmo lugar no gateway.
+   */
+  mergePresence: (entries) =>
+    set((state) => {
+      const presence = { ...state.presence };
+      const activity = { ...state.activity };
+      for (const entrada of entries) {
+        presence[entrada.userId] = entrada.status;
+        if (entrada.game) {
+          activity[entrada.userId] = {
+            game: entrada.game,
+            since: entrada.gameSince,
+            icon: entrada.gameIcon,
+          };
+        } else {
+          delete activity[entrada.userId];
+        }
+      }
+      return { presence, activity };
     }),
 
   updatePresence: (entry) =>

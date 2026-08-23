@@ -181,3 +181,23 @@ export function toPublicMessage(row: MessageRow): PublicMessage {
     },
   };
 }
+
+/**
+ * Uma amizade do ponto de vista de QUEM esta olhando.
+ *
+ * O banco guarda `requesterId`/`addresseeId`, que sao sobre quem pediu. A tela
+ * nunca quer isso: quer "a outra pessoa" e "de que lado esta a decisao". A
+ * traducao acontece no servidor, uma vez, em vez de cada componente refazer o
+ * mesmo `meuId === requesterId ? ... : ...` e um deles errar.
+ */
+export interface PublicFriendship {
+  id: string;
+  /** a outra ponta — nunca voce */
+  user: PublicUser;
+  /**
+   * `friend` ja aceito; `incoming` alguem te pediu e a decisao e sua;
+   * `outgoing` voce pediu e esta esperando.
+   */
+  kind: "friend" | "incoming" | "outgoing";
+  createdAt: string;
+}

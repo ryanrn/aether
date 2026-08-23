@@ -35,11 +35,17 @@ export function useSocket(): TypedSocket | null {
   return useContext(SocketContext);
 }
 
+/**
+ * `serverId` e `null` nas telas que ficam FORA de um servidor — hoje, a de
+ * amigos. O socket abre igual (e a sala pessoal do gateway que entrega a
+ * presenca dos amigos), so o `server:join` nao acontece: nao ha servidor em
+ * que entrar, e chamar com `null` faria o gateway recusar.
+ */
 export function RealtimeProvider({
   serverId,
   children,
 }: {
-  serverId: string;
+  serverId: string | null;
   children: React.ReactNode;
 }) {
   const [socket, setSocket] = useState<TypedSocket | null>(null);
@@ -129,6 +135,34 @@ export function RealtimeProvider({
         const state = useRealtimeStore.getState();
         if (incoming !== state.serverId) return;
         state.updatePresence(entry);
+      });
+
+      /**
+       * Presenca de amigo, pela sala pessoal. Sem `serverId` para conferir:
+       * este evento nao pertence a servidor nenhum, e e exatamente por isso
+       * que ele existe separado do `presence:update`.
+       */
+      socketInstance.on("friend:presence", ({ entry }) => {
+        useRealtimeStore.getState().updatePresence(entry);
+      });
+
+      /**
+       * `mergePresence`, nunca `syncPresence`: este evento chega tambem
+       * enquanto voce esta dentro de um servidor, e substituir o mapa apagaria
+       * a presenca de todo mundo dali.
+       */
+      socketInstance.on("friend:sync", ({ entries }) => {
+        useRealtimeStore.getState().mergePresence(entries);
+      });
+
+      /**
+       * A lista de amizades mudou. Igual ao `server:changed`: o evento nao
+       * carrega o que mudou, so pede a tela nova ao Next — quem sabe montar
+       * "pendente"/"aceito" e o servidor, e duplicar isso aqui seria uma
+       * segunda versao da mesma consulta.
+       */
+      socketInstance.on("friend:changed", () => {
+        refreshRef.current();
       });
 
       socketInstance.on("voice:sync", ({ serverId: incoming, participants }) => {
@@ -226,13 +260,23 @@ export function RealtimeProvider({
   // 2. entrada no servidor, refeita a cada reconexao
   useEffect(() => {
     if (!socket) return;
-    useRealtimeStore.getState().enterServer(serverId);
+    /**
+     * Fora de servidor nao ha nada a entrar nem a limpar: `enterServer` zeraria
+     * presenca, voz e mensagens, e o `friend:sync` que ja chegou junto com a
+     * conexao seria perdido.
+     */
+    if (!serverId) return;
+    // Amarrado numa const para o TypeScript manter o estreitamento dentro das
+    // funcoes abaixo: `serverId` e `string | null`, e o guard acima nao
+    // atravessa fronteira de closure.
+    const alvo: string = serverId;
+    useRealtimeStore.getState().enterServer(alvo);
 
     function join() {
       const reconnecting = hadConnected.current;
       hadConnected.current = true;
 
-      socket?.emit("server:join", serverId, (result) => {
+      socket?.emit("server:join", alvo, (result) => {
         const state = useRealtimeStore.getState();
         if (!result.ok) {
           state.setError(result.error);
@@ -273,7 +317,7 @@ export function RealtimeProvider({
 
     return () => {
       socket.off("connect", join);
-      if (socket.connected) socket.emit("server:leave", serverId);
+      if (socket.connected) socket.emit("server:leave", alvo);
     };
   }, [socket, serverId]);
 

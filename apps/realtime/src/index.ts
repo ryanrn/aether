@@ -1,12 +1,21 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { prisma } from "@aether/db";
+import { loadFriendIds } from "@aether/access";
+import { room } from "@aether/shared";
 import { env } from "./env";
 import { authenticateHandshake } from "./auth";
 import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
-import { attachSocket, stats } from "./state";
+import {
+  attachSocket,
+  isConnected,
+  presenceOfFriends,
+  setFriends,
+  stats,
+  statusOf,
+} from "./state";
 import { handleInternalRequest } from "./internal";
 import { startSessionGuard } from "./session-guard";
 import type { AetherServer } from "./types";
@@ -87,9 +96,70 @@ io.use(async (socket, next) => {
 
 io.on("connection", (socket) => {
   const { user } = socket.data;
+  /**
+   * Lido ANTES de anexar: depois de `attachSocket` a resposta e sempre `true`.
+   * O que interessa e se esta era a PRIMEIRA aba — abrir a segunda nao e
+   * "ficou online" e nao deve avisar ninguem de novo.
+   */
+  const primeiraConexao = !isConnected(user.id);
   attachSocket(socket.id, user.id, user.status);
 
   socket.emit("ready", { user, serverTime: Date.now() });
+
+  /**
+   * Sala pessoal. Todo socket entra na sua, sempre — e por ela que chega o que
+   * e endereçado a PESSOA e nao a um servidor: presenca de amigo e aviso de
+   * que a lista de amizades mudou.
+   *
+   * Nao ha checagem de permissao aqui de proposito: a sala e a do proprio
+   * usuario autenticado no handshake. Ninguem entra na sala de outro porque o
+   * nome vem de `socket.data`, que o cliente nao escolhe.
+   */
+  void socket.join(room.user(user.id));
+
+  /**
+   * Amizades: carregadas do banco uma vez por conexao.
+   *
+   * Assincrono e sem `await` porque o resto do handshake nao depende disto —
+   * segurar a conexao por uma consulta atrasaria o `ready` de todo mundo. A
+   * consequencia e uma janela de alguns milissegundos em que a presenca de um
+   * amigo que mudou nesse instante nao seria roteada; o `friend:sync` logo
+   * abaixo fecha essa janela do lado de quem conectou.
+   */
+  void loadFriendIds(user.id)
+    .then((amigos) => {
+      setFriends(user.id, amigos);
+
+      // Quem ja esta online, para a lista nascer preenchida.
+      socket.emit("friend:sync", { entries: presenceOfFriends(user.id) });
+
+      if (!primeiraConexao) return;
+      /**
+       * "Entrei." Vai so para os amigos que estao conectados — quem estiver
+       * fora recebe o estado inteiro no proprio `friend:sync` ao voltar.
+       *
+       * O status e o do ESTADO, nao o do banco: `attachSocket` promove
+       * OFFLINE ("nunca escolheu") para ONLINE, e mandar o valor cru faria a
+       * pessoa aparecer offline para os amigos assim que conectasse.
+       */
+      const meuStatus = statusOf(user.id);
+      if (amigos.length > 0) {
+        io.to(amigos.map(room.user)).emit("friend:presence", {
+          entry: {
+            userId: user.id,
+            status: meuStatus,
+            // Acabou de conectar: ainda nao ha jogo detectado. O app de
+            // desktop manda `presence:game` logo em seguida, se houver.
+            game: null,
+            gameSince: null,
+            gameIcon: null,
+          },
+        });
+      }
+    })
+    .catch((error) =>
+      console.error("[gateway] nao consegui carregar amizades:", error),
+    );
 
   socket.on("ping", (ack) => {
     if (typeof ack === "function") ack(Date.now());
