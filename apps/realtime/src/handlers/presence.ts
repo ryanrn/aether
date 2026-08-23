@@ -4,17 +4,20 @@ import {
   GAME_NAME_MAX,
   isUserStatus,
   room,
+  safeGameCover,
   safeGameIcon,
   type PresenceEntry,
   type UserStatus,
 } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { visibleChannelRooms } from "../rooms";
+import { metadadosDe } from "../games/metadata";
 import {
   detachSocket,
   friendsOf,
   isConnected,
   joinServer,
+  setGameCover,
   leaveServer,
   presenceEntryOf,
   presenceOf,
@@ -55,6 +58,7 @@ function entryVisivel(userId: string, status: UserStatus): PresenceEntry {
     game: invisivel ? null : atual?.game ?? null,
     gameSince: invisivel ? null : atual?.gameSince ?? null,
     gameIcon: invisivel ? null : atual?.gameIcon ?? null,
+    gameCover: invisivel ? null : atual?.gameCover ?? null,
   };
 }
 
@@ -92,6 +96,46 @@ function announceToFriends(
   io.to(friendIds.map(room.user)).emit("friend:presence", {
     entry: entryVisivel(userId, status),
   });
+}
+
+/**
+ * Busca capa e nome oficial e, se vierem, anuncia a presenca de novo.
+ *
+ * Falha aqui e SEMPRE silenciosa no que diz respeito ao usuario: a atividade
+ * ja esta na tela com o que o detector deu. Nao ha nada a desfazer e nada a
+ * avisar — so deixamos de melhorar.
+ */
+async function enriquecer(
+  io: AetherServer,
+  userId: string,
+  jogo: string,
+): Promise<void> {
+  try {
+    const meta = await metadadosDe(jogo);
+    /**
+     * Validado mesmo vindo de casa. A URL foi montada por nos, mas passa pelo
+     * BANCO antes de chegar aqui — e vai para o `src` de uma imagem na tela de
+     * outras pessoas. A garantia tem de estar no caminho por onde o dado
+     * passa, nao na lembranca de quem escreveu o `urlDaCapa`.
+     */
+    const capa = safeGameCover(meta.coverUrl);
+    const mudou = setGameCover(userId, jogo, capa, meta.displayName);
+    if (!mudou) return;
+
+    const visivel = entryVisivel(userId, statusOf(userId));
+    for (const serverId of mudou.servers) {
+      io.to(room.server(serverId)).emit("presence:update", {
+        serverId,
+        entry: visivel,
+      });
+    }
+    announceToFriends(io, userId, statusOf(userId), friendsOf(userId));
+  } catch (erro) {
+    console.error(
+      "[presence] nao consegui enriquecer o jogo:",
+      erro instanceof Error ? erro.message : "erro desconhecido",
+    );
+  }
 }
 
 export function registerPresenceHandlers(
@@ -217,6 +261,19 @@ export function registerPresenceHandlers(
       });
     }
     announceToFriends(io, userId, statusOf(userId), friendsOf(userId));
+
+    /**
+     * A capa vem DEPOIS, e de proposito.
+     *
+     * O anuncio acima ja saiu com o nome e o icone do executavel — a atividade
+     * aparece na hora. A busca de metadados fala com o banco e, na primeira
+     * vez, com o IGDB; pendurar o anuncio nela faria a atividade de todo mundo
+     * depender da latencia de um servico de terceiro, e sumir quando ele
+     * estivesse fora do ar.
+     *
+     * Sem `await`: nada aqui pode segurar o handler.
+     */
+    if (nome) void enriquecer(io, userId, nome);
   });
 
   socket.on("disconnect", () => {

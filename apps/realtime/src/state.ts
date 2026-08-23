@@ -29,6 +29,8 @@ interface UserPresence {
   gameSince: number | null;
   /** icone do jogo (data URL), ja validado por quem recebeu do cliente */
   gameIcon: string | null;
+  /** capa do jogo (URL do IGDB), resolvida pelo servidor; `null` ate chegar */
+  gameCover: string | null;
   /** sockets vivos deste usuario */
   sockets: Set<string>;
   /**
@@ -68,6 +70,7 @@ export function attachSocket(
     game: null,
     gameSince: null,
     gameIcon: null,
+    gameCover: null,
     sockets: new Set([socketId]),
     friends: new Set(),
     servers: new Map(),
@@ -86,6 +89,7 @@ function toPresenceEntry(userId: string, user: UserPresence): PresenceEntry {
     game: user.game,
     gameSince: user.gameSince ? new Date(user.gameSince).toISOString() : null,
     gameIcon: user.gameIcon,
+    gameCover: user.gameCover,
   };
 }
 
@@ -110,6 +114,45 @@ export function setGame(
   user.game = game;
   user.gameSince = game ? Date.now() : null;
   user.gameIcon = game ? icon : null;
+  // A capa do jogo ANTERIOR morre aqui. Ela e resolvida em segundo plano e
+  // chega depois; sem zerar, o jogo novo apareceria por um instante com a
+  // arte do que acabou de ser fechado.
+  user.gameCover = null;
+  return {
+    servers: [...user.servers.keys()],
+    entry: toPresenceEntry(userId, user),
+  };
+}
+
+/**
+ * Anexa a capa resolvida pelo IGDB.
+ *
+ * `jogoEsperado` existe por causa de uma corrida real: a resolucao acontece em
+ * segundo plano e pode demorar segundos. Se a pessoa fechar um jogo e abrir
+ * outro nesse intervalo, a resposta atrasada chegaria e grudaria a capa do
+ * jogo ANTIGO no novo. Conferimos que ainda e o mesmo jogo antes de aplicar.
+ *
+ * Devolve a entrada atualizada e os servidores a avisar, ou `null` quando nao
+ * ha o que fazer — o que inclui a capa vir vazia, para nao reemitir presenca
+ * identica para a sala inteira.
+ */
+export function setGameCover(
+  userId: string,
+  jogoEsperado: string,
+  cover: string | null,
+  displayName?: string,
+): { servers: string[]; entry: PresenceEntry } | null {
+  const user = users.get(userId);
+  if (!user) return null;
+  if (user.game !== jogoEsperado) return null;
+
+  const nomeNovo = displayName && displayName !== user.game ? displayName : null;
+  if (!cover && !nomeNovo) return null;
+  if (cover === user.gameCover && !nomeNovo) return null;
+
+  if (cover) user.gameCover = cover;
+  if (nomeNovo) user.game = nomeNovo;
+
   return {
     servers: [...user.servers.keys()],
     entry: toPresenceEntry(userId, user),

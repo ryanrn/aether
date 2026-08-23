@@ -321,3 +321,48 @@ model Friendship {
   @@index([addresseeId, status])
   @@index([requesterId, status])
 }
+
+enum GameMetadataSource {
+  /// veio do IGDB
+  IGDB
+  /// o IGDB nao achou (ou nao esta configurado) — vale o que o detector deu
+  DETECTOR
+}
+
+/// Metadados de jogo — cache COMPARTILHADO entre todo mundo.
+///
+/// Compartilhado de proposito: o primeiro que abre Hollow Knight resolve a
+/// capa para todos os outros. Cache por maquina faria cada pessoa pagar a
+/// mesma consulta, e o IGDB limita a 4 por segundo.
+///
+/// **Nao ha nenhuma coluna de usuario aqui, e isso e deliberado.** A tabela
+/// diz "Hollow Knight tem esta capa", nunca "fulano jogou Hollow Knight".
+/// Guardar quem consultou transformaria um cache de arte em um historico de
+/// habitos de jogo — que e exatamente o dado que a deteccao local se recusa a
+/// mandar para o servidor.
+model GameMetadata {
+  id String @id @default(cuid())
+
+  /// Nome normalizado — a chave de busca. Ver `normalize.ts`.
+  lookupKey    String @unique
+  /// Como o detector entregou, guardado para diagnostico do casamento.
+  detectedName String
+  /// O que a Activity mostra.
+  displayName  String
+
+  igdbId   Int?
+  coverUrl String?
+  genre    String?
+
+  source     GameMetadataSource
+  /// 0..1 — quao confiavel foi o casamento com o IGDB.
+  confidence Float?
+
+  /// Quando consultamos por ultimo. E o que decide reconsultar: linha sem
+  /// capa merece nova tentativa (o IGDB cadastra jogos novos), e linha com
+  /// capa envelhece devagar.
+  checkedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([checkedAt])
+}

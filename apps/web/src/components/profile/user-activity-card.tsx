@@ -270,21 +270,7 @@ export function UserActivityCard({
               */}
               {game ? (
                 <div className="mb-2 flex items-start gap-2">
-                  {/*
-                    O icone vem do executavel do jogo, extraido na maquina de
-                    quem joga. Cai no icone generico quando nao deu para
-                    extrair — nome sem icone continua sendo informacao.
-                  */}
-                  {game.icon ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- data URL, nao ha o que otimizar
-                    <img
-                      src={game.icon}
-                      alt=""
-                      className="h-8 w-8 shrink-0 rounded-[4px]"
-                    />
-                  ) : (
-                    <Gamepad2 className="mt-[3px] h-3.5 w-3.5 shrink-0 text-accent-400" />
-                  )}
+                  <ArteDoJogo cover={game.cover} icon={game.icon} />
                   <div className="min-w-0">
                     <p className="truncate text-[13px] text-ink-100">
                       Jogando {game.game}
@@ -370,4 +356,50 @@ export function UserActivityCard({
     </>,
     document.body,
   );
+}
+
+/**
+ * A imagem do jogo, em cadeia de fallback.
+ *
+ *   1. capa do IGDB  — 264x374, arte de verdade
+ *   2. icone do executavel — 48px, extraido na maquina de quem joga
+ *   3. icone generico do AETHER
+ *
+ * O passo 3 nao e enfeite: e a garantia de que nunca aparece imagem quebrada.
+ * E por isso a falha de CARREGAMENTO tambem cai na cadeia — uma capa que
+ * responde 404 (o CDN mudou, a URL envelheceu no cache) e indistinguivel de
+ * nao ter capa, do ponto de vista de quem esta olhando a tela.
+ */
+function ArteDoJogo({
+  cover,
+  icon,
+}: {
+  cover: string | null;
+  icon: string | null;
+}) {
+  const [capaFalhou, setCapaFalhou] = useState(false);
+
+  // Capa nova depois de uma que falhou merece nova chance.
+  useEffect(() => setCapaFalhou(false), [cover]);
+
+  if (cover && !capaFalhou) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- CDN externo, fora do otimizador
+      <img
+        src={cover}
+        alt=""
+        onError={() => setCapaFalhou(true)}
+        className="h-14 w-10 shrink-0 rounded-[4px] object-cover"
+      />
+    );
+  }
+
+  if (icon) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- data URL, nao ha o que otimizar
+      <img src={icon} alt="" className="h-8 w-8 shrink-0 rounded-[4px]" />
+    );
+  }
+
+  return <Gamepad2 className="mt-[3px] h-3.5 w-3.5 shrink-0 text-accent-400" />;
 }

@@ -123,9 +123,32 @@ if (redisMissing.length === 0) {
   for (const key of REDIS_KEYS) payload[key] = env[key];
 }
 
+/**
+ * IGDB, via Twitch (capa de jogo na atividade). Opcional e em par.
+ *
+ * Vai para o GATEWAY, e so para ele: e o gateway que recebe o nome do jogo e
+ * resolve a capa. O `TWITCH_CLIENT_SECRET` nao vai para a Vercel nem para o
+ * Electron — o app desktop carrega conteudo remoto, e segredo la e segredo
+ * publicado.
+ *
+ * Sem o par, a atividade funciona igual: nome do jogo e icone do executavel,
+ * so sem capa.
+ */
+const TWITCH_KEYS = ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"];
+const twitchMissing = TWITCH_KEYS.filter((key) => !env[key]);
+if (twitchMissing.length === 0) {
+  for (const key of TWITCH_KEYS) payload[key] = env[key];
+}
+
 console.log(`App Fly:  ${flyApp}`);
 console.log(`Origem liberada no CORS:  ${payload.NEXT_PUBLIC_APP_URL}`);
 if (bumped) console.log("connection_limit ajustado para 5 na URL de producao.");
+if (twitchMissing.length > 0) {
+  console.log(
+    `IGDB nao configurado (falta ${twitchMissing.join(", ")}) — a atividade` +
+      " segue com nome e icone do executavel, sem capa de jogo.",
+  );
+}
 if (redisMissing.length > 0) {
   console.log(
     `Redis nao configurado (falta ${redisMissing.join(", ")}) — o consumo unico`

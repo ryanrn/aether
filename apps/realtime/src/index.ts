@@ -153,6 +153,7 @@ io.on("connection", (socket) => {
             game: null,
             gameSince: null,
             gameIcon: null,
+            gameCover: null,
           },
         });
       }

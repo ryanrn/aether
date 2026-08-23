@@ -547,6 +547,134 @@ Onde fica:
   store conhece naquele canal. Bate com a arvore de canais porque as duas leem
   a mesma fonte.
 
+## Capa de jogo pelo IGDB (fase 1 — camada de metadados)
+
+O que a atividade mostra alem do nome. **O IGDB e provedor de METADADOS, nunca
+detector**: quem descobre que voce esta jogando continua sendo o app de
+desktop, lendo processos na sua maquina.
+
+### O que o IGDB resolve — e o que ele NAO resolvia
+
+A suposicao comum e que falta um banco de jogos para converter
+`HollowKnight.exe` em "Hollow Knight". **O Aether nunca olhou o nome do
+executavel.** Ele olha a pasta de instalacao e o manifesto da propria loja:
+`appmanifest_*.acf` na Steam, `DisplayName` na Epic. "Apex Legends" ja saia
+certo porque o jogo mora em `steamapps/common/Apex Legends/` — sem cadastrar
+nada.
+
+O problema real era outro: **icone de executavel tem 48px, e capa de jogo e um
+retrato de 264x374.** Era isso que fazia a atividade parecer pobre. E isso que
+o IGDB conserta.
+
+### A ordem, que e o desenho todo
+
+```
+1. cache no banco   (compartilhado entre todo mundo)
+2. IGDB             (so em falta no cache, ou quando ele envelheceu)
+3. o que o detector ja deu  (nome + icone do executavel)
+```
+
+O passo 3 **nunca falha**, e e por isso que a atividade nunca fica quebrada: o
+IGDB e enfeite em cima de algo que ja funciona sozinho. Fora do ar, sem
+credencial, respondendo 429 ou simplesmente sem o jogo — a pessoa continua
+aparecendo como "jogando X" com o icone do executavel.
+
+**Quem chama nao espera.** O gateway anuncia o jogo na hora e resolve a capa em
+segundo plano; quando ela chega, anuncia de novo. Pendurar o anuncio na
+consulta faria a atividade de todo mundo depender da latencia de terceiro.
+
+### O cache e compartilhado, e nao tem coluna de usuario
+
+`GameMetadata` guarda **"Hollow Knight tem esta capa"**, nunca "fulano jogou
+Hollow Knight". O primeiro que abre um jogo resolve a capa para todos os
+outros — cache por maquina faria cada pessoa pagar a mesma consulta, e o IGDB
+limita a 4 por segundo.
+
+A ausencia de coluna de usuario e verificada por teste, nao por disciplina:
+guardar quem consultou transformaria um cache de arte num historico de habitos
+de jogo — exatamente o dado que a deteccao local se recusa a mandar para o
+servidor.
+
+Duas validades, porque os casos sao diferentes: linha **com** capa vale 30
+dias (esta resolvida); linha **sem** capa vale 3 (pode ser jogo que o IGDB
+ainda nao tinha, e merece nova chance).
+
+### Casar o nome errado e o pior defeito possivel aqui
+
+Nao e travamento nem excecao: e uma imagem plausivel e ERRADA na tela de outras
+pessoas. Por isso o casamento e em degraus e o corte e alto:
+
+| confianca | criterio |
+|-----------|----------|
+| 1,00 | identicos depois de normalizar |
+| 0,90 | identicos ignorando a edicao ("Spider-Man" x "... Remastered") |
+| 0,75 | um contem o outro **e o que sobra nao e numero de sequencia** |
+| 0,00 | qualquer outra coisa |
+
+Abaixo de 0,75 **nao usamos nada** — sem capa e melhor que capa errada. E o
+nome do IGDB so substitui o do detector acima de 0,90; abaixo disso o nome da
+LOJA vale mais, porque veio do manifesto do jogo instalado.
+
+A clausula do numero de sequencia existe por causa de um defeito que o teste
+pegou: `"Portal"` cabe dentro de `"Portal 2"` como palavra, e a capa de Portal
+ia para quem joga Portal 2. Agora o que sobra decide — `"the wild hunt"` e
+subtitulo (mesmo jogo), `"2"` e sequencia (outro jogo). Vale para romano
+tambem: "Final Fantasy" nao e "Final Fantasy VII".
+
+### Onde as credenciais moram
+
+O IGDB autentica pela **Twitch**, com *client credentials* — a aplicacao pega
+um token para ela mesma. Nao ha login de usuario, nao ha redirect, nao ha nada
+para o navegador fazer.
+
+`TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` vao **so para o gateway** (Fly).
+Nao vao para a Vercel e nao vao para o Electron: o app desktop carrega conteudo
+remoto, e segredo la e segredo publicado. A consulta parte do nosso servidor,
+nao da maquina de quem joga — assim o IGDB ve o IP de um servidor, e nao "o IP
+do Ryan pediu Hollow Knight as 3 da manha".
+
+O par e opcional. Sem ele tudo funciona, so nao ha capa.
+
+### Nunca uma imagem quebrada
+
+A cadeia no desenho: capa do IGDB, senao icone do executavel, senao icone
+generico. **A falha de CARREGAMENTO tambem cai na cadeia** — uma capa que
+responde 404 e indistinguivel de nao ter capa, do ponto de vista de quem esta
+olhando a tela.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/game-metadata.test.ts
+npx dotenv -e .env -- npx tsx scripts/verify-igdb.mjs
+```
+
+O segundo roda por `tsx` (e nao `node`) porque importa os modulos TypeScript do
+gateway de verdade. Sem credencial ele **nao pula em silencio**: confere a
+tabela e o caminho de fallback, que e o que esta valendo, e diz o que ficou por
+conferir.
+
+### Limitacoes conhecidas da capa de jogo
+
+- **A busca no IGDB ainda nao foi exercitada contra o servico real** — falta o
+  `TWITCH_CLIENT_SECRET`. O que esta provado hoje: o fallback, o cache, a
+  resiliencia a credencial recusada (401) e a forma da tabela. O casamento com
+  jogos reais esta escrito em `scripts/verify-igdb.mjs` e roda assim que a
+  chave existir.
+- **A capa vai como URL, nao embutida.** O navegador de QUEM OLHA busca a
+  imagem no `images.igdb.com`, entao o IGDB ve o IP de quem esta vendo a
+  atividade. Embutir obrigaria o servidor a baixar e reencodar a capa de todo
+  jogo. Se isso incomodar, o conserto e um proxy no nosso dominio.
+- **So Steam e Epic sao detectados** — o IGDB nao muda isso, porque ele nao e o
+  detector. GOG, Battle.net, Xbox e jogos avulsos continuam de fora ate a fase
+  3 (aliases e cadastro manual).
+- **Nao ha `details` nem `state`** como no Rich Presence do Discord ("Nivel 3",
+  "Na partida"). Isso exige o JOGO cooperar por um SDK; nada e derivavel de
+  fora. O que temos e nome, capa e tempo.
+- **O genero e guardado mas nao aparece** em lugar nenhum ainda.
+- **Um jogo com nome muito generico pode nao casar.** O corte alto e
+  deliberado: prefere ficar sem capa a arriscar a errada.
+
 ## Deteccao de jogo (so no app desktop)
 
 "Jogando Hollow Knight" no cartao de atividade, como o Discord faz.

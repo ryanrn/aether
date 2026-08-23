@@ -65,7 +65,17 @@ interface RealtimeState {
    * maioria nem usa. Mapa separado: quem quer status continua igual, quem quer
    * jogo pede o jogo.
    */
-  activity: Record<string, { game: string; since: string | null; icon: string | null }>;
+  activity: Record<
+    string,
+    {
+      game: string;
+      since: string | null;
+      /** icone do executavel (data URL), da maquina de quem joga */
+      icon: string | null;
+      /** capa do IGDB (URL), resolvida pelo servidor; chega depois do icone */
+      cover: string | null;
+    }
+  >;
   voice: Record<string, VoiceParticipant>;
   /** credenciais do SFU, validas so enquanto voce esta na call */
   media: MediaGrant | null;
@@ -239,7 +249,12 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
           .filter((e) => e.game)
           .map((e) => [
             e.userId,
-            { game: e.game as string, since: e.gameSince, icon: e.gameIcon },
+            {
+              game: e.game as string,
+              since: e.gameSince,
+              icon: e.gameIcon,
+              cover: e.gameCover,
+            },
           ]),
       ),
     }),
@@ -266,6 +281,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             game: entrada.game,
             since: entrada.gameSince,
             icon: entrada.gameIcon,
+            cover: entrada.gameCover,
           };
         } else {
           delete activity[entrada.userId];
@@ -300,6 +316,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
                 game: entry.game,
                 since: entry.gameSince,
                 icon: entry.gameIcon,
+                cover: entry.gameCover,
               },
             }
           : atividadeSemEste,

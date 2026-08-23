@@ -185,9 +185,17 @@ async function main() {
     !("channelId" in (idle?.entry ?? {})),
     campos,
   );
+  /**
+   * Lista TRAVADA de proposito. Campo novo em `PresenceEntry` faz esta
+   * assercao falhar, e e para falhar mesmo: obriga quem acrescentou a decidir
+   * conscientemente se aquilo pode ir para um amigo que nao divide servidor.
+   *
+   * `gameCover` entrou assim — e uma URL de capa em CDN publico. Revela QUAL
+   * jogo, que o amigo ja ve pelo campo `game`, e nao revela lugar nenhum.
+   */
   check(
     "leva exatamente os campos previstos",
-    campos === "game,gameIcon,gameSince,status,userId",
+    campos === "game,gameCover,gameIcon,gameSince,status,userId",
     campos,
   );
 
@@ -207,6 +215,11 @@ async function main() {
     "e o nome do jogo NAO viaja junto",
     invisivel?.entry?.game === null,
     `veio ${JSON.stringify(invisivel?.entry?.game)}`,
+  );
+  check(
+    "nem a capa — que denunciaria o jogo por imagem",
+    invisivel?.entry?.gameCover === null && invisivel?.entry?.gameIcon === null,
+    `capa ${JSON.stringify(invisivel?.entry?.gameCover)}, icone ${JSON.stringify(invisivel?.entry?.gameIcon)}`,
   );
 
   // Volta a aparecer, para o teste de desconexao comecar de um estado visivel.

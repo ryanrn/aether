@@ -39,6 +39,19 @@ export interface PresenceEntry {
    * joga. `null` quando nao deu para extrair — nome sem icone continua util.
    */
   gameIcon: string | null;
+  /**
+   * Capa do jogo (URL), resolvida pelo SERVIDOR no IGDB. `null` quando o jogo
+   * nao foi encontrado, ou quando o IGDB nao esta configurado.
+   *
+   * Convive com `gameIcon` em vez de substitui-lo, e isso e a cadeia de
+   * fallback: capa (264x374, arte de verdade) e melhor que icone de
+   * executavel (48px), mas so existe para jogo que o IGDB conhece. Quem
+   * desenha escolhe a primeira que houver — e nunca fica sem nada.
+   *
+   * Vem como URL, e nao embutida como o icone, porque nasce num CDN publico:
+   * embutir obrigaria o servidor a baixar e reencodar a imagem de todo jogo.
+   */
+  gameCover: string | null;
 }
 
 /** Tamanho maximo do nome de jogo aceito — nome de pasta nao passa disso. */
@@ -68,6 +81,27 @@ export const GAME_ICON_MAX_CHARS = 32 * 1024;
  * Devolve o proprio icone quando serve, ou `null` — quem chama simplesmente
  * segue sem icone, porque nome sem icone continua util.
  */
+/**
+ * A capa e uma URL de imagem do CDN do IGDB?
+ *
+ * Diferente do `safeGameIcon`, isto NAO vem do cliente — quem monta e o
+ * proprio gateway, a partir do `image_id`. A checagem existe mesmo assim
+ * porque o valor sai do banco e vai para o `src` de uma imagem na tela de
+ * outras pessoas: um dia alguem edita a tabela na mao, ou escreve um provedor
+ * novo, e a garantia precisa estar no caminho por onde o dado passa — nao na
+ * memoria de quem escreveu.
+ *
+ * Host fixo de proposito. Nao e "uma URL https qualquer": e o CDN do IGDB.
+ */
+export function safeGameCover(cover: unknown): string | null {
+  if (typeof cover !== "string") return null;
+  if (cover.length === 0 || cover.length > 300) return null;
+  if (!/^https:\/\/images\.igdb\.com\/igdb\/image\/upload\/[A-Za-z0-9_]+\/[A-Za-z0-9_-]+\.(jpg|png|webp)$/.test(cover)) {
+    return null;
+  }
+  return cover;
+}
+
 export function safeGameIcon(icon: unknown): string | null {
   if (typeof icon !== "string") return null;
   if (icon.length === 0 || icon.length > GAME_ICON_MAX_CHARS) return null;
