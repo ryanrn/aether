@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/server/auth/session";
 import { listFriendships } from "@/server/services/friends";
-import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { FriendsScreen } from "@/components/friends/friends-screen";
 
 /**
@@ -11,12 +10,13 @@ import { FriendsScreen } from "@/components/friends/friends-screen";
  * nenhum — e justamente o unico lugar do app onde duas pessoas se veem sem
  * dividir um servidor.
  *
- * O `RealtimeProvider` e montado aqui com `serverId={null}`: o socket abre e
- * entra na sala pessoal (o gateway faz isso sozinho, no `connection`), o que
- * traz a presenca dos amigos. Nao ha `server:join`, porque nao ha servidor.
+ * O socket vem do `RealtimeProvider` do layout de `/app`, ja montado acima —
+ * esta pagina NAO monta um proprio. Montar aqui foi o erro que derrubava a
+ * chamada: cada troca de tela criava e destruia uma conexao, e destruir a
+ * conexao tira a pessoa do canal de voz.
  *
- * Sao dois provedores no app, nunca ao mesmo tempo: esta rota e a de servidor
- * sao irmas, entao so uma esta montada — nao ha dois sockets abertos.
+ * A presenca dos amigos chega pela sala pessoal, em que o gateway coloca todo
+ * socket no `connection` — nao depende de estar dentro de servidor nenhum.
  */
 export default async function FriendsPage() {
   const session = await getSession();
@@ -25,8 +25,6 @@ export default async function FriendsPage() {
   const friendships = await listFriendships(session.user.id);
 
   return (
-    <RealtimeProvider serverId={null}>
-      <FriendsScreen friendships={friendships} />
-    </RealtimeProvider>
+    <FriendsScreen friendships={friendships} />
   );
 }

@@ -3,6 +3,8 @@ import { getSession } from "@/server/auth/session";
 import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
 import { ServerRail } from "@/components/layout/server-rail";
+import { RealtimeProvider } from "@/components/realtime/realtime-provider";
+import { VoiceSession } from "@/components/realtime/voice-session";
 
 /**
  * Casca do aplicativo. Roda no servidor: a lista de servidores ja chega
@@ -24,9 +26,21 @@ export default async function AppLayout({
   ]);
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-base-950">
-      <ServerRail servers={servers} pendingRequests={pendingRequests} />
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-    </div>
+    /**
+     * O provedor e a sessao de midia moram AQUI, e nao no layout do servidor.
+     *
+     * Foi um bug real que ensinou isso: com eles la dentro, sair para a tela de
+     * amigos desmontava tudo, o socket fechava, e o gateway tirava a pessoa do
+     * canal de voz. Navegar encerrava a chamada — o que nao pode acontecer.
+     *
+     * Aqui em cima os dois atravessam toda navegacao dentro de `/app`.
+     */
+    <RealtimeProvider>
+      <div className="flex h-dvh w-full overflow-hidden bg-base-950">
+        <VoiceSession />
+        <ServerRail servers={servers} pendingRequests={pendingRequests} />
+        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      </div>
+    </RealtimeProvider>
   );
 }

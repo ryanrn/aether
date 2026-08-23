@@ -10,6 +10,7 @@
  *   dotenv -e .env -- node scripts/restore-fixture.mjs
  */
 import { PrismaClient } from "@prisma/client";
+import { escolherServidorDeTeste } from "./lib/fixture.mjs";
 
 const prisma = new PrismaClient();
 
@@ -21,7 +22,8 @@ try {
     process.exit(1);
   }
 
-  const server = await prisma.server.findFirst({ where: { ownerId: owner.id } });
+  // A MESMA escolha que os verify fazem — ver o comentario em lib/fixture.mjs.
+  const server = await escolherServidorDeTeste(prisma, owner.id);
   if (!server) {
     console.log("Servidor de seed nao encontrado. Rode: npm run db:seed");
     process.exit(1);

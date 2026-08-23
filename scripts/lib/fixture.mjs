@@ -11,6 +11,41 @@
  * exatamente o que fazer.
  */
 
+/**
+ * O servidor de teste do dono, escolhido pelo que os testes PRECISAM e em
+ * ordem determinista.
+ *
+ * Exportada para o `restore-fixture.mjs` usar a MESMA escolha. Quando cada um
+ * escolhia por conta propria, o restore consertava um servidor e o teste
+ * reclamava de outro — e a instrucao de conserto que o proprio teste imprimia
+ * nao consertava nada.
+ */
+export async function escolherServidorDeTeste(prisma, ownerId) {
+  const candidatos = await prisma.server.findMany({
+    where: { ownerId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      channels: { where: { isPrivate: false }, select: { type: true } },
+    },
+  });
+
+  /**
+   * Preferimos um servidor com canal de texto E de voz publicos.
+   *
+   * Era `findFirst` sem ordenacao, e quebrou de um jeito instrutivo: o
+   * Postgres pode devolver qualquer linha, o dono tinha dois servidores, e num
+   * deles os canais de texto viraram privados em uso normal. O teste passou a
+   * pular 22 assercoes de chat e voz sem nada estar errado no app.
+   */
+  return (
+    candidatos.find(
+      (s) =>
+        s.channels.some((c) => c.type === "TEXT") &&
+        s.channels.some((c) => c.type === "VOICE"),
+    ) ?? candidatos[0] ?? null
+  );
+}
+
 export async function requireSeedFixture(prisma) {
   const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
   const member = await prisma.user.findUnique({ where: { username: "joao" } });
@@ -19,7 +54,21 @@ export async function requireSeedFixture(prisma) {
     fail("Usuarios de seed nao encontrados.", "npm run db:seed");
   }
 
-  const server = await prisma.server.findFirst({ where: { ownerId: owner.id } });
+  /**
+   * O servidor e escolhido pelo que o teste PRECISA, e em ordem determinista.
+   *
+   * Era `findFirst` sem ordenacao, e isso quebrou de um jeito instrutivo: o
+   * Postgres pode devolver qualquer linha, e o dono tinha dois servidores. Num
+   * deles os canais de texto haviam virado privados em uso normal, e o teste
+   * passou a pular 22 assercoes de chat e voz — sem nada estar errado no app.
+   *
+   * Preferimos um servidor com canal de texto E de voz publicos. Nao havendo,
+   * cai para qualquer um do dono (as secoes que dependem deles se pulam
+   * sozinhas, e ai o pulo descreve os dados de verdade). `orderBy` garante que
+   * duas execucoes seguidas escolham o mesmo.
+   */
+  const server = await escolherServidorDeTeste(prisma, owner.id);
+
   if (!server) {
     fail("Servidor de seed nao encontrado.", "npm run db:seed");
   }

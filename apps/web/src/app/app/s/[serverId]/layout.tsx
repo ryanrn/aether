@@ -5,12 +5,10 @@ import { getServerContext } from "@/server/services/servers";
 import { ChannelSidebar } from "@/components/layout/channel-sidebar";
 import { ControlBar } from "@/components/layout/control-bar";
 import { MemberPanel } from "@/components/layout/member-panel";
-import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
 import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
 import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
 import { VoiceChimes } from "@/components/realtime/voice-chimes";
-import { VoiceSession } from "@/components/realtime/voice-session";
 
 /**
  * Casca do servidor.
@@ -51,7 +49,7 @@ export default async function ServerLayout({
   };
 
   return (
-    <RealtimeProvider serverId={serverId}>
+    <>
       {/*
         Quatro colunas de altura inteira, sem barra atravessando o topo.
         A barra global saiu de proposito: com ela, a HUD tinha de ser um rodape
@@ -63,7 +61,6 @@ export default async function ServerLayout({
         <VoiceActivityMonitor />
         <GameActivityMonitor />
         <VoiceChimes />
-        <VoiceSession />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar
@@ -116,6 +113,6 @@ export default async function ServerLayout({
         </div>
 
       </div>
-    </RealtimeProvider>
+    </>
   );
 }

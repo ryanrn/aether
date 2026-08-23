@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
@@ -36,18 +36,24 @@ export function useSocket(): TypedSocket | null {
 }
 
 /**
- * `serverId` e `null` nas telas que ficam FORA de um servidor — hoje, a de
- * amigos. O socket abre igual (e a sala pessoal do gateway que entrega a
- * presenca dos amigos), so o `server:join` nao acontece: nao ha servidor em
- * que entrar, e chamar com `null` faria o gateway recusar.
+ * Conexao em tempo real do app inteiro.
+ *
+ * Montado UMA VEZ, no layout de `/app` — nunca dentro de um servidor. Isso e
+ * o que faz a chamada sobreviver a navegacao, e a licao veio de um bug real:
+ * enquanto vivia no layout do servidor, abrir a tela de amigos desmontava o
+ * provedor, o socket fechava, e o gateway tratava aquilo como desconexao e
+ * tirava a pessoa do canal de voz para todo mundo. Trocar de tela encerrava a
+ * call.
+ *
+ * O servidor aberto e descoberto pela ROTA, e nao recebido por propriedade:
+ * quem passasse a propriedade teria de estar dentro do servidor, que e
+ * exatamente o acoplamento que causou o problema. `null` significa "fora de
+ * qualquer servidor" (a tela de amigos), e ai so o `server:join` nao acontece
+ * — o socket e a sessao de midia seguem de pe.
  */
-export function RealtimeProvider({
-  serverId,
-  children,
-}: {
-  serverId: string | null;
-  children: React.ReactNode;
-}) {
+export function RealtimeProvider({ children }: { children: React.ReactNode }) {
+  const params = useParams<{ serverId?: string }>();
+  const serverId = params?.serverId ?? null;
   const [socket, setSocket] = useState<TypedSocket | null>(null);
   /** distingue a primeira conexao de uma reconexao — a segunda recupera o intervalo */
   const hadConnected = useRef(false);

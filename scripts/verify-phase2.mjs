@@ -60,9 +60,8 @@ async function main() {
   console.log(`Alvo: ${BASE}\n`);
 
   const owner = await prisma.user.findUnique({ where: { username: "ryan" } });
-  const member = await prisma.user.findUnique({ where: { username: "joao" } });
-  if (!owner || !member) {
-    console.log("Usuarios de seed nao encontrados. Rode: npm run db:seed");
+  if (!owner) {
+    console.log("Usuario de seed nao encontrado. Rode: npm run db:seed");
     process.exit(1);
   }
 
@@ -74,6 +73,43 @@ async function main() {
     console.log("Servidor de seed nao encontrado. Rode: npm run db:seed");
     process.exit(1);
   }
+
+  /**
+   * O "membro comum" e criado AGORA, com o cargo Member e mais nada.
+   *
+   * Antes era o `joao` do seed, e isso quebrou de um jeito instrutivo: em uso
+   * normal alguem deu a ele o cargo Moderator pelo proprio app, e como o canal
+   * privado do teste e liberado para Moderator, ele passou a enxergar o canal
+   * — legitimamente. O app estava CERTO e o teste acusava falha de
+   * autorizacao.
+   *
+   * Um teste de seguranca que reprova porque a pessoa mexeu no app vira ruido,
+   * e ruido se aprende a ignorar. Criando o membro aqui, a premissa "nao tem o
+   * cargo" deixa de ser torcida e passa a ser fato.
+   */
+  const memberRole = server.roles.find((role) => role.name === "Member");
+  if (!memberRole) {
+    console.log("Cargo 'Member' nao encontrado no servidor de seed.");
+    process.exit(1);
+  }
+
+  const marca = `verify-membro-${Date.now() % 1_000_000_000}`;
+  const member = await prisma.user.create({
+    data: {
+      username: marca.slice(0, 24),
+      displayName: "Membro comum (teste)",
+      email: `${marca}@local.test`,
+      passwordHash: "scrypt$16384$8$1$naoimporta$naoimporta",
+    },
+    select: { id: true },
+  });
+  const membership = await prisma.serverMember.create({
+    data: { serverId: server.id, userId: member.id },
+    select: { id: true },
+  });
+  await prisma.memberRole.create({
+    data: { memberId: membership.id, roleId: memberRole.id },
+  });
 
   const ownerAuth = await sessionCookie(owner.id);
   const memberAuth = await sessionCookie(member.id);
@@ -181,6 +217,8 @@ async function main() {
     await prisma.channelOverwrite.deleteMany({ where: { channelId: secretChannel.id } });
     await prisma.channel.delete({ where: { id: secretChannel.id } });
     await prisma.session.deleteMany({ where: { id: { in: createdSessions } } });
+    // O membro descartavel sai junto; o cascade leva a associacao e o cargo.
+    await prisma.user.delete({ where: { id: member.id } }).catch(() => undefined);
     await prisma.$disconnect();
   }
 

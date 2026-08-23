@@ -77,6 +77,19 @@ interface RealtimeState {
     }
   >;
   voice: Record<string, VoiceParticipant>;
+  /**
+   * A MINHA ocupacao de voz — separada do mapa acima, e nao derivada dele.
+   *
+   * O mapa `voice` e do servidor que esta ABERTO na tela: trocar de servidor
+   * troca o mapa inteiro. Minha chamada nao tem nada a ver com isso. Enquanto
+   * as duas coisas moravam no mesmo lugar, sair do servidor para ver os amigos
+   * apagava a minha entrada, a sessao de midia via o canal sumir e DESLIGAVA A
+   * CHAMADA — navegar encerrava a call.
+   *
+   * Aqui ela sobrevive a navegacao. So sai quando eu de fato saio da voz, ou
+   * quando o socket cai (`clearVolatile`).
+   */
+  selfVoice: VoiceParticipant | null;
   /** credenciais do SFU, validas so enquanto voce esta na call */
   media: MediaGrant | null;
   /** a sala de midia esta conectada de fato (nao e o mesmo que estar no canal) */
@@ -91,6 +104,18 @@ interface RealtimeState {
   localShareTrack: Track | null;
   /** qual compartilhamento esta em destaque; null = o primeiro disponivel */
   focusedShareUserId: string | null;
+  /**
+   * Transmissoes que voce ESCOLHEU assistir.
+   *
+   * Antes, a tela de quem transmitia abria sozinha para todo mundo no canal.
+   * Isso e invasivo em dois sentidos: rouba a atencao de quem estava fazendo
+   * outra coisa, e comeca a baixar video sem ninguem ter pedido — numa
+   * conexao limitada isso e um custo real e involuntario.
+   *
+   * A propria transmissao nunca precisa entrar aqui: ver o que voce mesmo esta
+   * enviando e conferencia, nao intromissao.
+   */
+  watchedShares: string[];
   /**
    * Comandos de midia, publicados pela sessao enquanto ela existe.
    *
@@ -142,6 +167,10 @@ interface RealtimeState {
   setLocalSharing: (sharing: boolean, track?: Track | null) => void;
   setSharePreset: (preset: SharePresetId) => void;
   setFocusedShare: (userId: string | null) => void;
+  /** aceita assistir a transmissao de alguem */
+  watchShare: (userId: string) => void;
+  /** para de assistir — volta a pedir permissao se ela recomecar */
+  unwatchShare: (userId: string) => void;
   setRoomControls: (controls: RealtimeState["roomControls"]) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
@@ -185,6 +214,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   presence: {},
   activity: {},
   voice: {},
+  selfVoice: null,
   media: null,
   mediaConnected: false,
   screenShares: [],
@@ -192,6 +222,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   sharePreset: DEFAULT_PRESET,
   localShareTrack: null,
   focusedShareUserId: null,
+  watchedShares: [],
   roomControls: null,
   messages: {},
   history: {},
@@ -213,9 +244,14 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             serverId,
             presence: {},
             activity: {},
+            /**
+             * `voice` zera porque os participantes sao daquele servidor.
+             *
+             * `selfVoice`, `media` e `mediaConnected` NAO: sao a minha
+             * chamada, que nao pertence a servidor nenhum. Zera-los aqui era
+             * o que fazia trocar de servidor derrubar a call.
+             */
             voice: {},
-            media: null,
-            mediaConnected: false,
             messages: {},
             history: {},
           },
@@ -233,12 +269,16 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       presence: {},
       activity: {},
       voice: {},
+      // O socket caiu: a chamada caiu junto, e ai limpar a MINHA voz esta
+      // certo — diferente de so ter trocado de servidor.
+      selfVoice: null,
       media: null,
       mediaConnected: false,
       screenShares: [],
       localSharing: false,
       localShareTrack: null,
       focusedShareUserId: null,
+      watchedShares: [],
     }),
 
   syncPresence: (entries) =>
@@ -324,8 +364,15 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     }),
 
   syncVoice: (participants) =>
-    set({
-      voice: Object.fromEntries(participants.map((p) => [p.userId, p])),
+    set((state) => {
+      const mapa = Object.fromEntries(participants.map((p) => [p.userId, p]));
+      /**
+       * A minha entrada so e atualizada se eu aparecer NESTA sincronizacao.
+       * Nao aparecer nao quer dizer que sai da voz — quer dizer que estou em
+       * outro servidor. Apagar aqui era metade do bug.
+       */
+      const eu = state.selfUserId ? mapa[state.selfUserId] : undefined;
+      return eu ? { voice: mapa, selfVoice: eu } : { voice: mapa };
     }),
 
   setMedia: (media) => set({ media }),
@@ -333,6 +380,15 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   setScreenShares: (screenShares) =>
     set((state) => ({
       screenShares,
+      /**
+       * Quem parou de transmitir sai da lista de assistidos. Sem isto, aceitar
+       * uma vez valeria para sempre: a pessoa recomecaria a transmitir noutro
+       * dia e a tela dela abriria sozinha de novo — que e exatamente o
+       * comportamento que estamos removendo.
+       */
+      watchedShares: state.watchedShares.filter((id) =>
+        screenShares.some((share) => share.userId === id),
+      ),
       // Se o destaque saiu do ar, volta para o automatico em vez de ficar
       // apontando para uma transmissao que acabou.
       focusedShareUserId: screenShares.some(
@@ -345,6 +401,18 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set({ localSharing, localShareTrack: localSharing ? (track ?? null) : null }),
   setSharePreset: (sharePreset) => set({ sharePreset }),
   setFocusedShare: (focusedShareUserId) => set({ focusedShareUserId }),
+
+  watchShare: (userId) =>
+    set((state) =>
+      state.watchedShares.includes(userId)
+        ? {}
+        : { watchedShares: [...state.watchedShares, userId] },
+    ),
+
+  unwatchShare: (userId) =>
+    set((state) => ({
+      watchedShares: state.watchedShares.filter((id) => id !== userId),
+    })),
   setRoomControls: (roomControls) => set({ roomControls }),
 
   updateVoice: (participant) =>
@@ -356,11 +424,13 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         // desconectado — o token nao serve mais.
         const leftMyself = participant.userId === state.selfUserId;
         return leftMyself
-          ? { voice: rest, media: null, mediaConnected: false }
+          ? { voice: rest, selfVoice: null, media: null, mediaConnected: false }
           : { voice: rest };
       }
+      const souEu = participant.userId === state.selfUserId;
       return {
         voice: { ...state.voice, [participant.userId]: participant },
+        ...(souEu ? { selfVoice: participant } : null),
       };
     }),
 
@@ -511,8 +581,13 @@ export function useMediaConnected(): boolean {
 }
 
 /** Estado de voz do proprio usuario — alimenta a barra de controles. */
+/**
+ * A minha ocupacao de voz.
+ *
+ * Le o campo proprio, e nao `voice[meuId]`: o mapa e do servidor aberto na
+ * tela, e a minha chamada nao pertence a servidor nenhum. Derivar do mapa era
+ * o que fazia a call morrer ao navegar.
+ */
 export function useSelfVoice(): VoiceParticipant | null {
-  const voice = useRealtimeStore((state) => state.voice);
-  const selfUserId = useRealtimeStore((state) => state.selfUserId);
-  return selfUserId ? (voice[selfUserId] ?? null) : null;
+  return useRealtimeStore((state) => state.selfVoice);
 }

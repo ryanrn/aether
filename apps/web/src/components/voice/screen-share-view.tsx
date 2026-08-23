@@ -8,6 +8,7 @@ import {
   Pin,
   PinOff,
   Volume1,
+  Play,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -34,6 +35,21 @@ import { cn } from "@/lib/utils";
  * Sem alfinete, o destaque e automatico: o primeiro que estiver no ar. Assim a
  * tela funciona sozinha quando so ha uma pessoa transmitindo, que e o caso
  * comum.
+ *
+ * NADA de outra pessoa comeca a tocar sem voce aceitar. Antes a transmissao
+ * alheia abria sozinha ao entrar no canal, roubando a atencao de quem estava
+ * fazendo outra coisa. Agora aparece um convite com o nome de quem transmite,
+ * e o video so roda depois do clique.
+ *
+ * LIMITE HONESTO: isto e consentimento de EXIBICAO, ainda nao de banda. O
+ * LiveKit assina as faixas automaticamente (`autoSubscribe` ligado), entao o
+ * video ja esta chegando mesmo sem aparecer — a economia de dados exige montar
+ * a lista a partir de `TrackPublished` e so assinar no aceite, o que reescreve
+ * o caminho de assinatura. Esta anotado como proximo passo; prometer economia
+ * de dados aqui seria mentira na interface.
+ *
+ * A SUA propria transmissao e a excecao: ver o que voce mesmo esta enviando e
+ * conferencia, nao intromissao.
  */
 export function ScreenShareView() {
   const shares = useScreenShares();
@@ -42,6 +58,8 @@ export function ScreenShareView() {
   const selfUserId = useRealtimeStore((state) => state.selfUserId);
   const focusedId = useRealtimeStore((state) => state.focusedShareUserId);
   const setFocusedShare = useRealtimeStore((state) => state.setFocusedShare);
+  const watched = useRealtimeStore((state) => state.watchedShares);
+  const watchShare = useRealtimeStore((state) => state.watchShare);
 
   /** A propria transmissao entra na lista para voce conferir o que esta enviando. */
   const all: { userId: string; label: string; track: Track }[] = [
@@ -61,16 +79,24 @@ export function ScreenShareView() {
   if (!focused) return null;
   const others = all.filter((item) => item.userId !== focused.userId);
 
+  /** A propria transmissao dispensa convite; a dos outros, nao. */
+  const podeVer = (userId: string) =>
+    userId === selfUserId || watched.includes(userId);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-4">
-      <FocusedStream
-        label={focused.label}
-        track={focused.track}
-        pinned={focusedId === focused.userId}
-        onTogglePin={() =>
-          setFocusedShare(focusedId === focused.userId ? null : focused.userId)
-        }
-      />
+      {podeVer(focused.userId) ? (
+        <FocusedStream
+          label={focused.label}
+          track={focused.track}
+          pinned={focusedId === focused.userId}
+          onTogglePin={() =>
+            setFocusedShare(focusedId === focused.userId ? null : focused.userId)
+          }
+        />
+      ) : (
+        <Convite label={focused.label} onAceitar={() => watchShare(focused.userId)} />
+      )}
 
       {others.length > 0 ? (
         <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
@@ -82,7 +108,14 @@ export function ScreenShareView() {
               title={`Ver a tela de ${item.label}`}
               className="group relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-base-700 bg-base-950 transition-colors hover:border-accent-600/60"
             >
-              <TrackVideo track={item.track} className="h-full w-full object-contain" />
+              {podeVer(item.userId) ? (
+                <TrackVideo track={item.track} className="h-full w-full object-contain" />
+              ) : (
+                /* Sem aceite, a miniatura tambem nao mostra a tela de ninguem. */
+                <span className="grid h-full w-full place-items-center">
+                  <MonitorUp className="h-5 w-5 text-ink-500" strokeWidth={1.75} />
+                </span>
+              )}
               <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-base-950/90 to-transparent px-2 py-1 text-left font-mono text-[10px] text-ink-300">
                 {item.label}
               </span>
@@ -315,5 +348,45 @@ function TrackVideo({
       muted
       className={className}
     />
+  );
+}
+
+/**
+ * O convite para assistir. Nao ha video rodando por tras dele: a faixa so e
+ * exibida depois do aceite.
+ */
+function Convite({
+  label,
+  onAceitar,
+}: {
+  label: string;
+  onAceitar: () => void;
+}) {
+  return (
+    <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-base-800 bg-base-950">
+      <div className="flex max-w-sm flex-col items-center gap-4 p-8 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-base-850">
+          <MonitorUp className="h-6 w-6 text-accent-400" strokeWidth={1.75} />
+        </span>
+
+        <div>
+          <p className="text-[15px] font-bold text-ink-100">
+            {label} esta compartilhando a tela
+          </p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-300">
+            Nada abre sozinho aqui. Clique quando quiser ver.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onAceitar}
+          className="flex items-center gap-2 rounded-md bg-accent-500 px-4 py-2 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400"
+        >
+          <Play className="h-4 w-4" strokeWidth={2} />
+          Assistir
+        </button>
+      </div>
+    </div>
   );
 }
