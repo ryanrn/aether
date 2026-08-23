@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { MicOff, MonitorUp, PhoneOff, Volume2, VolumeX } from "lucide-react";
 import type { PublicChannel, VoiceParticipant } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,6 +13,10 @@ import {
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
 import { ScreenShareView } from "@/components/voice/screen-share-view";
+import {
+  VoiceMemberMenu,
+  type MenuAnchor,
+} from "@/components/voice/voice-member-menu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -192,17 +197,42 @@ function ParticipantCard({
   const muted = participant.selfMuted || participant.serverMuted;
   const deafened = participant.selfDeafened || participant.serverDeafened;
   const speaking = participant.speaking && !muted;
+  const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
+
+  /**
+   * Clique direito no card abre o volume, como em qualquer aplicativo de voz.
+   * Sem `viewer` nem lista de canais: aqui o menu e so o volume. A moderacao
+   * fica na arvore de canais, que e onde existe a lista necessaria para o
+   * "mover para".
+   *
+   * O menu do proprio card nao abre — nao se regula o proprio microfone.
+   */
+  function openMenu(event: React.MouseEvent) {
+    if (isSelf) return;
+    event.preventDefault();
+    setMenuAnchor({ x: event.clientX, y: event.clientY });
+  }
 
   return (
     <div
+      onContextMenu={openMenu}
       className={cn(
         "group relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-base-900 transition-all duration-150",
         compact && "w-32 shrink-0",
+        !isSelf && "cursor-context-menu",
         speaking
           ? "border-accent-600/70 shadow-[0_0_0_1px_var(--color-accent-600),0_0_28px_-14px_var(--color-accent-500)]"
           : "border-base-700",
       )}
     >
+      {menuAnchor ? (
+        <VoiceMemberMenu
+          participant={participant}
+          anchor={menuAnchor}
+          onClose={() => setMenuAnchor(null)}
+        />
+      ) : null}
+
       {/* FASE 4/5: <video> entra aqui, ocupando o card inteiro */}
       <Avatar
         userId={participant.userId}

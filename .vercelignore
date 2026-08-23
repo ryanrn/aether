@@ -1,0 +1,9 @@
+# O app desktop nao vai para a Vercel: ele e um executavel que carrega o site,
+# nao parte do site. Sem esta linha o deploy tenta subir o instalador de 78MB e
+# o app descompactado, e estoura o limite de 100MB por arquivo.
+apps/desktop
+
+# Saidas de build e artefatos locais.
+dist
+.next
+node_modules

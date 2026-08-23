@@ -7,12 +7,20 @@ import {
   PictureInPicture2,
   Pin,
   PinOff,
+  Volume1,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { Track } from "livekit-client";
 import {
   useRealtimeStore,
   useScreenShares,
 } from "@/lib/stores/realtime-store";
+import {
+  DEFAULT_VOLUME,
+  readScreenVolume,
+  saveScreenVolume,
+} from "@/lib/voice/volumes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -158,10 +166,80 @@ function FocusedStream({
           </StreamAction>
         ) : null}
 
+        <ScreenAudioVolume />
+
         <StreamAction label="Tela cheia" onClick={() => void toggleFullscreen()}>
           <Maximize2 className="h-3.5 w-3.5" />
         </StreamAction>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Volume do audio que vem junto do compartilhamento de tela.
+ *
+ * Um controle SO para todas as telas, e nao um por transmissao: na pratica
+ * uma pessoa compartilha por vez, e um slider por miniatura seria mais
+ * interface do que utilidade. Se um dia duas transmissoes com som ao mesmo
+ * tempo virarem comum, vira um por pessoa.
+ *
+ * O valor e local e persiste no navegador — nao afeta o que os outros ouvem.
+ */
+function ScreenAudioVolume() {
+  const roomControls = useRealtimeStore((state) => state.roomControls);
+  const [open, setOpen] = useState(false);
+  const [volume, setVolume] = useState(DEFAULT_VOLUME);
+
+  // localStorage nao existe no servidor: so lemos depois de montar.
+  useEffect(() => setVolume(readScreenVolume()), []);
+
+  function change(next: number) {
+    setVolume(next);
+    saveScreenVolume(next);
+    roomControls?.setScreenAudioVolume(next);
+  }
+
+  const Icon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+
+  return (
+    <div className="relative">
+      <StreamAction
+        label={`Volume do audio da tela (${Math.round(volume * 100)}%)`}
+        onClick={() => setOpen((value) => !value)}
+        active={open}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </StreamAction>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute right-0 top-9 z-50 w-44 animate-rise rounded-lg border border-base-700 bg-base-900 p-2.5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-ink-300">Audio da tela</span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-500">
+                {Math.round(volume * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(volume * 100)}
+              onChange={(event) => change(Number(event.target.value) / 100)}
+              aria-label="Volume do audio da tela"
+              className="mt-1.5 w-full accent-accent-500"
+            />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

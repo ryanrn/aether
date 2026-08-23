@@ -1,0 +1,46 @@
+# Empacotamento do app desktop.
+#
+# Instalador NSIS, e nao portable: o app e atualizado varias vezes por semana,
+# e portable significaria reenviar o executavel para todo mundo a cada
+# correcao. Instalado, ele ganha atalho, icone e caminho para auto-update
+# depois.
+appId: com.aether.desktop
+productName: Aether
+copyright: Aether
+
+directories:
+  output: dist
+  buildResources: build
+
+# Só o que a casca precisa. O app em si vem da rede.
+files:
+  - src/**/*
+  - package.json
+
+# A casca NAO tem dependencia de runtime: e Electron puro, e o app vem da rede.
+#
+# Sem estas duas linhas, o electron-builder roda um "install production
+# dependencies" no diretorio do app — e num monorepo com workspaces isso PODA o
+# node_modules da raiz, levando junto Next, Vitest e Prisma. Aconteceu uma vez.
+npmRebuild: false
+buildDependenciesFromSource: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  # Sem certificado de assinatura, o Windows mostra "editor desconhecido" na
+  # primeira execucao. Isso e esperado e esta anotado nas limitacoes — assinar
+  # exige um certificado pago.
+
+nsis:
+  # Instalacao por usuario: nao pede senha de administrador.
+  perMachine: false
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Aether
+  # Desinstalar apaga tambem os dados locais da janela (cookies de sessao).
+  deleteAppDataOnUninstall: false

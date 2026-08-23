@@ -81,3 +81,91 @@ export function canCaptureScreen(): boolean {
     typeof navigator.mediaDevices?.getDisplayMedia === "function"
   );
 }
+
+/**
+ * Preferencia de levar o som do sistema junto.
+ *
+ * Existe porque `getDisplayMedia` e TUDO-OU-NADA com audio: nao ha como pedir
+ * "som se der, mas nao falhe". Quando o sistema recusa abrir a captura de som
+ * ("Could not start audio source" — outro programa segurando o audio em modo
+ * exclusivo, driver, ou o proprio navegador), a captura INTEIRA falha, video
+ * junto.
+ *
+ * A versao antiga descobria isso tentando e, no erro, refazia a captura sem
+ * audio — o que reabria o seletor nativo. Trocar surpresa por escolha: a
+ * pessoa decide ANTES, e quando o som falha desligamos a opcao e lembramos,
+ * para nao repetir o transtorno na proxima vez.
+ */
+const SHARE_AUDIO_KEY = "aether.share.systemAudio";
+
+export function readShareAudioPreference(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    // Padrao LIGADO: levar o som e o que a maioria espera.
+    return window.localStorage.getItem(SHARE_AUDIO_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function saveShareAudioPreference(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SHARE_AUDIO_KEY, enabled ? "on" : "off");
+  } catch {
+    // Storage bloqueado: a escolha vale so nesta sessao.
+  }
+}
+
+/**
+ * O erro e do SOM, e nao da tela?
+ *
+ * `NotReadableError` e o que o Chrome lanca quando nao consegue abrir a fonte
+ * de audio. Distinguir importa: nesse caso a tela funcionaria perfeitamente
+ * sem o som, e a mensagem para o usuario e outra.
+ */
+export function isAudioSourceError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "NotReadableError") return true;
+  return /audio source|audio capture/i.test(error.message);
+}
+
+/**
+ * Estamos rodando dentro do app desktop?
+ *
+ * O preload do Electron publica `window.aetherDesktop`. Isso importa para o
+ * SOM: no desktop existe um seletor proprio, com a chave de audio dele, e o
+ * Chromium so entrega faixa de audio se o RENDERER tambem tiver pedido —
+ * verificado. Ou seja, se o app web mandar `audio: false`, a chave do seletor
+ * vira enfeite.
+ *
+ * Entao no desktop pedimos audio SEMPRE e deixamos o seletor decidir. A chave
+ * daqui, que existe porque no navegador pedir som pode derrubar a captura
+ * inteira, nao faz sentido la — o seletor tem a dele.
+ */
+export function isDesktopApp(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof (window as { aetherDesktop?: unknown }).aetherDesktop === "object" &&
+    (window as { aetherDesktop?: unknown }).aetherDesktop !== null
+  );
+}
+
+interface AetherDesktopBridge {
+  reportAudioCaptureFailed?: () => void;
+}
+
+/**
+ * Avisa o processo principal do Electron que a captura de som falhou.
+ *
+ * Existe porque no desktop pedimos audio SEMPRE (ver `isDesktopApp`) — quem
+ * decide se tenta de verdade e o seletor proprio, la no main process. Sem
+ * avisar a falha, o seletor continuaria pedindo som na proxima tentativa e
+ * cairia no MESMO erro, para sempre, numa maquina onde o loopback nao
+ * funciona (verificado com dongle de audio sem fio).
+ */
+export function reportDesktopAudioFailure(): void {
+  if (typeof window === "undefined") return;
+  const bridge = (window as { aetherDesktop?: AetherDesktopBridge }).aetherDesktop;
+  bridge?.reportAudioCaptureFailed?.();
+}
