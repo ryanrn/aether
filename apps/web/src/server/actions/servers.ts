@@ -12,11 +12,13 @@ import {
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { writeAudit } from "../audit";
 import { requireMember, requirePermission, requireUser } from "../guards";
+import { evictFromGateway } from "../realtime-notify";
 import {
   createServerForUser,
   generateInviteCode,
 } from "../services/servers";
 import { joinServerByCode } from "../services/invites";
+import { uploadServerIcon } from "../storage";
 import { fail, ok, toActionError } from "./action-result";
 
 export async function createServerAction(
@@ -27,7 +29,7 @@ export async function createServerAction(
   try {
     const session = await requireUser();
 
-    const limit = rateLimit(`create-server:${session.user.id}`, 5, 60 * 60_000);
+    const limit = await rateLimit(`create-server:${session.user.id}`, 5, 60 * 60_000);
     if (!limit.ok) {
       return fail("Limite de criacao de servidores atingido. Tente mais tarde.");
     }
@@ -67,7 +69,7 @@ export async function joinServerAction(
   try {
     const session = await requireUser();
 
-    const limit = rateLimit(await clientKey("join-server"), 20, 10 * 60_000);
+    const limit = await rateLimit(await clientKey("join-server"), 20, 10 * 60_000);
     if (!limit.ok) {
       return fail(`Muitas tentativas. Aguarde ${limit.retryAfter}s.`);
     }
@@ -95,7 +97,7 @@ export async function createInviteAction(
   try {
     const context = await requirePermission(serverId, "CREATE_INVITE");
 
-    const limit = rateLimit(`invite:${context.session.user.id}`, 15, 60 * 60_000);
+    const limit = await rateLimit(`invite:${context.session.user.id}`, 15, 60 * 60_000);
     if (!limit.ok) {
       return fail(`Muitos convites gerados. Aguarde ${limit.retryAfter}s.`);
     }
@@ -178,6 +180,80 @@ export async function updateServerAction(
   }
 }
 
+/**
+ * Envia (ou substitui) o icone do servidor. Mesma permissao do renomear.
+ *
+ * Nao apaga o arquivo antigo no Storage quando substitui ou remove — cada
+ * envio ganha um nome novo, entao o anterior fica orfao no bucket. Aceito de
+ * proposito: apagar exigiria guardar o path (nao so a URL publica) e mais uma
+ * chamada de rede que pode falhar, por um espaco que custa centavos.
+ */
+export async function uploadServerIconAction(
+  serverId: string,
+  formData: FormData,
+): Promise<ActionResult<{ iconUrl: string }>> {
+  try {
+    const context = await requirePermission(serverId, "MANAGE_SERVER");
+
+    const file = formData.get("icon");
+    if (!(file instanceof File)) {
+      return fail("Nenhum arquivo enviado");
+    }
+
+    const result = await uploadServerIcon(serverId, file);
+    if (!result.ok) return fail(result.error);
+
+    await prisma.server.update({
+      where: { id: serverId },
+      data: { iconUrl: result.url },
+    });
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "server.update",
+      targetType: "server",
+      targetId: serverId,
+      metadata: { icon: "uploaded" },
+    });
+
+    revalidatePath(`/app/s/${serverId}`, "layout");
+    revalidatePath("/app");
+    return ok({ iconUrl: result.url });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Remove o icone do servidor, voltando ao avatar gerado por iniciais. */
+export async function removeServerIconAction(
+  serverId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const context = await requirePermission(serverId, "MANAGE_SERVER");
+
+    await prisma.server.update({
+      where: { id: serverId },
+      data: { iconUrl: null },
+    });
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "server.update",
+      targetType: "server",
+      targetId: serverId,
+      metadata: { icon: "removed" },
+    });
+
+    revalidatePath(`/app/s/${serverId}`, "layout");
+    revalidatePath("/app");
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
 /** Sair do servidor. O dono nao pode sair sem transferir a posse (fase 6). */
 export async function leaveServerAction(
   serverId: string,
@@ -189,6 +265,10 @@ export async function leaveServerAction(
     }
 
     await prisma.serverMember.delete({ where: { id: context.memberId } });
+    // Mesmo motivo do kick/ban: sem isto, quem saiu continuaria recebendo o
+    // chat pelo socket ate recarregar a pagina.
+    await evictFromGateway({ serverId, userId: context.session.user.id });
+
     await writeAudit({
       serverId,
       actorId: context.session.user.id,

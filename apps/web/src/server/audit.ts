@@ -23,7 +23,8 @@ export type AuditAction =
   | "member.ban"
   | "member.unban"
   | "member.move"
-  | "member.mute";
+  | "member.mute"
+  | "member.nickname";
 
 export async function writeAudit(params: {
   serverId: string;

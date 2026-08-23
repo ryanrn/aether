@@ -13,6 +13,7 @@ import {
   assertRoleHierarchy,
   requirePermission,
 } from "../guards";
+import { resyncGatewayRooms } from "../realtime-notify";
 import {
   assignRole,
   createRole,
@@ -95,6 +96,9 @@ export async function updateRoleAction(
       actorPermissions: context.permissions,
       actorIsOwner: context.isOwner,
     });
+    // Quem tem este cargo pode ter ganhado ou perdido VIEW_CHANNEL de algum
+    // canal — recalcula quem ja esta conectado, nao so quem entrar depois.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -121,6 +125,8 @@ export async function deleteRoleAction(
     await assertRoleHierarchy(context, roleId);
 
     await deleteRole(roleId, serverId);
+    // Quem tinha este cargo perde as permissoes que so vinham dele.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -152,6 +158,8 @@ export async function assignRoleAction(
     await assertRoleHierarchy(context, parsed.data.roleId);
 
     await assignRole(parsed.data.memberId, parsed.data.roleId, serverId);
+    // O cargo novo pode abrir canal que o membro nao via ate agora.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -182,6 +190,8 @@ export async function unassignRoleAction(
     await assertRoleHierarchy(context, parsed.data.roleId);
 
     await unassignRole(parsed.data.memberId, parsed.data.roleId, serverId);
+    // Perder o cargo pode fechar canal que so era visivel por causa dele.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,

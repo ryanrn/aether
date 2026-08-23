@@ -16,6 +16,7 @@ import {
   requireMember,
   requirePermission,
 } from "../guards";
+import { resyncGatewayRooms } from "../realtime-notify";
 import {
   createCategory,
   createChannel,
@@ -64,6 +65,8 @@ export async function createChannelAction(
       userLimit: data.userLimit,
       allowedRoleIds: data.isPrivate ? data.allowedRoleIds : [],
     });
+    // Canal novo: quem ja esta conectado no servidor nao tinha essa sala ainda.
+    await resyncGatewayRooms({ serverId: data.serverId });
 
     await writeAudit({
       serverId: data.serverId,
@@ -100,6 +103,9 @@ export async function updateChannelAction(
     );
 
     await updateChannel({ ...data, serverId });
+    // isPrivate pode ter mudado, e o servico limpa os overwrites quando o
+    // canal deixa de ser privado — os dois alteram quem enxerga o canal.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -134,6 +140,8 @@ export async function deleteChannelAction(
     });
 
     await deleteChannel(channelId, serverId);
+    // Alem de atualizar a arvore, tira todo mundo da sala do canal que sumiu.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -159,6 +167,8 @@ export async function moveChannelAction(
   try {
     await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
     await moveChannel(channelId, serverId, direction);
+    // Ordem e cosmetica, mas a arvore de todo mundo precisa refletir.
+    await resyncGatewayRooms({ serverId });
     refresh(serverId);
     return ok();
   } catch (error) {
@@ -181,6 +191,8 @@ export async function setChannelAccessAction(
     );
 
     await setChannelAccess(parsed.data.channelId, serverId, parsed.data.roleIds);
+    // A lista de cargos liberados neste canal privado mudou por inteiro.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,
@@ -222,6 +234,7 @@ export async function createCategoryAction(
 
     const context = await requirePermission(parsed.data.serverId, "CREATE_CHANNEL");
     const result = await createCategory(parsed.data.serverId, parsed.data.name);
+    await resyncGatewayRooms({ serverId: parsed.data.serverId });
 
     await writeAudit({
       serverId: parsed.data.serverId,
@@ -251,6 +264,7 @@ export async function renameCategoryAction(
 
     await requirePermission(serverId, "EDIT_CHANNEL");
     await renameCategory(parsed.data.categoryId, serverId, parsed.data.name);
+    await resyncGatewayRooms({ serverId });
 
     refresh(serverId);
     return ok();
@@ -266,6 +280,8 @@ export async function deleteCategoryAction(
   try {
     const context = await requirePermission(serverId, "DELETE_CHANNEL");
     await deleteCategory(categoryId, serverId);
+    // Os canais viram soltos (onDelete: SetNull) — a arvore muda para todos.
+    await resyncGatewayRooms({ serverId });
 
     await writeAudit({
       serverId,

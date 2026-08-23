@@ -22,6 +22,20 @@ export const displayNameSchema = z
   .min(1, "Nome de exibicao obrigatorio")
   .max(32, "Nome de exibicao pode ter no maximo 32 caracteres");
 
+/**
+ * Apelido por servidor. Vazio APAGA o apelido (volta ao nome de exibicao) —
+ * por isso a string vazia e valida aqui, diferente do displayName.
+ */
+export const nicknameSchema = z
+  .string()
+  .trim()
+  .max(32, "Apelido pode ter no maximo 32 caracteres");
+
+export const setNicknameSchema = z.object({
+  memberId: z.string().min(1),
+  nickname: nicknameSchema,
+});
+
 export const emailSchema = z
   .string()
   .trim()
@@ -61,6 +75,19 @@ export const updateServerSchema = z.object({
   serverId: z.string().min(1),
   name: serverNameSchema,
 });
+
+/**
+ * Icone do servidor. Os mesmos valores configuram o bucket no Supabase
+ * Storage (limite e mime type recusados na origem) e a validacao aqui —
+ * duas cópias da regra divergem, entao os dois lados leem esta constante.
+ */
+export const SERVER_ICON_MAX_BYTES = 2 * 1024 * 1024;
+export const SERVER_ICON_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+export type ServerIconMimeType = (typeof SERVER_ICON_MIME_TYPES)[number];
 
 export const inviteCodeSchema = z
   .string()

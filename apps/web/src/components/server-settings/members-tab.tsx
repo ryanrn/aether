@@ -158,6 +158,7 @@ export function MembersTab({
           serverId={serverId}
           member={editing}
           roles={manageable}
+          viewer={viewer}
           onClose={() => setEditing(null)}
         />
       ) : null}

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { PublicMember, PublicRole } from "@aether/shared";
+import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
 import { assignRoleAction, unassignRoleAction } from "@/server/actions/roles";
+import { setNicknameAction } from "@/server/actions/profile";
+import { viewerCan } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
-import { FieldError } from "@/components/ui/field";
+import { Field, FieldError, Input } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -15,16 +17,23 @@ import { cn } from "@/lib/utils";
  * A lista de cargos ja chega filtrada pela hierarquia de quem esta olhando —
  * e a action revalida a mesma regra no servidor (assertRoleHierarchy), entao
  * forjar o id de um cargo alto nao adianta nada.
+ *
+ * O APELIDO mora aqui pelo mesmo motivo: e o modal de "gerenciar este membro",
+ * e ja passa pela hierarquia. Nao foi para o modal de moderacao de proposito —
+ * la se expulsa e bane, e misturar edicao com acao destrutiva e pedir clique
+ * errado.
  */
 export function MemberRolesModal({
   serverId,
   member,
   roles,
+  viewer,
   onClose,
 }: {
   serverId: string;
   member: PublicMember;
   roles: PublicRole[];
+  viewer: ViewerContext;
   onClose: () => void;
 }) {
   const [assigned, setAssigned] = useState<string[]>(
@@ -32,6 +41,28 @@ export function MemberRolesModal({
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [nickname, setNickname] = useState(member.nickname ?? "");
+  const [nicknameSaved, setNicknameSaved] = useState(false);
+
+  /**
+   * Quem nao tem a permissao ve o campo desabilitado em vez de nao ver nada:
+   * esconder faria parecer que o recurso nao existe. A action recusa de
+   * qualquer forma — a interface so evita oferecer o que sera negado.
+   */
+  const canManageNicknames = viewerCan(viewer, "MANAGE_NICKNAMES");
+
+  function saveNickname() {
+    setError(null);
+    setNicknameSaved(false);
+    startTransition(async () => {
+      const result = await setNicknameAction(serverId, {
+        memberId: member.id,
+        nickname,
+      });
+      if (result.ok) setNicknameSaved(true);
+      else setError(result.error);
+    });
+  }
 
   function toggle(roleId: string, next: boolean) {
     setError(null);
@@ -76,6 +107,38 @@ export function MemberRolesModal({
             </p>
           </div>
         </div>
+
+        {canManageNicknames ? (
+          <div className="flex flex-col gap-2">
+            <Field
+              label="Apelido neste servidor"
+              hint="Vazio volta ao nome de exibicao da pessoa."
+            >
+              <Input
+                value={nickname}
+                onChange={(event) => {
+                  setNickname(event.target.value);
+                  setNicknameSaved(false);
+                }}
+                placeholder={member.user.displayName}
+                maxLength={32}
+              />
+            </Field>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={saveNickname}
+                disabled={pending || nickname.trim() === (member.nickname ?? "")}
+              >
+                Salvar apelido
+              </Button>
+              {nicknameSaved ? (
+                <span className="text-[13px] text-signal-online">Salvo.</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {roles.length === 0 ? (
           <p className="text-[13px] text-ink-400">

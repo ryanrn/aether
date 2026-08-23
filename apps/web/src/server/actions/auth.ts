@@ -24,7 +24,7 @@ export async function registerAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   try {
-    const limit = rateLimit(await clientKey("register"), 5, 10 * 60_000);
+    const limit = await rateLimit(await clientKey("register"), 5, 10 * 60_000);
     if (!limit.ok) {
       return fail(
         `Muitas tentativas. Aguarde ${limit.retryAfter}s antes de tentar de novo.`,
@@ -79,7 +79,7 @@ export async function loginAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   try {
-    const limit = rateLimit(await clientKey("login"), 10, 5 * 60_000);
+    const limit = await rateLimit(await clientKey("login"), 10, 5 * 60_000);
     if (!limit.ok) {
       return fail(
         `Muitas tentativas de login. Aguarde ${limit.retryAfter}s.`,

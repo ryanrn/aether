@@ -4,13 +4,16 @@ import { useState, useTransition } from "react";
 import { updateServerAction } from "@/server/actions/servers";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
+import { ServerIconField } from "./server-icon-field";
 
 export function GeneralTab({
   serverId,
   serverName,
+  serverIconUrl,
 }: {
   serverId: string;
   serverName: string;
+  serverIconUrl: string | null;
 }) {
   const [name, setName] = useState(serverName);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +32,12 @@ export function GeneralTab({
 
   return (
     <section className="flex max-w-[460px] flex-col gap-4">
+      <ServerIconField
+        serverId={serverId}
+        serverName={serverName}
+        serverIconUrl={serverIconUrl}
+      />
+
       <Field label="Nome do servidor">
         <Input
           value={name}
@@ -60,9 +69,7 @@ export function GeneralTab({
           Ainda nao disponivel
         </p>
         <p className="mt-1.5 text-[13px] leading-relaxed text-ink-400">
-          Icone do servidor (precisa de upload de arquivo), transferencia de
-          posse e exclusao do servidor entram na fase 6, junto com moderacao e
-          logs.
+          Transferencia de posse e exclusao do servidor ainda nao existem.
         </p>
       </div>
     </section>

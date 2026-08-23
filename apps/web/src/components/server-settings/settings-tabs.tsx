@@ -17,6 +17,7 @@ type Tab = "geral" | "cargos" | "membros" | "banimentos" | "registro";
 export function SettingsTabs({
   serverId,
   serverName,
+  serverIconUrl,
   roles,
   members,
   ownerId,
@@ -26,6 +27,7 @@ export function SettingsTabs({
 }: {
   serverId: string;
   serverName: string;
+  serverIconUrl: string | null;
   roles: PublicRole[];
   members: PublicMember[];
   ownerId: string;
@@ -75,7 +77,11 @@ export function SettingsTabs({
       </div>
 
       {active === "geral" && canManageServer ? (
-        <GeneralTab serverId={serverId} serverName={serverName} />
+        <GeneralTab
+          serverId={serverId}
+          serverName={serverName}
+          serverIconUrl={serverIconUrl}
+        />
       ) : null}
 
       {active === "cargos" && canManageRoles ? (
