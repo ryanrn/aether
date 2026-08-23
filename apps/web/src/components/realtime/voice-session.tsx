@@ -28,6 +28,7 @@ export function VoiceSession() {
   const setMediaConnected = useRealtimeStore((state) => state.setMediaConnected);
   const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
   const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
+  const setSharePreset = useRealtimeStore((state) => state.setSharePreset);
   const setRoomControls = useRealtimeStore((state) => state.setRoomControls);
 
   const channelId = selfVoice?.channelId ?? null;
@@ -89,13 +90,27 @@ export function VoiceSession() {
          */
         setRoomControls({
           setMicrophone: (deviceId) => handle.setMicrophone(deviceId),
-          startShare: async (preset) => {
-            const started = await handle.startScreenShare(preset);
+          setOutputDevice: (deviceId) => handle.setOutputDevice(deviceId),
+          setUserVolume: (userId, volume) => handle.setUserVolume(userId, volume),
+          setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
+          startShare: async (preset, withSystemAudio) => {
+            const started = await handle.startScreenShare(preset, withSystemAudio);
             if (started) {
               setLocalSharing(true, handle.localScreenTrack());
+              setSharePreset(preset);
               socket.emit("voice:streaming", true);
             }
             return started;
+          },
+          /**
+           * Troca a qualidade da transmissao ativa. Nao mexe em
+           * `localSharing` nem avisa o gateway: para os outros nada mudou —
+           * a mesma pessoa segue transmitindo a mesma faixa.
+           */
+          setSharePreset: async (preset) => {
+            const changed = await handle.setSharePreset(preset);
+            if (changed) setSharePreset(preset);
+            return changed;
           },
           stopShare: async () => {
             await handle.stopScreenShare();
@@ -137,6 +152,7 @@ export function VoiceSession() {
     setMediaConnected,
     setScreenShares,
     setLocalSharing,
+    setSharePreset,
     setRoomControls,
   ]);
 

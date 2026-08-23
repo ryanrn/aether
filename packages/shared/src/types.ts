@@ -89,6 +89,17 @@ export interface VoiceState {
   streaming: boolean;
   /** detectado como falando agora */
   speaking: boolean;
+  /**
+   * Quando entrou no canal atual (ISO), para contar ha quanto tempo esta ali.
+   *
+   * Carimbado pelo GATEWAY, nunca pelo cliente: relogio de navegador erra, e
+   * um cliente poderia mentir "estou aqui ha 8 horas". `null` quando a pessoa
+   * nao esta em voz.
+   *
+   * Trocar de canal REINICIA a contagem — a atividade e "estar neste canal",
+   * nao "estar em voz em algum lugar".
+   */
+  joinedAt: string | null;
 }
 
 /**

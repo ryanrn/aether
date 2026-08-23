@@ -1,13 +1,21 @@
 import { prisma } from "@aether/db";
 import { loadMemberAccess } from "@aether/access";
-import { isUserStatus, room, type UserStatus } from "@aether/shared";
+import {
+  GAME_NAME_MAX,
+  isUserStatus,
+  room,
+  safeGameIcon,
+  type UserStatus,
+} from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { visibleChannelRooms } from "../rooms";
 import {
   detachSocket,
   joinServer,
   leaveServer,
+  presenceEntryOf,
   presenceOf,
+  setGame,
   setStatus,
   statusOf,
   voiceOfServer,
@@ -27,9 +35,24 @@ function announce(
   userId: string,
   status: UserStatus,
 ): void {
+  /**
+   * O jogo vem do estado, e nao do parametro: quem chama aqui so tem opiniao
+   * sobre o STATUS. Sem isto, todo anuncio de presenca apagaria da tela dos
+   * outros o jogo de quem esta jogando — bastaria mudar para "Ausente".
+   *
+   * No `disconnect` a entrada ja saiu do mapa, e ai o `null` esta certo: quem
+   * desconectou nao esta mais jogando aos olhos de ninguem.
+   */
+  const atual = presenceEntryOf(userId);
   io.to(room.server(serverId)).emit("presence:update", {
     serverId,
-    entry: { userId, status },
+    entry: {
+      userId,
+      status,
+      game: atual?.game ?? null,
+      gameSince: atual?.gameSince ?? null,
+      gameIcon: atual?.gameIcon ?? null,
+    },
   });
 }
 
@@ -100,6 +123,44 @@ export function registerPresenceHandlers(
     await prisma.user
       .update({ where: { id: userId }, data: { status } })
       .catch((error) => console.error("[gateway] presence:set nao persistiu:", error));
+  });
+
+  /**
+   * "estou jogando X". Vem do app de desktop, que ja fez o casamento na
+   * maquina de quem joga — aqui chega so o nome.
+   *
+   * O nome e tratado como TEXTO DE CLIENTE, nao como verdade: cortado no
+   * tamanho maximo e podado nas pontas. Nao ha lista de jogos validos para
+   * conferir contra, e inventar uma so criaria um cadastro para manter — o
+   * dano possivel de um nome mentiroso e alguem dizer que joga o que nao joga.
+   *
+   * Nao persiste em lugar nenhum: jogo aberto e coisa do momento, como a
+   * propria presenca. Reiniciar o gateway limpa, e esta anotado no README.
+   */
+  socket.on("presence:game", (payload) => {
+    const bruto = payload?.name;
+    const nome =
+      typeof bruto === "string" && bruto.trim().length > 0
+        ? bruto.trim().slice(0, GAME_NAME_MAX)
+        : null;
+
+    /**
+     * O icone e renderizado na tela dos OUTROS, entao nada de confiar no que
+     * chegou: `safeGameIcon` so aceita data URL de imagem raster, com teto de
+     * tamanho, e recusa SVG de proposito — SVG e documento, aceita script.
+     * Icone invalido vira `null` e a pessoa aparece so com o nome.
+     */
+    const icone = nome ? safeGameIcon(payload?.icon) : null;
+
+    const mudou = setGame(userId, nome, icone);
+    if (!mudou) return;
+
+    for (const serverId of mudou.servers) {
+      io.to(room.server(serverId)).emit("presence:update", {
+        serverId,
+        entry: mudou.entry,
+      });
+    }
   });
 
   socket.on("disconnect", () => {

@@ -8,6 +8,7 @@ import { MemberPanel } from "@/components/layout/member-panel";
 import { TopBar } from "@/components/layout/top-bar";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
+import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
 import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
 import { VoiceChimes } from "@/components/realtime/voice-chimes";
 import { VoiceSession } from "@/components/realtime/voice-session";
@@ -57,12 +58,14 @@ export default async function ServerLayout({
 
         <ConnectionBanner />
         <VoiceActivityMonitor />
+        <GameActivityMonitor />
         <VoiceChimes />
         <VoiceSession />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar
             serverId={serverId}
+            serverName={data.server.name}
             categories={data.categories}
             looseChannels={data.looseChannels}
             roles={data.roles}
@@ -77,11 +80,27 @@ export default async function ServerLayout({
             roles={data.roles}
             ownerId={data.server.ownerId}
             serverId={serverId}
+            serverName={data.server.name}
+            /* O cartao de atividade mostra o NOME do canal ocupado; o estado
+               de voz so carrega o id. */
+            voiceChannels={[
+              ...data.looseChannels,
+              ...data.categories.flatMap((category) => category.channels),
+            ].filter((channel) => channel.type === "VOICE")}
             viewer={viewer}
           />
         </div>
 
-        <ControlBar user={context.session.user} viewer={viewer} />
+        <ControlBar
+          user={context.session.user}
+          viewer={viewer}
+          serverId={serverId}
+          memberId={context.memberId}
+          nickname={
+            data.members.find((member) => member.id === context.memberId)
+              ?.nickname ?? null
+          }
+        />
       </div>
     </RealtimeProvider>
   );

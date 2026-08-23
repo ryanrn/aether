@@ -21,6 +21,60 @@ import type {
 export interface PresenceEntry {
   userId: string;
   status: UserStatus;
+  /**
+   * Jogo detectado pelo app de desktop, ou `null`.
+   *
+   * Fica na PRESENCA e nao no estado de voz de proposito: da para estar
+   * jogando sem estar em canal nenhum, e amarrar as duas coisas faria o jogo
+   * sumir da tela de quem saiu da call sem ter fechado o jogo.
+   *
+   * Quem detecta e a maquina de quem joga — o navegador nao enumera processos.
+   * O servidor nunca ve a lista de programas, so este nome.
+   */
+  game: string | null;
+  /** desde quando neste jogo (ISO), para contar o tempo de sessao */
+  gameSince: string | null;
+  /**
+   * Icone do jogo como data URL, extraido do executavel na maquina de quem
+   * joga. `null` quando nao deu para extrair — nome sem icone continua util.
+   */
+  gameIcon: string | null;
+}
+
+/** Tamanho maximo do nome de jogo aceito — nome de pasta nao passa disso. */
+export const GAME_NAME_MAX = 64;
+
+/**
+ * Teto do icone do jogo, em caracteres do data URL.
+ *
+ * Um icone de 48x48 extraido de executavel da uns 4KB; 32KB deixa folga
+ * larga e ainda impede alguem de empurrar uma imagem grande pela presenca,
+ * que e um evento que vai para a sala inteira.
+ */
+export const GAME_ICON_MAX_CHARS = 32 * 1024;
+
+/**
+ * O icone e um data URL de imagem RASTER que podemos exibir?
+ *
+ * Isto vem do CLIENTE e e renderizado na tela dos OUTROS, entao a checagem
+ * nao e sobre formato bonito, e sobre seguranca:
+ *
+ *  - so `png`, `jpeg` e `webp`. **SVG fica de fora de proposito**: SVG e um
+ *    documento, aceita `<script>`, e existe caminho de execucao quando ele e
+ *    renderizado. Nenhuma imagem de icone precisa ser SVG;
+ *  - so base64, para nao aceitar payload de texto arbitrario;
+ *  - com teto de tamanho.
+ *
+ * Devolve o proprio icone quando serve, ou `null` — quem chama simplesmente
+ * segue sem icone, porque nome sem icone continua util.
+ */
+export function safeGameIcon(icon: unknown): string | null {
+  if (typeof icon !== "string") return null;
+  if (icon.length === 0 || icon.length > GAME_ICON_MAX_CHARS) return null;
+  if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(icon)) {
+    return null;
+  }
+  return icon;
 }
 
 export interface ReadyPayload {
@@ -81,6 +135,29 @@ export interface ServerToClientEvents {
    * pagina — o que e falha de acesso, nao so tela desatualizada.
    */
   "server:evicted": (payload: { serverId: string; reason: string }) => void;
+  /**
+   * Sua sessao nao vale mais (logout, revogacao, expiracao). O gateway
+   * revalida periodicamente a linha `Session` de cada socket aberto — sem
+   * este aviso, o cliente cairia num retry infinito e silencioso contra uma
+   * sessao morta em vez de saber que precisa logar de novo.
+   */
+  "session:revoked": () => void;
+  /**
+   * Algo mudou na estrutura deste servidor (canal criado/editado/movido/
+   * excluido, categoria, cargo, acesso de canal privado).
+   *
+   * De proposito NAO carrega o que mudou. A arvore de canais e renderizada no
+   * servidor, com as permissoes de quem esta olhando; mandar o conteudo pelo
+   * socket exigiria o gateway recalcular e serializar permissao por usuario —
+   * uma segunda copia da regra de autorizacao, que e exatamente o que este
+   * projeto nao faz. O cliente recebe o sinal e pede ao Next para
+   * re-renderizar, e a regra continua morando num lugar so.
+   *
+   * Por isso tambem e seguro mandar para a sala inteira do servidor: quem nao
+   * pode ver um canal simplesmente re-renderiza e recebe a mesma arvore de
+   * antes. O sinal em si nao revela nada.
+   */
+  "server:changed": (payload: { serverId: string }) => void;
   /** estado completo de presenca de um servidor, ao entrar */
   "presence:sync": (payload: {
     serverId: string;
@@ -141,6 +218,18 @@ export interface ClientToServerEvents {
   "server:leave": (serverId: string) => void;
   /** troca deliberada de status (ONLINE / IDLE / DND); persiste como preferencia */
   "presence:set": (status: UserStatus) => void;
+  /**
+   * "estou jogando X agora", ou `null` para limpar.
+   *
+   * Vem do app de desktop, que casa o processo LOCALMENTE e manda so o nome e
+   * o icone ja extraido. O gateway trata tudo como dado de cliente, e nao como
+   * verdade: corta o nome no tamanho maximo, valida o icone com
+   * `safeGameIcon`, e nao persiste nada — jogo aberto e coisa do momento,
+   * como a propria presenca.
+   */
+  "presence:game": (
+    payload: { name: string; icon?: string | null } | null,
+  ) => void;
   /**
    * Envia mensagem. O `nonce` e gerado pelo cliente e devolvido no ack e no
    * evento: e o que torna o reenvio apos reconexao idempotente na tela.

@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import { Crown, Shield } from "lucide-react";
-import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
+import type {
+  PublicChannel,
+  PublicMember,
+  PublicRole,
+  ViewerContext,
+} from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { MemberRolesModal } from "@/components/members/member-roles-modal";
+import {
+  UserActivityCard,
+  type CardAnchor,
+} from "@/components/profile/user-activity-card";
 import { canManageRole, viewerCan } from "@/lib/permissions";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 
@@ -20,15 +29,24 @@ export function MemberPanel({
   roles,
   ownerId,
   serverId,
+  serverName,
+  voiceChannels,
   viewer,
 }: {
   members: PublicMember[];
   roles: PublicRole[];
   ownerId: string;
   serverId: string;
+  /** nome do servidor — o cartao de atividade diz onde a pessoa esta */
+  serverName: string;
+  /** canais de voz, para o cartao resolver o nome do canal ocupado */
+  voiceChannels: PublicChannel[];
   viewer: ViewerContext;
 }) {
   const [editing, setEditing] = useState<PublicMember | null>(null);
+  const [openCard, setOpenCard] = useState<
+    { member: PublicMember; anchor: CardAnchor } | null
+  >(null);
   // O registro inteiro em vez de um seletor por membro: hook dentro do map
   // quebraria as regras dos hooks, e a referencia so muda quando a presenca muda.
   const presence = useRealtimeStore((state) => state.presence);
@@ -67,16 +85,40 @@ export function MemberPanel({
                   return (
                     <li key={member.id}>
                       <div className="group/member flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850">
-                        <Avatar
-                          userId={member.user.id}
-                          name={member.nickname ?? member.user.displayName}
-                          src={member.user.avatarUrl}
-                          status={presence[member.user.id] ?? "OFFLINE"}
-                          size="xs"
-                        />
-                        <span className="flex-1 truncate text-[13px] text-ink-300">
-                          {member.nickname ?? member.user.displayName}
-                        </span>
+                        {/*
+                          O nome inteiro abre o cartao de atividade. O cartao
+                          sai para a ESQUERDA: este painel encosta na borda
+                          direita da janela, e ancorar nela jogaria o cartao
+                          para fora da tela — o proprio cartao corrige, mas
+                          corrigido ele cobriria o nome que foi clicado.
+                        */}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            const rect =
+                              event.currentTarget.getBoundingClientRect();
+                            setOpenCard((current) =>
+                              current?.member.id === member.id
+                                ? null
+                                : {
+                                    member,
+                                    anchor: { x: rect.left - 280, y: rect.top },
+                                  },
+                            );
+                          }}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <Avatar
+                            userId={member.user.id}
+                            name={member.nickname ?? member.user.displayName}
+                            src={member.user.avatarUrl}
+                            status={presence[member.user.id] ?? "OFFLINE"}
+                            size="xs"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-ink-300">
+                            {member.nickname ?? member.user.displayName}
+                          </span>
+                        </button>
 
                         {isOwnerMember ? (
                           <Crown
@@ -105,11 +147,23 @@ export function MemberPanel({
         </div>
       </aside>
 
+      {openCard ? (
+        <UserActivityCard
+          user={openCard.member.user}
+          nickname={openCard.member.nickname}
+          serverName={serverName}
+          voiceChannels={voiceChannels}
+          anchor={openCard.anchor}
+          onClose={() => setOpenCard(null)}
+        />
+      ) : null}
+
       {editing ? (
         <MemberRolesModal
           serverId={serverId}
           member={editing}
           roles={roles.filter((role) => canManageRole(viewer, role))}
+          viewer={viewer}
           onClose={() => setEditing(null)}
         />
       ) : null}

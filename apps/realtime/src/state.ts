@@ -23,6 +23,12 @@ import type {
 
 interface UserPresence {
   status: UserStatus;
+  /** jogo detectado pelo app de desktop; `null` quando nao ha ou esta desligado */
+  game: string | null;
+  /** desde quando neste jogo — carimbado AQUI, nao pelo cliente */
+  gameSince: number | null;
+  /** icone do jogo (data URL), ja validado por quem recebeu do cliente */
+  gameIcon: string | null;
   /** sockets vivos deste usuario */
   sockets: Set<string>;
   /** servidores onde este usuario esta visivel, com quantos sockets em cada um */
@@ -50,6 +56,9 @@ export function attachSocket(
   users.set(userId, {
     // OFFLINE no banco significa "nunca escolheu": conectar equivale a ONLINE.
     status: initialStatus === "OFFLINE" ? "ONLINE" : initialStatus,
+    game: null,
+    gameSince: null,
+    gameIcon: null,
     sockets: new Set([socketId]),
     servers: new Map(),
   });
@@ -57,6 +66,50 @@ export function attachSocket(
 
 export function statusOf(userId: string): UserStatus {
   return users.get(userId)?.status ?? "OFFLINE";
+}
+
+/** Uma entrada de presenca no formato que o cliente consome. */
+function toPresenceEntry(userId: string, user: UserPresence): PresenceEntry {
+  return {
+    userId,
+    status: user.status,
+    game: user.game,
+    gameSince: user.gameSince ? new Date(user.gameSince).toISOString() : null,
+    gameIcon: user.gameIcon,
+  };
+}
+
+/**
+ * Registra o jogo que a pessoa esta jogando. Devolve os servidores a avisar,
+ * ou `null` quando nada mudou — repetir o mesmo nome para a sala inteira a
+ * cada verificacao seria trafego sem informacao nova.
+ *
+ * O carimbo de tempo e daqui, nao do cliente: o mesmo motivo do `joinedAt` da
+ * voz. Trocar de jogo reinicia a contagem; continuar no mesmo preserva.
+ */
+export function setGame(
+  userId: string,
+  game: string | null,
+  icon: string | null = null,
+): { servers: string[]; entry: PresenceEntry } | null {
+  const user = users.get(userId);
+  if (!user) return null;
+  // Comparacao pelo NOME: o icone acompanha o jogo, nao muda sozinho.
+  if (user.game === game) return null;
+
+  user.game = game;
+  user.gameSince = game ? Date.now() : null;
+  user.gameIcon = game ? icon : null;
+  return {
+    servers: [...user.servers.keys()],
+    entry: toPresenceEntry(userId, user),
+  };
+}
+
+/** A presenca de um usuario, para reemitir sem recalcular. */
+export function presenceEntryOf(userId: string): PresenceEntry | null {
+  const user = users.get(userId);
+  return user ? toPresenceEntry(userId, user) : null;
 }
 
 /**
@@ -145,7 +198,7 @@ export function presenceOf(serverId: string): PresenceEntry[] {
   const entries: PresenceEntry[] = [];
   for (const userId of members) {
     const user = users.get(userId);
-    if (user) entries.push({ userId, status: user.status });
+    if (user) entries.push(toPresenceEntry(userId, user));
   }
   return entries;
 }
@@ -182,6 +235,8 @@ interface VoiceEntry {
   /** silenciado por moderacao — o proprio usuario nao desfaz */
   serverMuted: boolean;
   serverDeafened: boolean;
+  /** quando entrou NESTE canal — a fonte do "ha quanto tempo" na tela */
+  joinedAt: number;
   user: PublicUser;
 }
 
@@ -200,6 +255,7 @@ function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
     // Mutado nunca aparece falando, mesmo que o cliente insista — inclusive
     // quando o mudo veio da moderacao.
     speaking: entry.speaking && !entry.selfMuted && !entry.serverMuted,
+    joinedAt: new Date(entry.joinedAt).toISOString(),
     user: entry.user,
   };
 }
@@ -224,6 +280,7 @@ export function voiceDeparture(
     serverDeafened: false,
     streaming: false,
     speaking: false,
+    joinedAt: null,
     user,
   };
 }
@@ -269,6 +326,17 @@ export function joinVoice(params: {
      */
     serverMuted: previous?.serverMuted ?? false,
     serverDeafened: previous?.serverDeafened ?? false,
+    /**
+     * Trocar de canal REINICIA a contagem; continuar no mesmo canal preserva.
+     *
+     * A distincao importa na reconexao: uma queda de rede chama isto de novo
+     * com o mesmo canal, e zerar ali faria o tempo da pessoa voltar para zero
+     * por causa de um soluco de conexao que ela nem viu.
+     */
+    joinedAt:
+      previous && previous.channelId === params.channelId
+        ? previous.joinedAt
+        : Date.now(),
     user: params.user,
   });
 

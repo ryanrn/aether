@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { Headphones, Mic, MicOff, MonitorUp, MoreVertical, VolumeX } from "lucide-react";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
-import { VoiceMemberMenu } from "@/components/voice/voice-member-menu";
+import {
+  VoiceMemberMenu,
+  type MenuAnchor,
+} from "@/components/voice/voice-member-menu";
+import {
+  UserActivityCard,
+  type CardAnchor,
+} from "@/components/profile/user-activity-card";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -16,13 +23,21 @@ import { cn } from "@/lib/utils";
 export function ChannelMembers({
   states,
   viewer,
+  serverName,
   voiceChannels,
 }: {
   states: VoiceParticipant[];
   viewer: ViewerContext;
+  /** nome do servidor — o cartao de atividade diz onde a pessoa esta */
+  serverName: string;
   voiceChannels: PublicChannel[];
 }) {
-  const [openFor, setOpenFor] = useState<string | null>(null);
+  const [openFor, setOpenFor] = useState<
+    { userId: string; anchor: MenuAnchor } | null
+  >(null);
+  const [openCard, setOpenCard] = useState<
+    { participant: VoiceParticipant; anchor: CardAnchor } | null
+  >(null);
 
   return (
     <ul className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-base-800 pl-2">
@@ -35,43 +50,83 @@ export function ChannelMembers({
             key={state.userId}
             className="group/participant relative flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850"
           >
-            <Avatar
-              userId={state.userId}
-              name={state.user.displayName}
-              src={state.user.avatarUrl}
-              size="xs"
-              speaking={state.speaking && !muted}
-            />
-            <span
-              className={cn(
-                "flex-1 truncate text-[12px] transition-colors",
-                state.speaking && !muted ? "text-accent-300" : "text-ink-300",
-                (muted || deafened) && "text-ink-500",
-              )}
+            {/*
+              Clicar na pessoa abre o cartao de atividade; o "..." ao lado
+              continua sendo a moderacao. Sao coisas diferentes: uma e olhar,
+              a outra e agir.
+            */}
+            <button
+              type="button"
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setOpenCard((current) =>
+                  current?.participant.userId === state.userId
+                    ? null
+                    : {
+                        participant: state,
+                        anchor: { x: rect.right + 8, y: rect.top },
+                      },
+                );
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
-              {state.user.displayName}
-            </span>
+              <Avatar
+                userId={state.userId}
+                name={state.user.displayName}
+                src={state.user.avatarUrl}
+                size="xs"
+                speaking={state.speaking && !muted}
+              />
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-[12px] transition-colors",
+                  state.speaking && !muted ? "text-accent-300" : "text-ink-300",
+                  (muted || deafened) && "text-ink-500",
+                )}
+              >
+                {state.user.displayName}
+              </span>
+            </button>
 
             <button
               type="button"
               title="Moderar"
               aria-label={`Moderar ${state.user.displayName}`}
-              onClick={() =>
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
                 setOpenFor((current) =>
-                  current === state.userId ? null : state.userId,
-                )
-              }
+                  current?.userId === state.userId
+                    ? null
+                    : {
+                        userId: state.userId,
+                        // Abre logo abaixo do botao; o menu se ajusta sozinho
+                        // se nao couber ate a borda da janela.
+                        anchor: { x: rect.left, y: rect.bottom + 4 },
+                      },
+                );
+              }}
               className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/participant:opacity-100"
             >
               <MoreVertical className="h-3 w-3" />
             </button>
 
-            {openFor === state.userId ? (
+            {openFor?.userId === state.userId ? (
               <VoiceMemberMenu
                 participant={state}
+                anchor={openFor.anchor}
                 viewer={viewer}
                 voiceChannels={voiceChannels}
                 onClose={() => setOpenFor(null)}
+              />
+            ) : null}
+
+            {openCard?.participant.userId === state.userId ? (
+              <UserActivityCard
+                user={state.user}
+                serverName={serverName}
+                voiceChannels={voiceChannels}
+                anchor={openCard.anchor}
+                onClose={() => setOpenCard(null)}
               />
             ) : null}
 

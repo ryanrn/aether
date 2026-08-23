@@ -11,7 +11,7 @@ import type {
 } from "@aether/shared";
 import type { Track } from "livekit-client";
 import type { RemoteScreenShare } from "@/lib/voice/room";
-import type { SharePresetId } from "@/lib/voice/screen-share";
+import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
 
 /**
  * Estado global de tempo real: presenca, voz e mensagens.
@@ -56,6 +56,16 @@ interface RealtimeState {
   voiceError: string | null;
 
   presence: Record<string, UserStatus>;
+  /**
+   * Jogo por usuario, SEPARADO de `presence`.
+   *
+   * Podia ser um campo dentro de `presence`, mas ali o valor e um `UserStatus`
+   * cru, lido em varios pontos como `presence[id] ?? "OFFLINE"`. Trocar o
+   * formato obrigaria a mexer em todos eles para acrescentar um dado que a
+   * maioria nem usa. Mapa separado: quem quer status continua igual, quem quer
+   * jogo pede o jogo.
+   */
+  activity: Record<string, { game: string; since: string | null; icon: string | null }>;
   voice: Record<string, VoiceParticipant>;
   /** credenciais do SFU, validas so enquanto voce esta na call */
   media: MediaGrant | null;
@@ -65,6 +75,8 @@ interface RealtimeState {
   screenShares: RemoteScreenShare[];
   /** o proprio usuario esta transmitindo */
   localSharing: boolean;
+  /** perfil de qualidade da MINHA transmissao — a interface marca o ativo */
+  sharePreset: SharePresetId;
   /** faixa local, para voce conferir o que esta enviando */
   localShareTrack: Track | null;
   /** qual compartilhamento esta em destaque; null = o primeiro disponivel */
@@ -77,9 +89,20 @@ interface RealtimeState {
    * alternativa seria mais um contexto so para isso.
    */
   roomControls: {
-    startShare: (preset: SharePresetId) => Promise<boolean>;
+    startShare: (
+      preset: SharePresetId,
+      withSystemAudio: boolean,
+    ) => Promise<boolean>;
     stopShare: () => Promise<void>;
     setMicrophone: (deviceId: string) => Promise<void>;
+    /** para ONDE tocamos o audio recebido — mic dos outros e som de tela */
+    setOutputDevice: (deviceId: string) => Promise<void>;
+    /** volume local com que EU ouço o microfone de alguem (0..1) */
+    setUserVolume: (userId: string, volume: number) => void;
+    /** volume local do audio que vem junto do compartilhamento de tela (0..1) */
+    setScreenAudioVolume: (volume: number) => void;
+    /** troca a qualidade da transmissao ativa, sem reabrir o seletor de tela */
+    setSharePreset: (preset: SharePresetId) => Promise<boolean>;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
@@ -105,6 +128,7 @@ interface RealtimeState {
   setMediaConnected: (connected: boolean) => void;
   setScreenShares: (shares: RemoteScreenShare[]) => void;
   setLocalSharing: (sharing: boolean, track?: Track | null) => void;
+  setSharePreset: (preset: SharePresetId) => void;
   setFocusedShare: (userId: string | null) => void;
   setRoomControls: (controls: RealtimeState["roomControls"]) => void;
 
@@ -147,11 +171,13 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   error: null,
   voiceError: null,
   presence: {},
+  activity: {},
   voice: {},
   media: null,
   mediaConnected: false,
   screenShares: [],
   localSharing: false,
+  sharePreset: DEFAULT_PRESET,
   localShareTrack: null,
   focusedShareUserId: null,
   roomControls: null,
@@ -174,6 +200,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             activeChannelId: null,
             serverId,
             presence: {},
+            activity: {},
             voice: {},
             media: null,
             mediaConnected: false,
@@ -192,6 +219,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     // que nao vale mais. As tracks tambem, porque pertencem a sala que caiu.
     set({
       presence: {},
+      activity: {},
       voice: {},
       media: null,
       mediaConnected: false,
@@ -204,16 +232,37 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   syncPresence: (entries) =>
     set({
       presence: Object.fromEntries(entries.map((e) => [e.userId, e.status])),
+      activity: Object.fromEntries(
+        entries
+          .filter((e) => e.game)
+          .map((e) => [
+            e.userId,
+            { game: e.game as string, since: e.gameSince, icon: e.gameIcon },
+          ]),
+      ),
     }),
 
   updatePresence: (entry) =>
     set((state) => {
+      const { [entry.userId]: _semJogo, ...atividadeSemEste } = state.activity;
+      // Quem ficou offline sai dos DOIS mapas: senao continuaria "jogando"
+      // para sempre na tela dos outros depois de fechar o app.
       if (entry.status === "OFFLINE") {
         const { [entry.userId]: _gone, ...rest } = state.presence;
-        return { presence: rest };
+        return { presence: rest, activity: atividadeSemEste };
       }
       return {
         presence: { ...state.presence, [entry.userId]: entry.status },
+        activity: entry.game
+          ? {
+              ...atividadeSemEste,
+              [entry.userId]: {
+                game: entry.game,
+                since: entry.gameSince,
+                icon: entry.gameIcon,
+              },
+            }
+          : atividadeSemEste,
       };
     }),
 
@@ -237,6 +286,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     })),
   setLocalSharing: (localSharing, track) =>
     set({ localSharing, localShareTrack: localSharing ? (track ?? null) : null }),
+  setSharePreset: (sharePreset) => set({ sharePreset }),
   setFocusedShare: (focusedShareUserId) => set({ focusedShareUserId }),
   setRoomControls: (roomControls) => set({ roomControls }),
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
@@ -44,11 +45,20 @@ export function RealtimeProvider({
   const [socket, setSocket] = useState<TypedSocket | null>(null);
   /** distingue a primeira conexao de uma reconexao — a segunda recupera o intervalo */
   const hadConnected = useRef(false);
+  const router = useRouter();
+  /**
+   * `router.refresh()` mora numa ref para o efeito da conexao nao depender
+   * dele: o router e recriado a cada render, e listar como dependencia
+   * derrubaria e reabriria o socket sem motivo.
+   */
+  const refreshRef = useRef(() => router.refresh());
+  refreshRef.current = () => router.refresh();
 
   // 1. conexao: criada uma vez e mantida entre navegacoes de canal
   useEffect(() => {
     let instance: TypedSocket | null = null;
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Deixa um ticket novo em maos para a PROXIMA tentativa. O socket.io
@@ -166,11 +176,47 @@ export function RealtimeProvider({
         window.location.assign("/app");
       });
 
+      /**
+       * Minha sessao nao vale mais (logout, revogacao, expiracao). O gateway
+       * revalida periodicamente, e sem este aviso o socket cairia num retry
+       * infinito e silencioso: `reconnectionAttempts: Infinity` tentaria de
+       * novo a cada poucos segundos com um ticket que nunca vai validar,
+       * sem a pessoa nunca saber que precisa logar de novo.
+       *
+       * Carga completa para /login, mesmo raciocinio do server:evicted: o
+       * unload da pagina e o que garante que o loop de reconexao para de
+       * verdade, em vez de so trocar o estado de uma tela que segue viva.
+       */
+      socketInstance.on("session:revoked", () => {
+        window.location.assign("/login");
+      });
+
+      /**
+       * A estrutura do servidor mudou (canal, categoria, cargo, acesso).
+       *
+       * O evento nao diz O QUE mudou de proposito — pedimos ao Next para
+       * re-renderizar, e o servidor devolve a arvore ja filtrada pelas
+       * permissoes de quem esta olhando. Sem isso, um canal criado agora so
+       * aparecia para os outros depois de um F5.
+       *
+       * Debounce porque reordenar canal e uma sequencia de cliques: sem ele,
+       * cada seta viraria um re-render para todo mundo no servidor.
+       */
+      socketInstance.on("server:changed", ({ serverId: incoming }) => {
+        if (incoming !== useRealtimeStore.getState().serverId) return;
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
+          refreshTimer = null;
+          refreshRef.current();
+        }, 300);
+      });
+
       setSocket(socketInstance);
     })();
 
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
       instance?.removeAllListeners();
       instance?.close();
       setSocket(null);

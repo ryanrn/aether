@@ -47,6 +47,7 @@ import { CategoryFormModal } from "@/components/channels/category-form-modal";
  */
 export function ChannelSidebar({
   serverId,
+  serverName,
   categories,
   looseChannels,
   roles,
@@ -54,6 +55,8 @@ export function ChannelSidebar({
   channelPermissions,
 }: {
   serverId: string;
+  /** nome do servidor — o cartao de atividade diz onde a pessoa esta */
+  serverName: string;
   categories: PublicCategory[];
   looseChannels: PublicChannel[];
   roles: PublicRole[];
@@ -96,6 +99,7 @@ export function ChannelSidebar({
                 <ChannelRow
                   key={channel.id}
                   serverId={serverId}
+                  serverName={serverName}
                   channel={channel}
                   active={channel.id === activeChannelId}
                   channelPermissions={channelPermissions}
@@ -163,6 +167,7 @@ export function ChannelSidebar({
                       <ChannelRow
                         key={channel.id}
                         serverId={serverId}
+                        serverName={serverName}
                         channel={channel}
                         active={channel.id === activeChannelId}
                         channelPermissions={channelPermissions}
@@ -288,6 +293,7 @@ function DeleteCategoryButton({
 
 function ChannelRow({
   serverId,
+  serverName,
   channel,
   active,
   channelPermissions,
@@ -296,6 +302,7 @@ function ChannelRow({
   onEdit,
 }: {
   serverId: string;
+  serverName: string;
   channel: PublicChannel;
   active: boolean;
   channelPermissions: ChannelPermissionMap;
@@ -420,6 +427,7 @@ function ChannelRow({
         <ChannelMembers
           states={connected}
           viewer={viewer}
+          serverName={serverName}
           voiceChannels={voiceChannels}
         />
       ) : null}

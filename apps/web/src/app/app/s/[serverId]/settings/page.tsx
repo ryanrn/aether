@@ -87,6 +87,7 @@ export default async function ServerSettingsPage({
           <SettingsTabs
             serverId={serverId}
             serverName={data.server.name}
+            serverIconUrl={data.server.iconUrl}
             roles={data.roles}
             members={data.members}
             ownerId={data.server.ownerId}
