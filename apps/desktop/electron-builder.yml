@@ -12,6 +12,18 @@ directories:
   output: dist
   buildResources: build
 
+# Nome SEM a versao, de proposito.
+#
+# O padrao do electron-builder inclui a versao no arquivo, e ai o link de
+# download do site muda a cada release — alguem tem de lembrar de editar o
+# site, e quando esquece o botao aponta para uma versao velha ou para o nada.
+#
+# Com nome fixo, este endereco vale para sempre:
+#   github.com/ryanrn/aether-releases/releases/latest/download/Aether-Setup.exe
+#
+# O atualizador nao se importa: ele le o nome do `latest.yml`, nao adivinha.
+artifactName: ${productName}-Setup.${ext}
+
 # Só o que a casca precisa. O app em si vem da rede.
 #
 # `node_modules` entrou por UMA razao: o `electron-updater` roda DENTRO do app.

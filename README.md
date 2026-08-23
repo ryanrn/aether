@@ -265,6 +265,18 @@ Detalhes que valem saber:
   O passo 3 e facil de esquecer e falha em silencio: rascunho e invisivel para
   o atualizador, e o app simplesmente nunca acha a versao nova.
 
+  **Link de download permanente**, para o site nao precisar ser editado a cada
+  release:
+
+  ```
+  https://github.com/ryanrn/aether-releases/releases/latest/download/Aether-Setup.exe
+  ```
+
+  Ele so funciona porque o `artifactName` no `electron-builder.yml` NAO inclui a
+  versao. Com o nome padrao (`Aether-Setup-0.1.3.exe`) o endereco mudaria a cada
+  versao, e o botao do site apontaria para o nada assim que alguem esquecesse
+  de atualizar.
+
   **As versoes vao para um repositorio PUBLICO separado** (`aether-releases`),
   enquanto o codigo fica privado. Release de repo privado exige token para
   baixar, e token embutido num programa distribuido e token publicado.
