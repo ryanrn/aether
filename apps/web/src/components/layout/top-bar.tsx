@@ -22,7 +22,7 @@ export function TopBar({
 
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-base-800 bg-base-900 px-4">
-      <span className="hidden font-mono text-[11px] tracking-[0.22em] text-ink-500 sm:inline">
+      <span className="hidden font-brand text-[12px] font-semibold tracking-[0.2em] text-ink-400 sm:inline">
         {BRAND.name}
       </span>
       <span className="hidden h-4 w-px bg-base-700 sm:inline" />

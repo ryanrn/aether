@@ -3,8 +3,15 @@
 /*
  * Design system do produto.
  * Identidade propria: grafite frio azulado + acento turquesa, bordas discretas,
- * raios curtos, tipografia Inter com detalhes em monoespacada (cara de software
- * tecnico, nao de rede social).
+ * raios curtos.
+ *
+ * Tres fontes, cada uma com um trabalho:
+ *  - `font-sans` (Rubik) carrega a interface. Geometrica e moderna, mas
+ *    desenhada para ser lida MIUDA — este app tem ~160 usos de texto entre
+ *    10px e 13px, e fonte de display cansaria em todos eles.
+ *  - `font-brand` (Chakra Petch) e so a marca: angular, cara de esports.
+ *    Aparece grande e em dois lugares, entao nao custa legibilidade nenhuma.
+ *  - `font-mono` (JetBrains Mono) nos rotulos tecnicos em versalete.
  */
 @theme {
   /* superficies — do mais profundo ao mais elevado */
@@ -38,7 +45,8 @@
   --color-signal-offline: #56606f;
   --color-signal-live: #f2565b;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-brand: var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
 
   --radius-xs: 4px;

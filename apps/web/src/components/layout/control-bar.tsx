@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
 import {
+  Check,
   ChevronUp,
   Headphones,
   HeadphoneOff,
@@ -17,6 +16,7 @@ import {
 import type { UserStatus, ViewerContext } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
+import { AppSettingsModal } from "@/components/settings/app-settings-modal";
 import { viewerCan } from "@/lib/permissions";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
@@ -26,7 +26,10 @@ import {
 } from "@/lib/stores/realtime-store";
 import {
   canCaptureScreen,
+  isDesktopApp,
   PRESET_LIST,
+  readShareAudioPreference,
+  saveShareAudioPreference,
   type SharePresetId,
 } from "@/lib/voice/screen-share";
 import {
@@ -48,6 +51,9 @@ import { cn } from "@/lib/utils";
 export function ControlBar({
   user,
   viewer,
+  serverId: currentServerId,
+  memberId,
+  nickname,
 }: {
   user: {
     id: string;
@@ -57,9 +63,11 @@ export function ControlBar({
     status: UserStatus;
   };
   viewer: ViewerContext;
+  /** servidor aberto agora — o apelido vale so nele */
+  serverId: string;
+  memberId: string;
+  nickname: string | null;
 }) {
-  const params = useParams<{ serverId?: string }>();
-  const serverId = params?.serverId;
   const [pending, startTransition] = useTransition();
   const socket = useSocket();
   const status = useConnectionStatus();
@@ -75,12 +83,19 @@ export function ControlBar({
   const [localMuted, setLocalMuted] = useState(false);
   const [localDeafened, setLocalDeafened] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [shareAudio, setShareAudio] = useState(true);
+  /** No desktop o seletor do Electron tem a chave de som; duas confundiriam. */
+  const [noDesktop, setNoDesktop] = useState(false);
   const [micMenuOpen, setMicMenuOpen] = useState(false);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [micId, setMicId] = useState<string | null>(null);
 
   // localStorage nao existe no servidor: so lemos depois de montar.
   useEffect(() => setMicId(readPreferredMicrophone()), []);
+  useEffect(() => setShareAudio(readShareAudioPreference()), []);
+  // Depois de montar: `window.aetherDesktop` nao existe no servidor.
+  useEffect(() => setNoDesktop(isDesktopApp()), []);
 
   async function openMicMenu() {
     const next = !micMenuOpen;
@@ -100,6 +115,7 @@ export function ControlBar({
 
   const roomControls = useRealtimeStore((state) => state.roomControls);
   const localSharing = useRealtimeStore((state) => state.localSharing);
+  const sharePreset = useRealtimeStore((state) => state.sharePreset);
 
   /**
    * Moderacao ganha do proprio controle: quem foi silenciado pelo servidor nao
@@ -131,30 +147,46 @@ export function ControlBar({
 
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
   /**
-   * Mesma condicao da TopBar. Sem isto a engrenagem aparecia para todo mundo e
-   * levava a um 404 — o 404 esta correto (nao revelamos que a pagina existe),
-   * mas oferecer uma porta que nao abre e problema de interface.
-   */
-  const canManageServer =
-    viewer.isOwner ||
-    viewerCan(viewer, "MANAGE_SERVER") ||
-    viewerCan(viewer, "MANAGE_ROLES");
-
-  /**
    * Compartilhar exige tres coisas ao mesmo tempo: permissao do cargo, estar
    * numa call (a tela vai para a sala de midia) e um navegador com captura —
    * que so existe em contexto seguro, ou seja, HTTPS ou localhost.
    */
   const shareBlocked = !canShare || !roomControls || !canCaptureScreen();
 
+  /**
+   * Transmitindo, troca a qualidade da faixa que ja esta no ar; parado,
+   * comeca uma transmissao nova. O mesmo menu serve para os dois porque a
+   * escolha e a mesma — o que muda e so haver ou nao faixa para ajustar.
+   */
   async function pickPreset(preset: SharePresetId) {
     setPresetOpen(false);
-    await roomControls?.startShare(preset);
+    if (localSharing) {
+      await roomControls?.setSharePreset(preset);
+      return;
+    }
+    const started = await roomControls?.startShare(preset, shareAudio);
+    /**
+     * O `startScreenShare` desliga a preferencia sozinho quando o sistema
+     * recusa abrir o som. Relemos para a chave na tela refletir isso — senao
+     * ela continuaria ligada e a proxima tentativa falharia igual.
+     */
+    if (!started) setShareAudio(readShareAudioPreference());
+  }
+
+  function toggleShareAudio() {
+    const next = !shareAudio;
+    setShareAudio(next);
+    saveShareAudioPreference(next);
   }
 
   return (
     <footer className="flex h-14 shrink-0 items-center gap-3 border-t border-base-800 bg-base-900 px-3">
-      <div className="flex min-w-0 items-center gap-2.5">
+      <button
+        type="button"
+        onClick={() => setProfileOpen(true)}
+        title="Suas configuracoes"
+        className="flex min-w-0 items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-base-800"
+      >
         <Avatar
           userId={user.id}
           name={user.displayName}
@@ -170,7 +202,14 @@ export function ControlBar({
             @{user.username}
           </p>
         </div>
-      </div>
+      </button>
+
+      <AppSettingsModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={user}
+        server={{ id: currentServerId, memberId, nickname }}
+      />
 
       <div className="mx-1 h-7 w-px bg-base-700" />
 
@@ -265,7 +304,7 @@ export function ControlBar({
           )}
         </ControlToggle>
 
-        <div className="relative">
+        <div className="relative flex items-center">
           <ControlToggle
             active={localSharing}
             danger={localSharing}
@@ -292,7 +331,25 @@ export function ControlBar({
             <MonitorUp className="h-4 w-4" />
           </ControlToggle>
 
-          {presetOpen && !localSharing ? (
+          {/*
+            Setinha para a qualidade, no mesmo vocabulario que o microfone ja
+            usa para trocar de aparelho. Existe SOBRETUDO enquanto se
+            transmite: sem ela, mudar de perfil obrigava a parar e comecar de
+            novo, e o Chrome reabriria o seletor de tela no meio da conversa.
+          */}
+          {localSharing ? (
+            <button
+              type="button"
+              onClick={() => setPresetOpen((open) => !open)}
+              title="Trocar a qualidade sem parar a transmissao"
+              aria-label="Trocar a qualidade da transmissao"
+              className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+          ) : null}
+
+          {presetOpen ? (
             <>
               {/* clique fora fecha, sem prender o foco da pagina */}
               <button
@@ -303,21 +360,64 @@ export function ControlBar({
               />
               <div className="absolute bottom-11 left-0 z-50 w-64 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
                 <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
-                  qualidade
+                  {localSharing ? "trocar qualidade" : "qualidade"}
                 </p>
-                {PRESET_LIST.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => void pickPreset(preset.id)}
-                    className="flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-base-800"
-                  >
-                    <span className="text-[13px] text-ink-100">{preset.label}</span>
-                    <span className="text-[11px] leading-snug text-ink-500">
-                      {preset.description}
+
+                {/*
+                  A escolha do som vem ANTES do seletor nativo abrir, de
+                  proposito. `getDisplayMedia` e tudo-ou-nada com audio: se o
+                  sistema recusar abrir o som, a captura inteira falha. Antes
+                  descobriamos isso tentando e refazendo — o que reabria o
+                  seletor. Melhor decidir aqui.
+
+                  So aparece antes de comecar: com a transmissao no ar, mudar
+                  isso exigiria recapturar, que e justamente o que evitamos.
+                */}
+                {!localSharing && !noDesktop ? (
+                  <label className="mb-1 flex cursor-pointer items-start gap-2 border-b border-base-800 px-2 pb-2 text-[12px] text-ink-200">
+                    <input
+                      type="checkbox"
+                      checked={shareAudio}
+                      onChange={toggleShareAudio}
+                      className="mt-0.5 accent-accent-500"
+                    />
+                    <span className="leading-snug">
+                      Levar o som do sistema
+                      <span className="mt-0.5 block text-[11px] text-ink-500">
+                        Aba e tela inteira oferecem som; janela avulsa nao.
+                      </span>
                     </span>
-                  </button>
-                ))}
+                  </label>
+                ) : null}
+                {PRESET_LIST.map((preset) => {
+                  const active = localSharing && preset.id === sharePreset;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => void pickPreset(preset.id)}
+                      className={cn(
+                        "flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-base-800",
+                        active && "bg-base-800",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex items-center gap-1.5 text-[13px]",
+                          active ? "text-accent-300" : "text-ink-100",
+                        )}
+                      >
+                        {preset.label}
+                        {active ? (
+                          <Check className="h-3 w-3 shrink-0" />
+                        ) : null}
+                      </span>
+                      <span className="text-[11px] leading-snug text-ink-500">
+                        {preset.description}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : null}
@@ -354,16 +454,18 @@ export function ControlBar({
               : "tempo real · offline"}
         </span>
 
-        {serverId && canManageServer ? (
-          <Link
-            href={`/app/s/${serverId}/settings`}
-            title="Configuracoes do servidor"
-            aria-label="Configuracoes do servidor"
-            className="grid h-9 w-9 place-items-center rounded-md border border-transparent text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-100"
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
-        ) : null}
+        {/*
+          Esta engrenagem e do APP, nao do servidor. A do servidor mora na
+          barra de cima, ao lado de "Convidar" — antes as duas faziam a MESMA
+          coisa, e uma delas era caminho repetido sem nada a mais.
+        */}
+        <ControlToggle
+          active={false}
+          label="Configuracoes"
+          onClick={() => setProfileOpen(true)}
+        >
+          <Settings className="h-4 w-4" />
+        </ControlToggle>
 
         <ControlToggle
           active={false}

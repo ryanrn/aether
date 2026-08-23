@@ -60,3 +60,49 @@ export function savePreferredMicrophone(deviceId: string | null): void {
     // Preferencia nao persistida nao impede usar o dispositivo agora.
   }
 }
+
+/**
+ * Escolha do alto-falante — para ONDE tocamos o audio que chega (microfone
+ * dos outros e som de tela), diferente do loopback do desktop, que e sobre
+ * de ONDE capturamos o som para ENVIAR na tela.
+ *
+ * Usa `HTMLMediaElement.setSinkId`, suportado nos navegadores baseados em
+ * Chromium (e por isso no Electron) mas nao no Firefox — por isso todo
+ * chamador trata a ausencia do metodo como "sem suporte", nao como erro.
+ */
+const SPEAKER_STORAGE_KEY = "aether:speaker";
+
+export async function listSpeakers(): Promise<AudioDevice[]> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices) return [];
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((device) => device.kind === "audiooutput")
+      .filter((device) => device.deviceId !== "communications")
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Alto-falante ${index + 1}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export function readPreferredSpeaker(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(SPEAKER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function savePreferredSpeaker(deviceId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (deviceId) window.localStorage.setItem(SPEAKER_STORAGE_KEY, deviceId);
+    else window.localStorage.removeItem(SPEAKER_STORAGE_KEY);
+  } catch {
+    // Preferencia nao persistida nao impede usar o dispositivo agora.
+  }
+}

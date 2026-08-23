@@ -34,7 +34,8 @@ export default function AuthLayout({
           <span className="grid h-9 w-9 place-items-center rounded-md border border-accent-600/40 bg-accent-500/10">
             <span className="h-2.5 w-2.5 rounded-[2px] bg-accent-500 shadow-[0_0_12px_var(--color-accent-500)]" />
           </span>
-          <span className="font-mono text-[15px] font-medium tracking-[0.22em] text-ink-100">
+          {/* A marca usa a fonte da marca — angular, e so aqui e no topo. */}
+          <span className="font-brand text-[17px] font-bold tracking-[0.2em] text-ink-100">
             {BRAND.name}
           </span>
         </Link>
