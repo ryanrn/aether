@@ -289,3 +289,60 @@ describe("de quem o icone pode ser tirado", () => {
     ).toBe(true);
   });
 });
+
+describe("jogo com anti-cheat continua tendo icone", () => {
+  /**
+   * O caso que quebrou DEPOIS da primeira correcao.
+   *
+   * Bloquear o anti-cheat resolveu o icone errado, mas criou outro problema:
+   * enquanto se joga Fall Guys, o processo visivel daquela pasta pode ser SO o
+   * do anti-cheat — e ai nao sobrava candidato nenhum, e o jogo aparecia com um
+   * controle generico. Foi o que o usuario reportou.
+   *
+   * A saida foi parar de depender apenas de quem esta RODANDO: o manifesto da
+   * Epic diz qual e o executavel de lancamento, e esse arquivo existe no disco
+   * o tempo todo.
+   *
+   * Caminhos com barra normal de proposito — o codigo normaliza, e barra
+   * invertida em string de teste ja se perdeu em edicao antes.
+   */
+  const FALLGUYS = "C:/Program Files/Epic Games/FallGuys";
+  const catalogo = [
+    {
+      pasta: comoPasta(FALLGUYS),
+      nome: "Fall Guys",
+      launch: `${FALLGUYS}/RunFallGuys.exe`,
+    },
+  ];
+
+  it("com SO o anti-cheat rodando, ainda ha de onde tirar o icone", () => {
+    const achados = jogosEmSaida(`${FALLGUYS}/start_protected_game.exe`, catalogo);
+    expect(achados).toHaveLength(1);
+    const validos = achados[0].caminhos.filter(podeDarIcone);
+    // O anti-cheat e recusado; o executavel do manifesto entra no lugar.
+    expect(validos).toEqual([`${FALLGUYS}/RunFallGuys.exe`]);
+  });
+
+  it("o executavel do manifesto nao entra duas vezes", () => {
+    const achados = jogosEmSaida(
+      [
+        `${FALLGUYS}/RunFallGuys.exe`,
+        `${FALLGUYS}/start_protected_game.exe`,
+      ].join("\n"),
+      catalogo,
+    );
+    const runs = achados[0].caminhos.filter((c: string) =>
+      /RunFallGuys/.test(c),
+    );
+    expect(runs).toHaveLength(1);
+  });
+
+  it("jogo sem `launch` no manifesto nao quebra", () => {
+    const semLaunch = [
+      { pasta: comoPasta("E:/GTAV"), nome: "Grand Theft Auto V", launch: null },
+    ];
+    const achados = jogosEmSaida("E:/GTAV/GTA5.exe", semLaunch);
+    expect(achados[0].caminhos).toEqual(["E:/GTAV/GTA5.exe"]);
+  });
+});
+

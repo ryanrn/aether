@@ -125,6 +125,20 @@ function lerManifestosEpic() {
           jogos.push({
             pasta: comoPasta(dados.InstallLocation),
             nome: String(dados.DisplayName),
+            /**
+             * O executavel de lancamento, em caminho absoluto.
+             *
+             * Vale ouro para o icone: ele existe no DISCO independentemente de
+             * qual processo esteja de pe. Jogo com anti-cheat passa boa parte
+             * do tempo sem nenhum processo "livre" na pasta, e sem isto ficava
+             * sem icone nenhum.
+             */
+            launch: dados.LaunchExecutable
+              ? path.join(
+                  String(dados.InstallLocation),
+                  String(dados.LaunchExecutable).replace(/\//g, path.sep),
+                )
+              : null,
           });
         }
       } catch {
@@ -179,10 +193,20 @@ function jogosEpic() {
  * a pasta de instalacao de nenhum jogo.
  */
 function jogoEpicEm(caminho, catalogo) {
+  return entradaEpicDe(caminho, catalogo)?.nome ?? null;
+}
+
+/**
+ * A entrada INTEIRA do catalogo, para quem tambem precisa do `launch`.
+ *
+ * Separada de `jogoEpicEm` porque a maioria dos chamadores so quer o nome, e
+ * devolver o objeto em todo lugar convidaria a depender de campos por acidente.
+ */
+function entradaEpicDe(caminho, catalogo) {
   if (typeof caminho !== "string" || caminho.length === 0) return null;
   const alvo = String(caminho).replace(/\\/g, "/").toLowerCase();
   for (const jogo of catalogo) {
-    if (alvo.startsWith(jogo.pasta)) return jogo.nome;
+    if (alvo.startsWith(jogo.pasta)) return jogo;
   }
   return null;
 }
@@ -220,8 +244,21 @@ function jogosEmSaida(texto, catalogoEpic = jogosEpic()) {
       continue;
     }
     // So tentamos a Epic quando NAO e da Steam: um jogo nao esta nas duas.
-    const nomeEpic = jogoEpicEm(caminho, catalogoEpic);
-    if (nomeEpic && ehJogo(nomeEpic)) registrar(nomeEpic, nomeEpic, caminho);
+    const entrada = entradaEpicDe(caminho, catalogoEpic);
+    if (entrada && ehJogo(entrada.nome)) {
+      registrar(entrada.nome, entrada.nome, caminho);
+      /**
+       * O executavel do MANIFESTO entra junto, mesmo que nao esteja rodando.
+       * E o que garante icone para jogo com anti-cheat, cujos processos
+       * "livres" podem nao existir enquanto se joga.
+       */
+      if (entrada.launch) {
+        const registro = achados.get(entrada.nome);
+        if (registro && !registro.caminhos.includes(entrada.launch)) {
+          registro.caminhos.push(entrada.launch);
+        }
+      }
+    }
   }
   return [...achados.values()];
 }
@@ -370,7 +407,12 @@ async function melhorIcone(caminhos) {
         // Executavel sumiu ou sem permissao: segue sem icone deste.
         icone = null;
       }
-      iconesResolvidos.set(caminho, icone);
+      /**
+       * Falha NAO vira cache. Anti-cheat pode segurar o arquivo por um
+       * instante, e guardar o `null` deixaria aquele executavel sem icone para
+       * sempre — mesmo depois de liberar.
+       */
+      if (icone) iconesResolvidos.set(caminho, icone);
     }
     if (icone && (!melhor || icone.length > melhor.length)) melhor = icone;
   }
@@ -523,4 +565,5 @@ module.exports = {
   jogoEpicEm,
   comoPasta,
   podeDarIcone,
+  jogosEpic,
 };

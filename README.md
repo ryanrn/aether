@@ -516,6 +516,15 @@ Onde fica:
   lista `NAO_DA_ICONE` e a comparacao passou a incluir o icone, entao ele
   MELHORA assim que o processo do jogo aparece.
 
+  **E isso quebrou de outro jeito**, reportado na sequencia: com o anti-cheat
+  bloqueado, o Fall Guys passou a nao ter icone NENHUM — enquanto se joga, o
+  unico processo visivel daquela pasta pode ser justamente o do anti-cheat.
+  A saida foi parar de depender so de quem esta RODANDO: o manifesto da Epic
+  traz `LaunchExecutable`, e esse arquivo existe no disco o tempo todo. Ele
+  entra como candidato junto dos processos, e vence quem tiver o icone maior —
+  o que mantem o GTA V com o icone bom do `GTA5.exe` (4126 bytes) em vez do
+  atalho `PlayGTAV.exe` (550).
+
   O icone atravessa o gateway como data URL e e renderizado na tela dos
   OUTROS — por isso passa por `safeGameIcon`, que so aceita PNG, JPEG e WEBP em
   base64, com teto de tamanho. **SVG e recusado de proposito**: SVG e

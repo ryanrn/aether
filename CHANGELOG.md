@@ -6,6 +6,21 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 
 ---
 
+## v0.1.5 — 23 de agosto de 2026
+
+**Correcao: Fall Guys ficou sem icone depois da correcao anterior.**
+
+### Correcoes
+
+- **Jogo com anti-cheat aparecia com um controle generico.** A versao 0.1.4
+  parou de usar o icone do anti-cheat — mas enquanto se joga, o processo
+  visivel daquela pasta pode ser SO o do anti-cheat, e ai nao sobrava de onde
+  tirar icone nenhum.
+
+  Agora o app tambem olha o arquivo do jogo no disco, que existe o tempo todo,
+  em vez de depender so de qual processo esta aberto naquele instante.
+  Verificado com Fall Guys e Rocket League.
+
 ## v0.1.4 — 23 de agosto de 2026
 
 **Correcao: jogo com anti-cheat mostrava o icone errado.**
