@@ -6,6 +6,27 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 
 ---
 
+## v0.1.4 — 23 de agosto de 2026
+
+**Correcao: jogo com anti-cheat mostrava o icone errado.**
+
+### Correcoes
+
+- **Jogos com Easy Anti-Cheat apareciam com a logo do anti-cheat** em vez da
+  do jogo — notado no Fall Guys. O anti-cheat sobe antes do jogo, e o icone
+  capturado nesse instante ficava preso ate fechar o jogo. Agora o app ignora
+  anti-cheat, instaladores e relatores de erro na hora de pegar o icone, e o
+  icone se corrige sozinho assim que o jogo termina de abrir.
+
+### Tambem no app (chegou sem precisar reinstalar)
+
+- Layout reestruturado: quatro colunas, controles de voz flutuando no centro
+- Cores novas, mais calmas
+- Clicar no seu nome abre um cartao com a call e quem esta nela
+- Status: Disponivel, Ausente, Nao perturbe e Invisivel
+
+---
+
 ## v0.1.3 — 23 de agosto de 2026
 
 **O app passa a se atualizar sozinho.**
@@ -28,6 +49,8 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 - Se o GitHub estiver fora do ar ou nao houver internet, a verificacao falha em
   silencio e o app funciona normalmente — atualizar nunca atrapalha quem so
   quer conversar.
+
+---
 
 ## v0.1.2 — 22 de agosto de 2026
 

@@ -504,6 +504,18 @@ Onde fica:
   icone generico) e o `GTA5.exe` devolve 4126 bytes em 48x48. Pegar o primeiro
   daria o pior dos dois.
 
+  **Anti-cheat, bootstrapper e relator de erro nao emprestam o icone.**
+  Descoberto com o Fall Guys, que aparecia com o escudo do Easy Anti-Cheat.
+  A investigacao contrariou a suposicao inicial: TRES dos quatro executaveis
+  trazem a logo do jogo (`RunFallGuys.exe`, `FallGuys_client.exe`,
+  `FallGuys_client_game.exe`) e so o `start_protected_game.exe` traz o do EAC —
+  que ainda por cima e o MENOR, ou seja, a regra de "maior vence" ja o
+  descartaria. O problema era outro: o anti-cheat sobe ANTES do jogo, existe
+  uma janela em que ele e o unico processo da pasta, e o icone capturado ali
+  ficava preso porque so avisavamos quando o NOME mudava. Dois consertos: a
+  lista `NAO_DA_ICONE` e a comparacao passou a incluir o icone, entao ele
+  MELHORA assim que o processo do jogo aparece.
+
   O icone atravessa o gateway como data URL e e renderizado na tela dos
   OUTROS — por isso passa por `safeGameIcon`, que so aceita PNG, JPEG e WEBP em
   base64, com teto de tamanho. **SVG e recusado de proposito**: SVG e

@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — modulo do desktop e JavaScript puro, sem tipos
 import detect from "../../apps/desktop/src/game-detect.js";
 
-const { pastaDoJogo, ehJogo, jogosEmSaida, nomeNoManifesto, jogoEpicEm, comoPasta } =
-  detect;
+const {
+  pastaDoJogo,
+  ehJogo,
+  jogosEmSaida,
+  nomeNoManifesto,
+  jogoEpicEm,
+  comoPasta,
+  podeDarIcone,
+} = detect;
 
 /**
  * Deteccao de jogo — a parte que decide, sem tocar no sistema.
@@ -226,5 +233,59 @@ describe("pasta -> nome oficial pelo manifesto", () => {
   it("nao quebra com manifesto incompleto", () => {
     expect(nomeNoManifesto('"installdir" "Hollow Knight"', "Hollow Knight")).toBeNull();
     expect(nomeNoManifesto("", "Hollow Knight")).toBeNull();
+  });
+});
+
+describe("de quem o icone pode ser tirado", () => {
+  /**
+   * Caso real: o Fall Guys aparecia com a logo do Easy Anti-Cheat.
+   *
+   * Extrai os icones um a um para descobrir o porque, e a resposta nao era a
+   * que eu supunha. TRES dos quatro executaveis trazem a logo do jogo —
+   * `RunFallGuys.exe`, `FallGuys_client.exe` e `FallGuys_client_game.exe`;
+   * so o `start_protected_game.exe` traz o escudo do EAC, e ele ainda por
+   * cima e o MENOR dos quatro.
+   *
+   * Ou seja: a regra de "maior data URL vence" ja o descartaria — se ele nao
+   * fosse, por alguns segundos, o UNICO processo da pasta rodando. Anti-cheat
+   * sobe antes do jogo.
+   */
+  it("recusa o lancador do Easy Anti-Cheat", () => {
+    expect(
+      podeDarIcone(
+        "C:\\Program Files\\Epic Games\\FallGuys\\start_protected_game.exe",
+      ),
+    ).toBe(false);
+  });
+
+  it("aceita os executaveis do jogo em si", () => {
+    const base = "C:\\Program Files\\Epic Games\\FallGuys\\";
+    expect(podeDarIcone(base + "FallGuys_client.exe")).toBe(true);
+    expect(podeDarIcone(base + "FallGuys_client_game.exe")).toBe(true);
+    expect(podeDarIcone(base + "RunFallGuys.exe")).toBe(true);
+  });
+
+  it("recusa relator de erro e bootstrapper", () => {
+    expect(podeDarIcone("C:/jogo/UnityCrashHandler64.exe")).toBe(false);
+    expect(podeDarIcone("C:/jogo/crashpad_handler.exe")).toBe(false);
+    expect(podeDarIcone("C:/jogo/EOSBootstrapper.exe")).toBe(false);
+  });
+
+  it("recusa redistribuiveis por FAMILIA, sem listar cada versao", () => {
+    // Sem isto, cada nova versao do VC++ precisaria entrar na lista na mao.
+    expect(podeDarIcone("C:/jogo/Redistributables/VC_redist.x64.exe")).toBe(false);
+    expect(podeDarIcone("C:/jogo/vcredist_x86.exe")).toBe(false);
+    expect(podeDarIcone("C:/jogo/UEPrereqSetup_x64.exe")).toBe(false);
+  });
+
+  it("nao se importa com maiusculas nem com o tipo de barra", () => {
+    expect(podeDarIcone("C:/x/START_PROTECTED_GAME.EXE")).toBe(false);
+    expect(podeDarIcone("C:\\jogo\\EasyAntiCheat_EOS.exe")).toBe(false);
+  });
+
+  it("deixa passar jogo normal, sem anti-cheat", () => {
+    expect(
+      podeDarIcone("E:/SteamLibrary/steamapps/common/Hollow Knight/hollow_knight.exe"),
+    ).toBe(true);
   });
 });

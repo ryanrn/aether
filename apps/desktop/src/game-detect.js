@@ -305,6 +305,49 @@ function nomeOficial(caminhoDoExecutavel, pasta) {
 const iconesResolvidos = new Map();
 
 /**
+ * Executaveis que moram na pasta do jogo mas NAO carregam a cara dele.
+ *
+ * O caso que motivou isto: o Fall Guys aparecia com a logo do Easy Anti-Cheat.
+ * O anti-cheat sobe ANTES do jogo, entao existe uma janela em que ele e o
+ * unico processo daquela pasta rodando — e o icone capturado ali ficava preso
+ * a sessao inteira.
+ *
+ * Verificado extraindo os icones um a um: `RunFallGuys.exe`,
+ * `FallGuys_client.exe` e `FallGuys_client_game.exe` trazem a logo do jogo;
+ * so o `start_protected_game.exe` traz o escudo do EAC.
+ *
+ * Comparado em minusculas contra o NOME do arquivo.
+ */
+const NAO_DA_ICONE = new Set([
+  // Easy Anti-Cheat
+  "start_protected_game.exe",
+  "easyanticheat.exe",
+  "easyanticheat_eos.exe",
+  "easyanticheat_eos_setup.exe",
+  "eaclauncher.exe",
+  // BattlEye
+  "beservice.exe",
+  "belauncher.exe",
+  // Epic Online Services
+  "eosbootstrapper.exe",
+  "epiconlineservicesinstaller.exe",
+  // relatorio de erro e redistribuiveis: nunca sao o jogo
+  "crashpad_handler.exe",
+  "unitycrashhandler64.exe",
+  "unitycrashhandler32.exe",
+  "crashreportclient.exe",
+]);
+
+/** Este executavel pode emprestar o icone ao jogo? */
+function podeDarIcone(caminho) {
+  const arquivo = String(caminho).replace(/\\/g, "/").split("/").pop() ?? "";
+  const minusculo = arquivo.toLowerCase();
+  if (NAO_DA_ICONE.has(minusculo)) return false;
+  // Familias inteiras, sem precisar listar cada variante de versao.
+  return !/^(vc_redist|vcredist|dxsetup|dotnet|oalinst|ueprereq)/.test(minusculo);
+}
+
+/**
  * O melhor icone entre os processos de um jogo.
  *
  * "Melhor" e o data URL MAIOR, e isso nao e chute: um jogo sobe varios
@@ -316,6 +359,8 @@ const iconesResolvidos = new Map();
 async function melhorIcone(caminhos) {
   let melhor = null;
   for (const caminho of caminhos) {
+    // Anti-cheat, bootstrapper e relator de erro nao emprestam a cara.
+    if (!podeDarIcone(caminho)) continue;
     let icone = iconesResolvidos.get(caminho);
     if (icone === undefined) {
       try {
@@ -412,11 +457,23 @@ function criarVigia(aoMudar) {
     try {
       const jogo = await jogoAtual();
       /**
-       * Comparacao pelo NOME, nao pelo objeto: `jogoAtual` devolve um objeto
+       * Comparacao por VALOR, nao pelo objeto: `jogoAtual` devolve um objeto
        * novo a cada chamada, e `===` entre objetos nunca e verdade — sem isto
        * o app anunciaria o mesmo jogo para a sala inteira a cada 15 segundos.
+       *
+       * O icone entra na comparacao junto com o nome, e nao so o nome. Jogo
+       * com anti-cheat sobe em etapas: existe uma janela em que a pasta so tem
+       * o processo do anti-cheat, e o icone daquele instante e pior (ou era o
+       * escudo do EAC). Comparando so o nome, o primeiro icone ficava preso a
+       * sessao inteira; comparando os dois, ele MELHORA assim que o processo
+       * do jogo aparece.
        */
-      if ((jogo?.nome ?? null) === (ultimo?.nome ?? null)) return;
+      if (
+        (jogo?.nome ?? null) === (ultimo?.nome ?? null) &&
+        (jogo?.icone ?? null) === (ultimo?.icone ?? null)
+      ) {
+        return;
+      }
       ultimo = jogo;
       aoMudar(jogo);
     } catch {
@@ -465,4 +522,5 @@ module.exports = {
   nomeNoManifesto,
   jogoEpicEm,
   comoPasta,
+  podeDarIcone,
 };
