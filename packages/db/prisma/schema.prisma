@@ -47,6 +47,7 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   sessions       Session[]
+  passwordResets PasswordReset[]
   memberships    ServerMember[]
   ownedServers   Server[]        @relation("ServerOwner")
   messages       Message[]
@@ -111,20 +112,20 @@ model ServerMember {
 }
 
 model Role {
-  id       String @id @default(cuid())
-  serverId String
-  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  name     String
-  color    String @default("#9AA6B8")
+  id          String   @id @default(cuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  name        String
+  color       String   @default("#9AA6B8")
   /// bitfield de permissoes (ver packages/shared/src/permissions.ts)
-  permissions BigInt @default(0)
+  permissions BigInt   @default(0)
   /// hierarquia: maior position = cargo mais alto
-  position  Int     @default(0)
+  position    Int      @default(0)
   /// cargo atribuido automaticamente a todo novo membro
-  isDefault Boolean @default(false)
+  isDefault   Boolean  @default(false)
   /// cargo intocavel do dono
-  isOwner   Boolean @default(false)
-  createdAt DateTime @default(now())
+  isOwner     Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   members    MemberRole[]
   overwrites ChannelOverwrite[] @relation("RoleOverwrite")
@@ -134,11 +135,11 @@ model Role {
 }
 
 model MemberRole {
-  memberId String
-  member   ServerMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  roleId   String
-  role     Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  assignedAt DateTime   @default(now())
+  memberId   String
+  member     ServerMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  roleId     String
+  role       Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime     @default(now())
 
   @@id([memberId, roleId])
   @@index([roleId])
@@ -157,23 +158,23 @@ model Category {
 }
 
 model Channel {
-  id         String      @id @default(cuid())
-  serverId   String
-  server     Server      @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  categoryId String?
-  category   Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  name       String
-  topic      String?
-  type       ChannelType
-  position   Int         @default(0)
+  id          String      @id @default(cuid())
+  serverId    String
+  server      Server      @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name        String
+  topic       String?
+  type        ChannelType
+  position    Int         @default(0)
   /// canal privado: so quem tem overwrite de allow enxerga
-  isPrivate  Boolean     @default(false)
+  isPrivate   Boolean     @default(false)
   /// canal temporario: removido quando esvazia (fase 2/3)
-  isTemporary Boolean    @default(false)
+  isTemporary Boolean     @default(false)
   /// limite de usuarios simultaneos em voz (null = ilimitado)
-  userLimit  Int?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  userLimit   Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   messages   Message[]
   overwrites ChannelOverwrite[]
@@ -235,17 +236,17 @@ model Invite {
 }
 
 model Ban {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   serverId   String
-  server     Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server     Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   userId     String
-  user       User     @relation("BannedUser", fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation("BannedUser", fields: [userId], references: [id], onDelete: Cascade)
   issuedById String
-  issuedBy   User     @relation("BanIssuer", fields: [issuedById], references: [id])
+  issuedBy   User      @relation("BanIssuer", fields: [issuedById], references: [id])
   reason     String?
   /// Banimento temporario. Nulo = permanente.
   expiresAt  DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@unique([serverId, userId])
   @@index([serverId, expiresAt])
@@ -264,4 +265,24 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([serverId, createdAt])
+}
+
+/// Pedido de redefinicao de senha.
+///
+/// O token e guardado como HASH, nunca em claro. Se o banco vazar — ou o dump
+/// de backup, que carrega esta tabela — token legivel deixaria qualquer um
+/// redefinir qualquer conta. Mesmo raciocinio do `passwordHash`.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// sha256 do token que foi para o e-mail
+  tokenHash String    @unique
+  expiresAt DateTime
+  /// carimbo de uso: o token vale UMA vez
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }

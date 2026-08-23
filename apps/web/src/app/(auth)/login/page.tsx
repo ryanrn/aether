@@ -16,6 +16,15 @@ export default function LoginPage() {
 
       <LoginForm />
 
+      <p className="text-center text-[13px]">
+        <Link
+          href="/esqueci"
+          className="text-ink-400 transition-colors hover:text-ink-200"
+        >
+          Esqueci minha senha
+        </Link>
+      </p>
+
       <p className="text-center text-[13px] text-ink-400">
         Ainda nao tem conta?{" "}
         <Link
