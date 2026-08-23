@@ -152,7 +152,32 @@ export function isDesktopApp(): boolean {
 }
 
 interface AetherDesktopBridge {
-  reportAudioCaptureFailed?: () => void;
+  reportAudioCaptureFailed?: (detalhes: {
+    erro: string;
+    dispositivo: string | null;
+  }) => void;
+}
+
+/**
+ * O rotulo da saida de audio PADRAO agora.
+ *
+ * Vai junto com o aviso de falha para o processo principal decidir se a marca
+ * de "som falhou" ainda vale na proxima vez: trocar de fone merece nova
+ * tentativa, e sem o nome do aparelho nao ha como saber que trocou.
+ *
+ * Devolve `null` quando nao da — sem rotulo o registro fica menos util, mas
+ * nada quebra.
+ */
+async function saidaPadraoDeAudio(): Promise<string | null> {
+  try {
+    const dispositivos = await navigator.mediaDevices.enumerateDevices();
+    const saida = dispositivos.find(
+      (d) => d.kind === "audiooutput" && d.deviceId === "default",
+    );
+    return saida?.label ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -164,8 +189,21 @@ interface AetherDesktopBridge {
  * cairia no MESMO erro, para sempre, numa maquina onde o loopback nao
  * funciona (verificado com dongle de audio sem fio).
  */
-export function reportDesktopAudioFailure(): void {
+export async function reportDesktopAudioFailure(erro: unknown): Promise<void> {
   if (typeof window === "undefined") return;
   const bridge = (window as { aetherDesktop?: AetherDesktopBridge }).aetherDesktop;
-  bridge?.reportAudioCaptureFailed?.();
+  if (!bridge?.reportAudioCaptureFailed) return;
+
+  /**
+   * O erro vai por INTEIRO (nome e mensagem), e nao reduzido a um booleano.
+   * Foi a falta disto que deixou o problema semanas sem causa: o app tinha o
+   * `NotReadableError: Could not start audio source` na mao e descartava.
+   */
+  const descricao =
+    erro instanceof Error ? `${erro.name}: ${erro.message}` : String(erro);
+
+  bridge.reportAudioCaptureFailed({
+    erro: descricao,
+    dispositivo: await saidaPadraoDeAudio(),
+  });
 }

@@ -11,7 +11,13 @@ const { contextBridge, ipcRenderer } = require("electron");
  * mandaram e devolver uma escolha.
  */
 contextBridge.exposeInMainWorld("picker", {
-  listSources: () => ipcRenderer.invoke("picker:sources"),
+  /**
+   * `dispositivoAtual` e o rotulo da saida de audio padrao AGORA. O processo
+   * principal usa isso para decidir se uma falha antiga ainda se aplica —
+   * trocar de fone merece nova tentativa.
+   */
+  listSources: (dispositivoAtual) =>
+    ipcRenderer.invoke("picker:sources", dispositivoAtual),
   choose: (id, withAudio) => ipcRenderer.send("picker:choose", { id, withAudio }),
   cancel: () => ipcRenderer.send("picker:cancel"),
 });

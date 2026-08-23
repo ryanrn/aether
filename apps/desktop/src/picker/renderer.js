@@ -121,11 +121,55 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && selectedId) confirmChoice();
 });
 
-void window.picker.listSources().then((payload) => {
+/**
+ * O rotulo da saida de audio PADRAO agora.
+ *
+ * Esta janela e `file://`, que o Chromium trata como contexto seguro — por
+ * isso `enumerateDevices` existe aqui e vem com rotulo. Isso foi verificado,
+ * nao suposto: o script `diagnose-audio.js` lista os dispositivos a partir de
+ * uma pagina `file://` e traz os nomes.
+ *
+ * Serve para uma coisa so: decidir se uma falha de som anterior ainda se
+ * aplica. Trocar de fone merece nova tentativa.
+ */
+async function saidaPadrao() {
+  try {
+    const dispositivos = await navigator.mediaDevices.enumerateDevices();
+    const saida = dispositivos.find(
+      (d) => d.kind === "audiooutput" && d.deviceId === "default",
+    );
+    return saida?.label ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Explica, sob a caixa, por que ela veio desmarcada. */
+function mostrarMotivo(motivo) {
+  if (!motivo) return;
+  const hint = document.querySelector(".audio .hint");
+  if (!hint) return;
+
+  const quando = motivo.quando ? new Date(motivo.quando) : null;
+  const data = quando
+    ? quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+    : null;
+  const onde = motivo.dispositivo ? ` em ${motivo.dispositivo}` : "";
+
+  hint.textContent =
+    `Desligado porque o som falhou${onde}${data ? ` (${data})` : ""}. ` +
+    "Pode marcar de novo para tentar.";
+  hint.classList.add("aviso");
+}
+
+void saidaPadrao()
+  .then((dispositivo) => window.picker.listSources(dispositivo))
+  .then((payload) => {
   sources = payload.sources;
   // Escolha lembrada da vez anterior: em maquinas onde o som do sistema nao
   // abre, ninguem precisa desmarcar isso toda vez.
   audioCheckbox.checked = payload.withAudio;
+  mostrarMotivo(payload.motivo);
 
   const screens = sources.filter((source) => source.isScreen).length;
   document.getElementById("count-screens").textContent = String(screens);

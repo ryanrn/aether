@@ -531,14 +531,26 @@ export async function connectVoiceRoom({
            * tentativa pediria som de novo e cairia no MESMO erro pra sempre:
            * foi exatamente isso que aconteceu com o dongle de audio sem fio.
            */
-          reportDesktopAudioFailure();
+          void reportDesktopAudioFailure(error);
+          /**
+           * A mensagem diz o que sabemos, e nao o que parece.
+           *
+           * A versao anterior afirmava que "o loopback so funciona no
+           * dispositivo com fio ou onboard" — o que se mostrou FALSO quando
+           * medimos: o loopback do Windows grava desse mesmo fone sem fio (o
+           * Xbox Game Bar faz isso). Quem nao consegue usa-lo e o Chromium.
+           *
+           * Dizer a causa errada e pior do que nao dizer nenhuma: manda a
+           * pessoa mexer no lugar errado.
+           */
           callbacks.onError(
-            "O dispositivo de saida de audio padrao do Windows nao deixou capturar " +
-              "o som do sistema (comum em fones/dongles sem fio — o loopback so " +
-              "funciona de forma confiavel no dispositivo com fio ou onboard). " +
-              "Desliguei o som no seletor de tela — e so clicar em compartilhar de " +
-              "novo, a tela vai normalmente. Para tentar com som outra vez, troque " +
-              "a saida padrao do Windows antes de compartilhar.",
+            "O Chromium nao conseguiu abrir a captura do som do sistema nesta " +
+              "saida de audio. O Windows CONSEGUE gravar dela — a limitacao e " +
+              "do navegador embutido, e um modulo nativo esta em construcao " +
+              "para contornar isso. Por enquanto desliguei o som: e so clicar " +
+              "em compartilhar de novo que a tela vai normalmente. Se voce " +
+              "trocar a saida padrao do Windows, o som volta a ser tentado " +
+              "sozinho.",
           );
           return false;
         }

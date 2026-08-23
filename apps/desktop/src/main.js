@@ -287,7 +287,9 @@ if (!app.requestSingleInstanceLock()) {
      * dispositivo de audio e o Chromium, depois que o callback do handler ja
      * retornou — o main nunca veria a falha sozinho.
      */
-    ipcMain.on("desktop:audio-capture-failed", () => disableAudioPreference());
+    ipcMain.on("desktop:audio-capture-failed", (_evento, detalhes) =>
+      disableAudioPreference(detalhes),
+    );
 
     instalarDeteccaoDeJogo();
     createWindow();

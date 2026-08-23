@@ -19,7 +19,15 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("aetherDesktop", {
   version: process.env.npm_package_version ?? "0.1.0",
   platform: process.platform,
-  reportAudioCaptureFailed: () => ipcRenderer.send("desktop:audio-capture-failed"),
+  /**
+   * `detalhes` e `{ erro, dispositivo }` — o nome da excecao e a saida de
+   * audio padrao no momento da falha.
+   *
+   * Antes isto ia VAZIO, e essa era a razao de "nao funciona" nunca virar uma
+   * causa: o app sabia exatamente qual erro tinha sido e jogava fora.
+   */
+  reportAudioCaptureFailed: (detalhes) =>
+    ipcRenderer.send("desktop:audio-capture-failed", detalhes ?? null),
 
   /**
    * Deteccao de jogo.
