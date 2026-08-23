@@ -23,3 +23,12 @@ packages/db/generated/
 
 .vercel
 .env*
+
+# Backups do banco. NUNCA versionar: o dump carrega `passwordHash` de todo
+# mundo e a tabela de sessoes. Um backup no git e um vazamento com historico.
+backups/
+
+# Excecao ao `build/` generico: o icone do app desktop e FONTE, nao artefato.
+# Sem ele o electron-builder falha num clone limpo, e a falha nao diz o porque.
+!apps/desktop/build/
+!apps/desktop/build/icon.png

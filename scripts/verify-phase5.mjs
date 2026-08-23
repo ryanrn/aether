@@ -15,7 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
-import { requireSeedFixture } from "./lib/fixture.mjs";
+import { connectedClients, requireSeedFixture, warnBusyGateway } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -139,6 +139,7 @@ async function main() {
 
   const { owner, member, server, defaultRole: memberRole } =
     await requireSeedFixture(prisma);
+  warnBusyGateway(await connectedClients(BASE));
 
   const allowed = await voiceChannel(server.id, memberRole.id, 0n);
   const denied = await voiceChannel(server.id, memberRole.id, PERM.SCREEN_SHARE);

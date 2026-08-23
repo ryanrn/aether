@@ -10,10 +10,15 @@
   "scripts": {
     "dev": "dotenv -e .env -- npm run dev --workspace=@aether/web",
     "dev:realtime": "dotenv -e .env -- npm run dev --workspace=@aether/realtime",
+    "dev:desktop": "npm run dev --workspace=@aether/desktop",
+    "build:desktop": "npm run build --workspace=@aether/desktop",
     "build": "npm run db:generate && dotenv -e .env -- npm run build --workspace=@aether/web",
     "build:ci": "prisma generate --schema packages/db/prisma/schema.prisma && npm run build --workspace=@aether/web",
     "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "env:check": "node scripts/check-env.js .env",
     "db:password": "node scripts/set-db-password.js",
     "db:diagnose": "node scripts/diagnose-db.js",
@@ -22,11 +27,15 @@
     "db:migrate": "dotenv -e .env -- npm run migrate --workspace=@aether/db",
     "db:deploy": "dotenv -e .env -- npm run deploy --workspace=@aether/db",
     "db:studio": "dotenv -e .env -- npm run studio --workspace=@aether/db",
-    "db:seed": "dotenv -e .env -- npm run seed --workspace=@aether/db"
+    "db:seed": "dotenv -e .env -- npm run seed --workspace=@aether/db",
+    "backup": "dotenv -e .env -- node scripts/backup.mjs",
+    "backup:verify": "dotenv -e .env -- node scripts/verify-backup.mjs",
+    "restore": "dotenv -e .env -- node scripts/restore.mjs"
   },
   "devDependencies": {
     "dotenv-cli": "^11.0.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.11"
@@ -36,6 +45,7 @@
     "@prisma/engines@6.19.2": true,
     "prisma@6.19.2": true,
     "esbuild@0.28.2": true,
-    "sharp@0.34.5": true
+    "sharp@0.34.5": true,
+    "electron@33.4.11": true
   }
 }

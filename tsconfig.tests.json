@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    /**
+     * A suite importa modulos de apps/ e packages/ como fonte, entao precisa
+     * das mesmas libs de runtime que eles: Buffer e crypto do Node, e as APIs
+     * de DOM que o codigo compartilhado referencia.
+     */
+    "lib": ["ES2022", "DOM"],
+    "allowJs": false
+  },
+  "include": ["tests/**/*.ts", "vitest.config.mts"]
+}

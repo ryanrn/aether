@@ -15,7 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT, jwtVerify, decodeJwt } from "jose";
 import { io } from "socket.io-client";
-import { requireSeedFixture } from "./lib/fixture.mjs";
+import { connectedClients, requireSeedFixture, warnBusyGateway } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -156,6 +156,7 @@ async function main() {
   );
 
   const { owner, member, server } = await requireSeedFixture(prisma);
+  warnBusyGateway(await connectedClients(BASE));
 
   // O dono curto-circuita para todas as permissoes, entao os testes de
   // restricao precisam de um membro comum.

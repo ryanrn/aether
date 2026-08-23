@@ -13,7 +13,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
-import { requireSeedFixture } from "./lib/fixture.mjs";
+import { connectedClients, requireSeedFixture, skipped, warnBusyGateway } from "./lib/fixture.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -208,6 +208,8 @@ async function main() {
   await requireGatewayUp();
 
   const { owner, member, server } = await requireSeedFixture(prisma);
+  const busyClients = await connectedClients(BASE);
+  warnBusyGateway(busyClients);
   const foreign = await prisma.server.findFirst({
     where: {
       ownerId: { not: owner.id },
@@ -362,7 +364,15 @@ async function main() {
     (p) => p.entry.userId === member.id && p.entry.status !== "OFFLINE",
   );
   await joinServer(memberConn.socket, server.id);
-  check("dono ve o outro usuario ficar online", (await sawJoin) !== null);
+  const joinAnnounced = (await sawJoin) !== null;
+  if (busyClients > 0) {
+    skipped(
+      "dono ve o outro usuario ficar online",
+      "ha cliente alheio conectado; o usuario ja estava presente",
+    );
+  } else {
+    check("dono ve o outro usuario ficar online", joinAnnounced);
+  }
 
   const sawStatus = waitFor(
     ownerConn.socket,
@@ -587,7 +597,15 @@ async function main() {
     (p) => p.entry.userId === member.id && p.entry.status === "OFFLINE",
   );
   memberConn.socket.close();
-  check("fechar a ULTIMA aba marca offline", (await sawRealOffline) !== null);
+  const offlineAnnounced = (await sawRealOffline) !== null;
+  if (busyClients > 0) {
+    skipped(
+      "fechar a ULTIMA aba marca offline",
+      "ha cliente alheio conectado; esta nao era a ultima aba",
+    );
+  } else {
+    check("fechar a ULTIMA aba marca offline", offlineAnnounced);
+  }
   ownerConn.socket.off("presence:update", watcher);
 
   for (const socket of openSockets) socket.close();
