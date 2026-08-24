@@ -54,7 +54,6 @@ export function ForgotPasswordForm() {
           autoComplete="email"
           value={email}
           onChange={(evento) => setEmail(evento.target.value)}
-          placeholder="voce@exemplo.com"
           required
         />
       </Field>

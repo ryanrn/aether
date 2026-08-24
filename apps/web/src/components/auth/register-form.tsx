@@ -34,7 +34,7 @@ export function RegisterForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Usuario">
+        <Field label="Usuario" hint="3 a 24 caracteres." required>
           <Input
             name="username"
             autoComplete="username"
@@ -42,41 +42,37 @@ export function RegisterForm() {
             required
             minLength={3}
             maxLength={24}
-            placeholder="ryan"
             aria-invalid={error?.field === "username"}
           />
         </Field>
-        <Field label="Nome exibido">
+        <Field label="Nome exibido" required>
           <Input
             name="displayName"
             autoComplete="nickname"
             required
             maxLength={32}
-            placeholder="Ryan"
             aria-invalid={error?.field === "displayName"}
           />
         </Field>
       </div>
 
-      <Field label="E-mail">
+      <Field label="E-mail" required>
         <Input
           name="email"
           type="email"
           autoComplete="email"
           required
-          placeholder="voce@exemplo.com"
           aria-invalid={error?.field === "email"}
         />
       </Field>
 
-      <Field label="Senha" hint="Minimo de 8 caracteres.">
+      <Field label="Senha" hint="Minimo de 8 caracteres." required>
         <Input
           name="password"
           type="password"
           autoComplete="new-password"
           required
           minLength={8}
-          placeholder="••••••••"
           aria-invalid={error?.field === "password"}
         />
       </Field>

@@ -45,15 +45,31 @@ export function FieldError({ children }: { children?: React.ReactNode }) {
 export function Field({
   label,
   hint,
+  required = false,
   children,
 }: {
   label: string;
   hint?: string;
+  /**
+   * Marca o campo como obrigatorio com um asterisco no rotulo.
+   *
+   * Existe porque os formularios de entrada perderam os placeholders: com o
+   * campo vazio e sem dica, nada dizia o que era obrigatorio. O asterisco diz,
+   * e sem fingir conteudo dentro da caixa.
+   */
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
+      <Label>
+        {label}
+        {required ? (
+          <span className="ml-1 text-signal-dnd" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </Label>
       {children}
       {hint ? <p className="text-xs text-ink-500">{hint}</p> : null}
     </div>

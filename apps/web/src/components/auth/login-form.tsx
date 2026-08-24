@@ -33,24 +33,22 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <Field label="Usuario ou e-mail">
+      <Field label="Usuario ou e-mail" required>
         <Input
           name="identifier"
           autoComplete="username"
           autoFocus
           required
-          placeholder="ryan"
           aria-invalid={error?.field === "identifier"}
         />
       </Field>
 
-      <Field label="Senha">
+      <Field label="Senha" required>
         <Input
           name="password"
           type="password"
           autoComplete="current-password"
           required
-          placeholder="••••••••"
           aria-invalid={error?.field === "password"}
         />
       </Field>
