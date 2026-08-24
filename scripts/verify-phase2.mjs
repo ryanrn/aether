@@ -87,9 +87,17 @@ async function main() {
    * e ruido se aprende a ignorar. Criando o membro aqui, a premissa "nao tem o
    * cargo" deixa de ser torcida e passa a ser fato.
    */
-  const memberRole = server.roles.find((role) => role.name === "Member");
+  /**
+   * O cargo e escolhido pelo que ele E, nao pelo nome.
+   *
+   * Casar por texto quebraria no dia em que alguem renomeasse o cargo — e foi
+   * exatamente o que aconteceu quando o molde padrao passou de "Member" para
+   * "Membro". O teste precisa do cargo PADRAO (o que todo mundo recebe ao
+   * entrar), e isso e a flag `isDefault`, que nao depende de idioma.
+   */
+  const memberRole = server.roles.find((role) => role.isDefault);
   if (!memberRole) {
-    console.log("Cargo 'Member' nao encontrado no servidor de seed.");
+    console.log("Nenhum cargo padrao (isDefault) no servidor de seed.");
     process.exit(1);
   }
 
@@ -115,8 +123,19 @@ async function main() {
   const memberAuth = await sessionCookie(member.id);
   const createdSessions = [ownerAuth.sessionId, memberAuth.sessionId];
 
-  // canal privado liberado apenas para o cargo Moderator (que joao nao tem)
-  const modRole = server.roles.find((role) => role.name === "Moderator");
+  /**
+   * O canal privado e liberado para um cargo que o membro de teste NAO tem.
+   *
+   * Escolhido por posicao, e nao por nome: o mais alto que nao seja o do dono
+   * serve, e continua servindo depois de qualquer renomeacao ou traducao.
+   */
+  const modRole = server.roles
+    .filter((role) => !role.isOwner && !role.isDefault)
+    .sort((a, b) => b.position - a.position)[0];
+  if (!modRole) {
+    console.log("Nenhum cargo intermediario para o teste de canal privado.");
+    process.exit(1);
+  }
   const publicChannel = await prisma.channel.findFirst({
     where: { serverId: server.id, isPrivate: false },
   });

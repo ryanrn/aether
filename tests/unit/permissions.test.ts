@@ -163,11 +163,20 @@ describe("applyOverwrites", () => {
 });
 
 describe("cargos padrao", () => {
-  it("so o Owner carrega todas as permissoes", () => {
+  /**
+   * A assercao e sobre a FLAG, nao sobre o nome.
+   *
+   * Ja foi `toEqual(["Owner"])` e quebrou quando os cargos padrao foram
+   * traduzidos para portugues — sem nada estar errado. O que o teste quer
+   * dizer e "um cargo so tem tudo, e e o do dono"; casar por texto era uma
+   * forma fragil de dizer isso, e prendia o idioma ao teste.
+   */
+  it("so o cargo do dono carrega todas as permissoes", () => {
     const withEverything = DEFAULT_ROLE_TEMPLATES.filter(
       (role) => role.permissions === ALL_PERMISSIONS,
     );
-    expect(withEverything.map((role) => role.name)).toEqual(["Owner"]);
+    expect(withEverything).toHaveLength(1);
+    expect(withEverything[0]!.isOwner).toBe(true);
   });
 
   it("nenhum cargo padrao abaixo do Owner recebe ADMINISTRATOR", () => {

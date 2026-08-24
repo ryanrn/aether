@@ -221,10 +221,22 @@ export function applyOverwrites(
   return result;
 }
 
-/** Cargos criados automaticamente quando um servidor nasce. */
+/**
+ * Cargos criados automaticamente quando um servidor nasce.
+ *
+ * Os nomes sao DADOS, nao rotulo de tela: viram linhas na tabela `Role` e
+ * podem ser renomeados por quem administra o servidor. Mudar aqui vale para os
+ * servidores criados DEPOIS — os que ja existem seguem com o nome que
+ * receberam quando nasceram.
+ *
+ * Nada no app procura cargo por nome: a autorizacao usa a flag `isOwner` e os
+ * bits de permissao. Isso e o que torna renomear seguro, e e uma propriedade
+ * que vale preservar — codigo que casa por texto quebra no dia em que alguem
+ * renomeia o cargo dele.
+ */
 export const DEFAULT_ROLE_TEMPLATES = [
   {
-    name: "Owner",
+    name: "Dono",
     color: "#19D3B4",
     position: 100,
     isDefault: false,
@@ -232,7 +244,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
     permissions: ALL_PERMISSIONS,
   },
   {
-    name: "Administrator",
+    name: "Administrador",
     color: "#7DA2FF",
     position: 80,
     isDefault: false,
@@ -260,7 +272,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
     ),
   },
   {
-    name: "Moderator",
+    name: "Moderador",
     color: "#F2B45E",
     position: 60,
     isDefault: false,
@@ -281,7 +293,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
     ),
   },
   {
-    name: "Member",
+    name: "Membro",
     color: "#9AA6B8",
     position: 10,
     isDefault: true,
@@ -296,7 +308,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
     ),
   },
   {
-    name: "Guest",
+    name: "Convidado",
     color: "#6B7688",
     position: 1,
     isDefault: false,
