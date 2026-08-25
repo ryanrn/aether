@@ -280,8 +280,9 @@ if (!app.requestSingleInstanceLock()) {
 
     /**
      * Microfone e captura de tela sao concedidos sem perguntar; camera e todo
-     * o resto sao NEGADOS. O app nunca usa camera, e uma permissao que nao se
-     * usa e superficie de ataque de graca.
+     * o resto sao NEGADOS. Camera entrou quando o recurso passou a existir;
+     * antes era negada de proposito, porque permissao que nao se usa e
+     * superficie de ataque de graca.
      *
      * Nao ha dialogo de permissao aqui de proposito: quem instalou um
      * aplicativo de voz ja consentiu em usar o microfone, e o Windows continua
@@ -295,6 +296,28 @@ if (!app.requestSingleInstanceLock()) {
           return;
         }
         callback(permission === "media" || permission === "display-capture");
+      },
+    );
+
+    /**
+     * O handler de VERIFICACAO, que e outro e nao pode faltar.
+     *
+     * O Chromium pergunta duas coisas em momentos diferentes: "posso PEDIR?"
+     * (acima) e "esta permitido AGORA?" (aqui). O padrao do Electron nega o
+     * segundo para camera vindo de conteudo remoto — e sem ele o microfone
+     * funcionava e a camera nao, com um erro que nao explicava nada:
+     *
+     *   navigator.permissions.query({name:"camera"}) -> "denied"
+     *   getUserMedia({video:true}) -> NotAllowedError: Permission denied
+     *
+     * A origem e conferida do mesmo jeito: so o app, nunca uma pagina
+     * qualquer que consiga se carregar aqui dentro.
+     */
+    session.defaultSession.setPermissionCheckHandler(
+      (webContents, permission, requestingOrigin) => {
+        const url = webContents?.getURL() ?? requestingOrigin ?? "";
+        if (!isAllowedUrl(url)) return false;
+        return permission === "media" || permission === "display-capture";
       },
     );
 

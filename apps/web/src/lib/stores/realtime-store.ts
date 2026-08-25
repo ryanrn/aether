@@ -149,7 +149,7 @@ interface RealtimeState {
     /** troca a qualidade da transmissao ativa, sem reabrir o seletor de tela */
     setSharePreset: (preset: SharePresetId) => Promise<boolean>;
     /** liga/desliga a camera; `false` quando o dispositivo recusou */
-    setCameraEnabled: (enabled: boolean) => Promise<boolean>;
+    setCameraEnabled: (enabled: boolean, deviceId?: string) => Promise<boolean>;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;

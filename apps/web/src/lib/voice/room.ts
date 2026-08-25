@@ -116,6 +116,41 @@ export interface VoiceRoomHandle {
   disconnect: () => Promise<void>;
 }
 
+/**
+ * Traduz o erro do navegador em algo acionavel.
+ *
+ * A versao anterior chutava uma causa unica ("outro programa esta usando") e
+ * mandava a pessoa mexer no lugar errado — o erro real era
+ * `NotAllowedError: Permission denied`, vindo do cabecalho
+ * `Permissions-Policy: camera=()`. Cada nome de excecao aponta para um lugar
+ * diferente, e dizer a causa errada e pior do que nao dizer nenhuma.
+ */
+function explicarErroDeCamera(erro: unknown, ligando: boolean): string {
+  if (!ligando) return "Nao consegui desligar a camera.";
+
+  const nome = erro instanceof Error ? erro.name : "";
+  switch (nome) {
+    case "NotAllowedError":
+      return (
+        "A camera foi bloqueada. Se o aviso do sistema apareceu, escolha " +
+        "permitir; se nao apareceu, o bloqueio vem do proprio app e precisa " +
+        "de correcao nossa."
+      );
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "Nenhuma camera encontrada. Conecte uma e tente de novo.";
+    case "NotReadableError":
+      return (
+        "A camera existe mas nao abriu — normalmente outro programa esta " +
+        "usando. Feche-o e tente de novo."
+      );
+    default:
+      return erro instanceof Error
+        ? `Nao consegui ligar a camera (${erro.name}: ${erro.message}).`
+        : "Nao consegui ligar a camera.";
+  }
+}
+
 /** Container dos <audio> remotos, fora do controle do React. */
 function audioContainer(): HTMLElement {
   const existing = document.getElementById("aether-audio-sink");
@@ -859,11 +894,7 @@ export async function connectVoiceRoom({
         return true;
       } catch (error) {
         mediaLog("nao consegui mudar a camera", error);
-        callbacks.onError(
-          enabled
-            ? "Nao consegui ligar a camera. Confira se outro programa esta usando."
-            : "Nao consegui desligar a camera.",
-        );
+        callbacks.onError(explicarErroDeCamera(error, enabled));
         return false;
       }
     },

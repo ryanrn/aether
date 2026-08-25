@@ -40,7 +40,10 @@ import {
 } from "@/lib/voice/screen-share";
 import {
   listMicrophones,
+  listCameras,
+  readPreferredCamera,
   readPreferredMicrophone,
+  savePreferredCamera,
   savePreferredMicrophone,
   type AudioDevice,
 } from "@/lib/voice/devices";
@@ -98,11 +101,15 @@ export function ControlBar({
   /** No desktop o seletor do Electron tem a chave de som; duas confundiriam. */
   const [noDesktop, setNoDesktop] = useState(false);
   const [micMenuOpen, setMicMenuOpen] = useState(false);
+  const [camMenuOpen, setCamMenuOpen] = useState(false);
+  const [cameras, setCameras] = useState<AudioDevice[]>([]);
+  const [camId, setCamId] = useState<string | null>(null);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [micId, setMicId] = useState<string | null>(null);
 
   // localStorage nao existe no servidor: so lemos depois de montar.
   useEffect(() => setMicId(readPreferredMicrophone()), []);
+  useEffect(() => setCamId(readPreferredCamera()), []);
   useEffect(() => setShareAudio(readShareAudioPreference()), []);
   // Depois de montar: `window.aetherDesktop` nao existe no servidor.
   useEffect(() => setNoDesktop(isDesktopApp()), []);
@@ -113,6 +120,25 @@ export function ControlBar({
     // Enumerar a cada abertura, e nao uma vez: aparelho USB pode ter sido
     // conectado depois que a pagina abriu.
     if (next) setDevices(await listMicrophones());
+  }
+
+  async function abrirMenuDeCamera() {
+    const proximo = !camMenuOpen;
+    setCamMenuOpen(proximo);
+    // Enumerar a cada abertura: camera USB pode ter sido ligada depois.
+    if (proximo) setCameras(await listCameras());
+  }
+
+  async function escolherCamera(deviceId: string) {
+    setCamMenuOpen(false);
+    setCamId(deviceId);
+    savePreferredCamera(deviceId);
+    /**
+     * Com a camera JA ligada, trocar exige republicar com o aparelho novo —
+     * o LiveKit nao troca a fonte de uma faixa no ar. Desligada, a escolha
+     * fica guardada e vale quando ligar.
+     */
+    if (cameraLigada) await roomControls?.setCameraEnabled(true, deviceId);
   }
 
   async function pickMicrophone(deviceId: string) {
@@ -177,7 +203,10 @@ export function ControlBar({
   async function alternarCamera() {
     if (!roomControls) return;
     const desejado = !cameraLigada;
-    const deu = await roomControls.setCameraEnabled(desejado);
+    const deu = await roomControls.setCameraEnabled(
+      desejado,
+      desejado ? (camId ?? undefined) : undefined,
+    );
     if (!deu) return;
     /**
      * O indicador so e anunciado DEPOIS de a faixa mudar de verdade. Anunciar
@@ -367,7 +396,8 @@ export function ControlBar({
           )}
         </ControlToggle>
 
-        <ControlToggle
+        <div className="relative flex items-center">
+          <ControlToggle
           active={cameraLigada}
           danger={cameraLigada}
           disabled={cameraBloqueada}
@@ -387,7 +417,60 @@ export function ControlBar({
           ) : (
             <Video className="h-4 w-4" />
           )}
-        </ControlToggle>
+          </ControlToggle>
+
+          <button
+            type="button"
+            onClick={() => void abrirMenuDeCamera()}
+            disabled={cameraBloqueada}
+            title="Escolher camera"
+            aria-label="Escolher camera"
+            className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100 disabled:opacity-40"
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+
+          {camMenuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Fechar"
+                onClick={() => setCamMenuOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+                <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
+                  camera
+                </p>
+                {cameras.length === 0 ? (
+                  <p className="px-2 pb-2 text-[12px] leading-snug text-ink-500">
+                    Nenhuma camera encontrada. Conecte uma e abra de novo.
+                  </p>
+                ) : (
+                  cameras.map((aparelho) => (
+                    <button
+                      key={aparelho.deviceId}
+                      type="button"
+                      onClick={() => void escolherCamera(aparelho.deviceId)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] transition-colors hover:bg-base-800",
+                        aparelho.deviceId === camId
+                          ? "text-accent-300"
+                          : "text-ink-200",
+                      )}
+                    >
+                      <Video className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{aparelho.label}</span>
+                    </button>
+                  ))
+                )}
+                <p className="border-t border-base-800 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                  Os nomes so aparecem depois de voce permitir a camera uma vez.
+                </p>
+              </div>
+            </>
+          ) : null}
+        </div>
 
         <div className="relative flex items-center">
           <ControlToggle

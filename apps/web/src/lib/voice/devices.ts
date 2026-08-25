@@ -106,3 +106,47 @@ export function savePreferredSpeaker(deviceId: string | null): void {
     // Preferencia nao persistida nao impede usar o dispositivo agora.
   }
 }
+
+/* -------------------------------------------------------------------------
+ * Camera
+ *
+ * Mesmo desenho do microfone, e por um motivo pratico: os rotulos so aparecem
+ * DEPOIS de a pessoa ter concedido a permissao alguma vez. Antes disso a lista
+ * vem com nomes vazios, e por isso ha um nome de reserva numerado.
+ * ------------------------------------------------------------------------- */
+
+const CHAVE_CAMERA = "aether:camera";
+
+export async function listCameras(): Promise<AudioDevice[]> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices) return [];
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((device) => device.kind === "videoinput")
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Camera ${index + 1}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export function readPreferredCamera(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(CHAVE_CAMERA);
+  } catch {
+    return null;
+  }
+}
+
+export function savePreferredCamera(deviceId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (deviceId) window.localStorage.setItem(CHAVE_CAMERA, deviceId);
+    else window.localStorage.removeItem(CHAVE_CAMERA);
+  } catch {
+    // Preferencia nao persistida nao impede usar o aparelho agora.
+  }
+}

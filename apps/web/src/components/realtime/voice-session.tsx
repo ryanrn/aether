@@ -100,8 +100,8 @@ export function VoiceSession() {
            * Guardar antes deixaria o proprio bloco tentando desenhar uma faixa
            * que o dispositivo ainda podia recusar.
            */
-          setCameraEnabled: async (enabled) => {
-            const deu = await handle.setCameraEnabled(enabled);
+          setCameraEnabled: async (enabled, deviceId) => {
+            const deu = await handle.setCameraEnabled(enabled, deviceId);
             if (deu) {
               useRealtimeStore
                 .getState()

@@ -22,8 +22,22 @@ const config: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            // microfone e captura de tela sao necessarios a partir da fase 4/5
-            value: "camera=(), microphone=(self), display-capture=(self), geolocation=()",
+            /**
+             * `(self)` no que o app USA; `()` no que ele nao usa.
+             *
+             * A camera saiu de `()` para `(self)` quando o recurso passou a
+             * existir. Vale registrar o modo de falha, porque foi caro: com
+             * `camera=()` o navegador nega ANTES de qualquer permissao — o
+             * handler do Electron respondia "pode", o Windows permitia, a
+             * webcam estava livre, e mesmo assim vinha
+             * `NotAllowedError: Permission denied`. Sem cabecalho nenhum
+             * (`file://`) a mesma camera abria na hora.
+             *
+             * `geolocation` continua trancada: o app nao usa, e permissao que
+             * nao se usa e superficie de ataque de graca.
+             */
+            value:
+              "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
           },
         ],
       },
