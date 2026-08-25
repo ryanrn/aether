@@ -222,8 +222,12 @@ async function pickSource(parentWindow) {
       : screen.getPrimaryDisplay().bounds,
   );
 
-  const width = Math.min(920, display.workArea.width - 80);
-  const height = Math.min(640, display.workArea.height - 80);
+  /**
+   * Janela maior desde a reformulacao: os cards passaram de 210 para 300px de
+   * largura minima, e numa janela de 920 sobrava vazio em volta de duas telas.
+   */
+  const width = Math.min(1040, display.workArea.width - 80);
+  const height = Math.min(700, display.workArea.height - 80);
 
   pickerWindow = new BrowserWindow({
     width,
