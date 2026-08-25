@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
     disponivel: () => ipcRenderer.invoke("desktop:loopback-available"),
     saidas: () => ipcRenderer.invoke("desktop:loopback-devices"),
     iniciar: (deviceId) => ipcRenderer.invoke("desktop:loopback-start", deviceId),
+    /** o que foi respondido no seletor sobre levar o som do sistema */
+    escolhaDoSeletor: () => ipcRenderer.invoke("desktop:share-audio-choice"),
     parar: () => ipcRenderer.invoke("desktop:loopback-stop"),
     /** devolve a funcao que cancela a inscricao */
     aoReceber: (callback) => {

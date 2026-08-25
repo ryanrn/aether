@@ -159,6 +159,21 @@ function disableAudioPreference(detalhes) {
   log.registrar("audio.tela.falhou", { dispositivo, erro });
 }
 
+/**
+ * A ultima resposta a "levar o som do sistema", para o renderer consultar.
+ *
+ * Existe porque a pergunta e feita no SELETOR (processo principal) e quem
+ * captura o som agora e o renderer, pelo modulo nativo. Sem este caminho de
+ * volta, a caixa marcada no seletor nao chegava a lugar nenhum: o app pedia
+ * som ao Chromium — que e justamente quem nao consegue — e a escolha da
+ * pessoa se perdia.
+ */
+let ultimaEscolhaDeAudio = true;
+
+function escolhaDeAudioDoSeletor() {
+  return ultimaEscolhaDeAudio;
+}
+
 let pickerWindow = null;
 
 /**
@@ -271,6 +286,7 @@ async function pickSource(parentWindow) {
         return;
       }
       const withAudio = choice.withAudio === true;
+      ultimaEscolhaDeAudio = withAudio;
       saveAudioPreference(withAudio);
       finish({ source, withAudio });
     });
@@ -292,6 +308,7 @@ async function pickSource(parentWindow) {
  */
 module.exports = {
   pickSource,
+  escolhaDeAudioDoSeletor,
   disableAudioPreference,
   /** exportada para teste: e a regra que ja errou uma vez */
   decidirComPrefs,

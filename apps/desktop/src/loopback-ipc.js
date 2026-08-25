@@ -3,6 +3,7 @@
 const { ipcMain } = require("electron");
 const log = require("./log");
 const loopback = require("../native");
+const { escolhaDeAudioDoSeletor } = require("./picker");
 
 /**
  * Leva o som do sistema do processo principal ate a pagina.
@@ -70,6 +71,12 @@ function instalarLoopback() {
     disponivel: loopback.disponivel(),
     motivo: loopback.indisponivelPorque(),
   }));
+
+  /**
+   * O que a pessoa respondeu no seletor sobre levar o som. A pergunta e feita
+   * la; quem captura e o renderer.
+   */
+  ipcMain.handle("desktop:share-audio-choice", () => escolhaDeAudioDoSeletor());
 
   ipcMain.handle("desktop:loopback-devices", () => {
     if (!loopback.disponivel()) return [];

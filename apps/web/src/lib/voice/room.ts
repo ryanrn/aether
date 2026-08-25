@@ -22,6 +22,7 @@ import {
 } from "./screen-share";
 import {
   capturarSomDoSistema,
+  pediuSomNoSeletor,
   podeCapturarSomDoSistema,
   type SomDoSistema,
 } from "./system-audio";
@@ -517,10 +518,19 @@ export async function connectVoiceRoom({
       }
 
       /**
-       * Perguntado ANTES da captura porque muda o pedido que sera feito.
-       * Falha aqui nao e erro: sem nativo, seguimos pelo caminho de sempre.
+       * DISPONIBILIDADE, e nao vontade.
+       *
+       * Isto decide como PEDIR a captura, e por isso nao pode depender de a
+       * pessoa querer som: havendo modulo nativo, o video vem sozinho de
+       * qualquer jeito, e o som (se pedido) vem por fora.
+       *
+       * A primeira versao juntava as duas coisas — `withSystemAudio && ...` — e
+       * o caminho nativo nunca era usado no desktop, porque ali a caixa de som
+       * fica no SELETOR e o `withSystemAudio` do navegador nem e exibido. O
+       * log mostrava `loopback.disponivel: sim` e, na linha seguinte, o erro do
+       * Chromium.
        */
-      const temNativo = withSystemAudio && (await podeCapturarSomDoSistema());
+      const temNativo = await podeCapturarSomDoSistema();
 
       let tracks;
       try {
@@ -660,7 +670,17 @@ export async function connectVoiceRoom({
        * Publicado DEPOIS do video e de proposito: se algo aqui falhar, a tela
        * ja esta no ar. Som e um degrau; tela e a transmissao.
        */
-      if (temNativo) {
+      /**
+       * A VONTADE, esta sim, decide se capturamos o som. No desktop a resposta
+       * mora no seletor; no navegador, na barra de controles.
+       */
+      const querSom = temNativo
+        ? isDesktopApp()
+          ? await pediuSomNoSeletor()
+          : withSystemAudio
+        : false;
+
+      if (querSom) {
         const som = await capturarSomDoSistema();
         if (som) {
           try {

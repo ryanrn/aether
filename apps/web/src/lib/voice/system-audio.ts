@@ -29,6 +29,7 @@ interface PonteLoopback {
     | { ok: false; erro: string }
   >;
   parar: () => Promise<{ ok: true }>;
+  escolhaDoSeletor: () => Promise<boolean>;
   aoReceber: (callback: (pedaco: Uint8Array) => void) => () => void;
 }
 
@@ -48,6 +49,26 @@ export async function podeCapturarSomDoSistema(): Promise<boolean> {
     return resposta.disponivel === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * A pessoa pediu som, do jeito que o app de desktop pergunta?
+ *
+ * No desktop a pergunta esta no SELETOR de tela, nao na barra de controles —
+ * e por isso a resposta precisa vir de la. A preferencia do navegador
+ * (`withSystemAudio`) nao vale no desktop: a caixa dela nem e exibida, entao
+ * ficaria presa no que o localStorage tivesse, inclusive num `false` gravado
+ * por uma falha antiga. Foi exatamente isso que impediu o caminho nativo de
+ * ser usado na primeira versao.
+ */
+export async function pediuSomNoSeletor(): Promise<boolean> {
+  const api = ponte();
+  if (!api) return false;
+  try {
+    return (await api.escolhaDoSeletor()) === true;
+  } catch {
+    return true; // na duvida, tenta o som — falhar nele nao derruba a tela
   }
 }
 
