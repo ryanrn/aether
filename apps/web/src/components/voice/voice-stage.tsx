@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MicOff, MonitorUp, PhoneOff, Volume2, VolumeX } from "lucide-react";
+import type { Track } from "livekit-client";
 import type { PublicChannel, VoiceParticipant } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { useSocket } from "@/components/realtime/realtime-provider";
@@ -200,6 +201,20 @@ function ParticipantCard({
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
 
   /**
+   * A camera de quem esta neste bloco: a propria vem do estado local, a dos
+   * outros vem da sala. So desenhamos se o participante TAMBEM se anuncia com
+   * a camera ligada — assim uma faixa que ficou para tras nao mantem imagem de
+   * alguem que ja desligou.
+   */
+  const cameras = useRealtimeStore((estado) => estado.cameras);
+  const minhaCamera = useRealtimeStore((estado) => estado.localCameraTrack);
+  const faixa = !participant.camera
+    ? null
+    : isSelf
+      ? minhaCamera
+      : (cameras.find((c) => c.userId === participant.userId)?.track ?? null);
+
+  /**
    * Clique direito no card abre o volume, como em qualquer aplicativo de voz.
    * Sem `viewer` nem lista de canais: aqui o menu e so o volume. A moderacao
    * fica na arvore de canais, que e onde existe a lista necessaria para o
@@ -233,14 +248,26 @@ function ParticipantCard({
         />
       ) : null}
 
-      {/* FASE 4/5: <video> entra aqui, ocupando o card inteiro */}
-      <Avatar
-        userId={participant.userId}
-        name={participant.user.displayName}
-        src={participant.user.avatarUrl}
-        size={compact ? "sm" : "lg"}
-        speaking={speaking}
-      />
+      {/*
+        Com a camera ligada, o video OCUPA o bloco e o avatar sai. Os dois ao
+        mesmo tempo seriam a mesma pessoa duas vezes.
+
+        `faixa` pode ser nula por um instante: o indicador (`participant.camera`)
+        chega pelo nosso gateway e a faixa chega pelo SFU, por caminhos
+        diferentes. Enquanto ela nao chega, o avatar segura o lugar em vez de
+        piscar um retangulo preto.
+      */}
+      {faixa ? (
+        <CameraVideo track={faixa} espelhar={isSelf} />
+      ) : (
+        <Avatar
+          userId={participant.userId}
+          name={participant.user.displayName}
+          src={participant.user.avatarUrl}
+          size={compact ? "sm" : "lg"}
+          speaking={speaking}
+        />
+      )}
 
       {participant.streaming ? (
         <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-sm border border-signal-live/40 bg-signal-live/12 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-signal-live">
@@ -260,5 +287,49 @@ function ParticipantCard({
         </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * O <video> de uma camera.
+ *
+ * `attach`/`detach` do LiveKit em vez de `srcObject` na mao: e o proprio
+ * cliente que cuida de reassinar a faixa quando a qualidade muda, e mexer no
+ * `srcObject` por fora briga com isso.
+ *
+ * A PROPRIA camera aparece espelhada. Nao e enfeite: sem espelho, levantar a
+ * mao direita mostra a mao esquerda subindo, e a imagem parece de outra
+ * pessoa. Camera dos OUTROS nunca espelha — ali o certo e ver como e.
+ */
+function CameraVideo({
+  track,
+  espelhar,
+}: {
+  track: Track;
+  espelhar: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const elemento = ref.current;
+    if (!elemento) return;
+    track.attach(elemento);
+    return () => {
+      track.detach(elemento);
+    };
+  }, [track]);
+
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      /** A propria camera vai MUDA: ouvir o proprio microfone e eco. */
+      muted
+      className={cn(
+        "h-full w-full object-cover",
+        espelhar && "-scale-x-100",
+      )}
+    />
   );
 }

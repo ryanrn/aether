@@ -324,6 +324,8 @@ interface VoiceEntry {
   selfDeafened: boolean;
   speaking: boolean;
   streaming: boolean;
+  /** camera ligada — sinalizacao; o video vai pelo SFU */
+  camera: boolean;
   /** silenciado por moderacao — o proprio usuario nao desfaz */
   serverMuted: boolean;
   serverDeafened: boolean;
@@ -344,6 +346,7 @@ function toParticipant(userId: string, entry: VoiceEntry): VoiceParticipant {
     serverMuted: entry.serverMuted,
     serverDeafened: entry.serverDeafened,
     streaming: entry.streaming,
+    camera: entry.camera,
     // Mutado nunca aparece falando, mesmo que o cliente insista — inclusive
     // quando o mudo veio da moderacao.
     speaking: entry.speaking && !entry.selfMuted && !entry.serverMuted,
@@ -371,6 +374,7 @@ export function voiceDeparture(
     serverMuted: false,
     serverDeafened: false,
     streaming: false,
+    camera: false,
     speaking: false,
     joinedAt: null,
     user,
@@ -412,6 +416,11 @@ export function joinVoice(params: {
     speaking: false,
     // Trocar de canal encerra a transmissao: a track fica na sala anterior.
     streaming: false,
+    /**
+     * A camera tambem NAO acompanha a troca de canal. A faixa pertence a sala
+     * anterior; deixar o indicador aceso mostraria camera onde nao ha video.
+     */
+    camera: false,
     /**
      * Moderacao acompanha a pessoa ao trocar de canal. Zerar aqui deixaria
      * qualquer silenciado se livrar do mudo so entrando em outro canal.
@@ -509,6 +518,21 @@ export function setVoiceSpeaking(
   if (!entry) return null;
   if (entry.speaking === speaking) return null;
   entry.speaking = speaking;
+  return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+}
+
+/**
+ * Marca quem esta com a camera ligada. `null` quando nada mudou — repetir o
+ * mesmo estado para a sala inteira e trafego sem informacao nova.
+ */
+export function setVoiceCamera(
+  userId: string,
+  camera: boolean,
+): { serverId: string; participant: VoiceParticipant } | null {
+  const entry = voice.get(userId);
+  if (!entry) return null;
+  if (entry.camera === camera) return null;
+  entry.camera = camera;
   return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
 }
 

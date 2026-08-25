@@ -10,6 +10,8 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  Video,
+  VideoOff,
   PhoneOff,
   Settings,
 } from "lucide-react";
@@ -160,6 +162,30 @@ export function ControlBar({
    * que so existe em contexto seguro, ou seja, HTTPS ou localhost.
    */
   const shareBlocked = !canShare || !roomControls || !canCaptureScreen();
+
+  /**
+   * A camera exige o cargo e estar numa call, pelas mesmas razoes da tela.
+   *
+   * A checagem AQUI e conveniencia: quem decide de verdade e o token do SFU,
+   * que so lista a fonte CAMERA para quem tem a permissao. Esconder o botao
+   * evita oferecer o que seria recusado; nao e o que protege.
+   */
+  const podeCamera = viewerCan(viewer, "CAMERA");
+  const cameraBloqueada = !podeCamera || !roomControls;
+  const cameraLigada = useRealtimeStore((estado) => estado.localCameraTrack) !== null;
+
+  async function alternarCamera() {
+    if (!roomControls) return;
+    const desejado = !cameraLigada;
+    const deu = await roomControls.setCameraEnabled(desejado);
+    if (!deu) return;
+    /**
+     * O indicador so e anunciado DEPOIS de a faixa mudar de verdade. Anunciar
+     * antes acenderia a camera na tela dos outros enquanto o dispositivo ainda
+     * podia recusar.
+     */
+    socket?.emit("voice:camera", desejado);
+  }
 
   /**
    * Transmitindo, troca a qualidade da faixa que ja esta no ar; parado,
@@ -338,6 +364,28 @@ export function ControlBar({
             <HeadphoneOff className="h-4 w-4" />
           ) : (
             <Headphones className="h-4 w-4" />
+          )}
+        </ControlToggle>
+
+        <ControlToggle
+          active={cameraLigada}
+          danger={cameraLigada}
+          disabled={cameraBloqueada}
+          onClick={() => void alternarCamera()}
+          label={
+            cameraLigada
+              ? "Desligar a camera"
+              : !podeCamera
+                ? "Seu cargo nao permite ligar a camera"
+                : !roomControls
+                  ? "Entre em um canal de voz para ligar a camera"
+                  : "Ligar a camera"
+          }
+        >
+          {cameraLigada ? (
+            <VideoOff className="h-4 w-4" />
+          ) : (
+            <Video className="h-4 w-4" />
           )}
         </ControlToggle>
 

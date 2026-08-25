@@ -52,6 +52,20 @@ export const Permission = {
   MANAGE_NICKNAMES: 1n << 18n,
   /** Ler o log de auditoria. */
   VIEW_AUDIT_LOG: 1n << 19n,
+  /**
+   * Ligar a camera num canal de voz.
+   *
+   * Bit PROPRIO, e nao emprestado do SCREEN_SHARE: mostrar a tela e mostrar o
+   * rosto sao coisas diferentes, e uma equipe pode querer uma sem a outra.
+   * Juntar as duas num bit so seria impossivel de separar depois sem quebrar
+   * cargo de quem ja usa.
+   *
+   * CONSEQUENCIA de ser novo: cargo que ja existe NAO tem este bit — os
+   * valores estao gravados no banco. Por isso ha o
+   * `scripts/liberar-camera.mjs`, que concede a quem ja podia compartilhar
+   * tela. Sem ele, o botao nasceria sem ninguem que pudesse usa-lo.
+   */
+  CAMERA: 1n << 20n,
 } as const;
 
 export type PermissionKey = keyof typeof Permission;
@@ -120,6 +134,11 @@ export const PERMISSION_METADATA: Record<
   SPEAK: {
     label: "Falar",
     description: "Transmitir microfone no canal de voz.",
+    group: "voz",
+  },
+  CAMERA: {
+    label: "Ligar a camera",
+    description: "Mostrar a propria camera nos canais de voz.",
     group: "voz",
   },
   SCREEN_SHARE: {
@@ -259,6 +278,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
       "CONNECT",
       "SPEAK",
       "SCREEN_SHARE",
+      "CAMERA",
       "SEND_MESSAGES",
       "MANAGE_MESSAGES",
       "MOVE_MEMBERS",
@@ -282,6 +302,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
       "CONNECT",
       "SPEAK",
       "SCREEN_SHARE",
+      "CAMERA",
       "SEND_MESSAGES",
       "MANAGE_MESSAGES",
       "MOVE_MEMBERS",
@@ -303,6 +324,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
       "CONNECT",
       "SPEAK",
       "SCREEN_SHARE",
+      "CAMERA",
       "SEND_MESSAGES",
       "CREATE_INVITE",
     ),

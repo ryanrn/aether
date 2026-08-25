@@ -144,6 +144,8 @@ export interface MediaGrant {
   canPublish: boolean;
   /** o token permite publicar tela (depende de SCREEN_SHARE) — fase 5 */
   canShareScreen: boolean;
+  /** o token permite publicar a camera (depende de CAMERA) */
+  canUseCamera: boolean;
 }
 
 export type VoiceModerateAck =
@@ -351,6 +353,14 @@ export interface ClientToServerEvents {
     selfMuted?: boolean;
     selfDeafened?: boolean;
   }) => void;
+  /**
+   * "estou com a camera ligada". Sinalizacao apenas — o video vai pelo SFU.
+   *
+   * Existe pela mesma razao do `voice:streaming`: a arvore de canais precisa
+   * mostrar o indicador para quem NAO esta na sala de midia, e o SFU so
+   * conhece a propria sala.
+   */
+  "voice:camera": (camera: boolean) => void;
   /** medicao de latencia; o ack responde o timestamp do servidor */
   ping: (ack: (serverTime: number) => void) => void;
 }

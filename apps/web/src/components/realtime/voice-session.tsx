@@ -27,6 +27,7 @@ export function VoiceSession() {
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
   const setMediaConnected = useRealtimeStore((state) => state.setMediaConnected);
   const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
+  const setCameras = useRealtimeStore((state) => state.setCameras);
   const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
   const setSharePreset = useRealtimeStore((state) => state.setSharePreset);
   const setRoomControls = useRealtimeStore((state) => state.setRoomControls);
@@ -65,6 +66,7 @@ export function VoiceSession() {
         },
         onConnectionChange: (connected) => setMediaConnected(connected),
         onScreenSharesChange: (shares) => setScreenShares(shares),
+        onCamerasChange: (cameras) => setCameras(cameras),
         onLocalShareEnded: () => {
           // Cobre tambem o "parar de compartilhar" da barra do navegador, que
           // nao passa pela nossa interface.
@@ -93,6 +95,20 @@ export function VoiceSession() {
           setOutputDevice: (deviceId) => handle.setOutputDevice(deviceId),
           setUserVolume: (userId, volume) => handle.setUserVolume(userId, volume),
           setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
+          /**
+           * A faixa local vai para a store DEPOIS de a camera ligar de fato.
+           * Guardar antes deixaria o proprio bloco tentando desenhar uma faixa
+           * que o dispositivo ainda podia recusar.
+           */
+          setCameraEnabled: async (enabled) => {
+            const deu = await handle.setCameraEnabled(enabled);
+            if (deu) {
+              useRealtimeStore
+                .getState()
+                .setLocalCamera(enabled ? handle.localCameraTrack() : null);
+            }
+            return deu;
+          },
           startShare: async (preset, withSystemAudio) => {
             const started = await handle.startScreenShare(preset, withSystemAudio);
             if (started) {

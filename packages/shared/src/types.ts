@@ -87,6 +87,8 @@ export interface VoiceState {
   serverDeafened: boolean;
   /** esta transmitindo tela neste momento */
   streaming: boolean;
+  /** a camera esta ligada — sinalizacao; o video em si vai pelo SFU */
+  camera: boolean;
   /** detectado como falando agora */
   speaking: boolean;
   /**

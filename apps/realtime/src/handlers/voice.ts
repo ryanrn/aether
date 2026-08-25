@@ -15,6 +15,7 @@ import {
   setVoiceFlags,
   setServerVoiceFlags,
   setVoiceSpeaking,
+  setVoiceCamera,
   setVoiceStreaming,
   voiceSocketOf,
   voiceDeparture,
@@ -206,6 +207,41 @@ export function registerVoiceHandlers(
 
     const updated = setVoiceStreaming(userId, streaming);
     if (updated) broadcast(updated.serverId, updated.participant);
+  });
+
+  /**
+   * "estou com a camera ligada". So sinalizacao — o video vai pelo SFU.
+   *
+   * A checagem espelha a do `voice:streaming`, e pela mesma razao: o token do
+   * SFU ja impede PUBLICAR a faixa sem a permissao CAMERA, entao ninguem
+   * aparece de fato. Mas o indicador e outra coisa — sem checar aqui, um
+   * cliente reescrito poderia se anunciar "com camera" para o servidor
+   * inteiro. Interface que mente e bug, mesmo sem dado vazando.
+   *
+   * DESLIGAR nunca exige permissao. Parar e sempre legitimo, e exigir cargo
+   * para parar prenderia alguem ao indicador aceso depois de perde-lo.
+   */
+  socket.on("voice:camera", async (camera) => {
+    if (typeof camera !== "boolean") return;
+
+    const location = voiceLocation(userId);
+    if (!location) return;
+
+    if (camera) {
+      try {
+        const access = await loadMemberAccess(location.serverId, userId);
+        const bits = access
+          ? await getChannelPermissions(access, location.channelId)
+          : null;
+        if (bits === null || !has(bits, "CAMERA")) return;
+      } catch (error) {
+        console.error("[gateway] voice:camera falhou:", error);
+        return;
+      }
+    }
+
+    const atualizado = setVoiceCamera(userId, camera);
+    if (atualizado) broadcast(atualizado.serverId, atualizado.participant);
   });
 
   /**

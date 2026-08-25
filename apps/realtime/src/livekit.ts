@@ -30,6 +30,7 @@ export interface MediaCredentials {
   /** o que o token permite — a UI usa para nao oferecer o que sera recusado */
   canPublish: boolean;
   canShareScreen: boolean;
+  canUseCamera: boolean;
 }
 
 export function isMediaEnabled(): boolean {
@@ -52,6 +53,7 @@ export async function createMediaCredentials(params: {
 
   const canPublish = has(params.permissions, "SPEAK");
   const canShareScreen = has(params.permissions, "SCREEN_SHARE");
+  const canUseCamera = has(params.permissions, "CAMERA");
 
   const token = new AccessToken(config.apiKey, config.apiSecret, {
     identity: params.userId,
@@ -70,6 +72,12 @@ export async function createMediaCredentials(params: {
   if (canShareScreen) {
     sources.push(TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO);
   }
+  /**
+   * A camera entra na lista de FONTES do token, e nao so numa checagem de
+   * interface. E o SFU que recusa a faixa de quem nao pode publicar — nao
+   * dependemos de a tela se comportar.
+   */
+  if (canUseCamera) sources.push(TrackSource.CAMERA);
 
   token.addGrant({
     room: roomName(params.channelId),
@@ -87,6 +95,7 @@ export async function createMediaCredentials(params: {
     token: await token.toJwt(),
     canPublish,
     canShareScreen,
+    canUseCamera,
   };
 }
 

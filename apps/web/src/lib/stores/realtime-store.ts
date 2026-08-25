@@ -10,7 +10,7 @@ import type {
   VoiceParticipant,
 } from "@aether/shared";
 import type { Track } from "livekit-client";
-import type { RemoteScreenShare } from "@/lib/voice/room";
+import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
 import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
 
 /**
@@ -96,12 +96,22 @@ interface RealtimeState {
   mediaConnected: boolean;
   /** compartilhamentos de tela recebidos na sala */
   screenShares: RemoteScreenShare[];
+  /**
+   * Cameras recebidas na sala, SEPARADAS dos compartilhamentos.
+   *
+   * Sao dois videos com destinos diferentes: camera vai no bloco da pessoa,
+   * tela vai no palco. Guardar juntos obrigaria todo consumidor a filtrar, e
+   * bastaria um esquecer para a camera de alguem virar transmissao.
+   */
+  cameras: RemoteCamera[];
   /** o proprio usuario esta transmitindo */
   localSharing: boolean;
   /** perfil de qualidade da MINHA transmissao — a interface marca o ativo */
   sharePreset: SharePresetId;
   /** faixa local, para voce conferir o que esta enviando */
   localShareTrack: Track | null;
+  /** a propria camera, para voce se ver no proprio bloco */
+  localCameraTrack: Track | null;
   /** qual compartilhamento esta em destaque; null = o primeiro disponivel */
   focusedShareUserId: string | null;
   /**
@@ -138,6 +148,8 @@ interface RealtimeState {
     setScreenAudioVolume: (volume: number) => void;
     /** troca a qualidade da transmissao ativa, sem reabrir o seletor de tela */
     setSharePreset: (preset: SharePresetId) => Promise<boolean>;
+    /** liga/desliga a camera; `false` quando o dispositivo recusou */
+    setCameraEnabled: (enabled: boolean) => Promise<boolean>;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
@@ -164,7 +176,9 @@ interface RealtimeState {
   setMedia: (media: MediaGrant | null) => void;
   setMediaConnected: (connected: boolean) => void;
   setScreenShares: (shares: RemoteScreenShare[]) => void;
+  setCameras: (cameras: RemoteCamera[]) => void;
   setLocalSharing: (sharing: boolean, track?: Track | null) => void;
+  setLocalCamera: (track: Track | null) => void;
   setSharePreset: (preset: SharePresetId) => void;
   setFocusedShare: (userId: string | null) => void;
   /** aceita assistir a transmissao de alguem */
@@ -218,9 +232,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   media: null,
   mediaConnected: false,
   screenShares: [],
+  cameras: [],
   localSharing: false,
   sharePreset: DEFAULT_PRESET,
   localShareTrack: null,
+  localCameraTrack: null,
   focusedShareUserId: null,
   watchedShares: [],
   roomControls: null,
@@ -275,8 +291,10 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       media: null,
       mediaConnected: false,
       screenShares: [],
+      cameras: [],
       localSharing: false,
       localShareTrack: null,
+      localCameraTrack: null,
       focusedShareUserId: null,
       watchedShares: [],
     }),
@@ -377,6 +395,9 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
 
   setMedia: (media) => set({ media }),
   setMediaConnected: (mediaConnected) => set({ mediaConnected }),
+  setCameras: (cameras) => set({ cameras }),
+  setLocalCamera: (localCameraTrack) => set({ localCameraTrack }),
+
   setScreenShares: (screenShares) =>
     set((state) => ({
       screenShares,

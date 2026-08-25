@@ -61,12 +61,20 @@ export interface RemoteScreenShare {
   track: RemoteTrack;
 }
 
+/** Camera de outra pessoa, ja inscrita e pronta para desenhar. */
+export interface RemoteCamera {
+  userId: string;
+  track: RemoteTrack;
+}
+
 export interface VoiceRoomCallbacks {
   /** o proprio usuario comecou/parou de falar — segue para o nosso gateway */
   onSpeakingChange: (speaking: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
   /** alguem comecou ou parou de compartilhar tela na sala */
   onScreenSharesChange: (shares: RemoteScreenShare[]) => void;
+  /** alguem ligou ou desligou a camera na sala */
+  onCamerasChange: (cameras: RemoteCamera[]) => void;
   /**
    * A transmissao local terminou. Inclui o caso de a pessoa clicar em "parar
    * de compartilhar" na barra do proprio navegador, que nao passa pela nossa
@@ -99,6 +107,10 @@ export interface VoiceRoomHandle {
   stopScreenShare: () => Promise<void>;
   /** faixa local de tela, para a previa de quem esta transmitindo */
   localScreenTrack: () => Track | null;
+  /** liga/desliga a camera; `false` quando nao deu */
+  setCameraEnabled: (enabled: boolean, deviceId?: string) => Promise<boolean>;
+  /** a propria camera, para voce se ver */
+  localCameraTrack: () => Track | null;
   /** para ONDE tocamos o audio recebido — mic dos outros e som de tela */
   setOutputDevice: (deviceId: string) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -260,6 +272,13 @@ export async function connectVoiceRoom({
     callbacks.onScreenSharesChange([...screenShares.values()]);
   }
 
+  /** Cameras remotas ativas, por identidade do participante. */
+  const cameras = new Map<string, RemoteCamera>();
+
+  function publishCameras() {
+    callbacks.onCamerasChange([...cameras.values()]);
+  }
+
   room.on(
     RoomEvent.TrackSubscribed,
     (
@@ -301,13 +320,31 @@ export async function connectVoiceRoom({
         return;
       }
 
-      /**
-       * Qualquer video que chegue aqui e compartilhamento de tela: este app
-       * nunca publica camera. Filtrar por `publication.source` era fragil —
-       * se a origem ainda nao estivesse resolvida no momento da inscricao, a
-       * faixa era descartada em silencio e nao havia nova chance.
-       */
       if (track.kind !== Track.Kind.Video) return;
+
+      /**
+       * Agora ha DOIS tipos de video, e eles precisam ir para lugares
+       * diferentes: camera vai no bloco da pessoa, tela vai no palco.
+       *
+       * A regra de desempate importa. Antes deste recurso, qualquer video era
+       * tela — e filtrar por `publication.source` tinha se mostrado fragil:
+       * quando a origem ainda nao estava resolvida na hora da inscricao, a
+       * faixa era descartada em silencio, sem nova chance.
+       *
+       * Por isso a condicao e afirmativa para a CAMERA e o resto cai em tela.
+       * Origem indefinida continua indo para onde ia antes, e nao para o
+       * limbo: no pior caso a tela de alguem aparece no palco (o comportamento
+       * de sempre), nunca uma faixa some.
+       */
+      if (publication.source === Track.Source.Camera) {
+        mediaLog("camera recebida", participant.identity);
+        cameras.set(participant.identity, {
+          userId: participant.identity,
+          track,
+        });
+        publishCameras();
+        return;
+      }
 
       mediaLog("compartilhamento de tela recebido", participant.identity);
       screenShares.set(participant.identity, {
@@ -324,6 +361,7 @@ export async function connectVoiceRoom({
     (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
       for (const element of track.detach()) element.remove();
       if (screenShares.delete(participant.identity)) publishScreenShares();
+      if (cameras.delete(participant.identity)) publishCameras();
     },
   );
 
@@ -334,6 +372,9 @@ export async function connectVoiceRoom({
     }
     attachedAudio.delete(participant.identity);
     if (screenShares.delete(participant.identity)) publishScreenShares();
+    // Quem saiu leva a camera junto — senao o bloco dele ficaria com um
+    // quadro congelado de alguem que nao esta mais na sala.
+    if (cameras.delete(participant.identity)) publishCameras();
   });
 
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -797,6 +838,41 @@ export async function connectVoiceRoom({
       }
 
       return true;
+    },
+
+    /**
+     * Liga ou desliga a camera.
+     *
+     * Quem recusa de verdade e o SFU: a fonte CAMERA so entra no token de quem
+     * tem a permissao. A interface esconde o botao por conveniencia, e nao por
+     * seguranca — as duas coisas nunca sao a mesma aqui.
+     *
+     * `false` quando nao deu, para a interface nao acender um indicador que
+     * nao corresponde a faixa nenhuma.
+     */
+    async setCameraEnabled(enabled, deviceId) {
+      try {
+        await room.localParticipant.setCameraEnabled(
+          enabled,
+          deviceId ? { deviceId } : undefined,
+        );
+        return true;
+      } catch (error) {
+        mediaLog("nao consegui mudar a camera", error);
+        callbacks.onError(
+          enabled
+            ? "Nao consegui ligar a camera. Confira se outro programa esta usando."
+            : "Nao consegui desligar a camera.",
+        );
+        return false;
+      }
+    },
+
+    localCameraTrack() {
+      const publication = room.localParticipant.getTrackPublication(
+        Track.Source.Camera,
+      );
+      return publication?.track ?? null;
     },
 
     async stopScreenShare() {
