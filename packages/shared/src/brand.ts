@@ -8,7 +8,7 @@ export const BRAND = {
   /** Nome exibido na interface. Provisorio. */
   name: "AETHER",
   /** Tagline curta usada nas telas de entrada. */
-  tagline: "Comunicacao em tempo real",
+  tagline: "VOIP // Tela e voz",
   /** Descricao usada em metadata/SEO. */
   description:
     "Plataforma de voz, compartilhamento de tela e texto com canais persistentes.",
