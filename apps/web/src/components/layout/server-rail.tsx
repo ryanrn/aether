@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Plus, Users } from "lucide-react";
 import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
+import { useShellStore } from "@/lib/stores/shell-store";
 
 /**
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
@@ -25,6 +26,14 @@ export function ServerRail({
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
   const [modalOpen, setModalOpen] = useState(false);
+
+  /**
+   * Publica a lista para a barra de TITULO, que vive no layout raiz e nao tem
+   * como buscar isso sozinha. Daqui sai de graca: a lista ja chega pronta do
+   * servidor e este componente ja e de cliente.
+   */
+  const setServers = useShellStore((estado) => estado.setServers);
+  useEffect(() => setServers(servers), [servers, setServers]);
 
   return (
     <>

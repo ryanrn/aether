@@ -1,0 +1,119 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, usePathname } from "next/navigation";
+import { Users } from "lucide-react";
+import { useShellStore } from "@/lib/stores/shell-store";
+import { isDesktopApp } from "@/lib/voice/screen-share";
+import { cn, colorFromId, initials } from "@/lib/utils";
+
+/**
+ * Barra de titulo do app de desktop.
+ *
+ * SO existe no desktop. No navegador a janela ja tem a barra dele, e desenhar
+ * outra seria uma faixa morta ocupando altura.
+ *
+ * O Electron esconde a barra do sistema mas mantem os BOTOES nativos num
+ * overlay a direita — por isso aqui nao ha minimizar, maximizar nem fechar.
+ * Reimplementa-los custaria o Snap Layouts do Windows, o duplo clique para
+ * maximizar e a area de clique correta; o overlay entrega os tres de graca.
+ *
+ * As variaveis `titlebar-area-*` dizem QUANTO espaco sobra ao lado dos botoes.
+ * Sem elas, o conteudo passaria por baixo deles — e o centro ficaria
+ * visualmente torto, porque o eixo da janela nao e o eixo da area livre.
+ */
+export function TitleBar() {
+  /**
+   * `window.aetherDesktop` nao existe no servidor, entao a primeira renderizacao
+   * precisa ser igual nos dois lados. Decidir depois de montar evita o erro de
+   * hidratacao — e, no navegador, o componente simplesmente nunca aparece.
+   */
+  const [noDesktop, setNoDesktop] = useState(false);
+  useEffect(() => setNoDesktop(isDesktopApp()), []);
+
+  const pathname = usePathname();
+  const params = useParams<{ serverId?: string }>();
+  const servers = useShellStore((estado) => estado.servers);
+
+  if (!noDesktop) return null;
+
+  const serverId = params?.serverId ?? null;
+  const server = serverId
+    ? (servers.find((item) => item.id === serverId) ?? null)
+    : null;
+
+  const emAmigos = pathname === "/app/amigos";
+
+  return (
+    <header
+      /**
+       * A faixa INTEIRA arrasta a janela. O conteudo dentro dela nao precisa
+       * de nada: so quem for clicavel marca `no-drag`, e hoje nao ha nada
+       * clicavel aqui.
+       */
+      className="app-drag flex shrink-0 items-center border-b border-white/[0.06] bg-base-950"
+      style={{
+        height: "var(--altura-barra)",
+        paddingLeft: "env(titlebar-area-x, 0px)",
+        width: "env(titlebar-area-width, 100%)",
+      }}
+    >
+      <span className="shrink-0 px-4 font-brand text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-500">
+        Aether
+      </span>
+
+      {/*
+        O contexto fica CENTRADO na area livre, e nao na janela.
+        `flex-1` + `justify-center` fazem isso sozinhos, porque o proprio
+        elemento pai ja termina onde os botoes comecam.
+      */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+        {server ? (
+          <>
+            <span
+              className={cn(
+                "grid h-[18px] w-[18px] shrink-0 place-items-center overflow-hidden",
+                "rounded-[5px] text-[9px] font-bold text-ink-100",
+              )}
+              style={
+                server.iconUrl
+                  ? undefined
+                  : { backgroundColor: colorFromId(server.id) }
+              }
+            >
+              {server.iconUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- icone pequeno, sem ganho em otimizar
+                <img
+                  src={server.iconUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials(server.name)
+              )}
+            </span>
+            <span className="truncate text-[12px] font-medium text-ink-200">
+              {server.name}
+            </span>
+          </>
+        ) : emAmigos ? (
+          <>
+            <Users
+              className="h-[15px] w-[15px] shrink-0 text-ink-400"
+              strokeWidth={1.75}
+            />
+            <span className="truncate text-[12px] font-medium text-ink-200">
+              Amigos
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {/*
+        Contrapeso da largura da marca a esquerda. Sem ele o centro pende para
+        a direita, porque "Aether" ocupa espaco de um lado so.
+      */}
+      <span aria-hidden className="w-[88px] shrink-0" />
+    </header>
+  );
+}

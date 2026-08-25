@@ -56,7 +56,7 @@ export default async function ServerLayout({
         de largura total, e o palco central nunca era uma regiao propria. Agora
         cada coluna tem o seu cabecalho de 48px e a HUD flutua DENTRO do centro.
       */}
-      <div className="flex h-dvh min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
         <ConnectionBanner />
         <VoiceActivityMonitor />
         <GameActivityMonitor />

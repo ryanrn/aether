@@ -192,6 +192,25 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     icon: path.join(__dirname, "..", "build", "icon.png"),
+
+    /**
+     * Barra de titulo propria, desenhada pela pagina.
+     *
+     * `hidden` + `titleBarOverlay`, e nao janela sem moldura com botoes
+     * proprios: assim o Windows continua desenhando minimizar/maximizar/fechar
+     * de verdade. O que se ganha com isso nao e estetica, e comportamento —
+     * Snap Layouts (o menu de layout ao pousar o mouse no maximizar), duplo
+     * clique para maximizar, area de clique correta e alta densidade. Botao
+     * proprio significa reimplementar tudo isso, e errar em algum.
+     *
+     * A pagina desenha o resto da faixa e informa onde da para arrastar.
+     */
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#0b0d10",
+      symbolColor: "#8a8f98",
+      height: 36,
+    },
     webPreferences: {
       /**
        * As tres linhas que importam para seguranca. O app carrega conteudo

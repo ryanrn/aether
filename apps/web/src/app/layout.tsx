@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, JetBrains_Mono, Rubik } from "next/font/google";
 import { BRAND } from "@aether/shared";
 import "./globals.css";
+import { TitleBar } from "@/components/layout/title-bar";
 
 /**
  * Tipografia.
@@ -67,8 +68,22 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${rubik.variable} ${chakra.variable} ${jetbrains.variable}`}
     >
-      <body className="min-h-dvh bg-base-950 text-ink-200 antialiased">
-        {children}
+      {/*
+        Coluna de altura fixa: a barra de titulo em cima, o resto embaixo.
+        `h-dvh` no lugar de `min-h-dvh` porque o conteudo abaixo precisa de uma
+        altura DEFINIDA para dividir — as telas do app usam `h-full` e, sem um
+        pai medido, elas colapsariam.
+      */}
+      <body className="flex h-dvh flex-col overflow-hidden bg-base-950 text-ink-200 antialiased">
+        <TitleBar />
+        {/*
+          `overflow-auto` aqui serve as telas curtas (entrar, criar conta) em
+          janelas baixas. As telas do app tem rolagem propria por dentro e nao
+          chegam a usar esta.
+        */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          {children}
+        </div>
       </body>
     </html>
   );

@@ -36,7 +36,7 @@ export default async function AppLayout({
      * Aqui em cima os dois atravessam toda navegacao dentro de `/app`.
      */
     <RealtimeProvider>
-      <div className="flex h-dvh w-full overflow-hidden bg-base-950">
+      <div className="flex h-full w-full overflow-hidden bg-base-950">
         <VoiceSession />
         <ServerRail servers={servers} pendingRequests={pendingRequests} />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

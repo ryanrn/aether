@@ -77,6 +77,13 @@
    * Antes iam de 4 a 12 e o app inteiro parecia quadrado; agora o menor ja
    * nasce em 6, que e onde a borda deixa de parecer corte.
    */
+  /**
+   * Altura da barra de titulo do desktop. Precisa casar com o `height` do
+   * `titleBarOverlay` no main.js — se divergirem, os botoes do Windows ficam
+   * desalinhados com a faixa que desenhamos.
+   */
+  --altura-barra: env(titlebar-area-height, 36px);
+
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -201,4 +208,21 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/**
+ * Arrastar a janela pela faixa de titulo.
+ *
+ * `app-region` e propriedade do Chromium, entao vale no Electron e e ignorada
+ * no navegador — nao ha o que proteger com media query.
+ *
+ * Regra que vale lembrar: dentro de uma area `drag`, TUDO deixa de receber
+ * clique. Qualquer botao ali precisa de `app-no-drag`, ou vira enfeite.
+ */
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
 }
