@@ -30,6 +30,29 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
     ipcRenderer.send("desktop:audio-capture-failed", detalhes ?? null),
 
   /**
+   * Som do sistema para o compartilhamento de tela.
+   *
+   * Existe porque o Chromium nao abre a captura em aparelhos que se anunciam
+   * com mais de dois canais — o PRO X2 sem fio se apresenta como 7.1. Aqui o
+   * som vem do modulo nativo, ja misturado para estereo.
+   *
+   * O que atravessa e PCM da SAIDA DE AUDIO, nada mais. Nao ha acesso a
+   * dispositivo, a arquivo nem a lista de processos por este caminho.
+   */
+  loopback: {
+    disponivel: () => ipcRenderer.invoke("desktop:loopback-available"),
+    saidas: () => ipcRenderer.invoke("desktop:loopback-devices"),
+    iniciar: (deviceId) => ipcRenderer.invoke("desktop:loopback-start", deviceId),
+    parar: () => ipcRenderer.invoke("desktop:loopback-stop"),
+    /** devolve a funcao que cancela a inscricao */
+    aoReceber: (callback) => {
+      const ouvinte = (_evento, pedaco) => callback(pedaco);
+      ipcRenderer.on("desktop:loopback-data", ouvinte);
+      return () => ipcRenderer.removeListener("desktop:loopback-data", ouvinte);
+    },
+  },
+
+  /**
    * Deteccao de jogo.
    *
    * A pagina so consegue tres coisas: perguntar se esta ligada, ligar/desligar

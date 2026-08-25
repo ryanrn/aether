@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
+const { instalarLoopback, encerrarLoopback } = require("./loopback-ipc");
 const { criarVigia } = require("./game-detect");
 const { instalarAtualizador } = require("./updater");
 
@@ -292,6 +293,7 @@ if (!app.requestSingleInstanceLock()) {
     );
 
     instalarDeteccaoDeJogo();
+    instalarLoopback();
     createWindow();
 
     // Depois da janela: a verificacao nao pode atrasar a abertura do app.
@@ -306,4 +308,14 @@ if (!app.requestSingleInstanceLock()) {
     // No Windows e Linux, fechar a janela encerra o app.
     if (process.platform !== "darwin") app.quit();
   });
+
+  /**
+   * A thread de captura de som precisa morrer ANTES do processo.
+   *
+   * Sem isto, fechar o app durante um compartilhamento deixaria a thread
+   * nativa segurando o dispositivo de audio — e o proximo `Initialize` no
+   * WASAPI poderia falhar por recurso ocupado, num erro que pareceria vir do
+   * nada na proxima abertura do app.
+   */
+  app.on("will-quit", () => encerrarLoopback());
 }

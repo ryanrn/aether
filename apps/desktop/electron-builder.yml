@@ -33,6 +33,17 @@ files:
   - src/**/*
   - package.json
   - node_modules/**/*
+  # O modulo nativo do som do sistema. So o que roda: o `index.js` e o binario.
+  # Fonte, testes e node_modules dele sao coisa de compilacao e ficam de fora.
+  - native/index.js
+  - native/build/Release/aether_loopback.node
+
+# `.node` NAO carrega de dentro do asar — o Node precisa de um arquivo real no
+# disco para o carregador de biblioteca do sistema abrir. Sem esta linha, o
+# modulo funciona em desenvolvimento e falha SO no app instalado, que e o pior
+# lugar para descobrir.
+asarUnpack:
+  - native/build/Release/*.node
 
 # Sem estas duas linhas, o electron-builder roda um "install production
 # dependencies" no diretorio do app — e num monorepo com workspaces isso PODA o

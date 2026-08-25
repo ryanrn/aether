@@ -1,15 +1,16 @@
 {
   "name": "@aether/desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Aether — voz, tela e chat",
   "main": "src/main.js",
   "scripts": {
     "dev": "electron .",
-    "build": "electron-builder --win --publish never",
+    "build": "npm run build:native && electron-builder --win --publish never",
     "typecheck": "echo \"@aether/desktop e JavaScript puro; sem typecheck\"",
-    "release": "electron-builder --win --publish always",
-    "diagnose:audio": "electron diagnose-audio.js"
+    "release": "npm run build:native && electron-builder --win --publish always",
+    "diagnose:audio": "electron diagnose-audio.js",
+    "build:native": "cd native && npx --yes node-gyp@11 rebuild --target=33.4.11 --arch=x64 --dist-url=https://electronjs.org/headers"
   },
   "devDependencies": {
     "electron": "33.4.11",

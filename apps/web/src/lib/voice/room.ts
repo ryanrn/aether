@@ -20,6 +20,11 @@ import {
   SHARE_PRESETS,
   type SharePresetId,
 } from "./screen-share";
+import {
+  capturarSomDoSistema,
+  podeCapturarSomDoSistema,
+  type SomDoSistema,
+} from "./system-audio";
 import { mediaDebugEnabled, mediaLog } from "./debug";
 import {
   readPreferredMicrophone,
@@ -157,6 +162,27 @@ export async function connectVoiceRoom({
     adaptiveStream: false,
     dynacast: true,
   });
+
+  /**
+   * A sessao de som do sistema pelo modulo nativo, quando ha uma.
+   *
+   * Mora no escopo da SALA, e nao dentro do `startScreenShare`, porque quem
+   * precisa encerra-la e o `stopScreenShare`, o `disconnect` e o evento de
+   * parada pela barra do navegador — tres caminhos diferentes. Sem isto, a
+   * thread de captura no processo principal continuaria viva depois de a
+   * transmissao acabar, segurando o dispositivo de audio.
+   */
+  let somNativo: SomDoSistema | null = null;
+
+  async function pararSomNativo(): Promise<void> {
+    if (!somNativo) return;
+    const sessao = somNativo;
+    somNativo = null;
+    await room.localParticipant
+      .unpublishTrack(sessao.track)
+      .catch(() => undefined);
+    await sessao.parar();
+  }
 
   const sink = audioContainer();
   /**
@@ -325,6 +351,9 @@ export async function connectVoiceRoom({
     RoomEvent.LocalTrackUnpublished,
     (publication: LocalTrackPublication) => {
       if (publication.source === Track.Source.ScreenShare) {
+        // Parar pela barra do navegador nao passa pelo nosso botao — o som
+        // nativo precisa morrer aqui tambem, senao segue capturando sozinho.
+        void pararSomNativo();
         callbacks.onLocalShareEnded();
       }
     },
@@ -487,6 +516,12 @@ export async function connectVoiceRoom({
         );
       }
 
+      /**
+       * Perguntado ANTES da captura porque muda o pedido que sera feito.
+       * Falha aqui nao e erro: sem nativo, seguimos pelo caminho de sempre.
+       */
+      const temNativo = withSystemAudio && (await podeCapturarSomDoSistema());
+
       let tracks;
       try {
         /**
@@ -494,14 +529,20 @@ export async function connectVoiceRoom({
          * oferece (ou a pessoa nao liga a chave), o navegador simplesmente
          * devolve so o video. Isso e o caso normal, nao um erro.
          */
+        /**
+         * Com o modulo nativo disponivel, o video vem SOZINHO e o som vem por
+         * fora. Isso desfaz o tudo-ou-nada que derrubava a tela junto com o
+         * som: `getDisplayMedia({audio:true})` falha INTEIRO quando a captura
+         * de som e recusada, e era isso que acontecia no fone sem fio.
+         */
         tracks = await createLocalScreenTracks({
           /**
-           * No desktop pedimos audio SEMPRE: o Chromium so entrega faixa de
-           * som se o renderer tambem pedir, entao mandar `false` aqui faria a
-           * chave do seletor do Electron nao ter efeito nenhum. Quem decide
-           * la e o seletor.
+           * Sem o nativo, no desktop pedimos audio SEMPRE: o Chromium so
+           * entrega faixa de som se o renderer tambem pedir, entao mandar
+           * `false` faria a chave do seletor do Electron nao ter efeito. Quem
+           * decide la e o seletor.
            */
-          audio: isDesktopApp() ? true : withSystemAudio,
+          audio: temNativo ? false : isDesktopApp() ? true : withSystemAudio,
           contentHint: preset.contentHint,
           resolution: {
             width: preset.width,
@@ -613,6 +654,35 @@ export async function connectVoiceRoom({
         return false;
       }
 
+      /**
+       * O som pelo caminho nativo, quando ele existe.
+       *
+       * Publicado DEPOIS do video e de proposito: se algo aqui falhar, a tela
+       * ja esta no ar. Som e um degrau; tela e a transmissao.
+       */
+      if (temNativo) {
+        const som = await capturarSomDoSistema();
+        if (som) {
+          try {
+            await room.localParticipant.publishTrack(som.track, {
+              source: Track.Source.ScreenShareAudio,
+            });
+            somNativo = som;
+          } catch (error) {
+            await som.parar();
+            mediaLog("falha ao publicar o som nativo", error);
+            callbacks.onError(
+              "A tela esta sendo compartilhada, mas o som do sistema nao pode ser enviado.",
+            );
+          }
+        } else {
+          callbacks.onError(
+            "A tela esta indo, porem sem som: a captura de audio do sistema " +
+              "nao abriu nesta saida. O log do app registra o motivo.",
+          );
+        }
+      }
+
       if (audioTrack) {
         try {
           await room.localParticipant.publishTrack(audioTrack);
@@ -628,9 +698,10 @@ export async function connectVoiceRoom({
             "A tela esta sendo compartilhada, mas o som do sistema nao pode ser enviado.",
           );
         }
-      } else if (withSystemAudio) {
+      } else if (withSystemAudio && !temNativo) {
         // So avisa quem PEDIU som e nao recebeu. Quem escolheu compartilhar
-        // sem som nao precisa de aviso sobre algo que nao pediu.
+        // sem som nao precisa de aviso sobre algo que nao pediu — e quem
+        // recebeu pelo caminho nativo ja esta com som.
         callbacks.onError(
           "Compartilhando sem o som do sistema. Na janela de escolha, ligue " +
             '"Compartilhar tambem o audio do sistema" — o Windows oferece isso ' +
@@ -709,6 +780,7 @@ export async function connectVoiceRoom({
     },
 
     async stopScreenShare() {
+      await pararSomNativo();
       await room.localParticipant
         .setScreenShareEnabled(false)
         .catch(() => undefined);
@@ -722,6 +794,10 @@ export async function connectVoiceRoom({
     },
 
     async disconnect() {
+      // Antes de tudo: a thread de captura no processo principal nao pode
+      // sobreviver a sala que a motivou.
+      await pararSomNativo();
+
       for (const bucket of attachedAudio.values()) {
         for (const element of [...bucket.mic, ...bucket.screen]) {
           element.remove();
