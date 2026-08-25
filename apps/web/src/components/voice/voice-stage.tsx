@@ -18,6 +18,7 @@ import {
   VoiceMemberMenu,
   type MenuAnchor,
 } from "@/components/voice/voice-member-menu";
+import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
 import { cn } from "@/lib/utils";
 
 /**
@@ -63,24 +64,15 @@ export function VoiceStage({
   const blocked = !connected || !canConnect || full;
   const limitLabel = channel.userLimit ? ` / ${channel.userLimit}` : "";
 
+  /**
+   * A mesma entrada usada pelo clique no canal, na barra lateral. Duas copias
+   * do `voice:join` divergiriam, e o ack e quem traz as credenciais de midia.
+   */
+  const { entrar, sair } = useEntrarNaVoz();
+
   function toggleConnection() {
-    if (!socket) return;
-    if (isHere) {
-      socket.emit("voice:leave");
-      setMedia(null);
-      return;
-    }
-    socket.emit("voice:join", { channelId: channel.id }, (result) => {
-      if (!result.ok) {
-        // A ocupacao na tela vem do evento voice:update; o ack serve para o
-        // gateway poder recusar (canal cheio, sem CONNECT) e para entregar as
-        // credenciais de midia, que so existem apos a checagem de permissao.
-        setVoiceError(result.error);
-        return;
-      }
-      setVoiceError(null);
-      setMedia(result.media);
-    });
+    if (isHere) sair();
+    else entrar(channel.id);
   }
 
   const action = (

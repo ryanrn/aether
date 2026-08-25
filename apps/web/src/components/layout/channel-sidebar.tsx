@@ -28,6 +28,7 @@ import {
   moveChannelAction,
 } from "@/server/actions/channels";
 import { channelAllows, viewerCan } from "@/lib/permissions";
+import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
 import {
   useUnreadCounts,
   useVoiceParticipants,
@@ -356,6 +357,30 @@ function ChannelRow({
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");
   const canDelete = channelAllows(channelPermissions, channel.id, "DELETE_CHANNEL");
 
+  const { entrar } = useEntrarNaVoz();
+  const podeConectar = channelAllows(channelPermissions, channel.id, "CONNECT");
+
+  /**
+   * Clicar no canal de voz JA CONECTA — nao ha mais o passo de abrir e clicar
+   * em "Conectar". E o que se espera de um app de voz.
+   *
+   * A navegacao continua acontecendo: o link nao e cancelado. Entrar e abrir
+   * sao coisas diferentes, e quem clica quer as duas — ver quem esta la e
+   * estar la.
+   *
+   * NAO conecta quando o cargo nao permite: o gateway recusaria de qualquer
+   * jeito, e a tela do canal explica o motivo. Tentar e falhar em silencio
+   * seria pior do que so abrir.
+   *
+   * E nao desconecta ao clicar de novo no canal em que voce ja esta — disso
+   * cuida o proprio `entrar`. Sair e uma acao deliberada; clique repetido
+   * costuma ser engano ou navegacao.
+   */
+  function aoClicarNoCanal() {
+    if (channel.type !== "VOICE" || !podeConectar) return;
+    entrar(channel.id);
+  }
+
   return (
     <li className="group/channel">
       <div
@@ -366,6 +391,7 @@ function ChannelRow({
       >
         <Link
           href={`/app/s/${serverId}/c/${channel.id}`}
+          onClick={aoClicarNoCanal}
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]",
             active ? "text-ink-100" : "text-ink-300 hover:text-ink-100",
