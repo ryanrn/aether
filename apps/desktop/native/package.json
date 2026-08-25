@@ -1,0 +1,11 @@
+{
+  "name": "@aether/loopback",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Captura do som do sistema por WASAPI loopback (Windows)",
+  "main": "index.js",
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": "^8.3.0"
+  }
+}

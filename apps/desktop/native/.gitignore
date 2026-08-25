@@ -1,0 +1,11 @@
+# Artefatos de compilacao. NAO vao para o repositorio:
+#
+#  - sao especificos de arquitetura E da ABI (Node e Electron produzem
+#    binarios diferentes do mesmo fonte);
+#  - o pacote `wasapi-audio-capture` que auditamos publicou justamente isto
+#    por engano — .obj, .pdb, .tlog e um .node compilado para a ABI errada,
+#    12 MB de coisa que nao serve para quem baixa.
+#
+# O que precisa existir no repositorio e o FONTE e o binding.gyp.
+build/
+node_modules/
