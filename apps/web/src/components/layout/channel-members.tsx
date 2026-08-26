@@ -1,12 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Headphones, Mic, MicOff, MonitorUp, MoreVertical, VolumeX } from "lucide-react";
+import { Headphones, Mic, MicOff, MonitorUp, VolumeX } from "lucide-react";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
-import {
-  VoiceMemberMenu,
-  type MenuAnchor,
-} from "@/components/voice/voice-member-menu";
 import {
   UserActivityCard,
   type CardAnchor,
@@ -32,9 +28,6 @@ export function ChannelMembers({
   serverName: string;
   voiceChannels: PublicChannel[];
 }) {
-  const [openFor, setOpenFor] = useState<
-    { userId: string; anchor: MenuAnchor } | null
-  >(null);
   const [openCard, setOpenCard] = useState<
     { participant: VoiceParticipant; anchor: CardAnchor } | null
   >(null);
@@ -88,43 +81,28 @@ export function ChannelMembers({
               </span>
             </button>
 
-            <button
-              type="button"
-              title="Moderar"
-              aria-label={`Moderar ${state.user.displayName}`}
-              onClick={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setOpenFor((current) =>
-                  current?.userId === state.userId
-                    ? null
-                    : {
-                        userId: state.userId,
-                        // Abre logo abaixo do botao; o menu se ajusta sozinho
-                        // se nao couber ate a borda da janela.
-                        anchor: { x: rect.left, y: rect.bottom + 4 },
-                      },
-                );
-              }}
-              className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/participant:opacity-100"
-            >
-              <MoreVertical className="h-3 w-3" />
-            </button>
-
-            {openFor?.userId === state.userId ? (
-              <VoiceMemberMenu
-                participant={state}
-                anchor={openFor.anchor}
-                viewer={viewer}
-                voiceChannels={voiceChannels}
-                onClose={() => setOpenFor(null)}
-              />
-            ) : null}
-
+            {/*
+              NAO HA MAIS BOTAO DE TRES PONTINHOS AQUI.
+              
+              Ele tinha 12px, so aparecia no hover e abria um menu separado do
+              cartao — entao havia duas coisas diferentes para a mesma pessoa,
+              e a mais util era a mais dificil de acertar. Foi a queixa mais
+              repetida.
+              
+              Agora clicar na PESSOA (o botao inteiro, com avatar e nome) abre
+              o cartao, e o cartao ganhou o que estava no menu: volume,
+              silenciar, ensurdecer e mover. Um alvo grande, um lugar so.
+              
+              O menu continua existindo em `voice-stage`, no BOTAO DIREITO dos
+              blocos de video — la ele nao concorre com nada nem depende de
+              acertar um alvo pequeno.
+            */}
             {openCard?.participant.userId === state.userId ? (
               <UserActivityCard
                 user={state.user}
                 serverName={serverName}
                 voiceChannels={voiceChannels}
+                viewer={viewer}
                 anchor={openCard.anchor}
                 onClose={() => setOpenCard(null)}
               />

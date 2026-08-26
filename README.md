@@ -1551,6 +1551,38 @@ enquanto o app nao abre no boot seria a pior forma de errar aqui.
 que faz a pessoa achar que o app nao abriu. Se um dia houver icone na bandeja,
 vale reconsiderar.
 
+## Cartao do membro: um alvo so, em vez de dois
+
+Clicar na pessoa abre TUDO: perfil, atividade, volume, silenciar, ensurdecer,
+mover, mandar mensagem, adicionar amigo, bloquear.
+
+### O que foi removido
+
+O botao de tres pontinhos da lista de membros do canal de voz. Ele tinha 12x12
+pixels, so aparecia no hover, e abria um menu SEPARADO do cartao — entao havia
+duas coisas diferentes para a mesma pessoa, e a mais util era a mais dificil de
+acertar. Foi a queixa mais repetida de quem usa.
+
+O alvo passou de **12x12px** para **158x24px** — cerca de 25 vezes a area
+clicavel, medido na tela.
+
+### O que NAO mudou
+
+O `VoiceMemberMenu` continua existindo, no BOTAO DIREITO dos blocos de video em
+`voice-stage`. La ele nao concorre com nada nem depende de acertar um alvo
+pequeno: o alvo e o bloco inteiro. Apagar o componente para "limpar" custaria
+essa interacao sem devolver nada.
+
+### O que aparece depende do estado, nao do cargo apenas
+
+Volume, silenciar, ensurdecer e mover so aparecem quando a pessoa esta EM UMA
+CALL — silenciar quem nao esta em canal de voz nao tem onde ser aplicado, e
+mover exige ter de onde mover. Volume nao aparece para voce mesmo: regular o
+proprio microfone ali nao quer dizer nada.
+
+Esconder e so economia de clique: o servidor revalida cada acao em
+`voice:moderate` e `voice:move`, como sempre.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

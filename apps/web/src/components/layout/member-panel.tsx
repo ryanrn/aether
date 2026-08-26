@@ -165,6 +165,7 @@ export function MemberPanel({
           nickname={openCard.member.nickname}
           serverName={serverName}
           voiceChannels={voiceChannels}
+          viewer={viewer}
           anchor={openCard.anchor}
           onClose={() => setOpenCard(null)}
         />

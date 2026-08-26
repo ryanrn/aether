@@ -16,7 +16,12 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
+import type {
+  PublicChannel,
+  PublicUser,
+  UserStatus,
+  ViewerContext,
+} from "@aether/shared";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import {
@@ -27,6 +32,12 @@ import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { viewerCan } from "@/lib/permissions";
+import {
+  DEFAULT_VOLUME,
+  readUserVolumes,
+  saveUserVolume,
+} from "@/lib/voice/volumes";
 import { useElapsed } from "@/lib/use-elapsed";
 import { GameArt } from "@/components/profile/game-art";
 
@@ -83,6 +94,7 @@ export function UserActivityCard({
   serverName,
   voiceChannels,
   podeAdicionarAmigo = false,
+  viewer,
   anchor,
   onClose,
 }: {
@@ -97,6 +109,13 @@ export function UserActivityCard({
    * e uma copia no cliente seria uma segunda versao da mesma consulta.
    */
   podeAdicionarAmigo?: boolean;
+  /**
+   * Cargo de quem esta OLHANDO, para decidir o que pode moderar.
+   *
+   * Ausente = cartao sem moderacao. Nao e o mesmo que "nao pode": e o servidor
+   * que decide de novo a cada acao. Aqui so escondemos o que seria recusado.
+   */
+  viewer?: ViewerContext;
   anchor: CardAnchor;
   onClose: () => void;
 }) {
@@ -109,6 +128,11 @@ export function UserActivityCard({
   const [confirmandoBloqueio, setConfirmandoBloqueio] = useState(false);
   const [bloqueando, startBloqueio] = useTransition();
   const [pedidoEnviado, setPedidoEnviado] = useState(false);
+  const roomControls = useRealtimeStore((state) => state.roomControls);
+  const [volume, setVolume] = useState(
+    () => readUserVolumes()[user.id] ?? DEFAULT_VOLUME,
+  );
+  const [erroModeracao, setErroModeracao] = useState<string | null>(null);
   const [pedindo, startPedido] = useTransition();
 
   const presence = useRealtimeStore((state) => state.presence);
@@ -174,6 +198,39 @@ export function UserActivityCard({
        */
       setErroConversa(null);
       setPedidoEnviado(true);
+    });
+  }
+
+  /**
+   * Volume so faz sentido para OUTRA pessoa que esteja numa call: regular o
+   * proprio microfone aqui nao quer dizer nada, e regular quem nao esta
+   * falando nao tem o que aplicar.
+   */
+  function mudarVolume(proximo: number) {
+    setVolume(proximo);
+    saveUserVolume(user.id, proximo);
+    roomControls?.setUserVolume(user.id, proximo);
+  }
+
+  function moderar(patch: { serverMuted?: boolean; serverDeafened?: boolean }) {
+    setErroModeracao(null);
+    socket?.emit("voice:moderate", { userId: user.id, ...patch }, (resultado) => {
+      if (!resultado.ok) {
+        setErroModeracao(resultado.error);
+        return;
+      }
+      onClose();
+    });
+  }
+
+  function mover(channelId: string) {
+    setErroModeracao(null);
+    socket?.emit("voice:move", { userId: user.id, channelId }, (resultado) => {
+      if (!resultado.ok) {
+        setErroModeracao(resultado.error);
+        return;
+      }
+      onClose();
     });
   }
 
@@ -253,6 +310,22 @@ export function UserActivityCard({
     channel !== null &&
     selfVoice?.channelId !== channel.id &&
     socket !== null;
+
+  /**
+   * O que este cartao pode oferecer de moderacao.
+   *
+   * Tudo depende de a pessoa estar NUMA CALL: silenciar quem nao esta em canal
+   * de voz nao tem onde ser aplicado, e mover exige ter de onde mover.
+   */
+  const naCall = participant !== null;
+  const podeVolume = !isSelf && naCall;
+  const podeSilenciar = naCall && !!viewer && viewerCan(viewer, "MUTE_MEMBERS");
+  const podeEnsurdecer =
+    naCall && !!viewer && viewerCan(viewer, "DEAFEN_MEMBERS");
+  const podeMover = naCall && !!viewer && viewerCan(viewer, "MOVE_MEMBERS");
+  const destinos = (voiceChannels ?? []).filter(
+    (item) => item.id !== participant?.channelId,
+  );
 
   function joinChannel() {
     if (!socket || !channel) return;
@@ -427,6 +500,111 @@ export function UserActivityCard({
           {erroConversa ? (
             <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
               {erroConversa}
+            </p>
+          ) : null}
+
+          {/*
+            VOLUME. Veio do menu dos tres pontinhos, que foi removido da lista
+            de membros: aquele alvo tinha 12px e so aparecia no hover, e a
+            queixa era justamente nao conseguir acerta-lo. Agora clicar na
+            PESSOA abre tudo, e isto passou a morar aqui.
+          */}
+          {podeVolume ? (
+            <div className="mt-3 border-t border-base-800 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] text-ink-300">Volume</span>
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-500">
+                  {Math.round(volume * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(volume * 100)}
+                onChange={(evento) =>
+                  mudarVolume(Number(evento.target.value) / 100)
+                }
+                aria-label={`Volume de ${user.displayName}`}
+                className="mt-2 block w-full accent-accent-500"
+              />
+            </div>
+          ) : null}
+
+          {podeSilenciar || podeEnsurdecer ? (
+            <div className="mt-3 flex gap-2">
+              {podeSilenciar ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    moderar({ serverMuted: !participant?.serverMuted })
+                  }
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] transition-colors",
+                    participant?.serverMuted
+                      ? "border-base-700 text-ink-200 hover:bg-base-800"
+                      : "border-signal-dnd/40 text-signal-dnd hover:bg-signal-dnd/10",
+                  )}
+                >
+                  {participant?.serverMuted ? (
+                    <Mic className="h-3 w-3" />
+                  ) : (
+                    <MicOff className="h-3 w-3" />
+                  )}
+                  {participant?.serverMuted ? "Devolver mic" : "Silenciar"}
+                </button>
+              ) : null}
+
+              {podeEnsurdecer ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    moderar({ serverDeafened: !participant?.serverDeafened })
+                  }
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] transition-colors",
+                    participant?.serverDeafened
+                      ? "border-base-700 text-ink-200 hover:bg-base-800"
+                      : "border-signal-dnd/40 text-signal-dnd hover:bg-signal-dnd/10",
+                  )}
+                >
+                  {participant?.serverDeafened ? (
+                    <Volume2 className="h-3 w-3" />
+                  ) : (
+                    <VolumeX className="h-3 w-3" />
+                  )}
+                  {participant?.serverDeafened ? "Devolver audio" : "Ensurdecer"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {podeMover && destinos.length > 0 ? (
+            <div className="mt-2">
+              <label className="block text-[11px] text-ink-500">
+                Mover para
+              </label>
+              <select
+                value=""
+                onChange={(evento) => {
+                  if (evento.target.value) mover(evento.target.value);
+                }}
+                className="mt-1 w-full rounded-md border border-base-700 bg-base-950 px-2 py-1.5 text-[12px] text-ink-200"
+              >
+                <option value="">Escolher canal...</option>
+                {destinos.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {erroModeracao ? (
+            <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
+              {erroModeracao}
             </p>
           ) : null}
 
