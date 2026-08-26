@@ -50,6 +50,7 @@ export function ServerRail({
         <Link
           href="/app/amigos"
           title="Amigos"
+          draggable={false}
           className="group relative flex w-full justify-center"
         >
           <span
@@ -89,6 +90,8 @@ export function ServerRail({
               key={server.id}
               href={`/app/s/${server.id}`}
               title={server.name}
+              // Mesmo motivo do canal: arraste nativo de link mostra a URL.
+              draggable={false}
               className="group relative flex w-full justify-center"
             >
               <span

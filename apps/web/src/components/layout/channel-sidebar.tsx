@@ -409,6 +409,20 @@ function ChannelRow({
         <Link
           href={`/app/s/${serverId}/c/${channel.id}`}
           onClick={aoClicarNoCanal}
+          /**
+           * NAO ARRASTA.
+           *
+           * Todo `<a href>` tem arraste NATIVO do navegador: segurar e puxar
+           * cria um fantasma com a URL inteira e um cursor de "proibido". Quem
+           * tenta reordenar o canal — reflexo de quem usa Discord — ve o
+           * endereco do site aparecer atravessado na tela, o que parece defeito
+           * e nao "esse recurso nao existe".
+           *
+           * Isto SO tira o fantasma; nao adiciona reordenar por arrasto. A
+           * ordem se muda pelas setas ao lado do canal.
+           */
+          draggable={false}
+
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]",
             active ? "text-ink-100" : "text-ink-300 hover:text-ink-100",
