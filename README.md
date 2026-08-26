@@ -1251,6 +1251,114 @@ de alguem afetaria o que os outros escutam.
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
 
+## Auditoria de seguranca (26/08/2026) — o que foi corrigido e o que ficou
+
+Varredura de caixa-branca do gateway, das permissoes, do convite e dos
+cabecalhos. Cinco achados foram corrigidos; o que sobrou esta listado como
+limitacao logo abaixo, porque tem custo real e nao dava para resolver junto.
+
+### Corrigido
+
+1. **Rate limit do chat era contornavel abrindo mais sockets.** `messages.ts`
+   chaveava o balde por `socket.id`, e nada limita quantas conexoes uma pessoa
+   abre com o mesmo cookie — cada socket novo estreava com o balde cheio. Pior:
+   `forget()` no disconnect fazia de reconectar um jeito de zerar o limite. A
+   chave agora e o `userId` e nao ha `forget` no disconnect; o limitador
+   descarta sozinho as chaves cheias e paradas. `tests/unit/rate-limit-chave.test.ts`
+   e uma guarda de fonte que quebra se alguem reintroduzir `take(socket.id)`.
+
+2. **`voice:join`, `presence:game`, `presence:set` e `server:join` nao tinham
+   limite nenhum.** `voice:join` e o evento mais caro do gateway — tres idas ao
+   Postgres e a EMISSAO DE UM TOKEN do SFU a cada chamada — e `presence:game`
+   amplifica: uma mensagem que entra vira uma emissao por amigo e por servidor
+   em comum. Os quatro passaram a ter balde proprio, checado antes de tocar no
+   banco.
+
+3. **Corrida no `maxUses` do convite.** A checagem lia fora da transacao e o
+   incremento nao reconferia: duas pessoas resgatando ao mesmo tempo um convite
+   de uso unico liam `uses = 0` as duas e entravam as duas. O consumo virou um
+   `UPDATE ... WHERE uses < maxUses` feito ANTES de criar o membro, o que faz a
+   linha do convite ser o ponto de serializacao da transacao inteira.
+   `scripts/verify-seguranca.mjs` prova nos dois sentidos: reproduz o bug com o
+   codigo antigo (`uses = 2` num convite de 1) e mostra o novo deixando so um
+   passar.
+
+4. **Token do LiveKit valia 6 horas**, com um comentario no codigo que dizia
+   "curto de proposito". Nao era. E o SDK manda o token na QUERY STRING da URL
+   do websocket, entao ele fica no log de rede do navegador de quem transmite.
+   Caiu para 1h — ver a limitacao sobre isso abaixo.
+
+5. **Nao havia Content-Security-Policy.** Os quatro cabecalhos que ja existiam
+   cobrem sniffing, enquadramento e referer; nenhum diz PARA ONDE a pagina pode
+   falar. Agora ha uma. A origem do gateway sai de `NEXT_PUBLIC_REALTIME_URL`,
+   e faltar essa variavel em build de producao e ERRO DE BUILD: politica com
+   origem faltando nao avisa nada, so bloqueia o websocket no navegador de quem
+   usa. O LiveKit entra por curinga (`*.livekit.cloud`) porque `LIVEKIT_URL`
+   nao existe na Vercel e nem deve existir — quem emite o token do SFU e o
+   gateway no Fly. Ver a limitacao sobre isso abaixo.
+
+### O que a auditoria NAO encontrou (verificado, nao suposto)
+
+- Toda escrita revalida permissao no evento, direto do banco — `authorizeChannel`
+  nao confia em nada guardado no socket desde o handshake.
+- Escalada de cargo esta barrada na construcao: `desired = (bits mantidos) |
+  (bits adicionados & permissoes de quem edita)`. Nao ha caminho para conceder
+  bit que voce nao tem.
+- Nao existe `dangerouslySetInnerHTML` em lugar nenhum do app.
+- Nao existe preview de link, embed nem webhook — a superficie classica de SSRF
+  simplesmente nao esta construida.
+- Upload confere bytes magicos alem do MIME declarado, e o unico bucket publico
+  guarda icone de servidor, que e publico por natureza.
+- Senha e scrypt; token de recuperacao e guardado como hash e vale uma vez.
+- Cookie de sessao e httpOnly + sameSite lax + secure em producao; o gateway em
+  outro dominio usa ticket JWT de 5 min, consumido uma unica vez via Redis, e
+  fail-closed quando o Redis nao responde.
+- `/internal/*` do gateway compara o segredo em tempo constante.
+- `NEXT_PUBLIC_*` tem exatamente duas variaveis, as duas URLs publicas.
+
+### Limitacoes que ficaram
+
+- **`'unsafe-inline'` em `script-src`.** O App Router injeta script inline com
+  os dados de hidratacao em toda pagina; tirar isso exige nonce via middleware,
+  e nonce forca renderizacao dinamica em TODA rota. Entao, na pratica, o CSP
+  **nao protege contra XSS de script** hoje — o que protege e o React escapar
+  por padrao e nao haver `dangerouslySetInnerHTML` no app. O que o CSP entrega
+  mesmo assim e a exfiltracao fechada (`connect-src`), `base-uri`, `form-action`
+  e `object-src`.
+
+- **O token do SFU ainda vale 1h, e nao 5 minutos.** O SDK do LiveKit
+  reapresenta o MESMO token ao reconectar e o cliente nao implementa refresh;
+  com TTL de minutos, qualquer oscilacao de rede no meio de uma call derrubaria
+  a pessoa de vez. Para descer mais e preciso reemitir pelo gateway em
+  `RoomEvent.Disconnected`. Ate la, um token vazado da 1h de acesso aquela sala
+  de voz com os grants de publicacao de quem o gerou.
+
+- **A CSP libera `*.livekit.cloud`, nao so o nosso projeto.** A alternativa
+  era duplicar `LIVEKIT_URL` na Vercel so para montar o cabecalho — duas
+  copias de uma configuracao que precisa bater, e que ao divergir mataria a
+  call em producao calada. O curinga e um canal de exfiltracao ruim (exigiria
+  controlar um projeto LiveKit e escrever dados por handshake de sala), entao a
+  troca compensa. Se um dia o app web precisar da URL por outro motivo, da para
+  fechar o curinga.
+
+- **Os limites do gateway vivem no processo.** Sao `Map` em memoria: com uma
+  instancia funcionam, com duas cada uma tem o seu e o limite efetivo dobra. O
+  ticket ja usa Redis; estes ainda nao. Mesma limitacao ja anotada na FASE 7c-1.
+
+- **Nao ha teto de sockets por usuario.** A troca de chave tirou o ganho de
+  abrir varias conexoes para furar rate limit, mas abrir mil conexoes ainda
+  consome memoria e handshake do gateway. Um teto por `userId` no
+  `connection` resolveria; nao foi feito nesta rodada.
+
+- **`AUTH_SECRET` faz dois trabalhos**: assina a sessao e autentica o
+  `/internal/*` do gateway. Foi decisao consciente (uma variavel a menos para
+  configurar errado), mas significa que vazar o segredo interno tambem vaza a
+  capacidade de forjar sessao. Separar em duas variaveis e melhoria pendente.
+
+- **A auditoria nao cobriu o app de desktop a fundo.** O que foi verificado
+  ali: o `.env` nao vai no pacote e o renderer nao recebe segredo. Ficaram sem
+  varredura o auto-updater (assinatura do pacote) e o IPC do modulo nativo.
+
 ## Limitacoes conhecidas da FASE 7c-1 (rate limit distribuido e ticket)
 
 Pronto: o rate limit do app web e o consumo unico de ticket do gateway agora

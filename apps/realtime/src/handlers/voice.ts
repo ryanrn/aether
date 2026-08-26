@@ -45,6 +45,21 @@ import {
  */
 const speakingLimiter = createRateLimiter({ capacity: 12, refillPerSecond: 6 });
 
+/**
+ * Limite de ENTRADA em canal de voz.
+ *
+ * `voice:join` e o evento mais caro do gateway: tres idas ao Postgres (canal,
+ * acesso do membro, permissoes do canal) e, no fim, a EMISSAO DE UMA
+ * CREDENCIAL de midia. Sem limite, um laco de `voice:join` e ao mesmo tempo
+ * exaustao de banco e uma fabrica de tokens do SFU — cada resposta devolve um
+ * token valido, e nada obriga o cliente a usa-lo para conectar.
+ *
+ * 5 de rajada cobre trocar de canal algumas vezes seguidas, que e o uso real;
+ * 1 por segundo em regime nao atrapalha ninguem que esteja usando o app com a
+ * mao.
+ */
+const joinLimiter = createRateLimiter({ capacity: 5, refillPerSecond: 1 });
+
 export function registerVoiceHandlers(
   io: AetherServer,
   socket: AetherSocket,
@@ -65,6 +80,15 @@ export function registerVoiceHandlers(
 
     if (typeof channelId !== "string" || channelId.length === 0) {
       respond({ ok: false, error: "Canal invalido" });
+      return;
+    }
+
+    /**
+     * Antes de tocar no banco. Recusar depois de tres consultas ja teria
+     * pagado o custo que o limite existe para evitar.
+     */
+    if (!joinLimiter.take(userId)) {
+      respond({ ok: false, error: "Espere um instante para entrar de novo." });
       return;
     }
 
@@ -166,7 +190,7 @@ export function registerVoiceHandlers(
 
   socket.on("voice:speaking", (speaking) => {
     if (typeof speaking !== "boolean") return;
-    if (!speakingLimiter.take(socket.id)) return;
+    if (!speakingLimiter.take(userId)) return;
 
     // Devolve null quando o estado ja era esse — nao republicamos valor
     // identico para a sala inteira.
@@ -431,7 +455,6 @@ export function registerVoiceHandlers(
   });
 
   socket.on("disconnect", () => {
-    speakingLimiter.forget(socket.id);
     // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
     // mesma pessoa nao devem tirar ninguem da call.
     const left = leaveVoice(userId, socket.id);

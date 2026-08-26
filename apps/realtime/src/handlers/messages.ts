@@ -88,7 +88,7 @@ export function registerMessageHandlers(
     }
     const { channelId, content, nonce } = payload;
 
-    if (!limiter.take(socket.id)) {
+    if (!limiter.take(userId)) {
       respond({ ok: false, error: "Muitas mensagens seguidas. Respire." });
       return;
     }
@@ -189,7 +189,11 @@ export function registerMessageHandlers(
     }
   });
 
-  socket.on("disconnect", () => {
-    limiter.forget(socket.id);
-  });
+  /**
+   * Nao ha `forget` no disconnect de proposito.
+   *
+   * O balde e da PESSOA, nao da conexao: limpar aqui faria de reconectar um
+   * jeito de zerar o limite. O proprio limitador descarta chave cheia e
+   * parada, entao a memoria nao cresce sem fim.
+   */
 }

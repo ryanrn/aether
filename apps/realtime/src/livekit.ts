@@ -21,8 +21,26 @@ import { env } from "./env";
  * um caminho so, sem duas checagens para manter em sincronia.
  */
 
-/** Curto de proposito: e reemitido a cada entrada em canal e nunca guardado. */
-const TOKEN_TTL = "6h";
+/**
+ * Validade do token de midia.
+ *
+ * Era 6h, com um comentario dizendo "curto de proposito". Nao era: um token
+ * de 6h que vaze — extensao do navegador, devtools aberto numa transmissao de
+ * tela, log de cliente — e meio dia de acesso aquela sala de voz com a
+ * identidade de quem o gerou. E o token nao carrega so entrada: carrega os
+ * grants de publicacao (microfone, tela, camera) que o @aether/access decidiu.
+ *
+ * Por que 1h e nao 5 minutos, que seria o rigor de manual: o SDK do LiveKit
+ * reapresenta ESTE MESMO token ao reconectar, e nosso cliente nao implementa
+ * refresh. Com 5 minutos, qualquer oscilacao de rede depois do quinto minuto
+ * de call derrubaria a pessoa de vez. 1h corta a janela em seis sem regressao
+ * pratica — e a reconexao automatica do LiveKit desiste em ~1 minuto de queda,
+ * bem dentro disso.
+ *
+ * O caminho para descer mais esta anotado nas limitacoes do README: reemitir
+ * pelo gateway em `RoomEvent.Disconnected`, ai o TTL pode ser de minutos.
+ */
+const TOKEN_TTL = "1h";
 
 export interface MediaCredentials {
   url: string;

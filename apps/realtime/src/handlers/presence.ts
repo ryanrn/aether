@@ -11,6 +11,7 @@ import {
 } from "@aether/shared";
 import type { AetherServer, AetherSocket } from "../types";
 import { visibleChannelRooms } from "../rooms";
+import { createRateLimiter } from "../rate-limit";
 import { metadadosDe } from "../games/metadata";
 import {
   detachSocket,
@@ -138,6 +139,29 @@ async function enriquecer(
   }
 }
 
+/**
+ * Limite dos eventos de presenca.
+ *
+ * O que torna estes eventos caros nao e o custo de UM, e a AMPLIFICACAO: cada
+ * `presence:game` vira uma emissao para cada amigo e para cada servidor em
+ * comum, e ainda pode disparar uma busca de metadados do jogo. Uma mensagem
+ * que entra vira dezenas que saem — quem abusa gasta pouco e o servidor gasta
+ * muito, que e a forma barata de derrubar um gateway.
+ *
+ * Trocar de jogo e algo que acontece em minutos, nao em milissegundos. 10 de
+ * rajada cobre o app inteiro se re-sincronizando ao conectar; 1 por segundo
+ * em regime e folgado para qualquer uso honesto.
+ */
+const presenceLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 1 });
+
+/**
+ * `server:join` e separado porque tem outro perfil: entrar em sala e barato,
+ * mas cada chamada le o acesso do membro no Postgres e recalcula os canais
+ * visiveis. Um app abrindo do zero pede varios servidores em sequencia — dai a
+ * rajada alta — mas nao ha uso honesto que sustente isso continuamente.
+ */
+const joinRoomLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 2 });
+
 export function registerPresenceHandlers(
   io: AetherServer,
   socket: AetherSocket,
@@ -149,6 +173,12 @@ export function registerPresenceHandlers(
 
     if (typeof serverId !== "string" || serverId.length === 0) {
       respond({ ok: false, error: "servidor invalido" });
+      return;
+    }
+
+    // Antes de ir ao banco: recusar depois da consulta ja teria pago o custo.
+    if (!joinRoomLimiter.take(userId)) {
+      respond({ ok: false, error: "muitas entradas seguidas" });
       return;
     }
 
@@ -196,6 +226,7 @@ export function registerPresenceHandlers(
 
   socket.on("presence:set", async (status) => {
     if (!isUserStatus(status)) return;
+    if (!presenceLimiter.take(userId)) return;
 
     const affected = setStatus(userId, status);
     for (const serverId of affected) announce(io, serverId, userId, status);
@@ -236,6 +267,8 @@ export function registerPresenceHandlers(
    * propria presenca. Reiniciar o gateway limpa, e esta anotado no README.
    */
   socket.on("presence:game", (payload) => {
+    if (!presenceLimiter.take(userId)) return;
+
     const bruto = payload?.name;
     const nome =
       typeof bruto === "string" && bruto.trim().length > 0
