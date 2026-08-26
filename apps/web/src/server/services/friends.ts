@@ -43,7 +43,31 @@ export async function listFriendships(
     orderBy: { createdAt: "desc" },
   });
 
-  return linhas.map((linha) => {
+  /**
+   * Bloqueados entram na MESMA lista, com `kind: "blocked"`.
+   *
+   * Nao ha linha de `Friendship` para eles — bloquear apaga a amizade — entao
+   * eles viriam de lugar nenhum se a busca parasse aqui. O `id` usado e o do
+   * proprio bloqueio, que e o que a tela precisa para ter chave estavel.
+   */
+  const bloqueios = await prisma.block.findMany({
+    where: { blockerId: userId },
+    select: {
+      id: true,
+      createdAt: true,
+      blocked: { select: USUARIO_PUBLICO },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const bloqueados: PublicFriendship[] = bloqueios.map((linha) => ({
+    id: linha.id,
+    user: linha.blocked,
+    kind: "blocked" as const,
+    createdAt: linha.createdAt.toISOString(),
+  }));
+
+  const amizades = linhas.map((linha) => {
     const euPedi = linha.requesterId === userId;
     const outro = euPedi ? linha.addressee : linha.requester;
     return {
@@ -58,6 +82,8 @@ export async function listFriendships(
       createdAt: linha.createdAt.toISOString(),
     };
   });
+
+  return [...amizades, ...bloqueados];
 }
 
 /** Quantos pedidos esperam decisao SUA — o numerinho no menu lateral. */

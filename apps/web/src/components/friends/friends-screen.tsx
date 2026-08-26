@@ -32,6 +32,7 @@ export function FriendsScreen({
   const amigos = friendships.filter((f) => f.kind === "friend");
   const recebidos = friendships.filter((f) => f.kind === "incoming");
   const enviados = friendships.filter((f) => f.kind === "outgoing");
+  const bloqueados = friendships.filter((f) => f.kind === "blocked");
 
   return (
     <div className="flex h-full min-h-0 bg-base-950">
@@ -46,6 +47,7 @@ export function FriendsScreen({
         amigos={amigos}
         recebidos={recebidos}
         enviados={enviados}
+        bloqueados={bloqueados}
       />
 
       <ActivityPanel amigos={amigos} />

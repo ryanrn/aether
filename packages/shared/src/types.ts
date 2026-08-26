@@ -223,8 +223,12 @@ export interface PublicFriendship {
   user: PublicUser;
   /**
    * `friend` ja aceito; `incoming` alguem te pediu e a decisao e sua;
-   * `outgoing` voce pediu e esta esperando.
+   * `outgoing` voce pediu e esta esperando; `blocked` voce bloqueou.
+   *
+   * `blocked` entra AQUI em vez de virar uma lista propria porque a tela ja
+   * sabe desenhar uma pessoa a partir desta forma — nome, avatar, acoes. Uma
+   * segunda forma seria uma segunda copia da linha, do agrupamento e da busca.
    */
-  kind: "friend" | "incoming" | "outgoing";
+  kind: "friend" | "incoming" | "outgoing" | "blocked";
   createdAt: string;
 }

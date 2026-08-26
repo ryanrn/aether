@@ -58,6 +58,8 @@ model User {
   friendsAsAddressee Friendship[]    @relation("FriendshipAddressee")
   dmsComoA           DmChannel[]     @relation("DmUserA")
   dmsComoB           DmChannel[]     @relation("DmUserB")
+  bloqueiosFeitos    Block[]         @relation("Blocker")
+  bloqueiosRecebidos Block[]         @relation("Blocked")
   memberships        ServerMember[]
   ownedServers       Server[]        @relation("ServerOwner")
   messages           Message[]
@@ -412,4 +414,27 @@ model GameMetadata {
   createdAt DateTime @default(now())
 
   @@index([checkedAt])
+}
+
+/// Bloqueio de uma pessoa por outra.
+///
+/// DIRECIONAL: uma linha por sentido. Diferente da amizade, "A bloqueou B" e um
+/// fato distinto de "B bloqueou A" — os dois podem existir ao mesmo tempo, e
+/// desfazer um nao desfaz o outro.
+///
+/// Quem consulta, porem, olha os DOIS sentidos. Checar so um deixaria quem
+/// bloqueou continuar mandando mensagem para quem bloqueou, que e o oposto do
+/// que isto serve.
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  /// "quem me bloqueou" percorre a outra coluna; sem este indice, metade das
+  /// consultas sairia em varredura sequencial. Mesma razao dos dois em Friendship.
+  @@index([blockedId])
 }

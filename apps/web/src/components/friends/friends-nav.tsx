@@ -1,9 +1,9 @@
 "use client";
 
-import { Mail, Users } from "lucide-react";
+import { Ban, Mail, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SecaoAmigos = "amigos" | "solicitacoes";
+export type SecaoAmigos = "amigos" | "solicitacoes" | "bloqueados";
 
 /**
  * Painel esquerdo da tela de amigos — 244px fixos.
@@ -58,6 +58,12 @@ export function FriendsNav({
           ativo={secao === "solicitacoes"}
           badge={pedidosRecebidos}
           onClick={() => onSecao("solicitacoes")}
+        />
+        <ItemNav
+          icone={Ban}
+          rotulo="Bloqueados"
+          ativo={secao === "bloqueados"}
+          onClick={() => onSecao("bloqueados")}
         />
       </div>
 

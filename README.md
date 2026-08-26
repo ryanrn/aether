@@ -1315,7 +1315,42 @@ deliberadamente — esconder confunde mais do que protege, porque a configuracao
 nao e um segredo, e uma preferencia de contato. Quem NAO existe continua
 indistinguivel: so aparece a mensagem generica.
 
-### CONSEQUENCIA: desfazer amizade nao bloqueia mais
+### Bloqueio por pessoa
+
+`podeFalarCom` tem um PORTAO antes das duas portas: se existe bloqueio em
+qualquer sentido, nada passa — nem amizade, nem servidor em comum.
+
+A ordem importa e esta travada em teste. Com o bloqueio DEPOIS da amizade, um
+`podeFalarCom` de duas pessoas que voltaram a ser amigas devolveria "amizade" e
+o bloqueio nunca seria consultado; conferido por mutacao, e o teste
+"amizade NAO passa por cima do bloqueio" cai.
+
+**Os DOIS sentidos sao checados.** Olhar so "o alvo me bloqueou" deixaria quem
+bloqueou continuar mandando mensagem para quem bloqueou — o oposto do que a
+funcionalidade serve. Uma relacao bloqueada e muda nas duas direcoes.
+
+A tabela, por outro lado, e DIRECIONAL: uma linha por sentido, sem par
+ordenado. "A bloqueou B" e um fato diferente de "B bloqueou A", os dois podem
+existir juntos, e desbloquear um nao desfaz o outro — ordenar os ids perderia
+justamente quem bloqueou quem.
+
+**Bloquear desfaz a amizade**, na MESMA transacao. Separadas, uma poderia
+gravar e a outra nao, e sobraria alguem na sua lista de amigos com quem voce
+nao consegue falar — o que contradiz a propria tela ("seus amigos sempre
+conseguem falar com voce"). Vale para pedido pendente tambem.
+
+**Desbloquear nao devolve a amizade.** Devolve a possibilidade de falar, nao a
+relacao que existia antes: refazer amizade e decisao das duas pessoas, nao
+efeito colateral. Isso esta dito na confirmacao, antes de bloquear.
+
+Na tela: icone de bloquear ao lado de "desfazer amizade" na lista de amigos
+(no hover, junto das outras decisoes de encerrar), e no cartao do membro dentro
+do servidor — la com CONFIRMACAO, porque o botao fica perto de "Mandar
+mensagem" num cartao pequeno e o erro nao se desfaz sozinho. A secao
+"Bloqueados" na navegacao lista quem voce bloqueou, com "Desbloquear" sempre
+visivel: aba cuja unica acao esta escondida no hover nao serve para nada.
+
+### HISTORICO: por que o bloqueio precisou existir
 
 Isto mudou quando a conversa por servidor nasceu, e e a parte menos obvia da
 funcionalidade. Antes, desfazer amizade fechava a conversa — era a unica forma
@@ -1328,8 +1363,11 @@ TODO MUNDO que nao e amigo, nao so ela — ou sair do servidor em comum.
 
 Isso esta travado em teste (`verify-dm.mjs`), com o nome dizendo o que e:
 "desfazer amizade NAO fecha quando dividem servidor (comportamento novo)".
-**Falta bloqueio por pessoa**, e essa e a lacuna real que a funcionalidade
-abriu.
+
+**Foi essa lacuna que o bloqueio por pessoa veio tapar** — ver a secao acima.
+Hoje as saidas sao: bloquear a pessoa (o caminho certo), desligar
+`allowServerDms` (que corta todos os nao-amigos de uma vez) ou sair do servidor
+em comum.
 
 ### `channelId` virou `conversationId`
 
@@ -1346,7 +1384,7 @@ conversa direta.
 npx dotenv -e .env -- node scripts/verify-dm.mjs
 ```
 
-28 verificacoes: 8 tentam INSERIR no banco o que nao pode existir (par
+36 verificacoes: 8 tentam INSERIR no banco o que nao pode existir (par
 invertido, conversa consigo mesmo, mensagem com dois pais, mensagem sem pai), e
 20 exercitam o fluxo por socket real — incluindo as duas portas, a recusa
 explicada e o que acontece ao desligar a chave com conversa ja aberta — abrir, idempotencia dos dois lados,
@@ -1373,10 +1411,13 @@ Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
 - **Sem notificacao.** Mensagem que chega com a conversa fechada nao avisa nada.
 - **Sem anexo, edicao, exclusao ou resposta** — as mesmas ausencias do chat de
   servidor. O schema ja tem `replyToId`, `editedAt` e `deletedAt`; nada os usa.
-- **Sem bloqueio por pessoa.** E a lacuna mais importante, e ela AUMENTOU com a
-  conversa a partir de servidor — ver a secao "CONSEQUENCIA" acima. Hoje as
-  unicas saidas sao desligar `allowServerDms` (que corta todos os nao-amigos de
-  uma vez) ou sair do servidor em comum.
+- **O bloqueio nao esconde a pessoa nas outras telas.** Ele fecha a conversa,
+  mas quem voce bloqueou continua aparecendo na lista de membros do servidor e
+  nas mensagens antigas de canal. `loadBlockedBothWays` existe em
+  `@aether/access` para filtrar isso quando for a hora; nada consome ainda.
+- **Bloquear nao avisa quem foi bloqueado**, e isso e proposital. Mas a recusa
+  de `dm:open` usa a mesma frase de quem so aceita amigos, entao da para
+  deduzir tentando — nao e um segredo forte.
 - **A chave e global, nao por servidor.** Nao da para aceitar mensagens de um
   servidor e recusar de outro.
 - **`loadDmList` faz N consultas**, uma por conversa, porque passa cada uma pela

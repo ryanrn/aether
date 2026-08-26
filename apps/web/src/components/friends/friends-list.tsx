@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Check,
   Loader2,
+  Ban,
   MessageSquare,
   Monitor,
   Search,
@@ -14,7 +15,9 @@ import {
 } from "lucide-react";
 import type { PublicFriendship, UserStatus } from "@aether/shared";
 import {
+  blockUserAction,
   removeFriendAction,
+  unblockUserAction,
   respondFriendRequestAction,
   sendFriendRequestAction,
 } from "@/server/actions/friends";
@@ -36,11 +39,13 @@ export function FriendsList({
   amigos,
   recebidos,
   enviados,
+  bloqueados,
 }: {
   secao: SecaoAmigos;
   amigos: PublicFriendship[];
   recebidos: PublicFriendship[];
   enviados: PublicFriendship[];
+  bloqueados: PublicFriendship[];
 }) {
   const [aba, setAba] = useState<"online" | "todos">("online");
   const [busca, setBusca] = useState("");
@@ -74,7 +79,9 @@ export function FriendsList({
    * diria "fulano esta offline" quando a verdade e "ainda nao da para saber".
    */
   const grupos =
-    secao === "solicitacoes"
+    secao === "bloqueados"
+      ? [{ titulo: "Bloqueados", itens: filtrar(bloqueados) }]
+      : secao === "solicitacoes"
       ? [
           { titulo: "Recebidos", itens: filtrar(recebidos) },
           { titulo: "Enviados", itens: filtrar(enviados) },
@@ -95,7 +102,11 @@ export function FriendsList({
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-white/[0.06] px-5">
         <h1 className="shrink-0 text-[16px] font-bold text-ink-100">
-          {secao === "solicitacoes" ? "Solicitacoes" : "Amigos"}
+          {secao === "solicitacoes"
+            ? "Solicitacoes"
+            : secao === "bloqueados"
+              ? "Bloqueados"
+              : "Amigos"}
         </h1>
 
         {secao === "amigos" ? (
@@ -212,11 +223,13 @@ function Vazio({
 }) {
   const texto = temBusca
     ? "Ninguem com esse nome na sua lista."
-    : secao === "solicitacoes"
-      ? "Nenhum pedido esperando. Os que voce enviar tambem aparecem aqui."
-      : aba === "online"
-        ? "Ninguem online agora. A aba Todos mostra a lista inteira."
-        : "Sua lista esta vazia. Peca o nome de usuario de alguem e mande o convite acima.";
+    : secao === "bloqueados"
+      ? "Voce nao bloqueou ninguem. Quem for bloqueado deixa de conseguir te mandar mensagem, mesmo dividindo um servidor com voce."
+      : secao === "solicitacoes"
+        ? "Nenhum pedido esperando. Os que voce enviar tambem aparecem aqui."
+        : aba === "online"
+          ? "Ninguem online agora. A aba Todos mostra a lista inteira."
+          : "Sua lista esta vazia. Peca o nome de usuario de alguem e mande o convite acima.";
 
   return (
     <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-white/[0.06] px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
@@ -402,7 +415,20 @@ function Linha({ item }: { item: PublicFriendship }) {
         por Tab cairia num botao que nao consegue ver.
       */}
       <div className="flex shrink-0 items-center gap-1.5">
-        {item.kind === "incoming" ? (
+        {item.kind === "blocked" ? (
+          /*
+            Desbloquear fica SEMPRE visivel, e nao no hover: e a unica acao
+            desta aba, e uma aba cuja unica acao esta escondida nao serve para
+            nada. Foi o mesmo erro que deixou "Conversar" invisivel.
+          */
+          <BotaoAcao
+            titulo="Desbloquear"
+            pendente={pendente}
+            onClick={() => agir(() => unblockUserAction(item.user.id))}
+          >
+            <Ban className="h-4 w-4" strokeWidth={1.75} />
+          </BotaoAcao>
+        ) : item.kind === "incoming" ? (
           <>
             <BotaoAcao
               titulo="Aceitar"
@@ -438,7 +464,7 @@ function Linha({ item }: { item: PublicFriendship }) {
             >
               <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
             </BotaoAcao>
-            <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+            <span className="flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
               <BotaoAcao
                 titulo="Desfazer amizade"
                 perigo
@@ -446,6 +472,20 @@ function Linha({ item }: { item: PublicFriendship }) {
                 onClick={() => agir(() => removeFriendAction(item.user.id))}
               >
                 <UserX className="h-4 w-4" strokeWidth={1.75} />
+              </BotaoAcao>
+              {/*
+                Bloquear tambem desfaz a amizade — os dois botoes ficam juntos
+                de proposito, porque sao o mesmo tipo de decisao com alcances
+                diferentes: um encerra a relacao, o outro encerra e fecha a
+                porta.
+              */}
+              <BotaoAcao
+                titulo="Bloquear"
+                perigo
+                pendente={pendente}
+                onClick={() => agir(() => blockUserAction(item.user.id))}
+              >
+                <Ban className="h-4 w-4" strokeWidth={1.75} />
               </BotaoAcao>
             </span>
           </>

@@ -1,5 +1,6 @@
 import { prisma } from "@aether/db";
 import { areFriends } from "./friends";
+import { haBloqueio } from "./block";
 
 /**
  * Autorizacao das conversas diretas.
@@ -43,10 +44,13 @@ export type MotivoDm = "amizade" | "servidor";
 /**
  * `ator` pode falar com `alvo`?
  *
- * Duas portas, nesta ordem:
+ * Um portao e duas portas, nesta ordem:
  *
- *  1. AMIZADE. Passa por cima de tudo — quem ja e seu amigo nao depende de
- *     configuracao nenhuma.
+ *  0. BLOQUEIO, em qualquer sentido. Fecha tudo: nem amizade nem servidor em
+ *     comum passam por cima. Vem PRIMEIRO de proposito — se viesse depois,
+ *     bastaria a amizade sobreviver ao bloqueio para o bloqueio nao valer.
+ *  1. AMIZADE. Passa por cima da configuracao — quem ja e seu amigo nao
+ *     depende de `allowServerDms`.
  *  2. SERVIDOR EM COMUM, se `alvo` aceitar esse caminho (`allowServerDms`).
  *
  * A REGRA E ASSIMETRICA de proposito, e vale entender por que: quem checa e
@@ -63,6 +67,9 @@ export async function podeFalarCom(
   alvo: string,
 ): Promise<MotivoDm | null> {
   if (ator === alvo) return null;
+
+  // Antes de tudo. Ver o comentario acima sobre a ordem.
+  if (await haBloqueio(ator, alvo)) return null;
 
   if (await areFriends(ator, alvo)) return "amizade";
 

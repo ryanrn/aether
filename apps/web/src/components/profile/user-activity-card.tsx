@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import {
   Clock,
   Gamepad2,
+  Ban,
   Headphones,
   MessageSquare,
   Mic,
@@ -16,6 +17,8 @@ import {
 } from "lucide-react";
 import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
 import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { blockUserAction } from "@/server/actions/friends";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
@@ -92,6 +95,8 @@ export function UserActivityCard({
   const router = useRouter();
   const [abrindoConversa, setAbrindoConversa] = useState(false);
   const [erroConversa, setErroConversa] = useState<string | null>(null);
+  const [confirmandoBloqueio, setConfirmandoBloqueio] = useState(false);
+  const [bloqueando, startBloqueio] = useTransition();
 
   const presence = useRealtimeStore((state) => state.presence);
   const activity = useRealtimeStore((state) => state.activity);
@@ -120,6 +125,25 @@ export function UserActivityCard({
       }
       onClose();
       router.push(`/app/dm/${resultado.dm.id}`);
+    });
+  }
+
+  /**
+   * Bloquear pede CONFIRMACAO no proprio cartao, e nao age no primeiro clique.
+   *
+   * E destrutivo de um jeito que nao se desfaz sozinho: apaga a amizade, e
+   * desbloquear depois nao a traz de volta. Um clique errado ao lado de
+   * "Mandar mensagem" custaria caro, e o cartao e pequeno — os dois botoes
+   * ficam perto.
+   */
+  function bloquear() {
+    startBloqueio(async () => {
+      const resultado = await blockUserAction(user.id);
+      if (!resultado.ok) {
+        setErroConversa(resultado.error);
+        return;
+      }
+      onClose();
     });
   }
 
@@ -374,6 +398,45 @@ export function UserActivityCard({
             <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
               {erroConversa}
             </p>
+          ) : null}
+
+          {user.id !== selfUserId ? (
+            confirmandoBloqueio ? (
+              <div className="mt-2 rounded-md border border-signal-dnd/40 bg-signal-dnd/[0.07] p-2.5">
+                <p className="text-[11px] leading-snug text-ink-300">
+                  Bloquear <strong>{user.displayName}</strong> desfaz a amizade
+                  de voces e impede a pessoa de te mandar mensagem, mesmo
+                  dividindo um servidor. Desbloquear depois nao devolve a
+                  amizade.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={bloquear}
+                    disabled={bloqueando}
+                    className="flex-1 rounded-md bg-signal-dnd/90 px-2 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-signal-dnd disabled:opacity-50"
+                  >
+                    {bloqueando ? "Bloqueando..." : "Bloquear"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoBloqueio(false)}
+                    className="flex-1 rounded-md border border-base-700 px-2 py-1.5 text-[11px] text-ink-300 transition-colors hover:bg-base-800"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmandoBloqueio(true)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 px-3 py-1.5 text-[11px] text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
+              >
+                <Ban className="h-3 w-3" strokeWidth={1.75} />
+                Bloquear
+              </button>
+            )
           ) : null}
 
           {canJoin ? (

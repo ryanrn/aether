@@ -215,6 +215,7 @@ async function main() {
 
   await fluxoNoGateway();
   await dmDeServidor();
+  await bloqueio();
 
   console.log(`\n${passed} ok, ${failed} falhou\n`);
   for (const id of sessoesCriadas) {
@@ -626,6 +627,166 @@ Conversa a partir de servidor
         data: { allowServerDms: antes?.allowServerDms ?? true },
       })
       .catch(() => {});
+    if (dmId) {
+      await prisma
+        .$executeRaw`DELETE FROM "DmChannel" WHERE id = ${dmId}`
+        .catch(() => {});
+    }
+  }
+}
+
+/**
+ * Bloqueio: o portao que fecha ANTES das duas portas.
+ *
+ * O que precisa ser provado nao e "recusa", e que nem AMIZADE nem SERVIDOR EM
+ * COMUM passam por cima dele. Se passassem, o bloqueio seria decorativo — e a
+ * lacuna que ele existe para tapar continuaria aberta.
+ */
+async function bloqueio() {
+  console.log(`
+Bloqueio
+`);
+
+  const amizade = await prisma.friendship.findFirst({
+    where: { status: "ACCEPTED" },
+    select: { id: true, requesterId: true, addresseeId: true },
+  });
+  if (!amizade) {
+    console.log("  -- pulado: nao ha amizade aceita no banco");
+    return;
+  }
+  const aId = amizade.requesterId;
+  const bId = amizade.addresseeId;
+
+  const socketA = await conectar(await cookieDeSessao(aId));
+  const socketB = await conectar(await cookieDeSessao(bId));
+  if (!socketA || !socketB) {
+    console.log("  -- pulado: gateway fora do ar");
+    return;
+  }
+
+  let dmId = null;
+  try {
+    const aberta = await pedir(socketA, "dm:open", { userId: bId });
+    if (aberta.ok) dmId = aberta.dm.id;
+
+    /** A bloqueia B. Deve apagar a amizade na mesma transacao. */
+    await prisma.$transaction(async (tx) => {
+      await tx.block.createMany({
+        data: [{ blockerId: aId, blockedId: bId }],
+        skipDuplicates: true,
+      });
+      await tx.friendship.deleteMany({
+        where: {
+          OR: [
+            { requesterId: aId, addresseeId: bId },
+            { requesterId: bId, addresseeId: aId },
+          ],
+        },
+      });
+    });
+
+    const aindaAmigos = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: aId, addresseeId: bId },
+          { requesterId: bId, addresseeId: aId },
+        ],
+      },
+      select: { id: true },
+    });
+    checar("bloquear desfaz a amizade", aindaAmigos === null);
+
+    /**
+     * OS DOIS SENTIDOS. Quem bloqueou tambem para de alcancar — sem isso,
+     * bloquear viraria uma forma de calar o outro e seguir falando.
+     */
+    const bParaA = await pedir(socketB, "dm:open", { userId: aId });
+    checar("quem foi bloqueado nao alcanca", !bParaA.ok);
+
+    const aParaB = await pedir(socketA, "dm:open", { userId: bId });
+    checar("quem bloqueou tambem nao alcanca", !aParaB.ok);
+
+    if (dmId) {
+      const leitura = await pedir(socketB, "message:history", {
+        conversationId: dmId,
+      });
+      checar("bloqueio fecha a conversa que ja existia", !leitura.ok);
+
+      const escrita = await pedir(socketB, "message:send", {
+        conversationId: dmId,
+        content: `${PREFIXO} bloqueado`,
+        nonce: `${PREFIXO}b`,
+      });
+      checar("bloqueio impede escrever na conversa que ja existia", !escrita.ok);
+    }
+
+    /**
+     * O TESTE QUE IMPORTA: com a porta de SERVIDOR aberta (dividem servidor e
+     * a chave ligada), o bloqueio tem de continuar valendo. E aqui que se ve
+     * se ele vem antes das portas ou depois.
+     */
+    await prisma.user.update({
+      where: { id: aId },
+      data: { allowServerDms: true },
+    });
+    const comServidorAberto = await pedir(socketB, "dm:open", { userId: aId });
+    checar(
+      "servidor em comum NAO passa por cima do bloqueio",
+      !comServidorAberto.ok,
+    );
+
+    /** E a amizade tambem nao passa: refeita, o bloqueio continua mandando. */
+    await prisma.friendship.create({
+      data: {
+        requesterId: aId,
+        addresseeId: bId,
+        status: "ACCEPTED",
+        respondedAt: new Date(),
+      },
+    });
+    const comAmizade = await pedir(socketB, "dm:open", { userId: aId });
+    checar("amizade NAO passa por cima do bloqueio", !comAmizade.ok);
+
+    /** Desbloquear devolve o acesso. */
+    await prisma.block.deleteMany({ where: { blockerId: aId, blockedId: bId } });
+    const depois = await pedir(socketB, "dm:open", { userId: aId });
+    checar("desbloquear devolve o acesso", depois.ok, depois.error);
+  } finally {
+    socketA.close();
+    socketB.close();
+    await prisma.block
+      .deleteMany({
+        where: {
+          OR: [
+            { blockerId: aId, blockedId: bId },
+            { blockerId: bId, blockedId: aId },
+          ],
+        },
+      })
+      .catch(() => {});
+    // A amizade original volta como estava, se o teste a apagou.
+    const existe = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: aId, addresseeId: bId },
+          { requesterId: bId, addresseeId: aId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!existe) {
+      await prisma.friendship
+        .create({
+          data: {
+            requesterId: aId,
+            addresseeId: bId,
+            status: "ACCEPTED",
+            respondedAt: new Date(),
+          },
+        })
+        .catch(() => {});
+    }
     if (dmId) {
       await prisma
         .$executeRaw`DELETE FROM "DmChannel" WHERE id = ${dmId}`

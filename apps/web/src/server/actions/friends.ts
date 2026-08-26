@@ -220,3 +220,94 @@ async function depoisDeMudar(userIds: string[]): Promise<void> {
   revalidatePath("/app/amigos");
   await notifyFriendsChanged({ userIds });
 }
+
+/**
+ * Bloqueia uma pessoa.
+ *
+ * POR QUE ISTO EXISTE: desfazer amizade deixou de bastar quando a conversa a
+ * partir de servidor nasceu. Dividindo um servidor, com a chave ligada (o
+ * padrao), a pessoa continuava alcancando voce. Desligar a chave resolvia,
+ * cortando todo mundo que nao e amigo em vez de quem incomoda.
+ *
+ * BLOQUEAR DESFAZ A AMIZADE, e as duas coisas acontecem na MESMA transacao.
+ * Separadas, uma poderia gravar e a outra nao — e sobraria uma pessoa na sua
+ * lista de amigos com quem voce nao consegue falar, o que contradiz a propria
+ * tela ("seus amigos sempre conseguem falar com voce"). Vale para pedido
+ * pendente tambem: bloquear alguem que te mandou pedido tem de sumir com o
+ * pedido.
+ *
+ * O bloqueio NAO volta a amizade ao desbloquear. Desfazer o bloqueio devolve a
+ * possibilidade de falar, nao a relacao que existia antes — refazer amizade e
+ * uma decisao das duas pessoas, nao um efeito colateral.
+ */
+export async function blockUserAction(
+  otherUserId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const session = await requireUser();
+    if (typeof otherUserId !== "string" || otherUserId.length === 0) {
+      return fail("Pessoa invalida.");
+    }
+    if (otherUserId === session.user.id) {
+      return fail("Voce nao pode bloquear a si mesmo.");
+    }
+
+    const alvo = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { id: true },
+    });
+    if (!alvo) return fail("Pessoa nao encontrada.");
+
+    await prisma.$transaction(async (tx) => {
+      /**
+       * `createMany` com `skipDuplicates` em vez de `create`: bloquear duas
+       * vezes e um clique repetido, nao um erro a mostrar na tela.
+       */
+      await tx.block.createMany({
+        data: [{ blockerId: session.user.id, blockedId: otherUserId }],
+        skipDuplicates: true,
+      });
+
+      await tx.friendship.deleteMany({
+        where: {
+          OR: [
+            { requesterId: session.user.id, addresseeId: otherUserId },
+            { requesterId: otherUserId, addresseeId: session.user.id },
+          ],
+        },
+      });
+    });
+
+    await depoisDeMudar([session.user.id, otherUserId]);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Desbloqueia.
+ *
+ * So apaga o bloqueio DESTE sentido: se a outra pessoa tambem bloqueou voce,
+ * o bloqueio dela continua, e voces seguem sem se falar. Apagar o dela seria
+ * desfazer uma decisao que nao e sua.
+ */
+export async function unblockUserAction(
+  otherUserId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const session = await requireUser();
+    if (typeof otherUserId !== "string" || otherUserId.length === 0) {
+      return fail("Pessoa invalida.");
+    }
+
+    await prisma.block.deleteMany({
+      where: { blockerId: session.user.id, blockedId: otherUserId },
+    });
+
+    await depoisDeMudar([session.user.id, otherUserId]);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}

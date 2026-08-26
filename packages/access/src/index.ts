@@ -5,3 +5,4 @@ export * from "./member";
 export * from "./channels";
 export * from "./friends";
 export * from "./dm";
+export * from "./block";
