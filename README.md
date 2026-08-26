@@ -1668,9 +1668,14 @@ posicao 9 em vez de 6. O rAF corre antes de o React comitar, e o commit do
 campo controlado empurra o cursor para o fim depois; um efeito roda DEPOIS do
 commit.
 
-O seletor FECHA a cada escolha, ao contrario do Discord. Aqui ele cobre o campo
-inteiro: ficar aberto esconderia o que a pessoa acabou de escrever, e ela nao
-veria o resultado do proprio clique.
+O seletor FICA ABERTO entre escolhas, como no Discord: escolher varios seguidos
+e o uso comum, e reabrir a cada um seria um clique a mais por emoji. Sai
+clicando fora ou com Esc.
+
+Isso so e aceitavel porque ele abre ACIMA do campo e nao o cobre — medido: o
+seletor termina 10px antes de onde o campo comeca. Se cobrisse, ficar aberto
+esconderia o que a pessoa acabou de escrever, e ela nao veria o resultado do
+proprio clique.
 
 ### Limitacoes
 

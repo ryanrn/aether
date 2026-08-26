@@ -218,16 +218,16 @@ export function MessageComposer({
       {seletor ? (
         <EmojiPicker
           anchor={seletor}
-          onEscolher={(emoji) => {
-            inserirEmoji(emoji);
-            /**
-             * FECHA a cada escolha, ao contrario do Discord, que deixa aberto
-             * para escolher varios. Aqui o seletor cobre o campo inteiro: ficar
-             * aberto esconderia o que a pessoa acabou de escrever, e ela nao
-             * veria o resultado do proprio clique.
-             */
-            setSeletor(null);
-          }}
+          /**
+           * NAO FECHA a cada escolha — escolher varios seguidos e o uso comum,
+           * e reabrir a cada um seria um clique a mais por emoji.
+           *
+           * Isso so funciona porque o seletor abre ACIMA do campo e nao o
+           * cobre: se cobrisse, ficar aberto esconderia o que a pessoa acabou
+           * de escrever, e ela nao veria o resultado do proprio clique. Sai
+           * clicando fora ou com Esc.
+           */
+          onEscolher={inserirEmoji}
           onClose={() => setSeletor(null)}
         />
       ) : null}
