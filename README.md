@@ -1654,6 +1654,24 @@ esta na 19. Instalar exigiria `--legacy-peer-deps`, que passa hoje e quebra num
 `npm ci` futuro. O wrapper so monta o componente num `ref` — dez linhas de
 `useEffect`.
 
+### Emoji no que voce esta digitando
+
+O mesmo seletor tambem abre pelo botao de carinha no campo de mensagem, e
+insere o emoji NO CURSOR — nao no fim. Quem edita no meio da frase espera o
+emoji ali; jogar no fim obrigaria a recortar e colar. Com texto selecionado,
+substitui a selecao, como qualquer editor.
+
+O cursor volta para depois do emoji e o foco volta para o campo, num EFEITO e
+nao logo apos gravar o texto. A primeira versao usava `requestAnimationFrame` e
+o cursor ia parar no fim — medido: inserir em "bom |dia" deixava o cursor na
+posicao 9 em vez de 6. O rAF corre antes de o React comitar, e o commit do
+campo controlado empurra o cursor para o fim depois; um efeito roda DEPOIS do
+commit.
+
+O seletor FECHA a cada escolha, ao contrario do Discord. Aqui ele cobre o campo
+inteiro: ficar aberto esconderia o que a pessoa acabou de escrever, e ela nao
+veria o resultado do proprio clique.
+
 ### Limitacoes
 
 - **Nao da para ver QUEM reagiu.** A lista de nomes nao viaja: numa mensagem

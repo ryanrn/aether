@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { SendHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { SendHorizontal, Smile } from "lucide-react";
 import type { PublicUser } from "@aether/shared";
 import {
   useConnectionStatus,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { cn } from "@/lib/utils";
+import { EmojiPicker } from "@/components/chat/emoji-picker";
 
 /**
  * Campo de envio.
@@ -41,6 +42,21 @@ export function MessageComposer({
   const failPending = useRealtimeStore((state) => state.failPending);
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
+  /** Onde o cursor deve ficar depois que o React aplicar o texto novo. */
+  const [cursorPendente, setCursorPendente] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (cursorPendente === null) return;
+    const campo = textareaRef.current;
+    if (campo) {
+      campo.focus();
+      campo.setSelectionRange(cursorPendente, cursorPendente);
+      campo.style.height = "auto";
+      campo.style.height = `${Math.min(campo.scrollHeight, 180)}px`;
+    }
+    setCursorPendente(null);
+  }, [cursorPendente]);
 
   const disabled = !canSend || !connected;
   const tooLong = value.length > MAX_LENGTH;
@@ -74,6 +90,41 @@ export function MessageComposer({
       // abas); aqui so tratamos a falha.
       if (!result.ok) failPending(channelId, nonce, result.error);
     });
+  }
+
+  /**
+   * Insere o emoji NO CURSOR, e nao no fim.
+   *
+   * Quem esta editando no meio da frase espera o emoji onde o cursor esta —
+   * jogar no fim obrigaria a recortar e colar. `selectionStart/End` tambem
+   * cobrem o caso de haver texto SELECIONADO: ali o emoji substitui a selecao,
+   * que e o que qualquer editor faz.
+   *
+   * O cursor volta para DEPOIS do emoji e o foco volta para o campo: o seletor
+   * fecha e a pessoa continua digitando sem precisar clicar de novo.
+   */
+  function inserirEmoji(emoji: string) {
+    const campo = textareaRef.current;
+    if (!campo) {
+      setValue((atual) => atual + emoji);
+      return;
+    }
+    const inicio = campo.selectionStart ?? campo.value.length;
+    const fim = campo.selectionEnd ?? inicio;
+    const novo = campo.value.slice(0, inicio) + emoji + campo.value.slice(fim);
+    setValue(novo);
+
+    /**
+     * O cursor e reposicionado num EFEITO, e nao aqui.
+     *
+     * Primeira versao usava `requestAnimationFrame`, e o cursor ia parar no
+     * FIM do texto — medido: inserir num "bom |dia" deixava o cursor na
+     * posicao 9 em vez de 6. O motivo e que o rAF corre antes de o React
+     * comitar o valor novo, e o proprio commit do campo controlado empurra o
+     * cursor para o fim depois. Um efeito roda DEPOIS do commit, entao a
+     * ultima palavra sobre o cursor e nossa.
+     */
+    setCursorPendente(inicio + emoji.length);
   }
 
   function resetHeight() {
@@ -132,6 +183,27 @@ export function MessageComposer({
           className="max-h-[180px] min-h-[22px] flex-1 resize-none bg-transparent text-[13px] leading-relaxed text-ink-200 outline-none placeholder:text-ink-600 disabled:cursor-not-allowed"
         />
 
+        {/*
+          Emoji ANTES do enviar: e a ordem em que se usa — escolhe o emoji,
+          depois manda. Invertido, o botao de enviar ficaria no meio do
+          caminho da mao.
+        */}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={(evento) => {
+            const r = evento.currentTarget.getBoundingClientRect();
+            // Acima do botao: o campo fica no rodape, e abrir para baixo
+            // jogaria o seletor para fora da janela.
+            setSeletor({ x: r.right - 352, y: r.top - 440 });
+          }}
+          aria-label="Inserir emoji"
+          title="Emoji"
+          className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Smile className="h-4 w-4" />
+        </button>
+
         <button
           type="button"
           onClick={send}
@@ -142,6 +214,23 @@ export function MessageComposer({
           <SendHorizontal className="h-4 w-4" />
         </button>
       </div>
+
+      {seletor ? (
+        <EmojiPicker
+          anchor={seletor}
+          onEscolher={(emoji) => {
+            inserirEmoji(emoji);
+            /**
+             * FECHA a cada escolha, ao contrario do Discord, que deixa aberto
+             * para escolher varios. Aqui o seletor cobre o campo inteiro: ficar
+             * aberto esconderia o que a pessoa acabou de escrever, e ela nao
+             * veria o resultado do proprio clique.
+             */
+            setSeletor(null);
+          }}
+          onClose={() => setSeletor(null)}
+        />
+      ) : null}
 
       {tooLong ? (
         <p className="mt-1.5 px-1 text-[11px] text-signal-dnd">
