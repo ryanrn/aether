@@ -6,6 +6,38 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 
 ---
 
+## v0.1.10 — 26 de agosto de 2026
+
+**Abrir junto com o Windows, e o aviso de atualizacao dentro do app.**
+
+> As versoes 0.1.6 a 0.1.9 nao foram registradas aqui. Elas trataram do som do
+> sistema no compartilhamento de tela, da barra de titulo propria e da camera.
+
+### Novidades
+
+- **Abrir o Aether junto com o Windows.** Em Configuracoes > Atividade, "Ao
+  ligar o computador". A janela abre normalmente, nao escondida.
+
+  Quem manda nisso e a inicializacao do Windows, e nao um arquivo do app: tirar
+  o Aether de la pelo Gerenciador de Tarefas tambem desmarca a caixa. E o que
+  a tela mostra e o que o sistema confirmou depois de gravar — se ele recusar,
+  a caixa nao finge que deu certo.
+
+- **Aviso de atualizacao dentro do app.** Quando uma versao nova termina de
+  baixar, aparece um botao verde na barra de titulo. Clicar reinicia o app na
+  versao nova.
+
+  Antes disso era uma caixa nativa do Windows, que abria por cima de tudo —
+  inclusive no meio de uma call. Ignorar o botao continua nao custando nada: a
+  atualizacao entra sozinha no proximo fechamento.
+
+### O que NAO precisa desta versao
+
+O numero da versao acompanha so a CASCA do app. Amigos, conversas diretas,
+bloqueio, o contador de nao lidas no icone do servidor e os avisos de exclusao
+redesenhados chegam pela web, sem instalar nada — quem esta na 0.1.9 ja tem
+tudo isso.
+
 ## v0.1.5 — 23 de agosto de 2026
 
 **Correcao: Fall Guys ficou sem icone depois da correcao anterior.**

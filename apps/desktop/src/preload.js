@@ -72,6 +72,21 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
       ipcRenderer.invoke("desktop:iniciar-com-windows-set", ligar),
   },
 
+  /**
+   * Atualizacao do app. `pendente()` existe porque a pagina pode carregar
+   * DEPOIS de a versao ter sido baixada — o evento acontece uma vez, e quem
+   * chega atrasado precisa de alguem a quem perguntar.
+   */
+  atualizacao: {
+    pendente: () => ipcRenderer.invoke("desktop:atualizacao-pendente"),
+    instalar: () => ipcRenderer.invoke("desktop:atualizacao-instalar"),
+    aoFicarPronta: (callback) => {
+      const handler = (_evento, versao) => callback(versao);
+      ipcRenderer.on("desktop:atualizacao-pronta", handler);
+      return () => ipcRenderer.removeListener("desktop:atualizacao-pronta", handler);
+    },
+  },
+
   gameDetection: {
     isEnabled: () => ipcRenderer.invoke("desktop:game-detection-get"),
     /** o jogo ja detectado, para quem acabou de carregar */

@@ -217,6 +217,9 @@ function instalarDeteccaoDeJogo() {
   if (lerDeteccaoLigada()) vigiaDeJogo.iniciar();
 }
 
+/** A janela viva. O atualizador precisa dela para avisar da versao pronta. */
+let janelaPrincipal = null;
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 1280,
@@ -271,6 +274,10 @@ function createWindow() {
 
   window.once("ready-to-show", () => window.show());
   void window.loadURL(APP_ORIGIN);
+
+  // Devolvida para o atualizador poder avisar a pagina quando a versao nova
+  // ficar pronta — o aviso agora e um botao dentro do app, nao caixa nativa.
+  janelaPrincipal = window;
 
   /**
    * Link para fora abre no navegador do sistema, e nunca dentro do app. Sem
@@ -375,7 +382,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
 
     // Depois da janela: a verificacao nao pode atrasar a abertura do app.
-    instalarAtualizador();
+    instalarAtualizador(janelaPrincipal);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

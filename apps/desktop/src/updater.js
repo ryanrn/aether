@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, dialog } = require("electron");
+const { app, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 /**
@@ -24,7 +24,25 @@ const ATRASO_MS = 8_000;
 /** E depois, de tempos em tempos, para quem deixa o app dias aberto. */
 const INTERVALO_MS = 6 * 60 * 60 * 1000;
 
-function instalarAtualizador() {
+/**
+ * A versao ja baixada e esperando reinicio, ou `null`.
+ *
+ * Guardada porque a PAGINA pode carregar depois do download: o evento
+ * `update-downloaded` acontece uma vez, e quem chegar atrasado precisa de
+ * alguem a quem perguntar. Sem isto, atualizar durante o boot faria o botao
+ * so aparecer na proxima vez que o app abrisse — que e justamente quando ele
+ * ja nao seria mais necessario.
+ */
+let versaoPronta = null;
+
+/** Avisa a pagina, se ela ja existir. */
+function avisarPagina(janela, versao) {
+  if (janela && !janela.isDestroyed()) {
+    janela.webContents.send("desktop:atualizacao-pronta", versao);
+  }
+}
+
+function instalarAtualizador(janela) {
   /**
    * Em desenvolvimento nao ha versao publicada com que comparar, e o
    * electron-updater reclama alto. Sair cedo mantem o log de dev legivel.
@@ -55,26 +73,39 @@ function instalarAtualizador() {
     console.log("[updater] ja esta na versao mais recente");
   });
 
-  autoUpdater.on("update-downloaded", async (info) => {
+  autoUpdater.on("update-downloaded", (info) => {
     console.log("[updater] baixada:", info?.version);
 
-    const { response } = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Reiniciar agora", "Depois"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Atualizacao pronta",
-      message: `A versao ${info?.version ?? "nova"} do AETHER esta pronta.`,
-      detail:
-        "Ela sera aplicada quando voce reiniciar o app. Se estiver numa call, " +
-        "pode deixar para depois — a atualizacao fica guardada e entra sozinha " +
-        "no proximo fechamento.",
-    });
+    /**
+     * O AVISO E DENTRO DO APP, e nao mais uma caixa nativa do Windows.
+     *
+     * Antes isto abria um `dialog.showMessageBox`: fonte do sistema, titulo
+     * do processo, botoes fora do desenho do app — e, pior, roubando o foco
+     * de quem podia estar no meio de uma call. Agora vira um botao verde na
+     * barra de titulo, que a pessoa clica quando quiser.
+     *
+     * `autoInstallOnAppQuit` continua ligado, entao ignorar o botao nao custa
+     * nada: a atualizacao entra sozinha no proximo fechamento.
+     */
+    versaoPronta = info?.version ?? "nova";
+    avisarPagina(janela, versaoPronta);
+  });
 
-    if (response === 0) {
+  /** A pagina perguntando ao carregar — ver o comentario de `versaoPronta`. */
+  ipcMain.handle("desktop:atualizacao-pendente", () => versaoPronta);
+
+  ipcMain.handle("desktop:atualizacao-instalar", () => {
+    if (!versaoPronta) return false;
+    /**
+     * `setImmediate` para o `invoke` conseguir responder antes de o app
+     * comecar a fechar: sem isso, a promessa do lado da pagina fica pendurada
+     * e o clique parece nao ter feito nada nos milissegundos ate a janela sumir.
+     */
+    setImmediate(() => {
       // `isSilent: false` mostra o instalador; `isForceRunAfter: true` reabre.
       autoUpdater.quitAndInstall(false, true);
-    }
+    });
+    return true;
   });
 
   function verificar() {

@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
-import { Users } from "lucide-react";
+import { Download, Users } from "lucide-react";
 import { useShellStore } from "@/lib/stores/shell-store";
 import { isDesktopApp } from "@/lib/voice/screen-share";
+import {
+  aoFicarPronta,
+  atualizacaoPendente,
+  instalarAtualizacao,
+} from "@/lib/desktop/update";
 import { cn, colorFromId, initials } from "@/lib/utils";
 
 /**
@@ -30,6 +35,22 @@ export function TitleBar() {
    */
   const [noDesktop, setNoDesktop] = useState(false);
   useEffect(() => setNoDesktop(isDesktopApp()), []);
+
+  /**
+   * Versao nova ja baixada e esperando reinicio.
+   *
+   * Duas fontes, e as duas sao necessarias: `atualizacaoPendente` cobre o
+   * download que terminou ANTES de a pagina existir (o caso mais provavel, no
+   * boot), e `aoFicarPronta` cobre o que termina com o app aberto — a
+   * verificacao roda de 6 em 6 horas.
+   */
+  const [versaoNova, setVersaoNova] = useState<string | null>(null);
+  const [instalando, setInstalando] = useState(false);
+
+  useEffect(() => {
+    void atualizacaoPendente().then(setVersaoNova);
+    return aoFicarPronta(setVersaoNova);
+  }, []);
 
   const pathname = usePathname();
   const params = useParams<{ serverId?: string }>();
@@ -108,6 +129,41 @@ export function TitleBar() {
           </>
         ) : null}
       </div>
+
+      {/*
+        Atualizacao pronta. So aparece quando ha uma — o resto do tempo esta
+        faixa nao tem nada aqui, e o contrapeso abaixo cuida do equilibrio.
+
+        Fica na BARRA DE TITULO e nao na de controles porque aquela so existe
+        dentro de um servidor: quem estivesse na tela de Amigos nunca veria o
+        aviso.
+
+        `app-no-drag` porque a faixa inteira arrasta a janela — sem isso, o
+        clique viraria um arrasto e o botao nao responderia.
+      */}
+      {versaoNova ? (
+        <button
+          type="button"
+          onClick={async () => {
+            setInstalando(true);
+            const ok = await instalarAtualizacao();
+            // Se o processo principal recusar, devolve o botao em vez de
+            // deixar "Reiniciando..." para sempre numa janela que nao fechou.
+            if (!ok) setInstalando(false);
+          }}
+          disabled={instalando}
+          title={`Instalar a versao ${versaoNova}`}
+          className={cn(
+            "app-no-drag mr-2 flex shrink-0 items-center gap-1.5 rounded-full",
+            "px-2.5 py-1 text-[11px] font-semibold text-white",
+            "transition-opacity duration-150 hover:opacity-90 disabled:opacity-60",
+          )}
+          style={{ backgroundColor: "#68af64" }}
+        >
+          <Download className="h-3 w-3" strokeWidth={2.25} />
+          {instalando ? "Reiniciando..." : "Atualizar"}
+        </button>
+      ) : null}
 
       {/*
         Contrapeso da largura da marca a esquerda. Sem ele o centro pende para
