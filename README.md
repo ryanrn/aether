@@ -1583,6 +1583,86 @@ proprio microfone ali nao quer dizer nada.
 Esconder e so economia de clique: o servidor revalida cada acao em
 `voice:moderate` e `voice:move`, como sempre.
 
+## Reacoes de emoji
+
+Passar o mouse numa mensagem revela o botao de reagir; clicar num emoji ja
+existente alterna a sua.
+
+### O modelo
+
+`@@unique([messageId, userId, emoji])` — uma reacao por pessoa, por emoji, por
+mensagem, garantido pelo BANCO. Sem ele, dois cliques rapidos ou dois aparelhos
+da mesma pessoa criariam linhas repetidas e a contagem passaria a mentir sem
+nada quebrar visivelmente.
+
+Ele tambem torna o ALTERNAR correto sob concorrencia: em vez de "conferir e
+decidir", o servidor tenta criar e le a colisao (`P2002`) como "ja existia,
+entao remova". Uma checagem antes perderia a corrida de dois cliques
+simultaneos.
+
+O emoji e guardado como TEXTO, nao como id de catalogo nosso. Catalogo
+envelhece — emoji novo entra no Unicode todo ano — e um id proprio obrigaria a
+manter uma tabela de-para para sempre.
+
+### A validacao que o campo exigia
+
+`emoji` chega do CLIENTE. Sem filtro, "reagir" com um paragrafo, com HTML ou
+com um caractere invisivel gravaria aquilo e mostraria na tela de todo mundo.
+
+`emojiSchema` valida por PROPRIEDADE Unicode (`\p{Extended_Pictographic}`), e
+nao por lista: lista recusaria os emojis novos ate alguem lembrar de
+atualiza-la. Recusa tambem emoji com texto colado ("😀 clique aqui"), que e a
+forma mais provavel de burlar. Coberto por `tests/unit/emoji.test.ts`, incluindo
+os casos dificeis — sequencia ZWJ (`👨‍👩‍👧‍👦`) e tom de pele precisam PASSAR.
+
+O teto de tamanho esta em dois lugares de proposito: no schema, para o caminho
+normal, e num `CHECK` no banco, para qualquer outro que apareca.
+
+### Autorizacao: ver e poder reagir
+
+A regra e a da MENSAGEM, pela mesma `autorizarConversa` que envio e historico
+usam — `VIEW_CHANNEL` basta. Deliberado: reagir e mais leve que escrever, e
+exigir `SEND_MESSAGES` faria de um canal de anuncios um lugar onde ninguem pode
+nem dizer "👍".
+
+### O evento vai a lista INTEIRA, e personalizada
+
+`reaction:update` manda todas as reacoes daquela mensagem, e nao o delta
+("fulano somou 👍"). Delta exige o estado anterior certo para aplicar em cima, e
+um evento perdido numa oscilacao de rede deixaria a contagem errada para
+sempre. A lista inteira e idempotente.
+
+E sai PERSONALIZADA por destinatario, porque `mine` depende de quem recebe —
+mandar a mesma carga para a sala acenderia o botao de todo mundo quando uma
+pessoa reagisse. Custa uma consulta por pessoa distinta; num canal com centenas
+seria melhor mandar sem `mine` e deixar o cliente cruzar com o proprio id.
+
+### O `emoji-mart` e a CSP
+
+O `emoji-mart` busca o catalogo em `cdn.jsdelivr.net` quando nao recebe `data`,
+e a CSP deste app so libera `'self'`, o gateway e o LiveKit. Com o padrao, o
+seletor abriria VAZIO em producao e funcionaria no `npm run dev` — o pior jeito
+de quebrar.
+
+Os dados vao locais (423 KB, `import()` sob demanda: quem nunca abre o seletor
+nao paga nada). **E o `i18n` tambem** — isso so apareceu na verificacao:
+passar `data` sozinho nao basta, porque `locale: "pt"` faz ele buscar
+`i18n/pt.json` no CDN do mesmo jeito. A CSP bloqueou, e ainda bem.
+
+Nao usa `@emoji-mart/react`: o wrapper declara peer de React ate a 18 e este app
+esta na 19. Instalar exigiria `--legacy-peer-deps`, que passa hoje e quebra num
+`npm ci` futuro. O wrapper so monta o componente num `ref` — dez linhas de
+`useEffect`.
+
+### Limitacoes
+
+- **Nao da para ver QUEM reagiu.** A lista de nomes nao viaja: numa mensagem
+  com trinta reacoes seriam trinta usuarios completos por emoji a cada
+  carregamento de historico, para desenhar um numero.
+- **Sem emoji personalizado do servidor.** So os do Unicode.
+- **Sem reacao em conversa direta pela tela** — o caminho do servidor funciona
+  e o gateway trata os dois, mas a DM ainda nao foi verificada de ponta a ponta.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

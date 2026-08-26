@@ -9,6 +9,7 @@ import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { registerDmHandlers } from "./handlers/dm";
+import { registerReactionHandlers } from "./handlers/reactions";
 import { joinAllServerRooms } from "./rooms";
 import {
   attachSocket,
@@ -185,6 +186,7 @@ io.on("connection", (socket) => {
   registerMessageHandlers(io, socket);
   registerVoiceHandlers(io, socket);
   registerDmHandlers(socket);
+  registerReactionHandlers(io, socket);
 
   socket.on("disconnect", (reason) => {
     if (!env.isProduction) {

@@ -52,7 +52,7 @@ export default async function DmPage({
     status: session.user.status,
   };
 
-  const history = await listRecentDmMessages(dmId);
+  const history = await listRecentDmMessages(dmId, session.user.id);
 
   return (
     <>

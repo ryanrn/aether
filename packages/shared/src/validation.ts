@@ -273,3 +273,37 @@ export function banExpiryFrom(duration: BanDurationId): Date | null {
   if (!found || found.hours === null) return null;
   return new Date(Date.now() + found.hours * 60 * 60 * 1000);
 }
+
+/**
+ * Um emoji, e nao um texto qualquer.
+ *
+ * O valor chega do CLIENTE — o seletor manda o caractere escolhido — e sem
+ * checagem o campo viraria deposito de texto: "reagir" com um paragrafo
+ * inteiro, ou com HTML, e ele apareceria na tela de todo mundo junto da
+ * mensagem.
+ *
+ * A checagem e por PROPRIEDADE Unicode (`\p{Extended_Pictographic}`), e nao
+ * por lista de emojis conhecidos. Lista envelhece: emoji novo entra no padrao
+ * todo ano, e uma lista nossa recusaria os novos ate alguem lembrar de
+ * atualiza-la. A propriedade acompanha o Unicode sozinha.
+ *
+ * O teto de 32 caracteres existe porque emoji composto e longo de verdade —
+ * familia com tom de pele passa de 20 unidades, juntando ZWJ e seletores de
+ * variacao. Abaixo disso cortaria emoji legitimo; muito acima, deixaria passar
+ * uma sequencia inventada com dezenas de junções.
+ *
+ * O mesmo teto esta no CHECK do banco, de proposito: este validador cobre o
+ * caminho normal de escrita, e o CHECK cobre qualquer outro que apareca.
+ */
+export const emojiSchema = z
+  .string()
+  .min(1, "Escolha um emoji")
+  .max(32, "Emoji invalido")
+  .refine(
+    (valor) =>
+      /\p{Extended_Pictographic}/u.test(valor) &&
+      // So pictograma, junção e seletor — nada de letra, numero ou pontuacao
+      // no meio, que e como se disfarçaria texto de emoji.
+      !/[\p{L}\p{N}\p{P}\p{Z}]/u.test(valor),
+    "Isso nao e um emoji",
+  );

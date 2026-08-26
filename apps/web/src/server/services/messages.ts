@@ -18,8 +18,8 @@ import {
  * Sem checagem de permissao aqui de proposito: quem chama ja passou pelos
  * guards da pagina. Mesma convencao dos outros services.
  */
-export async function listRecentMessages(channelId: string) {
-  return historicoInicial({ channelId, deletedAt: null });
+export async function listRecentMessages(channelId: string, selfUserId: string) {
+  return historicoInicial({ channelId, deletedAt: null }, selfUserId);
 }
 
 /**
@@ -30,12 +30,14 @@ export async function listRecentMessages(channelId: string) {
  * devolveria zero linhas, e historico vazio parece "conversa nova" em vez de
  * bug.
  */
-export async function listRecentDmMessages(dmChannelId: string) {
-  return historicoInicial({ dmChannelId, deletedAt: null });
+export async function listRecentDmMessages(dmChannelId: string, selfUserId: string) {
+  return historicoInicial({ dmChannelId, deletedAt: null }, selfUserId);
 }
 
 async function historicoInicial(
   where: { channelId?: string; dmChannelId?: string; deletedAt: null },
+  /** Quem esta olhando, para marcar quais reacoes sao suas. */
+  selfUserId: string,
 ): Promise<{
   messages: PublicMessage[];
   hasMore: boolean;
@@ -46,6 +48,7 @@ async function historicoInicial(
       id: true,
       channelId: true,
       dmChannelId: true,
+      reactions: { select: { emoji: true, userId: true } },
       content: true,
       createdAt: true,
       editedAt: true,
@@ -69,7 +72,7 @@ async function historicoInicial(
   const page = hasMore ? rows.slice(0, MESSAGE_PAGE_SIZE) : rows;
 
   return {
-    messages: page.map(toPublicMessage).reverse(),
+    messages: page.map((row) => toPublicMessage(row, selfUserId)).reverse(),
     hasMore,
   };
 }

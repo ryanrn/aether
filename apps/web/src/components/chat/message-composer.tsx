@@ -60,6 +60,8 @@ export function MessageComposer({
       author: selfUser,
       createdAt: new Date().toISOString(),
       editedAt: null,
+      // Mensagem que ainda nao existe no banco nao tem reacao.
+      reactions: [],
       pending: true,
       nonce,
     });

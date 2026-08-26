@@ -1,5 +1,6 @@
 import type {
   PublicMessage,
+  PublicReaction,
   PublicUser,
   UserStatus,
   VoiceParticipant,
@@ -143,6 +144,8 @@ export type DmOpenAck =
   | { ok: true; dm: DmResumo }
   | { ok: false; error: string };
 
+export type ReactionAck = { ok: true } | { ok: false; error: string };
+
 export type DmListAck =
   | { ok: true; conversas: DmResumo[] }
   | { ok: false; error: string };
@@ -221,6 +224,22 @@ export interface ServerToClientEvents {
    * O `nonce` volta junto para quem enviou reconciliar a mensagem otimista
    * que ja esta na tela, em vez de duplica-la.
    */
+  /**
+   * As reacoes de UMA mensagem mudaram.
+   *
+   * Vai a lista inteira daquela mensagem, e nao o delta ("fulano somou 👍").
+   * Delta obriga o cliente a ter o estado anterior certo para aplicar em cima,
+   * e qualquer evento perdido numa oscilacao de rede deixaria a contagem
+   * errada para sempre. A lista inteira e idempotente: chegar duas vezes, ou
+   * fora de ordem, converge no mesmo lugar.
+   *
+   * `mine` E POR PESSOA, entao o evento sai personalizado para cada
+   * destinatario — ver `emitirReacoes` no gateway.
+   */
+  "reaction:update": (payload: {
+    messageId: string;
+    reactions: PublicReaction[];
+  }) => void;
   "message:new": (payload: {
     message: PublicMessage;
     nonce: string | null;
@@ -349,6 +368,18 @@ export interface ClientToServerEvents {
   ) => void;
   /** As conversas diretas de quem pediu. */
   "dm:list": (ack: (result: DmListAck) => void) => void;
+  /**
+   * Liga ou desliga a sua reacao numa mensagem.
+   *
+   * ALTERNA, e nao "adiciona" e "remove" separados: o cliente nao precisa
+   * saber se ja reagiu para agir, e uma tela desatualizada mandando "adicionar"
+   * duas vezes nao cria linha repetida — o indice unico do banco resolve, e o
+   * servidor le a colisao como "ja existia, entao remova".
+   */
+  "reaction:toggle": (
+    payload: { messageId: string; emoji: string },
+    ack: (result: ReactionAck) => void,
+  ) => void;
   "voice:join": (
     payload: { channelId: string },
     ack: (result: VoiceJoinAck) => void,

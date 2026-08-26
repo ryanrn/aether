@@ -139,6 +139,22 @@ export type ActionResult<T = undefined> =
  * entre servidor e cliente nem ao JSON do socket, e converter em dois lugares
  * diferentes e como os fusos comecam a divergir.
  */
+/**
+ * Uma reacao AGRUPADA, do jeito que a tela desenha: o emoji, quantos e se voce
+ * e um deles.
+ *
+ * Nao vai a lista de quem reagiu. Numa mensagem com trinta reacoes isso seriam
+ * trinta usuarios completos por emoji viajando a cada carregamento de
+ * historico, para desenhar um numero. Quem quiser ver os nomes um dia pede sob
+ * demanda.
+ */
+export interface PublicReaction {
+  emoji: string;
+  count: number;
+  /** Voce reagiu com este. E o que pinta o botao de aceso. */
+  mine: boolean;
+}
+
 export interface PublicMessage {
   id: string;
   /**
@@ -157,6 +173,7 @@ export interface PublicMessage {
   author: PublicUser;
   createdAt: string;
   editedAt: string | null;
+  reactions: PublicReaction[];
 }
 
 /**
@@ -172,6 +189,8 @@ export interface MessageRow {
   content: string;
   createdAt: Date;
   editedAt: Date | null;
+  /** Cru do banco: uma linha por pessoa por emoji. O agrupamento e aqui. */
+  reactions?: Array<{ emoji: string; userId: string }>;
   author: {
     id: string;
     username: string;
@@ -181,7 +200,44 @@ export interface MessageRow {
   };
 }
 
-export function toPublicMessage(row: MessageRow): PublicMessage {
+/**
+ * Agrupa as linhas cruas em `{ emoji, count, mine }`.
+ *
+ * A ORDEM E ESTAVEL — primeiro emoji a aparecer fica na frente — porque a
+ * alternativa (ordenar por contagem) faria os botoes SALTAREM de lugar quando
+ * alguem reage: a pessoa mira num, e ele troca de posicao no clique.
+ */
+function agruparReacoes(
+  linhas: Array<{ emoji: string; userId: string }>,
+  selfUserId: string | null,
+): PublicReaction[] {
+  const porEmoji = new Map<string, PublicReaction>();
+  for (const linha of linhas) {
+    const atual = porEmoji.get(linha.emoji);
+    if (atual) {
+      atual.count += 1;
+      if (linha.userId === selfUserId) atual.mine = true;
+    } else {
+      porEmoji.set(linha.emoji, {
+        emoji: linha.emoji,
+        count: 1,
+        mine: linha.userId === selfUserId,
+      });
+    }
+  }
+  return [...porEmoji.values()];
+}
+
+/**
+ * `selfUserId` decide o `mine` de cada reacao. Opcional porque nem todo
+ * chamador tem quem esta olhando — sem ele, nada fica aceso, que e o padrao
+ * seguro: pintar de aceso o que nao e seu seria mentira; deixar apagado o que
+ * e seu so custa um clique a mais.
+ */
+export function toPublicMessage(
+  row: MessageRow,
+  selfUserId: string | null = null,
+): PublicMessage {
   /**
    * Exatamente um dos dois esta preenchido — garantido pelo CHECK
    * `Message_um_pai_so` no banco. Se algum dia os dois vierem nulos, e melhor
@@ -199,6 +255,7 @@ export function toPublicMessage(row: MessageRow): PublicMessage {
     content: row.content,
     createdAt: row.createdAt.toISOString(),
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
+    reactions: agruparReacoes(row.reactions ?? [], selfUserId),
     author: {
       id: row.author.id,
       username: row.author.username,

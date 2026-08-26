@@ -7,6 +7,7 @@ import type {
   MediaGrant,
   PresenceEntry,
   PublicMessage,
+  PublicReaction,
   UserStatus,
   VoiceParticipant,
 } from "@aether/shared";
@@ -200,6 +201,7 @@ interface RealtimeState {
   setRoomControls: (controls: RealtimeState["roomControls"]) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
+  aplicarReacoes: (messageId: string, reactions: PublicReaction[]) => void;
   receiveMessage: (
     message: PublicMessage,
     nonce: string | null,
@@ -491,6 +493,36 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       if (!activeChannelId) return { activeChannelId };
       const { [activeChannelId]: _read, ...rest } = state.unread;
       return { activeChannelId, unread: rest };
+    }),
+
+  /**
+   * Troca as reacoes de UMA mensagem, onde quer que ela esteja.
+   *
+   * Percorre as conversas em vez de receber a conversa junto: o evento so traz
+   * `messageId`, e o cliente pode ter varias abertas em memoria. Sao dezenas
+   * de mensagens por conversa e um punhado de conversas — mais barato que
+   * carregar o cliente de saber a origem de cada id.
+   */
+  aplicarReacoes: (messageId, reactions) =>
+    set((state) => {
+      const proximas: Record<string, ChatMessage[]> = {};
+      let mudou = false;
+      for (const [conversa, lista] of Object.entries(state.messages)) {
+        const indice = lista.findIndex((m) => m.id === messageId);
+        if (indice === -1) {
+          proximas[conversa] = lista;
+          continue;
+        }
+        mudou = true;
+        //  em vez de indexar o array copiado: o TypeScript nao sabe que
+        // o indice existe, e um  esconderia justamente o caso que importa.
+        proximas[conversa] = lista.map((m) =>
+          m.id === messageId ? { ...m, reactions } : m,
+        );
+      }
+      // Mensagem que nao esta carregada aqui: nada a fazer, e devolver o
+      // mesmo objeto evita re-render de tudo a toa.
+      return mudou ? { messages: proximas } : {};
     }),
 
   receiveMessage: (message, nonce, serverId) =>

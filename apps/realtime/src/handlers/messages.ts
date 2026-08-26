@@ -37,6 +37,7 @@ const MESSAGE_SELECT = {
   id: true,
   channelId: true,
   dmChannelId: true,
+  reactions: { select: { emoji: true, userId: true } },
   content: true,
   createdAt: true,
   editedAt: true,
@@ -74,7 +75,7 @@ type Conversa =
  * nenhuma. `permission` so vale para canal de servidor: numa conversa direta
  * nao existe bit a conferir, a amizade E a permissao.
  */
-async function autorizarConversa(
+export async function autorizarConversa(
   userId: string,
   conversationId: string,
   permission: PermissionKey,
@@ -184,7 +185,7 @@ export function registerMessageHandlers(
             : { dmChannelId: conversa.dmId, authorId: userId, content: parsed.data },
         select: MESSAGE_SELECT,
       });
-      const message: PublicMessage = toPublicMessage(created);
+      const message: PublicMessage = toPublicMessage(created, userId);
 
       /**
        * Para onde a mensagem vai depende do tipo, e as duas entregas incluem
@@ -272,7 +273,7 @@ export function registerMessageHandlers(
 
       const hasMore = rows.length > MESSAGE_PAGE_SIZE;
       const page = hasMore ? rows.slice(0, MESSAGE_PAGE_SIZE) : rows;
-      const messages = page.map(toPublicMessage);
+      const messages = page.map((row) => toPublicMessage(row, userId));
 
       respond({
         ok: true,

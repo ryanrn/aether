@@ -1,7 +1,10 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { useState } from "react";
+import { AlertCircle, SmilePlus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { EmojiPicker } from "@/components/chat/emoji-picker";
+import { useSocket } from "@/components/realtime/realtime-provider";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
@@ -24,6 +27,38 @@ export function MessageItem({
   compact: boolean;
 }) {
   const time = new Date(message.createdAt);
+  const socket = useSocket();
+  const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
+
+  /**
+   * Alterna a reacao. O servidor decide se e para ligar ou desligar — o
+   * cliente so diz "este emoji, nesta mensagem".
+   *
+   * Sem estado otimista de proposito: a resposta chega pelo `reaction:update`,
+   * que traz a lista INTEIRA e ja e a verdade. Pintar antes e corrigir depois
+   * faria o botao piscar quando duas pessoas reagem quase junto.
+   */
+  const [erroReacao, setErroReacao] = useState<string | null>(null);
+
+  function alternar(emoji: string) {
+    setErroReacao(null);
+    socket?.emit(
+      "reaction:toggle",
+      { messageId: message.id, emoji },
+      (resultado) => {
+        /**
+         * A RECUSA PRECISA APARECER. A primeira versao passava `() => {}` e
+         * engolia o `ack` — limite de reacoes atingido, permissao perdida no
+         * meio, mensagem apagada: tudo virava "cliquei e nao aconteceu nada",
+         * que a pessoa le como travamento.
+         */
+        if (!resultado.ok) setErroReacao(resultado.error);
+      },
+    );
+  }
+
+  // Mensagem que ainda nao existe no banco nao pode receber reacao.
+  const podeReagir = socket !== null && !message.pending && !message.failed;
 
   return (
     <li
@@ -78,6 +113,78 @@ export function MessageItem({
           <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-300">
             {message.content}
           </p>
+
+          {/*
+            REACOES. So ocupam espaco quando existem — uma faixa vazia embaixo
+            de cada mensagem empurraria a conversa inteira para baixo a troco
+            de nada.
+          */}
+          {message.reactions.length > 0 || podeReagir ? (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {message.reactions.map((reacao) => (
+                <button
+                  key={reacao.emoji}
+                  type="button"
+                  disabled={!podeReagir}
+                  onClick={() => alternar(reacao.emoji)}
+                  title={reacao.mine ? "Tirar sua reacao" : "Reagir tambem"}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none",
+                    "transition-colors duration-150 disabled:cursor-not-allowed",
+                    reacao.mine
+                      ? "border-accent-600/60 bg-accent-600/15 text-accent-300"
+                      : "border-base-700 bg-base-800/60 text-ink-300 hover:border-base-600",
+                  )}
+                >
+                  <span className="text-[13px]">{reacao.emoji}</span>
+                  <span className="font-mono tabular-nums">{reacao.count}</span>
+                </button>
+              ))}
+
+              {/*
+                O botao de ABRIR o seletor so no hover: sem isso, cada mensagem
+                da conversa carregaria um icone permanente, e a coluna vira uma
+                fileira de botoes em vez de um texto para ler.
+              */}
+              {podeReagir ? (
+                <button
+                  type="button"
+                  onClick={(evento) => {
+                    const r = evento.currentTarget.getBoundingClientRect();
+                    setSeletor({ x: r.left, y: r.bottom + 6 });
+                  }}
+                  title="Reagir"
+                  aria-label="Reagir a esta mensagem"
+                  className={cn(
+                    "flex items-center rounded-full border border-base-700 bg-base-800/60 p-1 text-ink-500",
+                    "transition-opacity duration-150 hover:text-ink-200",
+                    // Fica visivel quando ja ha reacoes: ali o botao e parte
+                    // da fileira, e sumir deixaria um buraco.
+                    message.reactions.length > 0
+                      ? "opacity-100"
+                      : "opacity-0 group-hover/message:opacity-100 focus:opacity-100",
+                  )}
+                >
+                  <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {seletor ? (
+            <EmojiPicker
+              anchor={seletor}
+              onEscolher={(emoji) => {
+                alternar(emoji);
+                setSeletor(null);
+              }}
+              onClose={() => setSeletor(null)}
+            />
+          ) : null}
+
+          {erroReacao ? (
+            <p className="mt-1 text-[11px] text-signal-dnd">{erroReacao}</p>
+          ) : null}
 
           {message.failed ? (
             <p className="mt-1 flex items-center gap-1.5 text-[11px] text-signal-dnd">

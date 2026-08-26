@@ -192,6 +192,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         useRealtimeStore.getState().setMedia(media);
       });
 
+      socketInstance.on("reaction:update", ({ messageId, reactions }) => {
+        useRealtimeStore.getState().aplicarReacoes(messageId, reactions);
+      });
+
       socketInstance.on("message:new", ({ message, nonce, serverId }) => {
         useRealtimeStore
           .getState()

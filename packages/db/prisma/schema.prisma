@@ -70,6 +70,7 @@ model User {
   dmsComoB           DmChannel[]     @relation("DmUserB")
   bloqueiosFeitos    Block[]         @relation("Blocker")
   bloqueiosRecebidos Block[]         @relation("Blocked")
+  reacoes            Reaction[]
   memberships        ServerMember[]
   ownedServers       Server[]        @relation("ServerOwner")
   messages           Message[]
@@ -249,9 +250,39 @@ model Message {
   deletedAt   DateTime?
   createdAt   DateTime   @default(now())
 
+  reactions Reaction[]
+
   @@index([channelId, createdAt])
   @@index([dmChannelId, createdAt])
   @@index([authorId])
+}
+
+/// Reacao de uma pessoa a uma mensagem.
+///
+/// O `@@unique` e o coracao do modelo: ele faz "uma reacao por pessoa, por
+/// emoji, por mensagem" ser garantia do BANCO. Sem ele, clicar duas vezes
+/// rapido — ou dois aparelhos da mesma pessoa ao mesmo tempo — criaria linhas
+/// repetidas, e a contagem passaria a mentir sem nada quebrar visivelmente.
+///
+/// Ele tambem torna o ALTERNAR barato: em vez de "contar, decidir, gravar",
+/// da para tentar criar e tratar a colisao como "ja existe, entao remova".
+///
+/// O emoji e guardado como TEXTO (o proprio caractere), e nao como id de um
+/// catalogo. Catalogo envelhece: emoji novo entra no Unicode todo ano, e um id
+/// nosso obrigaria a manter uma tabela de-para para sempre. O caractere ja e o
+/// identificador universal — quem valida o que entra e `emojiSchema`.
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  /// Carregar as reacoes de uma pagina de mensagens percorre por messageId.
+  @@index([messageId])
 }
 
 /// Conversa direta entre duas pessoas.

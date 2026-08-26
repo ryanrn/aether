@@ -69,7 +69,7 @@ export default async function ChannelPage({
 
   const history =
     channel.type === "TEXT"
-      ? await listRecentMessages(channel.id)
+      ? await listRecentMessages(channel.id, selfUser.id)
       : { messages: [], hasMore: false };
 
   return (
