@@ -50,6 +50,8 @@ model User {
   passwordResets     PasswordReset[]
   friendsAsRequester Friendship[]    @relation("FriendshipRequester")
   friendsAsAddressee Friendship[]    @relation("FriendshipAddressee")
+  dmsComoA           DmChannel[]     @relation("DmUserA")
+  dmsComoB           DmChannel[]     @relation("DmUserB")
   memberships        ServerMember[]
   ownedServers       Server[]        @relation("ServerOwner")
   messages           Message[]
@@ -204,22 +206,61 @@ model ChannelOverwrite {
 }
 
 /// Mensagens de canal de texto (fase 3).
+/// Uma mensagem pertence a UM canal de servidor OU a UMA conversa direta —
+/// nunca aos dois, nunca a nenhum. Quem garante isso e um CHECK no banco
+/// (ver a migracao 20260826..._dm), porque convencao em codigo nao sobrevive
+/// ao primeiro caminho novo de escrita.
+///
+/// Por que uma tabela so, e nao uma `DirectMessage` separada: hoje a logica de
+/// mensagem e fina (um create, duas leituras), mas editar, apagar e responder
+/// vao chegar. Com duas tabelas eles chegam duas vezes, e duas copias da mesma
+/// regra divergem.
 model Message {
-  id        String    @id @default(cuid())
-  channelId String
-  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  content   String    @db.Text
-  replyToId String?
-  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   Message[] @relation("MessageReply")
-  editedAt  DateTime?
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
+  id          String     @id @default(cuid())
+  channelId   String?
+  channel     Channel?   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  dmChannelId String?
+  dmChannel   DmChannel? @relation(fields: [dmChannelId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content     String     @db.Text
+  replyToId   String?
+  replyTo     Message?   @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     Message[]  @relation("MessageReply")
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime   @default(now())
 
   @@index([channelId, createdAt])
+  @@index([dmChannelId, createdAt])
   @@index([authorId])
+}
+
+/// Conversa direta entre duas pessoas.
+///
+/// O PAR E ORDENADO: `userAId` guarda sempre o menor id e `userBId` o maior.
+/// Com isso o unique de (userAId, userBId) impede de verdade que exista mais
+/// de uma conversa para o mesmo par — inclusive quando os dois lados clicam ao
+/// mesmo tempo, que e onde uma checagem em codigo perde.
+///
+/// Difere da `Friendship`, que indexa por DIRECAO, e a diferenca e proposital:
+/// la o "quem pediu" precisa sobreviver, porque e ele que decide de que lado o
+/// botao de aceitar aparece. Numa conversa nao ha esse lado — trocar A por B
+/// nao muda nada — entao da para ordenar e deixar o banco garantir.
+model DmChannel {
+  id        String   @id @default(cuid())
+  userAId   String
+  userA     User     @relation("DmUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId   String
+  userB     User     @relation("DmUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  messages Message[]
+
+  @@unique([userAId, userBId])
+  /// A busca "minhas conversas" olha as duas colunas; sem este, metade sairia
+  /// de varredura sequencial. Mesma razao dos dois indices em Friendship.
+  @@index([userBId])
 }
 
 model Invite {

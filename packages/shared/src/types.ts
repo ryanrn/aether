@@ -141,7 +141,18 @@ export type ActionResult<T = undefined> =
  */
 export interface PublicMessage {
   id: string;
-  channelId: string;
+  /**
+   * Onde a mensagem vive: um canal de servidor OU uma conversa direta.
+   *
+   * NAO se chama `channelId` de proposito. Ate as conversas diretas
+   * existirem, esse era o nome, e o cliente sempre usou o campo como CHAVE
+   * (`messages[id]`, `unread[id]`, comparacao com a conversa aberta) — nunca
+   * para buscar um `Channel`. Com dois tipos de pai possiveis, manter o nome
+   * antigo deixaria pronta a armadilha de alguem escrever
+   * `channel.findUnique({ id: message.channelId })` e receber `null` calado em
+   * toda conversa direta.
+   */
+  conversationId: string;
   content: string;
   author: PublicUser;
   createdAt: string;
@@ -154,7 +165,10 @@ export interface PublicMessage {
  */
 export interface MessageRow {
   id: string;
-  channelId: string;
+  /** Preenchido quando a mensagem e de canal de servidor. */
+  channelId: string | null;
+  /** Preenchido quando a mensagem e de conversa direta. */
+  dmChannelId: string | null;
   content: string;
   createdAt: Date;
   editedAt: Date | null;
@@ -168,9 +182,20 @@ export interface MessageRow {
 }
 
 export function toPublicMessage(row: MessageRow): PublicMessage {
+  /**
+   * Exatamente um dos dois esta preenchido — garantido pelo CHECK
+   * `Message_um_pai_so` no banco. Se algum dia os dois vierem nulos, e melhor
+   * quebrar alto aqui do que devolver `undefined` e virar chave invalida no
+   * store do cliente, onde o sintoma seria "a mensagem sumiu".
+   */
+  const conversationId = row.channelId ?? row.dmChannelId;
+  if (conversationId === null) {
+    throw new Error(`Mensagem ${row.id} sem canal nem conversa`);
+  }
+
   return {
     id: row.id,
-    channelId: row.channelId,
+    conversationId,
     content: row.content,
     createdAt: row.createdAt.toISOString(),
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,

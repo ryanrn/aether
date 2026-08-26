@@ -68,7 +68,7 @@ export function MessageList({
 
       socket.emit(
         "message:history",
-        { channelId, before: oldest.id },
+        { conversationId: channelId, before: oldest.id },
         (result) => {
           if (!result.ok) {
             setHistoryLoading(channelId, false);

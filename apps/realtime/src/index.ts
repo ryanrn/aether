@@ -8,6 +8,7 @@ import { authenticateHandshake } from "./auth";
 import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
+import { registerDmHandlers } from "./handlers/dm";
 import {
   attachSocket,
   isConnected,
@@ -169,6 +170,7 @@ io.on("connection", (socket) => {
   registerPresenceHandlers(io, socket);
   registerMessageHandlers(io, socket);
   registerVoiceHandlers(io, socket);
+  registerDmHandlers(socket);
 
   socket.on("disconnect", (reason) => {
     if (!env.isProduction) {

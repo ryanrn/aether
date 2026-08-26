@@ -307,7 +307,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         if (!last) continue;
         socket?.emit(
           "message:history",
-          { channelId, after: last.id },
+          { conversationId: channelId, after: last.id },
           (result) => {
             if (!result.ok) return;
             useRealtimeStore

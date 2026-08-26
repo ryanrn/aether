@@ -55,7 +55,7 @@ export function MessageComposer({
 
     addPending({
       id: nonce,
-      channelId,
+      conversationId: channelId,
       content,
       author: selfUser,
       createdAt: new Date().toISOString(),
@@ -67,7 +67,7 @@ export function MessageComposer({
     setValue("");
     resetHeight();
 
-    socket.emit("message:send", { channelId, content, nonce }, (result) => {
+    socket.emit("message:send", { conversationId: channelId, content, nonce }, (result) => {
       // O sucesso chega pelo evento message:new (que tambem atende as outras
       // abas); aqui so tratamos a falha.
       if (!result.ok) failPending(channelId, nonce, result.error);

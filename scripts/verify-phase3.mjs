@@ -410,7 +410,7 @@ async function main() {
       (p) => p.message.content === "[verify] ola",
     );
     const sent = await sendMessage(ownerConn.socket, {
-      channelId: textChannel.id,
+      conversationId: textChannel.id,
       content: "[verify] ola",
       nonce: "n-1",
     });
@@ -439,28 +439,28 @@ async function main() {
     check("mensagem persiste no Postgres", persisted !== null);
 
     const empty = await sendMessage(ownerConn.socket, {
-      channelId: textChannel.id,
+      conversationId: textChannel.id,
       content: "   ",
       nonce: "n-2",
     });
     check("mensagem vazia e recusada", empty?.ok === false, JSON.stringify(empty));
 
     const huge = await sendMessage(ownerConn.socket, {
-      channelId: textChannel.id,
+      conversationId: textChannel.id,
       content: "x".repeat(5000),
       nonce: "n-3",
     });
     check("mensagem longa demais e recusada", huge?.ok === false);
 
     const toVoice = await sendMessage(ownerConn.socket, {
-      channelId: voiceChannel.id,
+      conversationId: voiceChannel.id,
       content: "[verify] em canal de voz",
       nonce: "n-4",
     });
     check("canal de voz nao aceita mensagem", toVoice?.ok === false);
 
     const ghost = await sendMessage(ownerConn.socket, {
-      channelId: "cxxxxxxxxxxxxxxxxxxxxxxxx",
+      conversationId: "cxxxxxxxxxxxxxxxxxxxxxxxx",
       content: "[verify] canal fantasma",
       nonce: "n-5",
     });
@@ -468,7 +468,7 @@ async function main() {
 
     if (secretChannelId) {
       const forbidden = await sendMessage(memberConn.socket, {
-        channelId: secretChannelId,
+        conversationId: secretChannelId,
         content: "[verify] canal privado",
         nonce: "n-6",
       });
@@ -480,7 +480,7 @@ async function main() {
     }
 
     const history = await requestHistory(ownerConn.socket, {
-      channelId: textChannel.id,
+      conversationId: textChannel.id,
     });
     check(
       "historico devolve a mensagem enviada",
@@ -493,7 +493,7 @@ async function main() {
     let blocked = 0;
     for (let i = 0; i < 14; i += 1) {
       const result = await sendMessage(ownerConn.socket, {
-        channelId: textChannel.id,
+        conversationId: textChannel.id,
         content: `[verify] flood ${i}`,
         nonce: `f-${i}`,
       });

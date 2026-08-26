@@ -27,6 +27,7 @@ export async function listRecentMessages(channelId: string): Promise<{
     select: {
       id: true,
       channelId: true,
+      dmChannelId: true,
       content: true,
       createdAt: true,
       editedAt: true,

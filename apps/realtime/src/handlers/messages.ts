@@ -1,5 +1,9 @@
 import { prisma } from "@aether/db";
-import { getChannelPermissions, loadMemberAccess } from "@aether/access";
+import {
+  getChannelPermissions,
+  loadDmAccess,
+  loadMemberAccess,
+} from "@aether/access";
 import {
   has,
   messageContentSchema,
@@ -32,6 +36,7 @@ const limiter = createRateLimiter({ capacity: 8, refillPerSecond: 2 });
 const MESSAGE_SELECT = {
   id: true,
   channelId: true,
+  dmChannelId: true,
   content: true,
   createdAt: true,
   editedAt: true,
@@ -47,30 +52,84 @@ const MESSAGE_SELECT = {
 } as const;
 
 /**
- * Resolve o canal e confere a permissao pedida nele.
- * Devolve `null` para qualquer recusa: canal inexistente, usuario que nao e
- * membro e permissao negada respondem igual, para nao vazar o que existe.
+ * Onde uma mensagem vive. Uniao discriminada porque as duas metades nao tem
+ * quase nada em comum: uma tem servidor, cargo e overwrite; a outra tem duas
+ * pessoas e uma amizade.
  */
-async function authorizeChannel(
+type Conversa =
+  | { tipo: "canal"; channelId: string; serverId: string; isText: boolean }
+  | { tipo: "dm"; dmId: string; outroId: string };
+
+/**
+ * Resolve a conversa e confere se quem pediu pode fazer o que quer nela.
+ *
+ * Devolve `null` para QUALQUER recusa — id inexistente, nao ser membro, nao
+ * ser participante, permissao negada. Todas respondem igual para nao vazar o
+ * que existe, e no caso da conversa direta isso importa ainda mais: distinguir
+ * "nao existe" de "existe e nao e sua" contaria que duas pessoas especificas
+ * se falam.
+ *
+ * O FORK ACONTECE AQUI, e so aqui. As duas regras continuam morando em
+ * `@aether/access` — esta funcao escolhe qual perguntar, nao reimplementa
+ * nenhuma. `permission` so vale para canal de servidor: numa conversa direta
+ * nao existe bit a conferir, a amizade E a permissao.
+ */
+async function autorizarConversa(
   userId: string,
-  channelId: string,
+  conversationId: string,
   permission: PermissionKey,
-): Promise<{ serverId: string; isText: boolean } | null> {
-  if (typeof channelId !== "string" || channelId.length === 0) return null;
+): Promise<Conversa | null> {
+  if (typeof conversationId !== "string" || conversationId.length === 0) {
+    return null;
+  }
 
   const channel = await prisma.channel.findUnique({
-    where: { id: channelId },
+    where: { id: conversationId },
     select: { serverId: true, type: true },
   });
-  if (!channel) return null;
+
+  /**
+   * Nao achou canal: pode ser uma conversa direta. Ids sao cuid e nao se
+   * cruzam, entao nao ha ambiguidade — no maximo uma das duas buscas acerta.
+   */
+  if (!channel) {
+    const dm = await loadDmAccess(userId, conversationId);
+    if (!dm) return null;
+    return { tipo: "dm", dmId: dm.dmId, outroId: dm.outroId };
+  }
 
   const access = await loadMemberAccess(channel.serverId, userId);
   if (!access) return null;
 
-  const bits = await getChannelPermissions(access, channelId);
+  const bits = await getChannelPermissions(access, conversationId);
   if (bits === null || !has(bits, permission)) return null;
 
-  return { serverId: channel.serverId, isText: channel.type === "TEXT" };
+  return {
+    tipo: "canal",
+    channelId: conversationId,
+    serverId: channel.serverId,
+    isText: channel.type === "TEXT",
+  };
+}
+
+/**
+ * Le o id da conversa aceitando TAMBEM o nome antigo `channelId`.
+ *
+ * COMPATIBILIDADE TEMPORARIA, com data para sair. O campo se chamava
+ * `channelId` ate as conversas diretas existirem. Vercel e Fly nao sobem no
+ * mesmo instante: entre um deploy e o outro ha uma janela em que o navegador
+ * de alguem ja carregou a versao velha da pagina e fala com o gateway novo, ou
+ * o contrario. Sem isto, essa janela e chat quebrado com "conversa nao
+ * encontrada" para todo mundo.
+ *
+ * REMOVER depois que web e gateway estiverem os dois em producao com o nome
+ * novo — esta anotado nas limitacoes do README.
+ */
+function idDaConversa(payload: unknown): string {
+  const p = payload as { conversationId?: unknown; channelId?: unknown };
+  if (typeof p?.conversationId === "string") return p.conversationId;
+  if (typeof p?.channelId === "string") return p.channelId;
+  return "";
 }
 
 export function registerMessageHandlers(
@@ -86,7 +145,8 @@ export function registerMessageHandlers(
       respond({ ok: false, error: "payload invalido" });
       return;
     }
-    const { channelId, content, nonce } = payload;
+    const { content, nonce } = payload;
+    const conversationId = idDaConversa(payload);
 
     if (!limiter.take(userId)) {
       respond({ ok: false, error: "Muitas mensagens seguidas. Respire." });
@@ -103,32 +163,50 @@ export function registerMessageHandlers(
     }
 
     try {
-      const channel = await authorizeChannel(
+      const conversa = await autorizarConversa(
         userId,
-        channelId,
+        conversationId,
         "SEND_MESSAGES",
       );
-      if (!channel) {
-        respond({ ok: false, error: "Canal nao encontrado" });
+      if (!conversa) {
+        respond({ ok: false, error: "Conversa nao encontrada" });
         return;
       }
-      if (!channel.isText) {
+      if (conversa.tipo === "canal" && !conversa.isText) {
         respond({ ok: false, error: "Canal de voz nao aceita mensagem" });
         return;
       }
 
       const created = await prisma.message.create({
-        data: { channelId, authorId: userId, content: parsed.data },
+        data:
+          conversa.tipo === "canal"
+            ? { channelId: conversa.channelId, authorId: userId, content: parsed.data }
+            : { dmChannelId: conversa.dmId, authorId: userId, content: parsed.data },
         select: MESSAGE_SELECT,
       });
       const message: PublicMessage = toPublicMessage(created);
 
-      // Vai para a sala inteira, inclusive para quem enviou: o remetente pode
-      // ter outra aba aberta, e ela precisa da mensagem tambem.
-      io.to(room.channel(channelId)).emit("message:new", {
-        message,
-        nonce: typeof nonce === "string" ? nonce : null,
-      });
+      /**
+       * Para onde a mensagem vai depende do tipo, e as duas entregas incluem
+       * quem enviou: o remetente pode ter outra aba aberta, e ela precisa da
+       * mensagem tambem.
+       *
+       * A conversa direta usa as SALAS PESSOAIS, que ja existem desde a
+       * funcionalidade de amigos — todo socket entra na sua ao conectar. Nao
+       * ha sala a criar, nem a entrar, nem a limpar quando a amizade acaba: a
+       * proxima mensagem simplesmente nao passa mais por `loadDmAccess`.
+       */
+      if (conversa.tipo === "canal") {
+        io.to(room.channel(conversa.channelId)).emit("message:new", {
+          message,
+          nonce: typeof nonce === "string" ? nonce : null,
+        });
+      } else {
+        io.to([room.user(userId), room.user(conversa.outroId)]).emit(
+          "message:new",
+          { message, nonce: typeof nonce === "string" ? nonce : null },
+        );
+      }
 
       respond({ ok: true, message });
     } catch (error) {
@@ -144,12 +222,17 @@ export function registerMessageHandlers(
       respond({ ok: false, error: "payload invalido" });
       return;
     }
-    const { channelId, before, after } = payload;
+    const { before, after } = payload;
+    const conversationId = idDaConversa(payload);
 
     try {
-      const channel = await authorizeChannel(userId, channelId, "VIEW_CHANNEL");
-      if (!channel) {
-        respond({ ok: false, error: "Canal nao encontrado" });
+      const conversa = await autorizarConversa(
+        userId,
+        conversationId,
+        "VIEW_CHANNEL",
+      );
+      if (!conversa) {
+        respond({ ok: false, error: "Conversa nao encontrada" });
         return;
       }
 
@@ -161,7 +244,15 @@ export function registerMessageHandlers(
 
       const rows = await prisma.message.findMany({
         where: {
-          channelId,
+          /**
+           * Filtrar pela COLUNA do tipo certo, e nao por um id solto: como as
+           * duas colunas sao nulaveis, `{ channelId: <id de dm> }` nao daria
+           * erro — devolveria zero linhas, e um historico vazio parece
+           * "conversa nova" em vez de bug.
+           */
+          ...(conversa.tipo === "canal"
+            ? { channelId: conversa.channelId }
+            : { dmChannelId: conversa.dmId }),
           // Soft delete: mensagem apagada nao volta pelo historico.
           deletedAt: null,
         },

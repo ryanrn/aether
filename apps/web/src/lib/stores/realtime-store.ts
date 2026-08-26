@@ -477,7 +477,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
 
   receiveMessage: (message, nonce) =>
     set((state) => {
-      const current = state.messages[message.channelId] ?? [];
+      const current = state.messages[message.conversationId] ?? [];
       // Reconcilia o envio otimista: substitui a linha pendente em vez de
       // duplicar a mensagem na tela de quem enviou.
       const withoutPending = nonce
@@ -487,20 +487,20 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
        * Nao conta como nao lida a mensagem que voce esta vendo, nem a que voce
        * mesmo escreveu — inclusive de outra aba sua.
        */
-      const isElsewhere = message.channelId !== state.activeChannelId;
+      const isElsewhere = message.conversationId !== state.activeChannelId;
       const isFromSomeoneElse = message.author.id !== state.selfUserId;
       const unread =
         isElsewhere && isFromSomeoneElse
           ? {
               ...state.unread,
-              [message.channelId]: (state.unread[message.channelId] ?? 0) + 1,
+              [message.conversationId]: (state.unread[message.conversationId] ?? 0) + 1,
             }
           : state.unread;
 
       return {
         messages: {
           ...state.messages,
-          [message.channelId]: mergeById(withoutPending, [message]),
+          [message.conversationId]: mergeById(withoutPending, [message]),
         },
         unread,
       };
@@ -510,8 +510,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set((state) => ({
       messages: {
         ...state.messages,
-        [message.channelId]: [
-          ...(state.messages[message.channelId] ?? []),
+        [message.conversationId]: [
+          ...(state.messages[message.conversationId] ?? []),
           message,
         ],
       },

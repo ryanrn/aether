@@ -132,6 +132,21 @@ export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }
   | { ok: false; error: string };
 
+/** Uma conversa direta, do ponto de vista de quem perguntou. */
+export interface DmResumo {
+  id: string;
+  /** A outra pessoa. Quem pergunta ja sabe quem e si mesmo. */
+  outro: PublicUser;
+}
+
+export type DmOpenAck =
+  | { ok: true; dm: DmResumo }
+  | { ok: false; error: string };
+
+export type DmListAck =
+  | { ok: true; conversas: DmResumo[] }
+  | { ok: false; error: string };
+
 /**
  * Credenciais para o SFU. `null` quando o servidor nao tem LiveKit
  * configurado — nesse caso a ocupacao de canal funciona e o audio nao existe,
@@ -295,7 +310,7 @@ export interface ClientToServerEvents {
    * evento: e o que torna o reenvio apos reconexao idempotente na tela.
    */
   "message:send": (
-    payload: { channelId: string; content: string; nonce: string },
+    payload: { conversationId: string; content: string; nonce: string },
     ack: (result: SendMessageAck) => void,
   ) => void;
   /**
@@ -303,7 +318,7 @@ export interface ClientToServerEvents {
    * `after` busca o intervalo perdido durante uma queda de conexao.
    */
   "message:history": (
-    payload: { channelId: string; before?: string; after?: string },
+    payload: { conversationId: string; before?: string; after?: string },
     ack: (result: MessageHistoryAck) => void,
   ) => void;
   /**
@@ -311,6 +326,20 @@ export interface ClientToServerEvents {
    * O gateway e a fonte de verdade de quem esta em qual canal, entao entrar
    * por aqui e o que faz o nome aparecer sob o canal para todo mundo.
    */
+  /**
+   * Abre (ou reencontra) a conversa direta com um amigo, e devolve o id dela.
+   *
+   * Idempotente de proposito: clicar em "conversar" varias vezes tem de cair
+   * sempre na mesma conversa. Quem garante isso e o indice unico sobre o par
+   * ORDENADO no banco, e nao uma checagem aqui — dois cliques simultaneos, um
+   * de cada lado, chegariam juntos numa checagem em codigo.
+   */
+  "dm:open": (
+    payload: { userId: string },
+    ack: (result: DmOpenAck) => void,
+  ) => void;
+  /** As conversas diretas de quem pediu. */
+  "dm:list": (ack: (result: DmListAck) => void) => void;
   "voice:join": (
     payload: { channelId: string },
     ack: (result: VoiceJoinAck) => void,
