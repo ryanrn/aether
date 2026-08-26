@@ -6,6 +6,35 @@ escondido — o [README](README.md) tem o detalhe tecnico de cada uma.
 
 ---
 
+## v0.1.11 — 26 de agosto de 2026
+
+**Atualizacao deixou de ser invisivel.**
+
+A 0.1.10 trouxe o botao verde de atualizar, mas ele nunca aparecia — e o motivo
+era mais fundo do que o botao. Esta versao conserta a causa.
+
+### Correcoes
+
+- **O download de 82 MB acontecia em silencio total.** Nada na tela indicava que
+  havia algo em curso, entao fechar o app — coisa perfeitamente normal de fazer
+  — descartava tudo e recomecava do zero na abertura seguinte. Quem abre e
+  fecha o app algumas vezes por dia nunca completava uma atualizacao.
+
+  Agora Configuracoes > Atividade mostra a versao instalada, a barra de
+  progresso do download e o aviso de deixar o app aberto ate terminar.
+
+- **Os erros do atualizador sumiam.** Eles iam para `console.log`, que em app
+  empacotado nao tem para onde ir. Quando a atualizacao nao chegava, nao havia
+  uma linha sequer para consultar. Agora vao para o arquivo de log, junto do
+  resto.
+
+### Novidades
+
+- **Botao "Verificar" atualizacoes.** A checagem automatica roda 8 segundos
+  depois de abrir e de 6 em 6 horas, sem dizer nada — e quando nao funciona,
+  nao da para distinguir "ja estou atualizado" de "nem tentou". O botao
+  responde na hora.
+
 ## v0.1.10 — 26 de agosto de 2026
 
 **Abrir junto com o Windows, e o aviso de atualizacao dentro do app.**

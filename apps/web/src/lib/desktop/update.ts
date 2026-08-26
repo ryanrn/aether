@@ -13,10 +13,29 @@
  * versao nova entra sozinha no proximo fechamento.
  */
 
+/**
+ * Em que pe esta a atualizacao.
+ *
+ * `baixando` existe porque o download de 82 MB acontecia em silencio total, e
+ * fechar o app no meio — coisa normal, ja que nada indicava haver algo em
+ * curso — descartava tudo. Mostrar o progresso e a diferenca entre a
+ * atualizacao chegar e nao chegar.
+ */
+export interface EstadoAtualizacao {
+  fase: "ocioso" | "verificando" | "baixando" | "pronta" | "atualizado" | "erro";
+  versao: string | null;
+  progresso: number;
+  erro: string | null;
+  versaoAtual?: string;
+}
+
 interface PonteAtualizacao {
   pendente: () => Promise<string | null>;
   instalar: () => Promise<boolean>;
+  estado: () => Promise<EstadoAtualizacao>;
+  verificar: () => Promise<EstadoAtualizacao>;
   aoFicarPronta: (callback: (versao: string) => void) => () => void;
+  aoMudarEstado: (callback: (estado: EstadoAtualizacao) => void) => () => void;
 }
 
 function ponte(): PonteAtualizacao | null {
@@ -71,5 +90,49 @@ export async function instalarAtualizacao(): Promise<boolean> {
     return (await api.instalar()) === true;
   } catch {
     return false;
+  }
+}
+
+/** O app consegue verificar atualizacao? So no desktop. */
+export function podeAtualizar(): boolean {
+  return ponte() !== null;
+}
+
+export async function estadoDaAtualizacao(): Promise<EstadoAtualizacao | null> {
+  const api = ponte();
+  if (!api) return null;
+  try {
+    return await api.estado();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verifica AGORA, a pedido da pessoa.
+ *
+ * A verificacao automatica roda 8s depois de abrir e de 6 em 6 horas, sem
+ * dizer nada — quando nao funciona, nao ha como distinguir "ja estou
+ * atualizado" de "nem tentou". Um botao que responde na hora resolve as duas.
+ */
+export async function verificarAgora(): Promise<EstadoAtualizacao | null> {
+  const api = ponte();
+  if (!api) return null;
+  try {
+    return await api.verificar();
+  } catch {
+    return null;
+  }
+}
+
+export function aoMudarEstado(
+  callback: (estado: EstadoAtualizacao) => void,
+): () => void {
+  const api = ponte();
+  if (!api) return () => undefined;
+  try {
+    return api.aoMudarEstado(callback);
+  } catch {
+    return () => undefined;
   }
 }

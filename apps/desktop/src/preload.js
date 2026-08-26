@@ -80,6 +80,14 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
   atualizacao: {
     pendente: () => ipcRenderer.invoke("desktop:atualizacao-pendente"),
     instalar: () => ipcRenderer.invoke("desktop:atualizacao-instalar"),
+    estado: () => ipcRenderer.invoke("desktop:atualizacao-estado"),
+    verificar: () => ipcRenderer.invoke("desktop:atualizacao-verificar"),
+    aoMudarEstado: (callback) => {
+      const handler = (_evento, estado) => callback(estado);
+      ipcRenderer.on("desktop:atualizacao-estado", handler);
+      return () =>
+        ipcRenderer.removeListener("desktop:atualizacao-estado", handler);
+    },
     aoFicarPronta: (callback) => {
       const handler = (_evento, versao) => callback(versao);
       ipcRenderer.on("desktop:atualizacao-pronta", handler);

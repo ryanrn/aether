@@ -2,6 +2,7 @@
 
 const { app, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const log = require("./log");
 
 /**
  * Atualizacao automatica da CASCA.
@@ -35,6 +36,26 @@ const INTERVALO_MS = 6 * 60 * 60 * 1000;
  */
 let versaoPronta = null;
 
+/**
+ * O que esta acontecendo, para a tela poder dizer.
+ *
+ * `ocioso` | `verificando` | `baixando` | `pronta` | `atualizado` | `erro`
+ *
+ * Existe porque o download acontecia em SILENCIO TOTAL: 82 MB baixando sem
+ * nenhum indicio na tela. Fechar o app no meio — coisa normal de fazer, ja
+ * que nada indicava que havia algo em curso — descartava tudo e recomecava do
+ * zero na proxima abertura. Foi exatamente o que aconteceu na 0.1.9: o
+ * `pending` do updater ficava com carimbo de hora recente e vazio.
+ */
+let estado = { fase: "ocioso", versao: null, progresso: 0, erro: null };
+
+function mudarEstado(janela, novo) {
+  estado = { ...estado, ...novo };
+  if (janela && !janela.isDestroyed()) {
+    janela.webContents.send("desktop:atualizacao-estado", estado);
+  }
+}
+
 /** Avisa a pagina, se ela ja existir. */
 function avisarPagina(janela, versao) {
   if (janela && !janela.isDestroyed()) {
@@ -56,21 +77,53 @@ function instalarAtualizador(janela) {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  /**
+   * O DIAGNOSTICO VAI PARA O ARQUIVO, e nao para `console`.
+   *
+   * Em app empacotado nao ha terminal: tudo que o updater dizia por
+   * `console.log` simplesmente sumia. Quando a atualizacao nao chegou na
+   * 0.1.9, nao havia UMA linha para consultar — deu para descobrir o que
+   * houve so olhando o carimbo de hora de uma pasta de cache. Log de
+   * atualizacao e exatamente o tipo de coisa que so se procura quando algo
+   * deu errado, e ai ja e tarde para instrumentar.
+   */
   autoUpdater.on("error", (erro) => {
     /**
      * Falhar em atualizar NAO pode atrapalhar quem so quer conversar. Sem
      * rede, sem release publicada ainda, GitHub fora do ar — tudo isso vira
      * uma linha de log e nada mais.
      */
-    console.error("[updater] falhou:", erro?.message ?? erro);
+    const mensagem = erro?.message ?? String(erro);
+    log.registrar("updater.erro", { erro: mensagem });
+    mudarEstado(janela, { fase: "erro", erro: mensagem });
+  });
+
+  autoUpdater.on("checking-for-update", () => {
+    log.registrar("updater.verificando", {});
+    mudarEstado(janela, { fase: "verificando", erro: null });
   });
 
   autoUpdater.on("update-available", (info) => {
-    console.log("[updater] versao nova encontrada:", info?.version);
+    log.registrar("updater.encontrou", { versao: info?.version });
+    mudarEstado(janela, {
+      fase: "baixando",
+      versao: info?.version ?? null,
+      progresso: 0,
+    });
   });
 
   autoUpdater.on("update-not-available", () => {
-    console.log("[updater] ja esta na versao mais recente");
+    log.registrar("updater.ja-atualizado", { versao: app.getVersion() });
+    mudarEstado(janela, { fase: "atualizado", progresso: 0 });
+  });
+
+  /**
+   * Progresso. Sem isto a pessoa nao tem como saber que vale a pena deixar o
+   * app aberto mais um minuto — que e a diferenca entre a atualizacao chegar
+   * e nao chegar.
+   */
+  autoUpdater.on("download-progress", (p) => {
+    mudarEstado(janela, { fase: "baixando", progresso: Math.round(p?.percent ?? 0) });
   });
 
   autoUpdater.on("update-downloaded", (info) => {
@@ -88,11 +141,44 @@ function instalarAtualizador(janela) {
      * nada: a atualizacao entra sozinha no proximo fechamento.
      */
     versaoPronta = info?.version ?? "nova";
+    log.registrar("updater.baixada", { versao: versaoPronta });
+    mudarEstado(janela, { fase: "pronta", versao: versaoPronta, progresso: 100 });
     avisarPagina(janela, versaoPronta);
   });
 
   /** A pagina perguntando ao carregar — ver o comentario de `versaoPronta`. */
   ipcMain.handle("desktop:atualizacao-pendente", () => versaoPronta);
+
+  /** O estado inteiro, para a tela de configuracoes desenhar o que houver. */
+  ipcMain.handle("desktop:atualizacao-estado", () => ({
+    ...estado,
+    versaoAtual: app.getVersion(),
+  }));
+
+  /**
+   * Verificar AGORA, a pedido da pessoa.
+   *
+   * Existe porque a verificacao automatica e invisivel: ela roda 8s depois de
+   * abrir e depois de 6 em 6 horas, sem dizer nada. Quando nao funciona — e
+   * nao funcionou — nao ha como distinguir "ja estou atualizado" de "nem
+   * tentou". Um botao que responde na hora resolve as duas coisas: da controle
+   * e da diagnostico.
+   */
+  ipcMain.handle("desktop:atualizacao-verificar", async () => {
+    if (versaoPronta) {
+      // Ja tem uma esperando: nao adianta procurar de novo.
+      mudarEstado(janela, { fase: "pronta", versao: versaoPronta, progresso: 100 });
+      return { ...estado, versaoAtual: app.getVersion() };
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (erro) {
+      const mensagem = erro?.message ?? String(erro);
+      log.registrar("updater.verificar.falhou", { erro: mensagem });
+      mudarEstado(janela, { fase: "erro", erro: mensagem });
+    }
+    return { ...estado, versaoAtual: app.getVersion() };
+  });
 
   ipcMain.handle("desktop:atualizacao-instalar", () => {
     if (!versaoPronta) return false;
@@ -110,9 +196,11 @@ function instalarAtualizador(janela) {
 
   function verificar() {
     autoUpdater.checkForUpdates().catch((erro) => {
-      console.error("[updater] checagem falhou:", erro?.message ?? erro);
+      log.registrar("updater.checagem.falhou", { erro: erro?.message ?? String(erro) });
     });
   }
+
+  log.registrar("updater.instalado", { versao: app.getVersion() });
 
   setTimeout(verificar, ATRASO_MS);
   setInterval(verificar, INTERVALO_MS);
