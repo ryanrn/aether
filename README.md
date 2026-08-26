@@ -1488,6 +1488,69 @@ este e estado, entao quem chama guarda o que vai apagar. Um pouco mais de
 codigo, e em troca a janela nao congela e o botao pode dizer "Excluindo..."
 enquanto age.
 
+## Contador de nao lidas no icone do servidor
+
+Bolinha vermelha no canto superior direito do icone, no trilho, com quantas
+mensagens nao lidas ha naquele servidor.
+
+### O que precisou mudar no gateway
+
+Ate aqui o cliente entrava em sala SO do servidor aberto — o `server:join` roda
+pela rota. A consequencia e que mensagem de qualquer outro servidor nunca
+chegava ao navegador: nao havia como acender contador nenhum, porque o app nem
+ficava sabendo que algo aconteceu.
+
+Agora, na CONEXAO, o socket entra nas salas de todos os servidores da pessoa
+(`joinAllServerRooms`). **So as salas** — nao o resto do `server:join`. Aquele
+tambem marca presenca e manda `voice:sync`; fazer isso para todos mudaria
+comportamento (a pessoa apareceria "presente" em todos ao conectar) e mandaria
+estado de voz que ninguem pediu.
+
+**A permissao continua sendo a mesma:** `visibleChannelRooms` decide, igual ao
+`server:join`. Canal privado que a pessoa nao ve nao vira sala, e portanto nao
+vira notificacao — contador aceso por canal invisivel estaria contando o que a
+pessoa nao pode saber que existe.
+
+`message:new` passou a carregar `serverId` (`null` em conversa direta). O
+cliente nao consegue descobrir isso sozinho: ele so conhece a arvore do
+servidor aberto.
+
+### O total e DERIVADO, nao um segundo contador
+
+`useUnreadByServer` soma o `unread` que ja existia, usando um mapa
+canal -> servidor aprendido das mensagens que chegam. Um contador proprio
+precisaria ser decrementado a cada canal lido, e bastaria um caminho esquecer
+para o numero do icone discordar da barra lateral — numero de notificacao que
+nao zera e pior do que numero nenhum.
+
+### Limitacoes
+
+- **A conta e por SESSAO.** Recarregar zera, porque `unread` sempre viveu em
+  memoria e nada disso e gravado. Para sobreviver ao restart seria preciso
+  guardar "ultima mensagem lida" por canal no banco.
+- **Nao ha notificacao do sistema nem som** — so o numero na tela.
+- **Conversa direta nao entra em nenhum contador de servidor**, e ainda nao tem
+  lugar proprio para aparecer (ver as limitacoes de DM).
+
+## Abrir junto com o Windows
+
+Chave em Configuracoes > Atividade > "Ao ligar o computador". So aparece no app
+de desktop.
+
+**Quem guarda a preferencia e o SISTEMA**, nao um arquivo nosso:
+`app.getLoginItemSettings()` e a fonte da verdade, lida a cada vez. Manter copia
+criaria o caso em que a caixa aparece marcada e o app nao abre — a pessoa pode
+ter tirado o Aether da inicializacao pelo Gerenciador de Tarefas, e um valor
+guardado continuaria dizendo que esta ligado.
+
+Pelo mesmo motivo, o que a tela mostra e o que o sistema CONFIRMOU depois de
+gravar, e nao o que a caixa marcou: o Windows pode recusar, e dizer "ligado"
+enquanto o app nao abre no boot seria a pior forma de errar aqui.
+
+`openAsHidden` fica falso: abrir escondido junto com o sistema e o tipo de coisa
+que faz a pessoa achar que o app nao abriu. Se um dia houver icone na bandeja,
+vale reconsiderar.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

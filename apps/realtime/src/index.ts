@@ -9,6 +9,7 @@ import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { registerDmHandlers } from "./handlers/dm";
+import { joinAllServerRooms } from "./rooms";
 import {
   attachSocket,
   isConnected,
@@ -117,6 +118,19 @@ io.on("connection", (socket) => {
    * nome vem de `socket.data`, que o cliente nao escolhe.
    */
   void socket.join(room.user(user.id));
+
+  /**
+   * Salas de TODOS os servidores da pessoa, e nao so o aberto.
+   *
+   * E o que permite o contador de nao lidas acender no icone de um servidor em
+   * que voce nao esta olhando agora — sem isso, a mensagem de la nunca chegava
+   * ao cliente. Sem `await` pelo mesmo motivo das amizades: o resto do
+   * handshake nao depende, e segurar a conexao por N consultas atrasaria o
+   * `ready` de todo mundo.
+   */
+  void joinAllServerRooms(socket).catch((erro) => {
+    console.error("[gateway] nao consegui entrar nas salas dos servidores:", erro);
+  });
 
   /**
    * Amizades: carregadas do banco uma vez por conexao.

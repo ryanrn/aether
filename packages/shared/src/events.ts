@@ -224,6 +224,15 @@ export interface ServerToClientEvents {
   "message:new": (payload: {
     message: PublicMessage;
     nonce: string | null;
+    /**
+     * De qual servidor veio; `null` em conversa direta.
+     *
+     * O cliente NAO consegue descobrir isso sozinho: ele so conhece os canais
+     * do servidor que esta aberto, e a mensagem pode vir de outro. Sem este
+     * campo nao ha como somar as nao lidas por servidor para acender o
+     * contador no icone.
+     */
+    serverId: string | null;
   }) => void;
   /**
    * Voce foi movido para outro canal de voz por um moderador.

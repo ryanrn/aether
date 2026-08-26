@@ -92,3 +92,54 @@ export function onGameChange(
     return () => undefined;
   }
 }
+
+/**
+ * Abrir o app junto com o Windows.
+ *
+ * Mora neste arquivo por conveniencia de vizinhanca — e a mesma ponte
+ * `window.aetherDesktop` — mas nao tem relacao com deteccao de jogo. Se
+ * aparecer uma terceira preferencia de desktop, vale um arquivo proprio.
+ *
+ * A PREFERENCIA E DO SISTEMA. `isEnabled` pergunta ao processo principal toda
+ * vez em vez de guardar um valor: a pessoa pode ter tirado o Aether da
+ * inicializacao pelo Gerenciador de Tarefas, e uma copia nossa continuaria
+ * dizendo que esta ligado enquanto o app nao abre.
+ */
+interface PonteInicio {
+  isEnabled: () => Promise<boolean>;
+  setEnabled: (ligar: boolean) => Promise<boolean>;
+}
+
+function ponteInicio(): PonteInicio | null {
+  if (typeof window === "undefined") return null;
+  const desktop = (
+    window as { aetherDesktop?: { iniciarComWindows?: PonteInicio } }
+  ).aetherDesktop;
+  return desktop?.iniciarComWindows ?? null;
+}
+
+/** O app consegue configurar isso? So no desktop. */
+export function podeIniciarComWindows(): boolean {
+  return ponteInicio() !== null;
+}
+
+export async function iniciaComWindows(): Promise<boolean> {
+  const api = ponteInicio();
+  if (!api) return false;
+  try {
+    return (await api.isEnabled()) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Devolve o que o SISTEMA passou a dizer, nao o que foi pedido. */
+export async function setIniciarComWindows(ligar: boolean): Promise<boolean> {
+  const api = ponteInicio();
+  if (!api) return false;
+  try {
+    return (await api.setEnabled(ligar)) === true;
+  } catch {
+    return false;
+  }
+}

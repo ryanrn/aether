@@ -62,6 +62,16 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
    * casa isso e o processo principal, e o que atravessa esta ponte ja e o
    * resultado.
    */
+  /**
+   * Abrir junto com o Windows. A preferencia mora no SISTEMA, nao aqui — por
+   * isso `isEnabled` pergunta a cada vez em vez de guardar um valor.
+   */
+  iniciarComWindows: {
+    isEnabled: () => ipcRenderer.invoke("desktop:iniciar-com-windows-get"),
+    setEnabled: (ligar) =>
+      ipcRenderer.invoke("desktop:iniciar-com-windows-set", ligar),
+  },
+
   gameDetection: {
     isEnabled: () => ipcRenderer.invoke("desktop:game-detection-get"),
     /** o jogo ja detectado, para quem acabou de carregar */

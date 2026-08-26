@@ -89,3 +89,45 @@ export async function resyncServerRooms(
     ]);
   }
 }
+
+/**
+ * Coloca o socket nas salas de TODOS os servidores da pessoa, logo na conexao.
+ *
+ * POR QUE ISTO EXISTE: ate aqui, so o servidor ABERTO entrava em sala — o
+ * `server:join` roda pela rota. A consequencia e que mensagem de qualquer
+ * outro servidor simplesmente nao chegava ao cliente, e por isso nao havia
+ * como acender um contador de nao lidas no icone dele: o app nunca ficava
+ * sabendo que algo aconteceu ali.
+ *
+ * SO AS SALAS, e nao o resto do `server:join`. Aquele tambem marca presenca e
+ * manda `voice:sync`; fazer isso para todos os servidores mudaria
+ * comportamento (a pessoa apareceria "presente" em todos ao conectar) e
+ * mandaria estado de voz que ninguem pediu. Aqui e so ouvir.
+ *
+ * A PERMISSAO CONTINUA SENDO A MESMA: `visibleChannelRooms` decide, exatamente
+ * como no `server:join`. Canal privado que a pessoa nao ve nao vira sala, e
+ * portanto nao vira notificacao — se o contador acendesse por um canal
+ * invisivel, ele estaria contando o que a pessoa nao pode saber que existe.
+ *
+ * `socket.join` de sala repetida e no-op, entao o `server:join` seguinte nao
+ * refaz trabalho nem atrapalha.
+ */
+export async function joinAllServerRooms(
+  socket: { data: { userId: string }; join: (room: string) => unknown },
+): Promise<void> {
+  const { userId } = socket.data;
+
+  const membros = await prisma.serverMember.findMany({
+    where: { userId },
+    select: { serverId: true },
+  });
+
+  for (const { serverId } of membros) {
+    const access = await loadMemberAccess(serverId, userId);
+    if (!access) continue;
+    socket.join(room.server(serverId));
+    for (const channelRoom of await visibleChannelRooms(access)) {
+      socket.join(channelRoom);
+    }
+  }
+}

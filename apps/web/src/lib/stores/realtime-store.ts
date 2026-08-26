@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   MediaGrant,
   PresenceEntry,
@@ -157,6 +158,17 @@ interface RealtimeState {
   activeChannelId: string | null;
   /** mensagens nao lidas por canal */
   unread: Record<string, number>;
+  /**
+   * De qual servidor e cada canal, APRENDIDO das mensagens que chegam.
+   *
+   * O cliente so conhece a arvore do servidor que esta aberto; para somar as
+   * nao lidas por servidor e preciso saber a origem de canais que ele nunca
+   * abriu. O gateway manda `serverId` junto de cada mensagem, e o mapa vai
+   * sendo preenchido.
+   *
+   * Conversa direta nao entra: ela nao pertence a servidor nenhum.
+   */
+  serverDoCanal: Record<string, string>;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSelfUserId: (userId: string) => void;
@@ -188,7 +200,11 @@ interface RealtimeState {
   setRoomControls: (controls: RealtimeState["roomControls"]) => void;
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
-  receiveMessage: (message: PublicMessage, nonce: string | null) => void;
+  receiveMessage: (
+    message: PublicMessage,
+    nonce: string | null,
+    serverId: string | null,
+  ) => void;
   addPending: (message: ChatMessage) => void;
   failPending: (channelId: string, nonce: string, error: string) => void;
   prependHistory: (
@@ -244,6 +260,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   history: {},
   activeChannelId: null,
   unread: {},
+  serverDoCanal: {},
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSelfUserId: (selfUserId) => set({ selfUserId }),
@@ -256,6 +273,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         ? { serverId }
         : {
             unread: {},
+            serverDoCanal: {},
             activeChannelId: null,
             serverId,
             presence: {},
@@ -475,7 +493,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       return { activeChannelId, unread: rest };
     }),
 
-  receiveMessage: (message, nonce) =>
+  receiveMessage: (message, nonce, serverId) =>
     set((state) => {
       const current = state.messages[message.conversationId] ?? [];
       // Reconcilia o envio otimista: substitui a linha pendente em vez de
@@ -503,6 +521,14 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
           [message.conversationId]: mergeById(withoutPending, [message]),
         },
         unread,
+        /**
+         * O mapa e alimentado SEMPRE, mesmo quando a mensagem nao conta como
+         * nao lida. Aprender a origem do canal enquanto voce olha para ele e o
+         * que faz o contador funcionar quando voce sair dali.
+         */
+        serverDoCanal: serverId
+          ? { ...state.serverDoCanal, [message.conversationId]: serverId }
+          : state.serverDoCanal,
       };
     }),
 
@@ -591,6 +617,34 @@ export function useVoiceParticipants(channelId: string): VoiceParticipant[] {
 
 export function useUnreadCounts(): Record<string, number> {
   return useRealtimeStore((state) => state.unread);
+}
+
+/**
+ * Nao lidas somadas por SERVIDOR, para o contador no icone do trilho.
+ *
+ * DERIVADO de `unread`, e nao um segundo contador mantido em paralelo. Um
+ * contador proprio precisaria ser decrementado toda vez que um canal fosse
+ * lido, e bastaria um caminho esquecer para o numero no icone passar a
+ * discordar da barra lateral — e numero de notificacao que nao zera e pior do
+ * que numero nenhum.
+ *
+ * `useShallow` porque o objeto e novo a cada calculo: sem ele, todo evento da
+ * store re-renderizaria o trilho inteiro.
+ */
+export function useUnreadByServer(): Record<string, number> {
+  return useRealtimeStore(
+    useShallow((state) => {
+      const total: Record<string, number> = {};
+      for (const [channelId, quantas] of Object.entries(state.unread)) {
+        const serverId = state.serverDoCanal[channelId];
+        // Sem origem conhecida = conversa direta, ou canal de que ainda nao
+        // chegou mensagem nenhuma nesta sessao. Nao pertence a servidor algum.
+        if (!serverId) continue;
+        total[serverId] = (total[serverId] ?? 0) + quantas;
+      }
+      return total;
+    }),
+  );
 }
 
 export function useScreenShares(): RemoteScreenShare[] {

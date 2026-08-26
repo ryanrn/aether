@@ -8,6 +8,7 @@ import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 import { useShellStore } from "@/lib/stores/shell-store";
+import { useUnreadByServer } from "@/lib/stores/realtime-store";
 
 /**
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
@@ -26,6 +27,7 @@ export function ServerRail({
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
   const [modalOpen, setModalOpen] = useState(false);
+  const naoLidas = useUnreadByServer();
 
   /**
    * Publica a lista para a barra de TITULO, que vive no layout raiz e nao tem
@@ -81,6 +83,7 @@ export function ServerRail({
 
         {servers.map((server) => {
           const active = server.id === activeId;
+          const quantas = naoLidas[server.id] ?? 0;
           return (
             <Link
               key={server.id}
@@ -94,6 +97,16 @@ export function ServerRail({
                   active ? "h-7" : "group-hover:h-3.5",
                 )}
               />
+              {/*
+                Caixa do TAMANHO DO ICONE, e nao do link.
+
+                O link ocupa a largura inteira do trilho (64px) e o icone tem
+                44px centrados. Ancorar a bolinha no link a jogava 12px alem da
+                borda direita do icone — para fora do trilho, medido. Ela
+                precisa do canto do ICONE, entao o icone e que tem de ser o
+                ponto de referencia.
+              */}
+              <span className="relative">
               <span
                 className={cn(
                   "grid h-11 w-11 place-items-center overflow-hidden rounded-xl text-[13px] font-semibold text-ink-100",
@@ -116,6 +129,35 @@ export function ServerRail({
                 ) : (
                   initials(server.name)
                 )}
+              </span>
+
+              {/*
+                Contador de nao lidas, no canto SUPERIOR DIREITO do icone.
+
+                Sai um pouco para fora do quadrado (`-top-0.5 -right-0.5`) e
+                leva um anel da cor do trilho: sem o anel, o vermelho encostado
+                no icone vira uma mancha, e sem sair para fora ele some dentro
+                das imagens escuras.
+
+                `pointer-events-none` porque o alvo de clique e o servidor
+                inteiro — a bolinha nao pode roubar o clique.
+
+                Some sozinho quando o numero zera: `unread` e o unico dono
+                dessa conta, e ele ja e limpo ao abrir o canal.
+              */}
+              {quantas > 0 ? (
+                <span
+                  aria-label={`${quantas} nao lidas em ${server.name}`}
+                  className={cn(
+                    "pointer-events-none absolute -right-0.5 -top-0.5",
+                    "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1",
+                    "bg-signal-dnd text-[10px] font-bold leading-none text-white",
+                    "ring-2 ring-base-900",
+                  )}
+                >
+                  {quantas > 99 ? "99+" : quantas}
+                </span>
+              ) : null}
               </span>
             </Link>
           );

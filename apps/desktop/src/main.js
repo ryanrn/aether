@@ -170,6 +170,42 @@ function instalarDeteccaoDeJogo() {
     lerDeteccaoLigada() ? vigiaDeJogo.atual() : null,
   );
 
+  /**
+   * Abrir junto com o Windows.
+   *
+   * QUEM GUARDA A PREFERENCIA E O SISTEMA, nao um arquivo nosso: o registro de
+   * inicializacao do Windows e a fonte da verdade. Ler de la em vez de manter
+   * copia evita o caso em que a caixa aparece marcada e o app nao abre — a
+   * pessoa pode ter tirado o Aether da inicializacao pelo Gerenciador de
+   * Tarefas, e um valor nosso guardado continuaria dizendo que esta ligado.
+   *
+   * `openAsHidden` fica FALSO: abrir escondido junto com o sistema e o tipo de
+   * coisa que faz a pessoa achar que o app nao abriu. Se um dia houver icone
+   * na bandeja, ai vale reconsiderar.
+   */
+  ipcMain.handle("desktop:iniciar-com-windows-get", () => {
+    try {
+      return app.getLoginItemSettings().openAtLogin === true;
+    } catch {
+      // Plataforma sem suporte (ou politica bloqueando): responde desligado
+      // em vez de derrubar a chamada.
+      return false;
+    }
+  });
+
+  ipcMain.handle("desktop:iniciar-com-windows-set", (_evento, ligar) => {
+    const valor = ligar === true;
+    try {
+      app.setLoginItemSettings({ openAtLogin: valor, openAsHidden: false });
+      // Devolve o que o SISTEMA passou a dizer, e nao o que pedimos: se ele
+      // recusar, a tela precisa mostrar a verdade, nao a intencao.
+      return app.getLoginItemSettings().openAtLogin === true;
+    } catch (erro) {
+      console.error("[inicio-automatico] falhou:", erro.message);
+      return false;
+    }
+  });
+
   ipcMain.handle("desktop:game-detection-set", (_evento, ligada) => {
     const valor = ligada === true;
     salvarDeteccaoLigada(valor);

@@ -200,11 +200,17 @@ export function registerMessageHandlers(
         io.to(room.channel(conversa.channelId)).emit("message:new", {
           message,
           nonce: typeof nonce === "string" ? nonce : null,
+          serverId: conversa.serverId,
         });
       } else {
         io.to([room.user(userId), room.user(conversa.outroId)]).emit(
           "message:new",
-          { message, nonce: typeof nonce === "string" ? nonce : null },
+          {
+            message,
+            nonce: typeof nonce === "string" ? nonce : null,
+            // Conversa direta nao pertence a servidor nenhum.
+            serverId: null,
+          },
         );
       }
 
