@@ -24,11 +24,6 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
 
-      # `apps/desktop` depende do Electron, que sao ~100 MB de binario baixados
-      # na instalacao. O CI nunca abre uma janela: pular o download corta o
-      # tempo de instalacao sem tirar nada do que e verificado aqui.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-
     steps:
       - uses: actions/checkout@v5
 
@@ -49,6 +44,15 @@ jobs:
           # em producao e verificamos aqui.
           node-version: "22"
           cache: npm
+
+      # O `cache: npm` acima guarda `~/.npm`, e o Electron NAO baixa para la —
+      # ele usa o proprio diretorio. Sem este passo, sao ~100 MB baixados de
+      # novo a cada rodada.
+      - name: Cache do binario do Electron
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Instalar
         run: npm ci
@@ -77,6 +81,14 @@ jobs:
 # banco a cada rodada. Da para fazer, e nao foi feito nesta rodada; ate la eles
 # continuam sendo rodados a mao antes de subir, como esta no README.
 #
-# Tambem fica de fora o `apps/desktop`: o modulo nativo do som e C++ compilado
-# contra os headers do Electron para Windows, e nao ha runner Windows aqui.
-# O que o CI garante do desktop e so o que `game-detect.test.ts` cobre.
+# Tambem fica de fora o BUILD do `apps/desktop`: o modulo nativo do som e C++
+# compilado contra os headers do Electron para Windows, e nao ha runner Windows
+# aqui. O que o CI garante do desktop e so o que `game-detect.test.ts` cobre.
+#
+# E POR QUE O ELECTRON PRECISA SER INSTALADO mesmo o CI nunca abrindo janela:
+# `game-detect.js` e `picker.js` fazem `require("electron")` no TOPO do modulo,
+# ainda que so usem `app.getFileIcon` la dentro. Importar a logica pura arrasta
+# o runtime junto, e o `index.js` do Electron lanca se o binario nao existir.
+# Tornar esse require preguicoso deixaria a logica testavel sem o runtime e
+# tiraria os 100 MB daqui — e mudanca em codigo de producao do desktop, que nao
+# da para verificar neste runner, entao ficou anotada em vez de feita.
