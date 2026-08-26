@@ -1251,6 +1251,46 @@ de alguem afetaria o que os outros escutam.
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
 
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,
+`prisma generate`, os dois typechecks e os 215 testes. Cerca de 68s.
+
+**Por que existe.** Os testes rodavam so quando alguem lembrava. Isso vale para
+qualquer teste, mas doi mais em um: `tests/unit/rate-limit-chave.test.ts` existe
+para quebrar se `take(socket.id)` voltar ao gateway. Um guard que depende de
+memoria humana nao e um guard.
+
+Nenhum segredo entra no job. Os testes unitarios nao tocam banco; o
+`prisma generate` so precisa da variavel DEFINIDA para ler o schema, e o valor
+usado e falso.
+
+### O que o CI NAO cobre
+
+- **Os `verify-*.mjs`.** Sao integracao de verdade: precisam do Postgres com
+  dados semeados, do gateway no ar, e no caso do `verify-seguranca.mjs` de duas
+  conexoes simultaneas. Continuam sendo rodados a mao antes de subir.
+- **O build do desktop.** O modulo nativo do som e C++ compilado contra os
+  headers do Electron para Windows, e o runner e Linux.
+
+### Duas coisas que a primeira rodada revelou
+
+1. **O `engines` mentia.** Dizia `>=20.11`, e o job foi fixado nesse piso de
+   proposito — rodar no minimo declarado pega uso acidental de API nova. So que
+   o Vitest 4 importa `styleText` de `node:util`, que so existe a partir do
+   20.12: o projeto nunca conseguiu rodar os proprios testes em 20.11. Piso que
+   ninguem exercita vira ficcao. Agora o CI e o `engines` dizem `>=22`, que e o
+   que o Dockerfile do gateway usa (`node:22-slim`) e o que a Vercel roda.
+
+2. **`game-detect.js` e `picker.js` arrastam o Electron.** Os dois fazem
+   `require("electron")` no TOPO do modulo, ainda que so usem `app.getFileIcon`
+   la dentro — entao importar a logica pura de deteccao puxa o runtime junto, e
+   o `index.js` do Electron lanca se o binario nao existir. Por isso o CI
+   instala o Electron (com cache) mesmo nunca abrindo janela. Tornar esse
+   require preguicoso deixaria a logica testavel sem o runtime; e mudanca em
+   codigo de producao do desktop que nao da para verificar num runner Linux,
+   entao ficou anotada, nao feita.
+
 ## Auditoria de seguranca (26/08/2026) — o que foi corrigido e o que ficou
 
 Varredura de caixa-branca do gateway, das permissoes, do convite e dos
