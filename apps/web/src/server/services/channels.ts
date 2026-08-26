@@ -267,3 +267,68 @@ export async function deleteCategory(
   });
   if (result.count === 0) throw new Error("Categoria nao encontrada");
 }
+
+/**
+ * Move um canal para uma posicao — e, se preciso, para outra categoria.
+ *
+ * RECALCULA A CATEGORIA INTEIRA como 0..n em vez de deslocar vizinhos.
+ * Deslocar exige que as posicoes atuais estejam sem buracos e sem empates, e
+ * elas nao estao: canais nascem com `position` default e duas criacoes
+ * simultaneas empatam. Reescrever tudo e idempotente — mandar a mesma
+ * operacao duas vezes da no mesmo — e conserta, de passagem, qualquer bagunca
+ * que ja exista.
+ *
+ * `categoryId` null e "canal solto", fora de categoria — o mesmo que a arvore
+ * ja usa.
+ */
+export async function reorderChannel(params: {
+  serverId: string;
+  channelId: string;
+  categoryId: string | null;
+  index: number;
+}): Promise<void> {
+  const { serverId, channelId, categoryId, index } = params;
+
+  const canal = await prisma.channel.findFirst({
+    where: { id: channelId, serverId },
+    select: { id: true, categoryId: true },
+  });
+  if (!canal) throw new Error("Canal nao encontrado");
+
+  /**
+   * A categoria de DESTINO tem de ser deste servidor. Sem esta checagem, o id
+   * chega do navegador e nada impediria mandar um canal para a categoria de
+   * outro servidor — que some da arvore dos dois lados.
+   */
+  if (categoryId !== null) {
+    const destino = await prisma.category.findFirst({
+      where: { id: categoryId, serverId },
+      select: { id: true },
+    });
+    if (!destino) throw new Error("Categoria nao encontrada");
+  }
+
+  const irmaos = await prisma.channel.findMany({
+    where: { serverId, categoryId },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  // Tira o proprio da lista antes de reinserir: mudando de categoria ele nem
+  // estava ali, e na mesma categoria ficaria duplicado.
+  const semEle = irmaos.map((c) => c.id).filter((id) => id !== channelId);
+  const alvo = Math.max(0, Math.min(index, semEle.length));
+  const ordenados = [...semEle.slice(0, alvo), channelId, ...semEle.slice(alvo)];
+
+  await prisma.$transaction([
+    // A categoria muda numa escrita separada porque so ela sai da categoria
+    // antiga; os demais so precisam de posicao nova.
+    prisma.channel.update({
+      where: { id: channelId },
+      data: { categoryId },
+    }),
+    ...ordenados.map((id, posicao) =>
+      prisma.channel.update({ where: { id }, data: { position: posicao } }),
+    ),
+  ]);
+}

@@ -1,0 +1,11 @@
+-- Ordem dos servidores no trilho, POR PESSOA.
+--
+-- Fica em ServerMember e nao em Server: a ordem do trilho e preferencia de
+-- quem olha. No servidor, arrastar um icone reordenaria a tela de todo mundo
+-- que e membro dele — uma pessoa mexendo no proprio atalho mudaria o de
+-- estranhos.
+--
+-- Default 0 para TODAS as linhas existentes, e o desempate continua sendo o
+-- `joinedAt`, que era o criterio unico ate aqui. Com todos empatados em 0, a
+-- ordem que as pessoas ja viam nao muda ate alguem arrastar algo.
+ALTER TABLE "ServerMember" ADD COLUMN "position" INTEGER NOT NULL DEFAULT 0;

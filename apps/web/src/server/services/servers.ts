@@ -124,7 +124,14 @@ export async function createServerForUser(params: {
 export async function listServersForUser(userId: string): Promise<PublicServer[]> {
   const memberships = await prisma.serverMember.findMany({
     where: { userId },
-    orderBy: { joinedAt: "asc" },
+    /**
+     * `position` primeiro, `joinedAt` como desempate.
+     *
+     * O desempate importa: a coluna nasceu com 0 para todo mundo, entao sem
+     * ele a ordem existente viraria indefinida da noite para o dia — a mesma
+     * pessoa veria os icones em ordens diferentes a cada carregamento.
+     */
+    orderBy: [{ position: "asc" }, { joinedAt: "asc" }],
     select: {
       server: {
         select: {
@@ -345,4 +352,42 @@ export async function getServerContext(
       permissions: role.permissions.toString(),
     })),
   };
+}
+
+/**
+ * Grava a ordem do trilho desta pessoa.
+ *
+ * Recebe a lista INTEIRA e regrava todas as posicoes como 0..n, em vez de
+ * mover um item. Idempotente: mandar a mesma lista duas vezes da no mesmo, e
+ * uma reordenacao concorrente na outra aba nao deixa buracos nem empates.
+ *
+ * Ids desconhecidos sao IGNORADOS em vez de darem erro: a lista chega do
+ * navegador, e alguem que saiu de um servidor noutra aba mandaria um id que
+ * nao existe mais. Recusar a operacao inteira por causa disso perderia a
+ * reordenacao legitima dos outros.
+ */
+export async function reorderServers(
+  userId: string,
+  orderedServerIds: string[],
+): Promise<void> {
+  const meus = await prisma.serverMember.findMany({
+    where: { userId },
+    select: { id: true, serverId: true },
+  });
+  const porServidor = new Map(meus.map((m) => [m.serverId, m.id]));
+
+  const updates = orderedServerIds
+    .map((serverId, indice) => ({ memberId: porServidor.get(serverId), indice }))
+    .filter((item): item is { memberId: string; indice: number } =>
+      Boolean(item.memberId),
+    );
+
+  await prisma.$transaction(
+    updates.map(({ memberId, indice }) =>
+      prisma.serverMember.update({
+        where: { id: memberId },
+        data: { position: indice },
+      }),
+    ),
+  );
 }

@@ -1686,6 +1686,67 @@ proprio clique.
 - **Sem reacao em conversa direta pela tela** — o caminho do servidor funciona
   e o gateway trata os dois, mas a DM ainda nao foi verificada de ponta a ponta.
 
+## Reordenar arrastando (canais e servidores)
+
+`dnd-kit` nos dois lugares. As setas ao lado do canal continuam funcionando —
+arrastar nao substituiu nada, so acrescentou.
+
+### A distancia de ativacao e o que faz isto funcionar
+
+`activationConstraint: { distance: 6 }` no `PointerSensor`. Sem ela, QUALQUER
+clique vira o comeco de um arrasto e o canal para de navegar — o item mais caro
+da funcionalidade seria ter quebrado o clique. 6px separa "cliquei" de "puxei"
+sem exigir precisao.
+
+### Ordem dos servidores e POR PESSOA
+
+`ServerMember.position`, e nao `Server.position`. A ordem do trilho e
+preferencia de quem olha: guardar no servidor faria arrastar um icone
+reordenar a tela de todo mundo que e membro dele.
+
+A coluna nasce com 0 para todos, e o desempate continua sendo `joinedAt` — o
+criterio unico ate aqui. Sem o desempate, a ordem que as pessoas ja viam
+viraria indefinida da noite para o dia.
+
+### O canal recalcula a CATEGORIA INTEIRA
+
+`reorderChannel` reescreve as posicoes do destino como 0..n em vez de deslocar
+vizinhos. Deslocar exige posicoes sem buracos e sem empates, e elas nao estao:
+canais nascem com `position` default e duas criacoes simultaneas empatam.
+Reescrever e idempotente e conserta, de passagem, qualquer bagunca que ja
+exista.
+
+A categoria de destino e conferida contra o servidor: o id chega do navegador,
+e sem isso daria para mandar um canal para a categoria de OUTRO servidor — onde
+ele sumiria dos dois lados.
+
+### So quem pode editar arrasta
+
+`useSortable({ disabled: !canEdit })` — `disabled`, e nao "nao chamar o hook",
+que quebraria a regra de hooks quando a permissao mudasse no meio da sessao (e
+ela muda: cargo editado ja recalcula a arvore de quem esta conectado).
+
+Sem isso, um membro comum arrastaria, veria o canal se mover, e a action seria
+recusada no servidor — a tela voltaria atras sozinha, o que parece defeito e
+nao "voce nao pode".
+
+### Um contexto so para a arvore inteira
+
+Arrastar ENTRE categorias so funciona se as duas pontas viverem no mesmo
+`DndContext`. Cada lista e um `SortableContext` com `useDroppable` proprio — e
+o droppable existe pela categoria VAZIA: sem area soltavel propria nao haveria
+sobre o que soltar ali, e mover um canal para uma categoria sem canais seria
+impossivel. Que e justamente o caso em que arrastar bate as setas.
+
+### Limitacoes
+
+- **Categorias nao se reordenam** arrastando; so canais e servidores.
+- **A categoria de ORIGEM nao e recalculada** ao mover um canal para fora, entao
+  ela pode ficar com buracos (0, 2, 3). Inofensivo — a ordem e relativa — mas
+  nao e limpo.
+- **Sem toque:** o `PointerSensor` cobre mouse e caneta; celular nao foi
+  verificado.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

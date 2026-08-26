@@ -24,6 +24,7 @@ import {
   deleteChannel,
   getChannelAccess,
   moveChannel,
+  reorderChannel,
   renameCategory,
   setChannelAccess,
   updateChannel,
@@ -348,6 +349,41 @@ export async function assertChannelVisibleAction(
   try {
     await requireMember(serverId);
     await requireChannelPermission(serverId, channelId, "VIEW_CHANNEL");
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Reordena um canal por ARRASTO: nova categoria e novo indice.
+ *
+ * Mesma permissao do mover por setas (`EDIT_CHANNEL` no canal arrastado), e
+ * nao uma nova: e a mesma acao com outro gesto. Quem nao podia mover pelas
+ * setas tambem nao move arrastando — o servidor decide, e a tela so esconde o
+ * que seria recusado.
+ */
+export async function reorderChannelAction(
+  serverId: string,
+  channelId: string,
+  categoryId: string | null,
+  index: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
+
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0) {
+      return fail("Posicao invalida.");
+    }
+
+    await reorderChannel({ serverId, channelId, categoryId, index });
+    /**
+     * Mesmo aviso do mover por setas. Mudar de CATEGORIA pode mexer no que
+     * cada pessoa enxerga (categoria privada), entao nao basta redesenhar a
+     * arvore de quem arrastou.
+     */
+    await resyncGatewayRooms({ serverId });
+    refresh(serverId);
     return ok();
   } catch (error) {
     return toActionError(error);

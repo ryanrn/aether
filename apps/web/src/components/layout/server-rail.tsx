@@ -1,6 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Plus, Users } from "lucide-react";
@@ -8,6 +25,7 @@ import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 import { useShellStore } from "@/lib/stores/shell-store";
+import { reorderServersAction } from "@/server/actions/servers";
 import { useUnreadByServer } from "@/lib/stores/realtime-store";
 
 /**
@@ -28,6 +46,40 @@ export function ServerRail({
   const emAmigos = pathname === "/app/amigos";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
+
+  /**
+   * A ordem local existe para o arrasto ser INSTANTANEO.
+   *
+   * Esperar o servidor responder para so entao mover o icone faria o item
+   * voltar ao lugar antigo por uma fracao de segundo — o gesto pareceria ter
+   * falhado. Aqui a lista reordena na hora e a action grava depois; se ela
+   * falhar, o `useEffect` abaixo devolve a ordem que veio do servidor.
+   */
+  const [ordem, setOrdem] = useState(servers);
+  useEffect(() => setOrdem(servers), [servers]);
+
+  /**
+   * `PointerSensor` com distancia minima: sem ela, QUALQUER clique vira o
+   * comeco de um arrasto e o link nao navega mais. 6px separa "cliquei" de
+   * "puxei" sem exigir precisao.
+   */
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function aoSoltar(evento: DragEndEvent) {
+    const { active, over } = evento;
+    if (!over || active.id === over.id) return;
+
+    const de = ordem.findIndex((s) => s.id === active.id);
+    const para = ordem.findIndex((s) => s.id === over.id);
+    if (de === -1 || para === -1) return;
+
+    const nova = arrayMove(ordem, de, para);
+    setOrdem(nova);
+    void reorderServersAction(nova.map((s) => s.id));
+  }
 
   /**
    * Publica a lista para a barra de TITULO, que vive no layout raiz e nao tem
@@ -82,89 +134,25 @@ export function ServerRail({
 
         <span className="h-px w-8 bg-base-700" />
 
-        {servers.map((server) => {
-          const active = server.id === activeId;
-          const quantas = naoLidas[server.id] ?? 0;
-          return (
-            <Link
-              key={server.id}
-              href={`/app/s/${server.id}`}
-              title={server.name}
-              // Mesmo motivo do canal: arraste nativo de link mostra a URL.
-              draggable={false}
-              className="group relative flex w-full justify-center"
-            >
-              <span
-                className={cn(
-                  "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-                  active ? "h-7" : "group-hover:h-3.5",
-                )}
+        <DndContext
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          onDragEnd={aoSoltar}
+        >
+          <SortableContext
+            items={ordem.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {ordem.map((server) => (
+              <ItemDeServidor
+                key={server.id}
+                server={server}
+                ativo={server.id === activeId}
+                naoLidas={naoLidas[server.id] ?? 0}
               />
-              {/*
-                Caixa do TAMANHO DO ICONE, e nao do link.
-
-                O link ocupa a largura inteira do trilho (64px) e o icone tem
-                44px centrados. Ancorar a bolinha no link a jogava 12px alem da
-                borda direita do icone — para fora do trilho, medido. Ela
-                precisa do canto do ICONE, entao o icone e que tem de ser o
-                ponto de referencia.
-              */}
-              <span className="relative">
-              <span
-                className={cn(
-                  "grid h-11 w-11 place-items-center overflow-hidden rounded-xl text-[13px] font-semibold text-ink-100",
-                  "transition-all duration-150",
-                  active ? "bg-base-800" : "group-hover:scale-105",
-                )}
-                style={
-                  server.iconUrl
-                    ? undefined
-                    : { backgroundColor: colorFromId(server.id) }
-                }
-              >
-                {server.iconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={server.iconUrl}
-                    alt={server.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  initials(server.name)
-                )}
-              </span>
-
-              {/*
-                Contador de nao lidas, no canto SUPERIOR DIREITO do icone.
-
-                Sai um pouco para fora do quadrado (`-top-0.5 -right-0.5`) e
-                leva um anel da cor do trilho: sem o anel, o vermelho encostado
-                no icone vira uma mancha, e sem sair para fora ele some dentro
-                das imagens escuras.
-
-                `pointer-events-none` porque o alvo de clique e o servidor
-                inteiro — a bolinha nao pode roubar o clique.
-
-                Some sozinho quando o numero zera: `unread` e o unico dono
-                dessa conta, e ele ja e limpo ao abrir o canal.
-              */}
-              {quantas > 0 ? (
-                <span
-                  aria-label={`${quantas} nao lidas em ${server.name}`}
-                  className={cn(
-                    "pointer-events-none absolute -right-0.5 -top-0.5",
-                    "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1",
-                    "bg-signal-dnd text-[10px] font-bold leading-none text-white",
-                    "ring-2 ring-base-900",
-                  )}
-                >
-                  {quantas > 99 ? "99+" : quantas}
-                </span>
-              ) : null}
-              </span>
-            </Link>
-          );
-        })}
+            ))}
+          </SortableContext>
+        </DndContext>
 
         {servers.length > 0 ? (
           <span className="h-px w-8 bg-base-700" />
@@ -185,5 +173,103 @@ export function ServerRail({
 
       <CreateServerModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </>
+  );
+}
+
+/**
+ * Um servidor no trilho — arrastavel.
+ *
+ * Componente proprio porque `useSortable` e um hook: chamado dentro do `map`
+ * do pai, quebraria a regra de hooks assim que a lista mudasse de tamanho.
+ *
+ * O LINK CONTINUA SENDO LINK. Os `listeners` do dnd-kit vao no mesmo elemento,
+ * e e o `activationConstraint` de 6px que separa os dois gestos: clique curto
+ * navega, puxar arrasta. Sem essa distancia, arrastar e clicar viram a mesma
+ * coisa e o trilho para de navegar.
+ */
+function ItemDeServidor({
+  server,
+  ativo,
+  naoLidas,
+}: {
+  server: PublicServer;
+  ativo: boolean;
+  naoLidas: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: server.id });
+
+  return (
+    <Link
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        // Enquanto arrasta, o item fica translucido e por cima dos outros.
+        opacity: isDragging ? 0.4 : undefined,
+        zIndex: isDragging ? 40 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+      href={`/app/s/${server.id}`}
+      title={server.name}
+      // Mesmo motivo do canal: arraste nativo de link mostra a URL.
+      draggable={false}
+      className="group relative flex w-full cursor-pointer justify-center"
+    >
+      <span
+        className={cn(
+          "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+          ativo ? "h-7" : "group-hover:h-3.5",
+        )}
+      />
+
+      <span className="relative">
+        <span
+          className={cn(
+            "grid h-11 w-11 place-items-center overflow-hidden rounded-xl text-[13px] font-semibold text-ink-100",
+            "transition-all duration-150",
+            ativo ? "bg-base-800" : "group-hover:scale-105",
+          )}
+          style={
+            server.iconUrl
+              ? undefined
+              : { backgroundColor: colorFromId(server.id) }
+          }
+        >
+          {server.iconUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={server.iconUrl}
+              alt={server.name}
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            initials(server.name)
+          )}
+        </span>
+
+        {naoLidas > 0 ? (
+          <span
+            aria-label={`${naoLidas} nao lidas em ${server.name}`}
+            className={cn(
+              "pointer-events-none absolute -right-0.5 -top-0.5",
+              "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1",
+              "bg-signal-dnd text-[10px] font-bold leading-none text-white",
+              "ring-2 ring-base-900",
+            )}
+          >
+            {naoLidas > 99 ? "99+" : naoLidas}
+          </span>
+        ) : null}
+      </span>
+    </Link>
   );
 }

@@ -125,6 +125,15 @@ model ServerMember {
   userId   String
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   nickname String?
+  /// Ordem do servidor no trilho DESTA pessoa.
+  ///
+  /// Por membro, e nao no proprio Server: a ordem do trilho e uma preferencia
+  /// de quem olha. Guardar no servidor faria arrastar um icone reordenar a
+  /// tela de todo mundo que e membro dele.
+  ///
+  /// Empate cai no `joinedAt`, que era o criterio unico antes desta coluna —
+  /// com todos em 0 (o padrao), a ordem existente nao muda.
+  position Int      @default(0)
   joinedAt DateTime @default(now())
 
   roles      MemberRole[]

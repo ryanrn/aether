@@ -1,6 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -36,6 +51,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ChannelMembers } from "./channel-members";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { reorderChannelAction } from "@/server/actions/channels";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
 import { CategoryFormModal } from "@/components/channels/category-form-modal";
 import { InviteButton } from "@/components/servers/invite-button";
@@ -69,6 +85,61 @@ export function ChannelSidebar({
 }) {
   const params = useParams<{ channelId?: string }>();
   const activeChannelId = params?.channelId;
+  /**
+   * "Soltos" tambem e um container, e precisa de um id proprio: `null` nao
+   * serve como chave de `Map` nem como id de area soltavel.
+   */
+  const SOLTOS = "__soltos__";
+
+  /** De qual container e cada canal — para saber o destino ao soltar. */
+  const containerDoCanal = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const canal of looseChannels) mapa.set(canal.id, SOLTOS);
+    for (const categoria of categories) {
+      for (const canal of categoria.channels) mapa.set(canal.id, categoria.id);
+    }
+    return mapa;
+  }, [looseChannels, categories]);
+
+  const sensores = useSensors(
+    // 6px separa "cliquei no canal" de "puxei o canal". Sem isso o clique
+    // deixa de navegar.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  function aoSoltarCanal(evento: DragEndEvent) {
+    const { active, over } = evento;
+    if (!over) return;
+
+    const canalId = String(active.id);
+    const alvoId = String(over.id);
+    if (canalId === alvoId) return;
+
+    /**
+     * Soltar SOBRE outro canal usa o container dele; soltar sobre a area vazia
+     * de uma categoria usa o id `cat:<id>`. O segundo caso e o unico jeito de
+     * mover para uma categoria que ainda nao tem nada.
+     */
+    const destino = alvoId.startsWith("cat:")
+      ? alvoId.slice(4)
+      : (containerDoCanal.get(alvoId) ?? SOLTOS);
+
+    const irmaos = destino === SOLTOS
+      ? looseChannels
+      : (categories.find((c) => c.id === destino)?.channels ?? []);
+
+    const indiceAlvo = irmaos.findIndex((c) => c.id === alvoId);
+    // Sobre a area vazia: vai para o fim.
+    const indice = indiceAlvo === -1 ? irmaos.length : indiceAlvo;
+
+    void reorderChannelAction(
+      serverId,
+      canalId,
+      destino === SOLTOS ? null : destino,
+      indice,
+    );
+  }
+
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [channelModal, setChannelModal] = useState<
     { mode: "create"; categoryId: string | null } | { mode: "edit"; channelId: string } | null
@@ -131,8 +202,18 @@ export function ChannelSidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
+          {/*
+            UM contexto para a arvore inteira, e nao um por categoria: arrastar
+            ENTRE categorias so funciona se as duas pontas viverem no mesmo
+            `DndContext`.
+          */}
+          <DndContext
+            sensors={sensores}
+            collisionDetection={closestCenter}
+            onDragEnd={aoSoltarCanal}
+          >
           {looseChannels.length > 0 ? (
-            <ul className="mb-3 flex flex-col gap-0.5">
+            <ListaSoltavel id={SOLTOS} itens={looseChannels.map((c) => c.id)} className="mb-3 flex flex-col gap-0.5">
               {looseChannels.map((channel) => (
                 <ChannelRow
                   key={channel.id}
@@ -146,7 +227,7 @@ export function ChannelSidebar({
                   onEdit={() => setChannelModal({ mode: "edit", channelId: channel.id })}
                 />
               ))}
-            </ul>
+            </ListaSoltavel>
           ) : null}
 
           {categories.map((category) => {
@@ -200,7 +281,11 @@ export function ChannelSidebar({
                 </div>
 
                 {!isCollapsed ? (
-                  <ul className="mt-0.5 flex flex-col gap-0.5">
+                  <ListaSoltavel
+                    id={`cat:${category.id}`}
+                    itens={category.channels.map((c) => c.id)}
+                    className="mt-0.5 flex flex-col gap-0.5"
+                  >
                     {category.channels.map((channel) => (
                       <ChannelRow
                         key={channel.id}
@@ -221,11 +306,12 @@ export function ChannelSidebar({
                         Sem canais visiveis
                       </li>
                     ) : null}
-                  </ul>
+                  </ListaSoltavel>
                 ) : null}
               </section>
             );
           })}
+          </DndContext>
 
           {canCreate ? (
             <div className="mt-1 flex flex-col gap-1 px-1">
@@ -375,6 +461,26 @@ function ChannelRow({
   const canDelete = channelAllows(channelPermissions, channel.id, "DELETE_CHANNEL");
 
   const { entrar } = useEntrarNaVoz();
+
+  /**
+   * SO quem pode editar arrasta.
+   *
+   * `disabled` em vez de nao chamar o hook: hook condicional quebraria a regra
+   * assim que a permissao mudasse no meio da sessao — e ela muda, porque cargo
+   * editado ja recalcula a arvore de quem esta conectado.
+   *
+   * Sem isto, um membro comum arrastaria o canal, veria ele se mover, e a
+   * action seria recusada no servidor — a tela voltaria atras sozinha, o que
+   * parece defeito e nao "voce nao pode".
+   */
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: channel.id, disabled: !canEdit });
   const podeConectar = channelAllows(channelPermissions, channel.id, "CONNECT");
 
   /**
@@ -399,7 +505,14 @@ function ChannelRow({
   }
 
   return (
-    <li className="group/channel">
+    <li
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : undefined,
+      }}
+      className="group/channel"
+    >
       <div
         className={cn(
           "flex items-center rounded-sm transition-colors duration-100",
@@ -407,6 +520,9 @@ function ChannelRow({
         )}
       >
         <Link
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
           href={`/app/s/${serverId}/c/${channel.id}`}
           onClick={aoClicarNoCanal}
           /**
@@ -537,5 +653,43 @@ function ChannelRow({
         podera ser desfeita — as mensagens do canal vao junto.
       </ConfirmDialog>
     </li>
+  );
+}
+
+/**
+ * Uma lista de canais que aceita soltar dentro.
+ *
+ * O `useDroppable` existe para a categoria VAZIA: sem uma area soltavel
+ * propria, nao haveria sobre o que soltar ali, e mover um canal para uma
+ * categoria sem canais seria impossivel — justamente o caso em que arrastar e
+ * mais util que as setas.
+ */
+function ListaSoltavel({
+  id,
+  itens,
+  className,
+  children,
+}: {
+  id: string;
+  itens: string[];
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  return (
+    <SortableContext items={itens} strategy={verticalListSortingStrategy}>
+      <ul
+        ref={setNodeRef}
+        className={cn(
+          className,
+          // Realce so quando ha algo pairando: um contorno permanente viraria
+          // ruido em cada categoria da arvore.
+          isOver && "rounded-md bg-accent-500/[0.06] ring-1 ring-accent-600/30",
+        )}
+      >
+        {children}
+      </ul>
+    </SortableContext>
   );
 }

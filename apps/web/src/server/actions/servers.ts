@@ -16,6 +16,7 @@ import { evictFromGateway } from "../realtime-notify";
 import {
   createServerForUser,
   generateInviteCode,
+  reorderServers,
 } from "../services/servers";
 import { joinServerByCode } from "../services/invites";
 import { uploadServerIcon } from "../storage";
@@ -278,6 +279,38 @@ export async function leaveServerAction(
     });
 
     revalidatePath("/app");
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Reordena o trilho de servidores DESTA pessoa.
+ *
+ * Nao ha checagem de permissao de servidor aqui de proposito: a ordem e uma
+ * preferencia de quem olha, e a unica coisa que precisa ser verdade e que a
+ * sessao existe. `reorderServers` so mexe nas linhas de `ServerMember` do
+ * proprio usuario — um id de servidor alheio simplesmente nao acha membro e e
+ * ignorado.
+ */
+export async function reorderServersAction(
+  orderedServerIds: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const session = await requireUser();
+
+    if (
+      !Array.isArray(orderedServerIds) ||
+      orderedServerIds.some((id) => typeof id !== "string")
+    ) {
+      return fail("Ordem invalida.");
+    }
+    // Teto de sanidade: ninguem tem mil servidores, e a lista vem do cliente.
+    if (orderedServerIds.length > 200) return fail("Ordem invalida.");
+
+    await reorderServers(session.user.id, orderedServerIds as string[]);
+    revalidatePath("/app", "layout");
     return ok();
   } catch (error) {
     return toActionError(error);
