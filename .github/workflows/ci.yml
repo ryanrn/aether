@@ -30,13 +30,24 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          # O piso declarado em `engines`. Rodar no piso e de proposito: e o
-          # que pega uso acidental de API que so existe em Node mais novo.
-          node-version: "20.11"
+          # A MESMA versao que producao roda: o gateway e `node:22-slim` no
+          # Dockerfile, e a Vercel roda 22+.
+          #
+          # A primeira versao deste arquivo fixava "20.11", o piso declarado em
+          # `engines`, com o argumento de que rodar no piso pega uso acidental
+          # de API nova. O argumento era bom e o piso e que estava errado: o
+          # Vitest 4 importa `styleText` de `node:util`, que so existe a partir
+          # do 20.12. O CI quebrou na primeira rodada e provou que o `engines`
+          # mentia — nada neste projeto jamais rodou em 20.11.
+          #
+          # A licao ficou: piso que ninguem exercita vira ficcao. Entao o
+          # `engines` passou a declarar `>=22`, que e o que buildamos, rodamos
+          # em producao e verificamos aqui.
+          node-version: "22"
           cache: npm
 
       - name: Instalar

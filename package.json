@@ -39,7 +39,7 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22"
   },
   "allowScripts": {
     "@prisma/client@6.19.2": true,
