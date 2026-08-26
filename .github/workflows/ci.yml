@@ -1,0 +1,71 @@
+name: CI
+
+# Push no master e todo PR. Nao ha branch protegida ainda; quando houver,
+# este e o job para exigir.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Um PR que recebe varios pushes seguidos nao precisa terminar as rodadas
+# antigas — so a ultima diz alguma coisa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    env:
+      # O Prisma exige as variaveis DEFINIDAS para gerar o cliente, mas nao
+      # conecta em nada durante o `generate` — ele so le o schema. Valor falso
+      # e suficiente, e nenhum segredo precisa existir neste job.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+
+      # `apps/desktop` depende do Electron, que sao ~100 MB de binario baixados
+      # na instalacao. O CI nunca abre uma janela: pular o download corta o
+      # tempo de instalacao sem tirar nada do que e verificado aqui.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # O piso declarado em `engines`. Rodar no piso e de proposito: e o
+          # que pega uso acidental de API que so existe em Node mais novo.
+          node-version: "20.11"
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Gerar cliente Prisma
+        # NAO e `npm run db:generate`: aquele script passa por `dotenv -e .env`,
+        # e o `.env` nao existe no CI (nem deve). Chamando o script do workspace
+        # direto, as variaveis do job acima bastam.
+        run: npm run generate --workspace=@aether/db
+
+      - name: Typecheck (workspaces)
+        run: npm run typecheck
+
+      - name: Typecheck (testes)
+        run: npm run typecheck:tests
+
+      - name: Testes
+        run: npx vitest run
+
+# O QUE ESTE CI *NAO* COBRE, e vale saber antes de confiar demais nele:
+#
+# Os `scripts/verify-*.mjs` ficam de fora. Eles sao testes de integracao de
+# verdade — precisam do Postgres com dados semeados, do gateway no ar e, no
+# caso do `verify-seguranca.mjs`, de duas conexoes simultaneas ao banco. Trazer
+# isso para ca pediria subir Postgres e Redis como servicos do job e semear o
+# banco a cada rodada. Da para fazer, e nao foi feito nesta rodada; ate la eles
+# continuam sendo rodados a mao antes de subir, como esta no README.
+#
+# Tambem fica de fora o `apps/desktop`: o modulo nativo do som e C++ compilado
+# contra os headers do Electron para Windows, e nao ha runner Windows aqui.
+# O que o CI garante do desktop e so o que `game-detect.test.ts` cobre.

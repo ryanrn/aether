@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — modulo do desktop e JavaScript puro, sem tipos
 import detect from "../../apps/desktop/src/game-detect.js";
 
+/**
+ * O que `jogosEmSaida` devolve.
+ *
+ * Declarado aqui porque `game-detect.js` e JavaScript puro — o desktop nao
+ * passa por `tsc` (ver o script `typecheck` dele). Sem isto, o retorno chega
+ * como `any` e cada `.map((j) => ...)` vira erro de `noImplicitAny`, que era
+ * exatamente o que mantinha `npm run typecheck:tests` vermelho e, por isso,
+ * fora do CI. Anotar aqui e o menor lugar possivel para a informacao: o
+ * modulo continua JS, e so o teste declara o que consome dele.
+ */
+type JogoAchado = { chave: string; nome: string; caminhos: string[] };
+
 const {
   pastaDoJogo,
   ehJogo,
@@ -94,7 +106,7 @@ describe("varredura da saida de processos", () => {
   ].join("\r\n");
 
   it("acha o jogo e ignora o resto da maquina", () => {
-    expect(jogosEmSaida(saidaReal, []).map((j) => j.chave)).toEqual([
+    expect(jogosEmSaida(saidaReal, []).map((j: JogoAchado) => j.chave)).toEqual([
       "Hollow Knight",
     ]);
   });
@@ -104,7 +116,7 @@ describe("varredura da saida de processos", () => {
       "E:\\SteamLibrary\\steamapps\\common\\Hollow Knight\\hollow_knight.exe",
       "E:\\SteamLibrary\\steamapps\\common\\Hollow Knight\\crashhandler.exe",
     ].join("\n");
-    expect(jogosEmSaida(comAuxiliares, []).map((j) => j.chave)).toEqual([
+    expect(jogosEmSaida(comAuxiliares, []).map((j: JogoAchado) => j.chave)).toEqual([
       "Hollow Knight",
     ]);
   });
@@ -188,15 +200,15 @@ describe("Steam e Epic juntas na mesma varredura", () => {
 
   it("acha os dois, sem duplicar o jogo da Epic", () => {
     const nomes = jogosEmSaida(saida, catalogo)
-      .map((j) => j.chave)
+      .map((j: JogoAchado) => j.chave)
       .sort();
     expect(nomes).toEqual(["Grand Theft Auto V", "Hollow Knight"]);
   });
 
   it("o da Epic ja vem com o nome pronto; o da Steam ainda nao", () => {
     const achados = jogosEmSaida(saida, catalogo);
-    const epic = achados.find((j) => j.chave === "Grand Theft Auto V");
-    const steam = achados.find((j) => j.chave === "Hollow Knight");
+    const epic = achados.find((j: JogoAchado) => j.chave === "Grand Theft Auto V");
+    const steam = achados.find((j: JogoAchado) => j.chave === "Hollow Knight");
     // Epic entrega DisplayName no manifesto; Steam exige ler o .acf depois.
     expect(epic?.nome).toBe("Grand Theft Auto V");
     expect(steam?.nome).toBeNull();
