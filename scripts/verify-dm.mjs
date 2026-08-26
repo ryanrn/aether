@@ -214,6 +214,7 @@ async function main() {
   }
 
   await fluxoNoGateway();
+  await dmDeServidor();
 
   console.log(`\n${passed} ok, ${failed} falhou\n`);
   for (const id of sessoesCriadas) {
@@ -295,8 +296,29 @@ async function fluxoNoGateway() {
     checar("conversa consigo mesmo e recusada", !comigo.ok);
 
     if (estranho) {
+      /**
+       * A chave do estranho e DESLIGADA de proposito antes de tentar.
+       *
+       * Sem isso o teste passou a falhar quando a conversa a partir de
+       * servidor nasceu — e com razao: se os dois dividem um servidor e ele
+       * aceita, abrir e o comportamento CERTO. O que continua valendo e
+       * "sem amizade e sem a porta de servidor, nao abre", e e isso que se
+       * afere aqui.
+       */
+      const chaveAntes = await prisma.user.findUnique({
+        where: { id: estranho.id },
+        select: { allowServerDms: true },
+      });
+      await prisma.user.update({
+        where: { id: estranho.id },
+        data: { allowServerDms: false },
+      });
       const naoAmigo = await pedir(socketA, "dm:open", { userId: estranho.id });
-      checar("abrir com quem nao e amigo e recusado", !naoAmigo.ok);
+      checar("sem amizade e sem porta de servidor, nao abre", !naoAmigo.ok);
+      await prisma.user.update({
+        where: { id: estranho.id },
+        data: { allowServerDms: chaveAntes?.allowServerDms ?? true },
+      });
     }
 
     /** A mensagem tem de CHEGAR no outro, nao so ser aceita. */
@@ -409,20 +431,57 @@ async function fluxoNoGateway() {
       select: { id: true, requesterId: true, addresseeId: true },
     });
     if (relacao) {
+      const chaveB = await prisma.user.findUnique({
+        where: { id: bId },
+        select: { allowServerDms: true },
+      });
       await prisma.friendship.delete({ where: { id: relacao.id } });
       try {
-        const semAmizade = await pedir(socketA, "message:history", {
+        /**
+         * PRIMEIRO o que MUDOU quando a conversa por servidor nasceu, porque
+         * e a consequencia menos obvia da funcionalidade: desfazer amizade
+         * SOZINHO nao basta mais para se livrar de alguem que divide um
+         * servidor com voce e tem a chave ligada. Nao ha bloqueio por pessoa
+         * no produto; esta anotado nas limitacoes do README.
+         */
+        await prisma.user.update({
+          where: { id: bId },
+          data: { allowServerDms: true },
+        });
+        const aindaAlcanca = await pedir(socketA, "message:history", {
           conversationId: dmId,
         });
-        checar("desfazer amizade fecha a conversa", !semAmizade.ok);
+        const dividemServidor = aindaAlcanca.ok;
+        checar(
+          dividemServidor
+            ? "desfazer amizade NAO fecha quando dividem servidor (comportamento novo)"
+            : "desfazer amizade fecha quando nao dividem servidor",
+          true,
+        );
+
+        /** Com as DUAS portas fechadas, o acesso acaba de verdade. */
+        await prisma.user.update({
+          where: { id: bId },
+          data: { allowServerDms: false },
+        });
+        const semNada = await pedir(socketA, "message:history", {
+          conversationId: dmId,
+        });
+        checar("sem amizade e com a chave desligada, a conversa fecha", !semNada.ok);
 
         const listaDepois = await pedir(socketA, "dm:list");
         checar(
-          "a conversa some de dm:list depois de desfazer",
+          "e some de dm:list",
           listaDepois.ok && !listaDepois.conversas.some((c) => c.id === dmId),
           listaDepois.error,
         );
       } finally {
+        await prisma.user
+          .update({
+            where: { id: bId },
+            data: { allowServerDms: chaveB?.allowServerDms ?? true },
+          })
+          .catch(() => {});
         await prisma.friendship.create({
           data: {
             requesterId: relacao.requesterId,
@@ -436,6 +495,137 @@ async function fluxoNoGateway() {
   } finally {
     socketA.close();
     socketB.close();
+    if (dmId) {
+      await prisma
+        .$executeRaw`DELETE FROM "DmChannel" WHERE id = ${dmId}`
+        .catch(() => {});
+    }
+  }
+}
+
+/**
+ * O caminho "conheci num servidor", e a chave que o governa.
+ *
+ * Duas portas existem: amizade, ou servidor em comum com `allowServerDms`
+ * ligado no OUTRO. Este bloco exercita a segunda — e, principalmente, prova
+ * que DESLIGAR fecha a porta de verdade, em vez de so sumir da tela.
+ */
+async function dmDeServidor() {
+  console.log(`
+Conversa a partir de servidor
+`);
+
+  /** Duas pessoas do MESMO servidor que NAO sao amigas. */
+  const membros = await prisma.serverMember.findMany({
+    select: { userId: true, serverId: true },
+  });
+  const porServidor = new Map();
+  for (const m of membros) {
+    if (!porServidor.has(m.serverId)) porServidor.set(m.serverId, []);
+    porServidor.get(m.serverId).push(m.userId);
+  }
+
+  const amizades = await prisma.friendship.findMany({
+    select: { requesterId: true, addresseeId: true },
+  });
+  const saoAmigos = (a, b) =>
+    amizades.some(
+      (f) =>
+        (f.requesterId === a && f.addresseeId === b) ||
+        (f.requesterId === b && f.addresseeId === a),
+    );
+
+  let par = null;
+  for (const ids of porServidor.values()) {
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a !== b && !saoAmigos(a, b)) {
+          par = [a, b];
+          break;
+        }
+      }
+      if (par) break;
+    }
+    if (par) break;
+  }
+
+  if (!par) {
+    console.log("  -- pulado: nao ha dois membros nao-amigos no mesmo servidor");
+    return;
+  }
+  const [aId, bId] = par;
+
+  const socketA = await conectar(await cookieDeSessao(aId));
+  if (!socketA) {
+    console.log("  -- pulado: gateway fora do ar");
+    return;
+  }
+
+  const antes = await prisma.user.findUnique({
+    where: { id: bId },
+    select: { allowServerDms: true },
+  });
+
+  let dmId = null;
+  try {
+    /** Porta ABERTA: divide servidor e o outro aceita. */
+    await prisma.user.update({
+      where: { id: bId },
+      data: { allowServerDms: true },
+    });
+    const aberta = await pedir(socketA, "dm:open", { userId: bId });
+    checar(
+      "com a chave LIGADA, abre mesmo sem ser amigo",
+      aberta.ok,
+      aberta.error,
+    );
+    if (aberta.ok) dmId = aberta.dm.id;
+
+    /**
+     * Porta FECHADA. O que se prova aqui nao e so a recusa: e que a recusa
+     * chega EXPLICADA, e nao como "nao encontrado". Some em silencio faria
+     * quem manda achar que esta sendo ignorado.
+     */
+    await prisma.user.update({
+      where: { id: bId },
+      data: { allowServerDms: false },
+    });
+
+    const fechada = await pedir(socketA, "dm:open", { userId: bId });
+    checar("com a chave DESLIGADA, recusa", !fechada.ok);
+    checar(
+      "a recusa explica o motivo, em vez de dizer que nao existe",
+      !fechada.ok && /amigo/i.test(fechada.error ?? ""),
+      `veio: ${fechada.error}`,
+    );
+
+    /**
+     * E a conversa que JA existia tambem fecha — a chave e rechecada a cada
+     * acao, nao so na abertura. Sem isto, bastaria ter aberto uma vez para
+     * ficar alcancavel para sempre.
+     */
+    if (dmId) {
+      const leitura = await pedir(socketA, "message:history", {
+        conversationId: dmId,
+      });
+      checar("desligar fecha tambem a conversa ja aberta", !leitura.ok);
+
+      const escrita = await pedir(socketA, "message:send", {
+        conversationId: dmId,
+        content: `${PREFIXO} nao deveria passar`,
+        nonce: `${PREFIXO}s`,
+      });
+      checar("desligar impede escrever na conversa ja aberta", !escrita.ok);
+    }
+  } finally {
+    socketA.close();
+    // Devolve a chave como estava: o teste nao pode mudar preferencia de ninguem.
+    await prisma.user
+      .update({
+        where: { id: bId },
+        data: { allowServerDms: antes?.allowServerDms ?? true },
+      })
+      .catch(() => {});
     if (dmId) {
       await prisma
         .$executeRaw`DELETE FROM "DmChannel" WHERE id = ${dmId}`

@@ -17,7 +17,12 @@ import { verifySessionToken } from "./tokens";
 
 export interface AuthenticatedSession {
   sessionId: string;
-  user: PublicUser & { email: string };
+  /**
+   * `email` e `allowServerDms` ficam FORA de `PublicUser` de proposito: o
+   * primeiro nunca desce para o navegador de outra pessoa, e o segundo e uma
+   * preferencia de quem esta logado — nao um atributo publico de perfil.
+   */
+  user: PublicUser & { email: string; allowServerDms: boolean };
 }
 
 export async function resolveSessionToken(
@@ -55,6 +60,10 @@ export async function loadSession(
           email: true,
           avatarUrl: true,
           status: true,
+          // Preferencia de contato: quem pode abrir conversa comigo sem ser
+          // amigo. Vem na sessao para a tela de configuracoes nao precisar de
+          // uma ida ao banco so para desenhar uma chave.
+          allowServerDms: true,
         },
       },
     },
@@ -80,6 +89,7 @@ export async function loadSession(
       email: session.user.email,
       avatarUrl: session.user.avatarUrl,
       status: session.user.status as UserStatus,
+      allowServerDms: session.user.allowServerDms,
     },
   };
 }

@@ -6,6 +6,7 @@ import {
   Clock,
   Gamepad2,
   Headphones,
+  MessageSquare,
   Mic,
   MicOff,
   MonitorUp,
@@ -14,6 +15,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
+import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
@@ -87,6 +89,9 @@ export function UserActivityCard({
   const socket = useSocket();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState(anchor);
+  const router = useRouter();
+  const [abrindoConversa, setAbrindoConversa] = useState(false);
+  const [erroConversa, setErroConversa] = useState<string | null>(null);
 
   const presence = useRealtimeStore((state) => state.presence);
   const activity = useRealtimeStore((state) => state.activity);
@@ -94,6 +99,29 @@ export function UserActivityCard({
   const selfUserId = useRealtimeStore((state) => state.selfUserId);
   const setMedia = useRealtimeStore((state) => state.setMedia);
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
+
+  /**
+   * Abre conversa a partir do servidor.
+   *
+   * O ERRO FICA NO CARTAO, e nao some. Quando a pessoa nao aceita mensagem de
+   * quem nao e amigo, o gateway responde dizendo isso — e a frase precisa
+   * aparecer onde a pessoa clicou. Aceitar em silencio faria quem mandou ir
+   * embora achando que esta sendo ignorado.
+   */
+  function mandarMensagem() {
+    if (!socket || abrindoConversa) return;
+    setAbrindoConversa(true);
+    setErroConversa(null);
+    socket.emit("dm:open", { userId: user.id }, (resultado) => {
+      setAbrindoConversa(false);
+      if (!resultado.ok) {
+        setErroConversa(resultado.error);
+        return;
+      }
+      onClose();
+      router.push(`/app/dm/${resultado.dm.id}`);
+    });
+  }
 
   const status = presence[user.id] ?? "OFFLINE";
   const participant = voice[user.id] ?? null;
@@ -323,6 +351,29 @@ export function UserActivityCard({
                 </>
               ) : null}
             </div>
+          ) : null}
+
+          {/*
+            "Mandar mensagem" vem ANTES de "Entrar no canal": e o que mais se
+            quer fazer ao abrir o cartao de alguem, e nao depende de a pessoa
+            estar numa call.
+          */}
+          {user.id !== selfUserId ? (
+            <button
+              type="button"
+              onClick={mandarMensagem}
+              disabled={abrindoConversa}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 bg-base-800 px-3 py-2 text-[12px] font-medium text-ink-200 transition-colors hover:bg-base-750 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {abrindoConversa ? "Abrindo..." : "Mandar mensagem"}
+            </button>
+          ) : null}
+
+          {erroConversa ? (
+            <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
+              {erroConversa}
+            </p>
           ) : null}
 
           {canJoin ? (

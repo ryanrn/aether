@@ -42,6 +42,12 @@ model User {
   passwordHash String
   avatarUrl    String?
   status       UserStatus @default(OFFLINE)
+  /// Aceita conversa direta de quem NAO e amigo, mas divide um servidor.
+  ///
+  /// Ligado por padrao: e o comportamento que as pessoas esperam de um app de
+  /// comunidade, e quem incomoda ainda pode desligar. Amizade passa por cima
+  /// disto — esta chave so governa o caminho "conheci num servidor".
+  allowServerDms Boolean  @default(true)
   lastSeenAt   DateTime   @default(now())
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

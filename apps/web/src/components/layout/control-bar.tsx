@@ -71,6 +71,8 @@ export function ControlBar({
     username: string;
     avatarUrl: string | null;
     status: UserStatus;
+    /** preferencia de contato; a aba de conta desenha a chave com isto */
+    allowServerDms: boolean;
   };
   viewer: ViewerContext;
   /** servidor aberto agora — o apelido vale so nele */

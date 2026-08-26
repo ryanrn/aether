@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { SERVER_ICON_MAX_BYTES, SERVER_ICON_MIME_TYPES } from "@aether/shared";
 import {
   removeAvatarAction,
+  setAllowServerDmsAction,
   setNicknameAction,
   updateDisplayNameAction,
   uploadAvatarAction,
@@ -33,6 +34,7 @@ export function AccountTab({
     displayName: string;
     username: string;
     avatarUrl: string | null;
+    allowServerDms: boolean;
   };
   /** servidor aberto agora — o apelido vale so nele */
   server: { id: string; memberId: string; nickname: string | null };
@@ -42,8 +44,32 @@ export function AccountTab({
   const [nickname, setNickname] = useState(server.nickname ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [aceitaDeServidor, setAceitaDeServidor] = useState(user.allowServerDms);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Grava na hora, sem botao de salvar.
+   *
+   * O estado local vira antes da resposta para a caixa nao ficar "presa" ate a
+   * rede voltar. Se a acao falhar, ele volta ao que era — caixa que mostra um
+   * valor que o servidor nao tem e pior do que caixa lenta, porque a pessoa vai
+   * embora achando que desligou.
+   */
+  function salvarDmDeServidor(valor: boolean) {
+    const anterior = aceitaDeServidor;
+    setAceitaDeServidor(valor);
+    setError(null);
+    startTransition(async () => {
+      const resultado = await setAllowServerDmsAction(valor);
+      if (!resultado.ok) {
+        setAceitaDeServidor(anterior);
+        setError(resultado.error);
+        return;
+      }
+      setSaved(true);
+    });
+  }
 
   function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -178,6 +204,36 @@ export function AccountTab({
             maxLength={32}
           />
         </Field>
+      </div>
+
+      {/*
+        PRIVACIDADE, separada dos campos de identidade por uma linha: nome e
+        avatar sao "quem eu sou"; isto e "quem pode me alcancar". Misturar os
+        dois num bloco so faz a chave passar despercebida.
+      */}
+      <div className="border-t border-base-800 pt-5">
+        <h3 className="mb-3 text-[13px] font-semibold text-ink-100">
+          Privacidade
+        </h3>
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={aceitaDeServidor}
+            disabled={pending}
+            onChange={(evento) => salvarDmDeServidor(evento.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
+          />
+          <span className="leading-tight">
+            <span className="block text-[13px] text-ink-200">
+              Receber mensagens diretas de quem divide um servidor comigo
+            </span>
+            <span className="block text-[11px] text-ink-500">
+              Seus amigos sempre conseguem falar com voce, com isto ligado ou
+              nao. Desligar nao apaga conversa nenhuma — quem ja falou com voce
+              volta a alcancar se voce religar.
+            </span>
+          </span>
+        </label>
       </div>
 
       <FieldError>{error}</FieldError>

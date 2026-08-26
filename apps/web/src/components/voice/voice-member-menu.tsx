@@ -2,8 +2,16 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Mic, MicOff, MoveRight, Volume2, VolumeX } from "lucide-react";
+import {
+  MessageSquare,
+  Mic,
+  MicOff,
+  MoveRight,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
+import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { viewerCan } from "@/lib/permissions";
@@ -58,11 +66,37 @@ export function VoiceMemberMenu({
   const socket = useSocket();
   const [error, setError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  const [abrindoConversa, setAbrindoConversa] = useState(false);
+  const router = useRouter();
   const roomControls = useRealtimeStore((state) => state.roomControls);
   const selfUserId = useRealtimeStore((state) => state.selfUserId);
   const [volume, setVolume] = useState(
     () => readUserVolumes()[participant.userId] ?? DEFAULT_VOLUME,
   );
+
+  /**
+   * Abre conversa com esta pessoa a partir do servidor.
+   *
+   * O ERRO APARECE AQUI, no proprio menu, e nao some em silencio: quando a
+   * pessoa nao aceita mensagem de quem nao e amigo, o gateway responde
+   * dizendo isso, e a frase cabe no mesmo lugar onde ela clicou. Aceitar e
+   * fingir que enviou seria pior — quem mandou iria embora achando que esta
+   * sendo ignorado.
+   */
+  function mandarMensagem() {
+    if (!socket || abrindoConversa) return;
+    setAbrindoConversa(true);
+    setError(null);
+    socket.emit("dm:open", { userId: participant.userId }, (resultado) => {
+      setAbrindoConversa(false);
+      if (!resultado.ok) {
+        setError(resultado.error);
+        return;
+      }
+      onClose();
+      router.push(`/app/dm/${resultado.dm.id}`);
+    });
+  }
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState(anchor);
@@ -159,6 +193,21 @@ export function VoiceMemberMenu({
         <p className="truncate px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
           {participant.user.displayName}
         </p>
+
+        {/*
+          PRIMEIRO item do menu, e nao o ultimo: mandar mensagem e o que mais
+          se quer fazer com alguem numa lista de membros. Moderacao vem depois
+          porque e rara e destrutiva.
+        */}
+        {participant.userId !== selfUserId ? (
+          <MenuItem
+            onClick={mandarMensagem}
+            icon={MessageSquare}
+            disabled={abrindoConversa}
+          >
+            Mandar mensagem
+          </MenuItem>
+        ) : null}
 
         {showVolume ? (
           <div
@@ -257,20 +306,25 @@ function MenuItem({
   children,
   icon: Icon,
   danger,
+  disabled,
   onClick,
 }: {
   children: React.ReactNode;
   icon: React.ComponentType<{ className?: string }>;
   danger?: boolean;
+  /** enquanto a acao esta em voo; evita disparar duas vezes no mesmo clique */
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-base-800",
         danger ? "text-signal-dnd" : "text-ink-200",
+        disabled && "cursor-not-allowed opacity-50",
       )}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />

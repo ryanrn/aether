@@ -1,5 +1,5 @@
 import { Prisma, prisma } from "@aether/db";
-import { areFriends, loadDmList, ordenarPar } from "@aether/access";
+import { loadDmList, ordenarPar, podeFalarCom } from "@aether/access";
 import { isUserStatus, type DmResumo, type PublicUser } from "@aether/shared";
 import type { AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
@@ -101,23 +101,42 @@ export function registerDmHandlers(socket: AetherSocket): void {
 
     try {
       /**
-       * A amizade e a permissao. Sem bloqueio no produto, ela e a unica coisa
-       * que impede alguem de abrir conversa com quem nao quer falar com ele.
-       *
-       * `areFriends` ja devolve `false` quando os dois ids sao iguais, entao
-       * conversa consigo mesmo cai aqui — antes de o CHECK do banco precisar
-       * entrar em acao.
+       * Duas portas: amizade, ou servidor em comum com a chave do OUTRO
+       * ligada. `podeFalarCom` ja devolve `null` quando os dois ids sao
+       * iguais, entao conversa consigo mesmo cai aqui — antes de o CHECK do
+       * banco precisar entrar em acao.
        */
-      if (!(await areFriends(userId, outroId))) {
-        // Mesma resposta para "nao existe" e "nao sao amigos".
-        respond({ ok: false, error: "Usuario nao encontrado" });
-        return;
-      }
+      const motivo = await podeFalarCom(userId, outroId);
 
       const outro = await prisma.user.findUnique({
         where: { id: outroId },
         select: USER_SELECT,
       });
+
+      if (motivo === null) {
+        /**
+         * A RECUSA DIZ O QUE ACONTECEU quando a pessoa existe.
+         *
+         * Some em silencio seria pior: quem manda acharia que foi entregue e
+         * que esta sendo ignorado. Dizer "nao aceita mensagens de quem nao e
+         * amigo" da o proximo passo — mandar pedido de amizade.
+         *
+         * Isso REVELA que a pessoa desligou a chave, e e uma troca aceita: a
+         * alternativa (esconder) confunde mais do que protege, porque a
+         * configuracao nao e um segredo, e uma preferencia de contato.
+         *
+         * Quem NAO existe continua indistinguivel de quem nao aceita — a
+         * mensagem generica so aparece quando nao ha usuario.
+         */
+        respond({
+          ok: false,
+          error: outro
+            ? "Esta pessoa so aceita mensagens de amigos. Envie um pedido de amizade."
+            : "Usuario nao encontrado",
+        });
+        return;
+      }
+
       if (!outro) {
         respond({ ok: false, error: "Usuario nao encontrado" });
         return;

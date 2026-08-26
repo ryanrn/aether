@@ -1284,13 +1284,52 @@ Difere da `Friendship`, que indexa por DIRECAO, e a diferenca e proposital: la
 o "quem pediu" precisa sobreviver, porque e ele que decide de que lado o botao
 de aceitar aparece. Numa conversa nao existe esse lado.
 
-### Desfazer amizade fecha a conversa
+### Duas portas: amizade, ou servidor em comum
 
-A amizade e rechecada a CADA acao, nao so na abertura. Sem bloqueio no produto,
-desfazer amizade e a unica forma de alguem parar de receber mensagem de outra
-pessoa — se a checagem valesse so na abertura, o canal ficaria aberto para
-sempre depois de aceito uma vez. **A conversa nao e apagada**: refazendo a
-amizade, o historico volta.
+`podeFalarCom(ator, alvo)` responde, nesta ordem:
+
+1. **Amizade** — passa por cima de tudo, sem depender de configuracao.
+2. **Servidor em comum**, se `alvo` tiver `allowServerDms` ligado (o padrao).
+
+A regra e **assimetrica** de proposito: quem checa e quem AGE, e a chave
+consultada e a de quem RECEBE. Se B desliga, A deixa de alcancar B — que e o
+objetivo — mas B continua podendo ler e responder a propria conversa, porque a
+chave dele governa o que CHEGA nele, nao o que ele quer dizer.
+
+A permissao e rechecada a CADA acao, nao so na abertura: sem isso, bastaria ter
+aberto uma vez para ficar alcancavel para sempre. **Nada e apagado** — religando
+a chave (ou refazendo a amizade), o historico volta.
+
+### Recusar em voz alta, e nao em silencio
+
+Quando a porta esta fechada, `dm:open` responde
+*"Esta pessoa so aceita mensagens de amigos. Envie um pedido de amizade."* — e a
+tela mostra isso no cartao onde a pessoa clicou.
+
+A alternativa considerada era aceitar a mensagem e nao entregar. Foi descartada:
+quem manda acharia que foi entregue e que esta sendo ignorado. Mensagem que some
+em silencio e pior que recusa, para os dois lados.
+
+A recusa REVELA que a pessoa desligou a chave, e essa troca foi aceita
+deliberadamente — esconder confunde mais do que protege, porque a configuracao
+nao e um segredo, e uma preferencia de contato. Quem NAO existe continua
+indistinguivel: so aparece a mensagem generica.
+
+### CONSEQUENCIA: desfazer amizade nao bloqueia mais
+
+Isto mudou quando a conversa por servidor nasceu, e e a parte menos obvia da
+funcionalidade. Antes, desfazer amizade fechava a conversa — era a unica forma
+de parar de receber mensagem de alguem, e funcionava.
+
+Agora, se voces ainda dividem um servidor e a chave esta ligada (o padrao),
+**desfazer amizade nao adianta nada**: a segunda porta continua aberta. Para se
+livrar de uma pessoa especifica hoje e preciso desligar a chave — o que corta
+TODO MUNDO que nao e amigo, nao so ela — ou sair do servidor em comum.
+
+Isso esta travado em teste (`verify-dm.mjs`), com o nome dizendo o que e:
+"desfazer amizade NAO fecha quando dividem servidor (comportamento novo)".
+**Falta bloqueio por pessoa**, e essa e a lacuna real que a funcionalidade
+abriu.
 
 ### `channelId` virou `conversationId`
 
@@ -1307,9 +1346,10 @@ conversa direta.
 npx dotenv -e .env -- node scripts/verify-dm.mjs
 ```
 
-22 verificacoes: 8 tentam INSERIR no banco o que nao pode existir (par
+28 verificacoes: 8 tentam INSERIR no banco o que nao pode existir (par
 invertido, conversa consigo mesmo, mensagem com dois pais, mensagem sem pai), e
-14 exercitam o fluxo por socket real — abrir, idempotencia dos dois lados,
+20 exercitam o fluxo por socket real — incluindo as duas portas, a recusa
+explicada e o que acontece ao desligar a chave com conversa ja aberta — abrir, idempotencia dos dois lados,
 entregar na sala pessoal do outro, historico, listar, e o que mais importa: um
 estranho de posse do id nao le nem escreve. Esse ultimo foi conferido por
 mutacao (remover a checagem de participante derruba exatamente esses dois).
@@ -1333,8 +1373,17 @@ Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
 - **Sem notificacao.** Mensagem que chega com a conversa fechada nao avisa nada.
 - **Sem anexo, edicao, exclusao ou resposta** — as mesmas ausencias do chat de
   servidor. O schema ja tem `replyToId`, `editedAt` e `deletedAt`; nada os usa.
-- **Sem bloqueio.** Desfazer amizade e o unico mecanismo, e ele e simetrico:
-  quem desfaz tambem perde o acesso ao historico.
+- **Sem bloqueio por pessoa.** E a lacuna mais importante, e ela AUMENTOU com a
+  conversa a partir de servidor — ver a secao "CONSEQUENCIA" acima. Hoje as
+  unicas saidas sao desligar `allowServerDms` (que corta todos os nao-amigos de
+  uma vez) ou sair do servidor em comum.
+- **A chave e global, nao por servidor.** Nao da para aceitar mensagens de um
+  servidor e recusar de outro.
+- **`loadDmList` faz N consultas**, uma por conversa, porque passa cada uma pela
+  mesma porta de `loadDmAccess` em vez de ter filtro proprio — lista que
+  discorda do acesso e a forma mais silenciosa de a regra divergir. Na escala
+  deste projeto sao dezenas; se um dia forem milhares, o jeito e resolver as
+  duas portas em lote, nao afrouxar a checagem.
 
 ## CI (GitHub Actions)
 

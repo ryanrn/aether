@@ -1,0 +1,11 @@
+-- Aceitar conversa direta de quem nao e amigo, mas divide um servidor.
+--
+-- LIGADO por padrao, e nao desligado. Um app de comunidade em que ninguem
+-- consegue falar com ninguem ate virar amigo tem um passo a mais em todo
+-- primeiro contato, e quem se incomodar desliga. O default tambem decide o
+-- que acontece com as contas que ja existem: com `true`, elas seguem
+-- alcancaveis, que e o comportamento que ninguem precisa aprender.
+--
+-- Amizade PASSA POR CIMA desta chave. Ela governa so o caminho
+-- "conheci num servidor" — desligar nao corta quem ja e seu amigo.
+ALTER TABLE "User" ADD COLUMN "allowServerDms" BOOLEAN NOT NULL DEFAULT true;

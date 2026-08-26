@@ -161,3 +161,36 @@ export async function setNicknameAction(
     return toActionError(error);
   }
 }
+
+/**
+ * Liga ou desliga "aceitar conversa de quem divide um servidor comigo".
+ *
+ * Nao mexe em amizade: amigo passa por cima desta chave, sempre. O que ela
+ * governa e so o caminho "conheci num servidor".
+ *
+ * DESLIGAR NAO APAGA NADA. As conversas ja abertas continuam no banco — quem
+ * nao e mais alcancavel simplesmente deixa de passar por `podeFalarCom` na
+ * proxima acao. Religando, tudo volta como estava.
+ */
+export async function setAllowServerDmsAction(
+  allow: unknown,
+): Promise<ActionResult<{ allowServerDms: boolean }>> {
+  try {
+    const session = await requireUser();
+
+    // Vem do cliente: so aceita booleano de verdade, nada de coercao.
+    if (typeof allow !== "boolean") {
+      return fail("Valor invalido", "allowServerDms");
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { allowServerDms: allow },
+    });
+
+    revalidatePath("/app", "layout");
+    return ok({ allowServerDms: allow });
+  } catch (error) {
+    return toActionError(error);
+  }
+}

@@ -37,6 +37,69 @@ export interface DmAccess {
   outroId: string;
 }
 
+/** Por que a conversa e permitida — a UI usa para explicar, nao para decidir. */
+export type MotivoDm = "amizade" | "servidor";
+
+/**
+ * `ator` pode falar com `alvo`?
+ *
+ * Duas portas, nesta ordem:
+ *
+ *  1. AMIZADE. Passa por cima de tudo — quem ja e seu amigo nao depende de
+ *     configuracao nenhuma.
+ *  2. SERVIDOR EM COMUM, se `alvo` aceitar esse caminho (`allowServerDms`).
+ *
+ * A REGRA E ASSIMETRICA de proposito, e vale entender por que: quem checa e
+ * quem AGE, e a chave consultada e a de quem RECEBE. Entao, se B desliga a
+ * opcao, A deixa de alcancar B — que e exatamente o objetivo. B, por sua vez,
+ * continua podendo ler e responder a propria conversa, porque a chave dele
+ * governa o que CHEGA nele, nao o que ele quer dizer.
+ *
+ * Devolve `null` quando nao pode. Nunca devolve motivo diferente para "nao
+ * existe" e "nao aceita": quem chama transforma isso em uma mensagem so.
+ */
+export async function podeFalarCom(
+  ator: string,
+  alvo: string,
+): Promise<MotivoDm | null> {
+  if (ator === alvo) return null;
+
+  if (await areFriends(ator, alvo)) return "amizade";
+
+  const alvoAceita = await prisma.user.findUnique({
+    where: { id: alvo },
+    select: { allowServerDms: true },
+  });
+  if (!alvoAceita?.allowServerDms) return null;
+
+  return (await dividemServidor(ator, alvo)) ? "servidor" : null;
+}
+
+/**
+ * Os dois sao membros de algum servidor em comum?
+ *
+ * Uma consulta so, com `IN`, em vez de carregar as duas listas e cruzar em
+ * memoria: quem tem muitos servidores carregaria muitas linhas para descobrir
+ * um `true`.
+ */
+async function dividemServidor(a: string, b: string): Promise<boolean> {
+  const encontrado = await prisma.serverMember.findFirst({
+    where: {
+      userId: b,
+      serverId: {
+        in: (
+          await prisma.serverMember.findMany({
+            where: { userId: a },
+            select: { serverId: true },
+          })
+        ).map((m) => m.serverId),
+      },
+    },
+    select: { id: true },
+  });
+  return encontrado !== null;
+}
+
 /**
  * Voce pode ler e escrever nesta conversa?
  *
@@ -45,11 +108,12 @@ export interface DmAccess {
  * dois, como no resto do sistema — dizer "essa conversa existe, mas nao e
  * sua" ja contaria que duas pessoas especificas se falam.
  *
- * A AMIZADE E RECHECADA A CADA CHAMADA, e nao so quando a conversa foi
- * aberta. Sem bloqueio no produto, desfazer a amizade e a UNICA forma de
- * alguem parar de receber mensagem de outra pessoa; se a checagem valesse so
- * na abertura, o canal continuaria aberto para sempre depois de aceito uma
- * vez. A conversa nao e apagada — refazendo a amizade, o historico volta.
+ * A PERMISSAO E RECHECADA A CADA CHAMADA, e nao so quando a conversa foi
+ * aberta. Sem bloqueio no produto, desfazer a amizade — ou desligar
+ * `allowServerDms` — e a UNICA forma de alguem parar de receber mensagem de
+ * outra pessoa; se a checagem valesse so na abertura, o canal continuaria
+ * aberto para sempre depois de aceito uma vez. A conversa nao e apagada:
+ * refazendo a amizade (ou religando a chave), o historico volta.
  */
 export async function loadDmAccess(
   userId: string,
@@ -71,7 +135,7 @@ export async function loadDmAccess(
         : null;
   if (outroId === null) return null;
 
-  if (!(await areFriends(userId, outroId))) return null;
+  if ((await podeFalarCom(userId, outroId)) === null) return null;
 
   return { dmId: dm.id, outroId };
 }
@@ -79,34 +143,29 @@ export async function loadDmAccess(
 /**
  * As conversas de alguem, com quem esta do outro lado.
  *
- * Filtra por amizade DEPOIS de buscar, e nao no `where`, porque a amizade
- * mora em outra tabela sem relacao declarada com esta. Na escala deste
- * projeto — um grupo de amigos — sao dezenas de linhas, nao milhares.
+ * Passa cada uma pela MESMA porta que `loadDmAccess` — nao por um filtro
+ * proprio. A primeira versao filtrava so por amizade, e quando o caminho
+ * "servidor em comum" surgiu, ela teria escondido da lista conversas que a
+ * pessoa ainda consegue abrir pela URL. Lista que discorda do acesso e a
+ * forma mais silenciosa de a regra divergir.
+ *
+ * Sao N consultas, uma por conversa. Na escala deste projeto — um grupo de
+ * amigos — sao dezenas; se um dia forem milhares, o jeito e resolver as duas
+ * portas em lote, nao afrouxar a checagem.
  */
 export async function loadDmList(
   userId: string,
-): Promise<Array<{ dmId: string; outroId: string }>> {
+): Promise<Array<{ dmId: string; outroId: string; motivo: MotivoDm }>> {
   const linhas = await prisma.dmChannel.findMany({
     where: { OR: [{ userAId: userId }, { userBId: userId }] },
     select: { id: true, userAId: true, userBId: true },
   });
 
-  const amigos = new Set(
-    (
-      await prisma.friendship.findMany({
-        where: {
-          status: "ACCEPTED",
-          OR: [{ requesterId: userId }, { addresseeId: userId }],
-        },
-        select: { requesterId: true, addresseeId: true },
-      })
-    ).map((f) => (f.requesterId === userId ? f.addresseeId : f.requesterId)),
-  );
-
-  return linhas
-    .map((linha) => ({
-      dmId: linha.id,
-      outroId: linha.userAId === userId ? linha.userBId : linha.userAId,
-    }))
-    .filter((item) => amigos.has(item.outroId));
+  const saida: Array<{ dmId: string; outroId: string; motivo: MotivoDm }> = [];
+  for (const linha of linhas) {
+    const outroId = linha.userAId === userId ? linha.userBId : linha.userAId;
+    const motivo = await podeFalarCom(userId, outroId);
+    if (motivo) saida.push({ dmId: linha.id, outroId, motivo });
+  }
+  return saida;
 }
