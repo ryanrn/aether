@@ -18,12 +18,30 @@ import {
  * Sem checagem de permissao aqui de proposito: quem chama ja passou pelos
  * guards da pagina. Mesma convencao dos outros services.
  */
-export async function listRecentMessages(channelId: string): Promise<{
+export async function listRecentMessages(channelId: string) {
+  return historicoInicial({ channelId, deletedAt: null });
+}
+
+/**
+ * O mesmo, para uma conversa direta.
+ *
+ * Filtra pela COLUNA certa, e nao por um id solto: como as duas colunas de pai
+ * sao nulaveis, passar um id de conversa em `channelId` nao daria erro —
+ * devolveria zero linhas, e historico vazio parece "conversa nova" em vez de
+ * bug.
+ */
+export async function listRecentDmMessages(dmChannelId: string) {
+  return historicoInicial({ dmChannelId, deletedAt: null });
+}
+
+async function historicoInicial(
+  where: { channelId?: string; dmChannelId?: string; deletedAt: null },
+): Promise<{
   messages: PublicMessage[];
   hasMore: boolean;
 }> {
   const rows = await prisma.message.findMany({
-    where: { channelId, deletedAt: null },
+    where,
     select: {
       id: true,
       channelId: true,
@@ -41,8 +59,8 @@ export async function listRecentMessages(channelId: string): Promise<{
         },
       },
     },
-    // As mais recentes primeiro para o banco usar o indice [channelId, createdAt]
-    // e nao varrer o canal inteiro; a ordem para a tela e invertida abaixo.
+    // As mais recentes primeiro para o banco usar o indice de (pai, createdAt)
+    // e nao varrer tudo; a ordem para a tela e invertida abaixo.
     orderBy: { createdAt: "desc" },
     take: MESSAGE_PAGE_SIZE + 1,
   });

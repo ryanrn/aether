@@ -21,6 +21,7 @@ export function ChatPanel({
   initialHasMore,
   selfUser,
   canSend,
+  ehConversaDireta = false,
 }: {
   channelId: string;
   channelName: string;
@@ -28,6 +29,8 @@ export function ChatPanel({
   initialHasMore: boolean;
   selfUser: PublicUser;
   canSend: boolean;
+  /** Repassado para a lista: conversa direta nao mostra "#". */
+  ehConversaDireta?: boolean;
 }) {
   const prependHistory = useRealtimeStore((state) => state.prependHistory);
   const setActiveChannel = useRealtimeStore((state) => state.setActiveChannel);
@@ -58,6 +61,7 @@ export function ChatPanel({
       <MessageList
         channelId={channelId}
         channelName={channelName}
+        ehConversaDireta={ehConversaDireta}
         initialMessages={initialMessages}
       />
       <MessageComposer

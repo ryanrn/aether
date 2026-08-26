@@ -1,7 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Check, Loader2, Monitor, Search, UserPlus, UserX, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Check,
+  Loader2,
+  MessageSquare,
+  Monitor,
+  Search,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import type { PublicFriendship, UserStatus } from "@aether/shared";
 import {
   removeFriendAction,
@@ -9,6 +19,7 @@ import {
   sendFriendRequestAction,
 } from "@/server/actions/friends";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useSocket } from "@/components/realtime/realtime-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { SecaoAmigos } from "./friends-nav";
@@ -318,9 +329,32 @@ function Linha({ item }: { item: PublicFriendship }) {
   const jogo = useRealtimeStore((estado) => estado.activity[item.user.id]);
   const [pendente, startTransition] = useTransition();
 
+  const router = useRouter();
+  const socket = useSocket();
+  const [abrindoConversa, setAbrindoConversa] = useState(false);
+
   function agir(acao: () => Promise<unknown>) {
     startTransition(async () => {
       await acao();
+    });
+  }
+
+  /**
+   * Abrir conversa e um ida-e-volta pelo socket, e nao um `<Link>` direto:
+   * so o servidor sabe o id da conversa, e ele pode nem existir ainda. Pedir
+   * primeiro e navegar depois evita inventar rota para uma conversa que
+   * ainda nao foi criada.
+   *
+   * O `dm:open` e idempotente — clicar dez vezes cai sempre na mesma conversa,
+   * garantido pelo indice unico sobre o par ordenado no banco.
+   */
+  function abrirConversa() {
+    if (!socket || abrindoConversa) return;
+    setAbrindoConversa(true);
+    socket.emit("dm:open", { userId: item.user.id }, (resultado) => {
+      setAbrindoConversa(false);
+      if (!resultado.ok) return;
+      router.push(`/app/dm/${resultado.dm.id}`);
     });
   }
 
@@ -385,14 +419,23 @@ function Linha({ item }: { item: PublicFriendship }) {
             <X className="h-4 w-4" strokeWidth={2} />
           </BotaoAcao>
         ) : (
-          <BotaoAcao
-            titulo="Desfazer amizade"
-            perigo
-            pendente={pendente}
-            onClick={() => agir(() => removeFriendAction(item.user.id))}
-          >
-            <UserX className="h-4 w-4" strokeWidth={1.75} />
-          </BotaoAcao>
+          <>
+            <BotaoAcao
+              titulo="Conversar"
+              pendente={abrindoConversa}
+              onClick={abrirConversa}
+            >
+              <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+            </BotaoAcao>
+            <BotaoAcao
+              titulo="Desfazer amizade"
+              perigo
+              pendente={pendente}
+              onClick={() => agir(() => removeFriendAction(item.user.id))}
+            >
+              <UserX className="h-4 w-4" strokeWidth={1.75} />
+            </BotaoAcao>
+          </>
         )}
       </div>
     </div>

@@ -23,10 +23,17 @@ export function MessageList({
   channelId,
   initialMessages,
   channelName,
+  ehConversaDireta = false,
 }: {
   channelId: string;
   initialMessages: PublicMessage[];
   channelName: string;
+  /**
+   * Conversa direta nao leva "#": o prefixo e o simbolo de CANAL, e coloca-lo
+   * antes do nome de uma pessoa faz a tela dizer "#LucasCR", que le como se
+   * existisse um canal com o nome dela.
+   */
+  ehConversaDireta?: boolean;
 }) {
   const socket = useSocket();
   const stored = useChannelMessages(channelId);
@@ -125,14 +132,20 @@ export function MessageList({
 
       {!hasMore && messages.length > 0 ? (
         <p className="px-4 py-6 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-ink-600">
-          inicio de #{channelName}
+          inicio de {ehConversaDireta ? "" : "#"}
+          {channelName}
         </p>
       ) : null}
 
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center px-8">
           <p className="max-w-[360px] text-balance text-center text-[13px] leading-relaxed text-ink-500">
-            Nenhuma mensagem em <span className="text-ink-300">#{channelName}</span> ainda.
+            Nenhuma mensagem em{" "}
+            <span className="text-ink-300">
+              {ehConversaDireta ? "" : "#"}
+              {channelName}
+            </span>{" "}
+            ainda.
             Escreva a primeira.
           </p>
         </div>

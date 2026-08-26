@@ -1251,6 +1251,91 @@ de alguem afetaria o que os outros escutam.
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
 
+## Conversas diretas (DM)
+
+Mensagem entre dois amigos, fora de qualquer servidor.
+
+### Por que a conversa NAO e um `Channel`
+
+Foi medido antes de decidir: **98** lugares no codigo acoplam canal a servidor,
+contra **16** que tocam `Message.channelId`. Tornar `Channel.serverId` nulavel
+mexeria numa superficie seis vezes maior.
+
+Mais decisivo que o numero: `getChannelPermissions` se apoia inteiramente em
+`MemberAccess` — servidor, membro, cargos, overwrites. Uma conversa direta nao
+tem nenhum desses. A regra dela cabe em uma linha: *voce e um dos dois, e voces
+ainda sao amigos*. Enfiar as duas coisas na mesma funcao criaria um segundo
+caminho de decisao dentro da funcao que existe justamente para ser o unico.
+
+Entao: `DmChannel` proprio, e `Message` com **dois pais possiveis**
+(`channelId` OU `dmChannelId`). Uma tabela de mensagem so, e nao duas, porque
+hoje a logica e fina — um `create`, duas leituras — mas editar, apagar e
+responder vao chegar, e com duas tabelas chegam duas vezes e divergem.
+
+### O que o banco garante (nao o codigo)
+
+- **Par ordenado**: `CHECK ("userAId" < "userBId")`. Com a ordem obrigatoria, o
+  indice unico impede DE VERDADE duas conversas para o mesmo par — inclusive
+  quando os dois lados clicam em "conversar" no mesmo instante, que e onde uma
+  checagem em codigo perde a corrida.
+- **Um pai so por mensagem**: `CHECK (("channelId" IS NULL) <> ("dmChannelId" IS NULL))`.
+
+Difere da `Friendship`, que indexa por DIRECAO, e a diferenca e proposital: la
+o "quem pediu" precisa sobreviver, porque e ele que decide de que lado o botao
+de aceitar aparece. Numa conversa nao existe esse lado.
+
+### Desfazer amizade fecha a conversa
+
+A amizade e rechecada a CADA acao, nao so na abertura. Sem bloqueio no produto,
+desfazer amizade e a unica forma de alguem parar de receber mensagem de outra
+pessoa — se a checagem valesse so na abertura, o canal ficaria aberto para
+sempre depois de aceito uma vez. **A conversa nao e apagada**: refazendo a
+amizade, o historico volta.
+
+### `channelId` virou `conversationId`
+
+No contrato publico (`PublicMessage`) e nos eventos `message:send` /
+`message:history`. O cliente sempre usou o campo como CHAVE (`messages[id]`,
+`unread[id]`), nunca para buscar um `Channel` — com dois tipos de pai
+possiveis, o nome antigo deixava pronta a armadilha de alguem escrever
+`channel.findUnique({ id: message.channelId })` e receber `null` calado em toda
+conversa direta.
+
+### Como testar
+
+```bash
+npx dotenv -e .env -- node scripts/verify-dm.mjs
+```
+
+22 verificacoes: 8 tentam INSERIR no banco o que nao pode existir (par
+invertido, conversa consigo mesmo, mensagem com dois pais, mensagem sem pai), e
+14 exercitam o fluxo por socket real — abrir, idempotencia dos dois lados,
+entregar na sala pessoal do outro, historico, listar, e o que mais importa: um
+estranho de posse do id nao le nem escreve. Esse ultimo foi conferido por
+mutacao (remover a checagem de participante derruba exatamente esses dois).
+
+Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
+
+### Limitacoes conhecidas
+
+- **Compatibilidade temporaria no gateway.** `message:send` e
+  `message:history` ainda aceitam o nome antigo `channelId` alem de
+  `conversationId`. Existe porque Vercel e Fly nao sobem no mesmo instante: sem
+  isso, a janela entre os dois deploys seria chat quebrado para todo mundo.
+  **Remover** — junto com o teste "compat:" em `verify-dm.mjs` — depois que os
+  dois lados estiverem em producao com o nome novo.
+- **Nao ha lista de conversas na lateral.** O evento `dm:list` existe e e
+  testado, mas nada na tela o consome ainda: hoje se chega numa conversa pelo
+  botao na lista de amigos ou pela URL. Conversa sem mensagem nova e sem
+  atalho fica dificil de reencontrar.
+- **Sem indicador de nao lida para DM.** O contador do store e por chave de
+  conversa e ja funcionaria, mas nao ha onde exibi-lo sem a lista acima.
+- **Sem notificacao.** Mensagem que chega com a conversa fechada nao avisa nada.
+- **Sem anexo, edicao, exclusao ou resposta** — as mesmas ausencias do chat de
+  servidor. O schema ja tem `replyToId`, `editedAt` e `deletedAt`; nada os usa.
+- **Sem bloqueio.** Desfazer amizade e o unico mecanismo, e ele e simetrico:
+  quem desfaz tambem perde o acesso ao historico.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,
