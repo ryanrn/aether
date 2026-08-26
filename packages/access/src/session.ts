@@ -22,7 +22,11 @@ export interface AuthenticatedSession {
    * primeiro nunca desce para o navegador de outra pessoa, e o segundo e uma
    * preferencia de quem esta logado — nao um atributo publico de perfil.
    */
-  user: PublicUser & { email: string; allowServerDms: boolean };
+  user: PublicUser & {
+    email: string;
+    allowServerDms: boolean;
+    allowServerFriendRequests: boolean;
+  };
 }
 
 export async function resolveSessionToken(
@@ -64,6 +68,7 @@ export async function loadSession(
           // amigo. Vem na sessao para a tela de configuracoes nao precisar de
           // uma ida ao banco so para desenhar uma chave.
           allowServerDms: true,
+          allowServerFriendRequests: true,
         },
       },
     },
@@ -90,6 +95,7 @@ export async function loadSession(
       avatarUrl: session.user.avatarUrl,
       status: session.user.status as UserStatus,
       allowServerDms: session.user.allowServerDms,
+      allowServerFriendRequests: session.user.allowServerFriendRequests,
     },
   };
 }

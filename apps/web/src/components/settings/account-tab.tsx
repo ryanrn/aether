@@ -5,6 +5,7 @@ import { SERVER_ICON_MAX_BYTES, SERVER_ICON_MIME_TYPES } from "@aether/shared";
 import {
   removeAvatarAction,
   setAllowServerDmsAction,
+  setAllowServerFriendRequestsAction,
   setNicknameAction,
   updateDisplayNameAction,
   uploadAvatarAction,
@@ -35,6 +36,7 @@ export function AccountTab({
     username: string;
     avatarUrl: string | null;
     allowServerDms: boolean;
+    allowServerFriendRequests: boolean;
   };
   /** servidor aberto agora — o apelido vale so nele */
   server: { id: string; memberId: string; nickname: string | null };
@@ -45,6 +47,9 @@ export function AccountTab({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [aceitaDeServidor, setAceitaDeServidor] = useState(user.allowServerDms);
+  const [aceitaPedidos, setAceitaPedidos] = useState(
+    user.allowServerFriendRequests,
+  );
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,15 +61,21 @@ export function AccountTab({
    * valor que o servidor nao tem e pior do que caixa lenta, porque a pessoa vai
    * embora achando que desligou.
    */
-  function salvarDmDeServidor(valor: boolean) {
-    const anterior = aceitaDeServidor;
-    setAceitaDeServidor(valor);
+  function salvarChave(
+    valor: boolean,
+    anterior: boolean,
+    aplicar: (v: boolean) => void,
+    acao: (v: boolean) => Promise<{ ok: boolean; error?: string }>,
+  ) {
+    aplicar(valor);
     setError(null);
     startTransition(async () => {
-      const resultado = await setAllowServerDmsAction(valor);
+      const resultado = await acao(valor);
       if (!resultado.ok) {
-        setAceitaDeServidor(anterior);
-        setError(resultado.error);
+        // Volta ao que era: caixa mostrando valor que o servidor nao tem e
+        // pior que caixa lenta — a pessoa vai embora achando que desligou.
+        aplicar(anterior);
+        setError(resultado.error ?? "Nao consegui salvar.");
         return;
       }
       setSaved(true);
@@ -220,7 +231,14 @@ export function AccountTab({
             type="checkbox"
             checked={aceitaDeServidor}
             disabled={pending}
-            onChange={(evento) => salvarDmDeServidor(evento.target.checked)}
+            onChange={(evento) =>
+              salvarChave(
+                evento.target.checked,
+                aceitaDeServidor,
+                setAceitaDeServidor,
+                setAllowServerDmsAction,
+              )
+            }
             className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
           />
           <span className="leading-tight">
@@ -231,6 +249,32 @@ export function AccountTab({
               Seus amigos sempre conseguem falar com voce, com isto ligado ou
               nao. Desligar nao apaga conversa nenhuma — quem ja falou com voce
               volta a alcancar se voce religar.
+            </span>
+          </span>
+        </label>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={aceitaPedidos}
+            disabled={pending}
+            onChange={(evento) =>
+              salvarChave(
+                evento.target.checked,
+                aceitaPedidos,
+                setAceitaPedidos,
+                setAllowServerFriendRequestsAction,
+              )
+            }
+            className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
+          />
+          <span className="leading-tight">
+            <span className="block text-[13px] text-ink-200">
+              Receber pedidos de amizade de quem divide um servidor comigo
+            </span>
+            <span className="block text-[11px] text-ink-500">
+              Desligando, so quem souber seu nome de usuario exato consegue te
+              mandar pedido.
             </span>
           </span>
         </label>

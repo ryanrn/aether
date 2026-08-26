@@ -35,6 +35,7 @@ import {
 } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 import { ChannelMembers } from "./channel-members";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
 import { CategoryFormModal } from "@/components/channels/category-form-modal";
 import { InviteButton } from "@/components/servers/invite-button";
@@ -308,23 +309,38 @@ function DeleteCategoryButton({
 }) {
   const [pending, startTransition] = useTransition();
 
+  const [confirmando, setConfirmando] = useState(false);
+
   return (
-    <IconAction
-      danger
-      label={`Excluir categoria ${name}`}
-      onClick={() => {
-        if (pending) return;
-        const confirmed = window.confirm(
-          `Excluir a categoria "${name}"? Os canais dentro dela viram canais soltos, nao sao apagados.`,
-        );
-        if (!confirmed) return;
-        startTransition(async () => {
-          await deleteCategoryAction(serverId, categoryId);
-        });
-      }}
-    >
-      <Trash2 className="h-3 w-3" />
-    </IconAction>
+    <>
+      <IconAction
+        danger
+        label={`Excluir categoria ${name}`}
+        onClick={() => {
+          if (pending) return;
+          setConfirmando(true);
+        }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </IconAction>
+
+      <ConfirmDialog
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        title="Excluir categoria"
+        confirmLabel="Excluir categoria"
+        pending={pending}
+        onConfirm={() => {
+          startTransition(async () => {
+            await deleteCategoryAction(serverId, categoryId);
+            setConfirmando(false);
+          });
+        }}
+      >
+        Tem certeza de que deseja excluir <strong className="text-ink-100">{name}</strong>?
+        Os canais dentro dela viram canais soltos — eles NAO sao apagados.
+      </ConfirmDialog>
+    </>
   );
 }
 
@@ -349,6 +365,7 @@ function ChannelRow({
   onEdit: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   // Quem esta na call vem do gateway: e ele que sabe, nao o banco.
   const connected = useVoiceParticipants(channel.id);
   const unread = useUnreadCounts()[channel.id] ?? 0;
@@ -469,13 +486,7 @@ function ChannelRow({
                 label="Excluir canal"
                 onClick={() => {
                   if (pending) return;
-                  const confirmed = window.confirm(
-                    `Excluir o canal "${channel.name}"? Esta acao nao pode ser desfeita.`,
-                  );
-                  if (!confirmed) return;
-                  startTransition(async () => {
-                    await deleteChannelAction(serverId, channel.id);
-                  });
+                  setConfirmandoExclusao(true);
                 }}
               >
                 <Trash2 className="h-3 w-3" />
@@ -493,6 +504,24 @@ function ChannelRow({
           voiceChannels={voiceChannels}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={confirmandoExclusao}
+        onClose={() => setConfirmandoExclusao(false)}
+        title="Excluir canal"
+        confirmLabel="Excluir canal"
+        pending={pending}
+        onConfirm={() => {
+          startTransition(async () => {
+            await deleteChannelAction(serverId, channel.id);
+            setConfirmandoExclusao(false);
+          });
+        }}
+      >
+        Tem certeza de que deseja excluir{" "}
+        <strong className="text-ink-100">{channel.name}</strong>? Esta acao nao
+        podera ser desfeita — as mensagens do canal vao junto.
+      </ConfirmDialog>
     </li>
   );
 }

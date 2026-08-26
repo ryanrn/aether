@@ -25,6 +25,7 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
  * so o socket sabe, entao e o socket que manda no ponto verde.
  */
 export function MemberPanel({
+  jaRelacionados,
   members,
   roles,
   ownerId,
@@ -34,6 +35,8 @@ export function MemberPanel({
   viewer,
 }: {
   members: PublicMember[];
+  /** ids que ja tem amizade, pedido pendente ou bloqueio comigo */
+  jaRelacionados: Set<string>;
   roles: PublicRole[];
   ownerId: string;
   serverId: string;
@@ -157,6 +160,7 @@ export function MemberPanel({
 
       {openCard ? (
         <UserActivityCard
+          podeAdicionarAmigo={!jaRelacionados.has(openCard.member.user.id)}
           user={openCard.member.user}
           nickname={openCard.member.nickname}
           serverName={serverName}

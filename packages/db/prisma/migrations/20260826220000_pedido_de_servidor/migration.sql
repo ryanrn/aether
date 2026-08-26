@@ -1,0 +1,13 @@
+-- Aceitar PEDIDO DE AMIZADE de quem divide um servidor.
+--
+-- Coluna separada de `allowServerDms`, e nao a mesma reaproveitada: sao
+-- decisoes diferentes. Da para querer receber pedido de amizade e nao querer
+-- conversa direta de estranho, e o contrario tambem. Uma chave so obrigaria as
+-- duas a andarem juntas, e quem quisesse metade teria de abrir mao da outra.
+--
+-- Nao governa o caminho por NOME DE USUARIO EXATO: quem passou o proprio nome
+-- para alguem ja decidiu ser encontravel por ali.
+--
+-- LIGADA por padrao, pelo mesmo motivo da outra: e o comportamento que nao
+-- precisa ser aprendido, e vale tambem para as contas que ja existem.
+ALTER TABLE "User" ADD COLUMN "allowServerFriendRequests" BOOLEAN NOT NULL DEFAULT true;

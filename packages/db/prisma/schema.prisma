@@ -48,6 +48,16 @@ model User {
   /// comunidade, e quem incomoda ainda pode desligar. Amizade passa por cima
   /// disto — esta chave so governa o caminho "conheci num servidor".
   allowServerDms Boolean  @default(true)
+  /// Aceita PEDIDO DE AMIZADE de quem divide um servidor.
+  ///
+  /// Separada de `allowServerDms` de proposito: sao decisoes diferentes. Da
+  /// para querer receber pedido de amizade e nao querer conversa direta de
+  /// estranho, e o contrario tambem. Uma chave so obrigaria as duas a andarem
+  /// juntas.
+  ///
+  /// Nao afeta o caminho por NOME DE USUARIO EXATO: quem passou o proprio nome
+  /// para alguem ja decidiu ser encontravel por ali.
+  allowServerFriendRequests Boolean @default(true)
   lastSeenAt   DateTime   @default(now())
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

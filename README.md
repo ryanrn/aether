@@ -1426,6 +1426,68 @@ Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
   deste projeto sao dezenas; se um dia forem milhares, o jeito e resolver as
   duas portas em lote, nao afrouxar a checagem.
 
+## Amizade a partir do servidor, e a chave que a governa
+
+Botao "Adicionar amigo" no cartao do membro, dentro do servidor. Aparece SO
+para quem ainda nao tem relacao com voce — nem amizade, nem pedido pendente,
+nem bloqueio.
+
+Esse calculo e feito NO SERVIDOR (`layout.tsx` monta `jaRelacionados`), e nao
+no store do cliente. Quem sabe montar "pendente/aceito" e o banco, e uma copia
+no navegador seria uma segunda versao da mesma consulta — a mesma razao pela
+qual `friend:changed` so pede a tela nova em vez de dizer o que mudou.
+
+`allowServerFriendRequests` e uma chave SEPARADA de `allowServerDms`, e nao a
+mesma reaproveitada: sao decisoes diferentes. Da para querer receber pedido de
+amizade e nao querer conversa direta de estranho, e o contrario tambem.
+
+**Nao governa o caminho por nome de usuario exato.** Quem passou o proprio nome
+para alguem ja decidiu ser encontravel por ali; a chave trata so de ser
+abordavel por ter caido no mesmo servidor. A recusa diz isso e aponta o outro
+caminho, em vez de sumir em silencio.
+
+O SERVIDOR EM COMUM E CONFERIDO NO BANCO, nao pelo que a tela mandou. O cartao
+so aparece para quem esta vendo a lista de membros, mas a action chega do
+navegador — sem essa checagem, aceitar um id viraria exatamente o que o caminho
+por nome evita: mandar pedido para qualquer conta sabendo so o id.
+
+### Correcao que veio junto: bloqueio nao barrava pedido de amizade
+
+Bloquear fechava a conversa mas NAO impedia a pessoa de mandar pedido de
+amizade — e aceitar esse pedido reabriria tudo. Era um buraco deixado pela
+propria funcionalidade de bloqueio. Agora `criarPedido` confere bloqueio nos
+dois sentidos antes de qualquer coisa, e a recusa e generica: dizer "voce foi
+bloqueado" avisaria a pessoa, e a decisao de bloquear nao precisa ser
+anunciada.
+
+## Confirmacao de acao destrutiva (`ConfirmDialog`)
+
+Tres lugares ainda chamavam `window.confirm`: excluir canal, excluir categoria
+e excluir cargo. No app de desktop aquilo abre a caixa NATIVA do Windows — com
+a fonte do sistema, o titulo "@aether/desktop" e os botoes OK/Cancelar em
+ingles. Alem do visual, ela mente sobre o que esta acontecendo: parece um aviso
+do sistema operacional, e nao do aplicativo.
+
+O projeto ja tinha decidido isso uma vez — `member-moderation-modal.tsx` carrega
+o comentario "a confirmacao nao e `window.confirm`". Estes tres so ficaram para
+tras, entao virou componente para nao haver uma quarta copia da decisao.
+
+Duas escolhas dentro dele:
+
+- **Cancelar primeiro, confirmar por ultimo.** Em caixa destrutiva, o botao que
+  a pessoa alcanca por engano tem de ser o que nao apaga nada.
+- **Vermelho SOLIDO no confirmar**, sobrescrevendo a variante `danger` do app.
+  A `danger` normal e discreta de proposito, porque vive dentro de listas ao
+  lado de outras acoes e gritar em toda linha cansaria. Aqui e o oposto: e a
+  ultima confirmacao de algo que nao se desfaz, e a caixa existe so para ela.
+  Sobrescrito no componente em vez de virar variante global — uma
+  `danger-solid` convidaria a usar vermelho cheio onde nao cabe.
+
+A troca pratica em relacao ao `confirm` nativo: ele e sincrono e trava a aba;
+este e estado, entao quem chama guarda o que vai apagar. Um pouco mais de
+codigo, e em troca a janela nao congela e o botao pode dizer "Excluindo..."
+enquanto age.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

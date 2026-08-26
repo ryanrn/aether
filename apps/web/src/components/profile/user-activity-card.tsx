@@ -11,6 +11,7 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  UserPlus,
   Users,
   Volume2,
   VolumeX,
@@ -18,7 +19,10 @@ import {
 import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { blockUserAction } from "@/server/actions/friends";
+import {
+  blockUserAction,
+  sendFriendRequestFromServerAction,
+} from "@/server/actions/friends";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
@@ -78,6 +82,7 @@ export function UserActivityCard({
   nickname,
   serverName,
   voiceChannels,
+  podeAdicionarAmigo = false,
   anchor,
   onClose,
 }: {
@@ -86,6 +91,12 @@ export function UserActivityCard({
   nickname?: string | null;
   serverName: string;
   voiceChannels: PublicChannel[];
+  /**
+   * A pessoa ainda NAO tem relacao comigo (nem amizade, nem pedido pendente,
+   * nem bloqueio). Vem calculado do servidor: quem sabe montar isso e o banco,
+   * e uma copia no cliente seria uma segunda versao da mesma consulta.
+   */
+  podeAdicionarAmigo?: boolean;
   anchor: CardAnchor;
   onClose: () => void;
 }) {
@@ -97,6 +108,8 @@ export function UserActivityCard({
   const [erroConversa, setErroConversa] = useState<string | null>(null);
   const [confirmandoBloqueio, setConfirmandoBloqueio] = useState(false);
   const [bloqueando, startBloqueio] = useTransition();
+  const [pedidoEnviado, setPedidoEnviado] = useState(false);
+  const [pedindo, startPedido] = useTransition();
 
   const presence = useRealtimeStore((state) => state.presence);
   const activity = useRealtimeStore((state) => state.activity);
@@ -144,6 +157,23 @@ export function UserActivityCard({
         return;
       }
       onClose();
+    });
+  }
+
+  function pedirAmizade() {
+    startPedido(async () => {
+      const resultado = await sendFriendRequestFromServerAction(user.id);
+      if (!resultado.ok) {
+        setErroConversa(resultado.error);
+        return;
+      }
+      /**
+       * Nao fecha o cartao: quem clicou precisa ver que deu certo, e sumir a
+       * janela deixaria a pessoa sem saber se o pedido foi. "Ja sao amigos"
+       * aparece quando os dois pediram um ao outro.
+       */
+      setErroConversa(null);
+      setPedidoEnviado(true);
     });
   }
 
@@ -397,6 +427,24 @@ export function UserActivityCard({
           {erroConversa ? (
             <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
               {erroConversa}
+            </p>
+          ) : null}
+
+          {podeAdicionarAmigo && user.id !== selfUserId && !pedidoEnviado ? (
+            <button
+              type="button"
+              onClick={pedirAmizade}
+              disabled={pedindo}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-accent-600/50 bg-accent-600/10 px-3 py-2 text-[12px] font-medium text-accent-300 transition-colors hover:bg-accent-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <UserPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {pedindo ? "Enviando..." : "Adicionar amigo"}
+            </button>
+          ) : null}
+
+          {pedidoEnviado ? (
+            <p className="mt-2 text-center text-[11px] text-signal-online">
+              Pedido enviado.
             </p>
           ) : null}
 

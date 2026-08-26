@@ -48,6 +48,7 @@ export function AppSettingsModal({
     username: string;
     avatarUrl: string | null;
     allowServerDms: boolean;
+    allowServerFriendRequests: boolean;
   };
   server: { id: string; memberId: string; nickname: string | null };
 }) {

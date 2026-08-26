@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@aether/db";
-import { findFriendship } from "@aether/access";
+import { findFriendship, haBloqueio } from "@aether/access";
 import { usernameSchema, type ActionResult } from "@aether/shared";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { requireUser } from "../guards";
@@ -86,42 +86,77 @@ export async function sendFriendRequestAction(
       return fail("Esse e voce.", "username");
     }
 
-    /**
-     * As duas direcoes numa consulta so. O indice unico do banco e por
-     * DIRECAO, entao ele nao barraria o par invertido — quem barra e isto.
-     */
-    const existente = await findFriendship(session.user.id, outro.id);
-
-    if (existente?.status === "ACCEPTED") {
-      return fail(`Voce e ${outro.username} ja sao amigos.`, "username");
-    }
-
-    if (existente?.status === "PENDING") {
-      if (existente.requesterId === session.user.id) {
-        return fail("Voce ja pediu. Espere a resposta.", "username");
-      }
-      /**
-       * Ela ja tinha pedido para voce, e agora voce pediu para ela: as duas
-       * querem. Vira amizade direto em vez de virar um segundo pedido — o
-       * contrario deixaria dois pedidos cruzados pendentes, cada uma
-       * esperando a outra aceitar.
-       */
-      await prisma.friendship.update({
-        where: { id: existente.id },
-        data: { status: "ACCEPTED", respondedAt: new Date() },
-      });
-      await depoisDeMudar([session.user.id, outro.id]);
-      return ok({ enviado: "aceito" as const });
-    }
-
-    await prisma.friendship.create({
-      data: { requesterId: session.user.id, addresseeId: outro.id },
-    });
-    await depoisDeMudar([session.user.id, outro.id]);
-    return ok({ enviado: "pedido" as const });
+    return criarPedido(session.user.id, outro.id, outro.username, "username");
   } catch (error) {
     return toActionError(error);
   }
+}
+
+/**
+ * O miolo do pedido, comum aos DOIS caminhos de entrada (nome exato e cartao
+ * do membro no servidor).
+ *
+ * Existe separado porque as duas portas checam coisas diferentes ANTES —
+ * uma valida o nome, a outra confere servidor em comum e a chave da pessoa —
+ * mas o que acontece DEPOIS e identico. Duas copias divergiriam justamente na
+ * parte delicada: o cruzamento de pedidos.
+ *
+ * `campo` muda so para qual input a tela pinta de vermelho.
+ */
+async function criarPedido(
+  euId: string,
+  outroId: string,
+  outroNome: string,
+  campo: string,
+): Promise<ActionResult<{ enviado: "pedido" | "aceito" }>> {
+  /**
+   * BLOQUEIO PRIMEIRO, nos dois sentidos.
+   *
+   * Faltava aqui: bloquear alguem fechava a conversa, mas nao impedia a
+   * pessoa de mandar pedido de amizade — e aceitar esse pedido reabriria
+   * tudo. Quem bloqueou tambem nao pede: uma relacao bloqueada e muda nas
+   * duas direcoes, e isso vale para o convite tambem.
+   *
+   * A recusa e generica de proposito: dizer "voce foi bloqueado" avisaria a
+   * pessoa, e a decisao de bloquear nao precisa ser anunciada.
+   */
+  if (await haBloqueio(euId, outroId)) {
+    return fail("Nao foi possivel enviar o pedido.", campo);
+  }
+
+  /**
+   * As duas direcoes numa consulta so. O indice unico do banco e por
+   * DIRECAO, entao ele nao barraria o par invertido — quem barra e isto.
+   */
+  const existente = await findFriendship(euId, outroId);
+
+  if (existente?.status === "ACCEPTED") {
+    return fail(`Voce e ${outroNome} ja sao amigos.`, campo);
+  }
+
+  if (existente?.status === "PENDING") {
+    if (existente.requesterId === euId) {
+      return fail("Voce ja pediu. Espere a resposta.", campo);
+    }
+    /**
+     * Ela ja tinha pedido para voce, e agora voce pediu para ela: as duas
+     * querem. Vira amizade direto em vez de virar um segundo pedido — o
+     * contrario deixaria dois pedidos cruzados pendentes, cada uma esperando
+     * a outra aceitar.
+     */
+    await prisma.friendship.update({
+      where: { id: existente.id },
+      data: { status: "ACCEPTED", respondedAt: new Date() },
+    });
+    await depoisDeMudar([euId, outroId]);
+    return ok({ enviado: "aceito" as const });
+  }
+
+  await prisma.friendship.create({
+    data: { requesterId: euId, addresseeId: outroId },
+  });
+  await depoisDeMudar([euId, outroId]);
+  return ok({ enviado: "pedido" as const });
 }
 
 /**
@@ -307,6 +342,80 @@ export async function unblockUserAction(
 
     await depoisDeMudar([session.user.id, otherUserId]);
     return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Pedido de amizade a partir do CARTAO DO MEMBRO, dentro de um servidor.
+ *
+ * Porta diferente da de nome exato, com gate diferente — e e por isso que ela
+ * existe separada em vez de a outra aceitar um id:
+ *
+ *  - precisa de SERVIDOR EM COMUM. Sem isso, aceitar um id do cliente viraria
+ *    exatamente o que o caminho por nome evita: mandar pedido para qualquer
+ *    conta, sabendo so o id;
+ *  - respeita `allowServerFriendRequests` do OUTRO. Quem desliga deixa de ser
+ *    abordavel por essa via, mas continua encontravel por quem tiver o nome
+ *    de usuario dele — porque isso a pessoa entregou de proposito.
+ */
+export async function sendFriendRequestFromServerAction(
+  otherUserId: string,
+): Promise<ActionResult<{ enviado: "pedido" | "aceito" }>> {
+  try {
+    const session = await requireUser();
+    if (typeof otherUserId !== "string" || otherUserId.length === 0) {
+      return fail("Pessoa invalida.");
+    }
+    if (otherUserId === session.user.id) return fail("Esse e voce.");
+
+    const porConta = await rateLimit(
+      `amigo-conta:${session.user.id}`,
+      LIMITE_PEDIDOS,
+      JANELA_MS,
+    );
+    if (!porConta.ok) {
+      return fail(`Muitos pedidos. Tente de novo em ${porConta.retryAfter}s.`);
+    }
+
+    const outro = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { id: true, username: true, allowServerFriendRequests: true },
+    });
+    if (!outro) return fail("Pessoa nao encontrada.");
+
+    /**
+     * Servidor em comum, checado no BANCO e nao pelo que a tela mandou. O
+     * cartao so aparece para quem esta vendo a lista de membros, mas a action
+     * chega do navegador — e o que chega de la nao e prova de nada.
+     */
+    const meusServidores = await prisma.serverMember.findMany({
+      where: { userId: session.user.id },
+      select: { serverId: true },
+    });
+    const juntos = await prisma.serverMember.findFirst({
+      where: {
+        userId: otherUserId,
+        serverId: { in: meusServidores.map((m) => m.serverId) },
+      },
+      select: { id: true },
+    });
+    if (!juntos) return fail("Voces nao dividem nenhum servidor.");
+
+    if (!outro.allowServerFriendRequests) {
+      /**
+       * Diz o motivo, como na recusa de conversa: some em silencio faria a
+       * pessoa achar que o pedido foi e esta sendo ignorado. Quem nao quer ser
+       * abordado por servidor continua alcancavel por nome exato, e a frase
+       * aponta esse caminho.
+       */
+      return fail(
+        "Esta pessoa nao aceita pedidos de amizade a partir de servidores.",
+      );
+    }
+
+    return criarPedido(session.user.id, outro.id, outro.username, "");
   } catch (error) {
     return toActionError(error);
   }

@@ -17,6 +17,7 @@ import {
 } from "@/server/actions/roles";
 import { canManageRole, viewerCan } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
@@ -306,24 +307,37 @@ function DeleteRoleButton({
   role: PublicRole;
 }) {
   const [pending, startTransition] = useTransition();
+  const [confirmando, setConfirmando] = useState(false);
 
   return (
-    <Button
-      variant="danger"
-      className="ml-auto"
-      disabled={pending}
-      onClick={() => {
-        const confirmed = window.confirm(
-          `Excluir o cargo "${role.name}"? Os membros perdem as permissoes dele.`,
-        );
-        if (!confirmed) return;
-        startTransition(async () => {
-          await deleteRoleAction(serverId, role.id);
-        });
-      }}
-    >
-      <Trash2 className="h-3.5 w-3.5" />
-      Excluir cargo
-    </Button>
+    <>
+      <Button
+        variant="danger"
+        className="ml-auto"
+        disabled={pending}
+        onClick={() => setConfirmando(true)}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Excluir cargo
+      </Button>
+
+      <ConfirmDialog
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        title="Excluir cargo"
+        confirmLabel="Excluir cargo"
+        pending={pending}
+        onConfirm={() => {
+          startTransition(async () => {
+            await deleteRoleAction(serverId, role.id);
+            setConfirmando(false);
+          });
+        }}
+      >
+        Tem certeza de que deseja excluir{" "}
+        <strong className="text-ink-100">{role.name}</strong>? Quem tiver este
+        cargo perde as permissoes dele na hora.
+      </ConfirmDialog>
+    </>
   );
 }

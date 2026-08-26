@@ -194,3 +194,32 @@ export async function setAllowServerDmsAction(
     return toActionError(error);
   }
 }
+
+/**
+ * Liga ou desliga "aceitar pedido de amizade de quem divide um servidor".
+ *
+ * Chave SEPARADA da de conversa direta: sao decisoes diferentes, e juntar as
+ * duas obrigaria quem quer metade a abrir mao da outra. Nao afeta o caminho
+ * por nome de usuario exato — quem entregou o proprio nome ja decidiu ser
+ * encontravel por ali.
+ */
+export async function setAllowServerFriendRequestsAction(
+  allow: unknown,
+): Promise<ActionResult<{ allowServerFriendRequests: boolean }>> {
+  try {
+    const session = await requireUser();
+    if (typeof allow !== "boolean") {
+      return fail("Valor invalido", "allowServerFriendRequests");
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { allowServerFriendRequests: allow },
+    });
+
+    revalidatePath("/app", "layout");
+    return ok({ allowServerFriendRequests: allow });
+  } catch (error) {
+    return toActionError(error);
+  }
+}

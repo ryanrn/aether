@@ -4,6 +4,7 @@ import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
 import { ChannelSidebar } from "@/components/layout/channel-sidebar";
 import { ControlBar } from "@/components/layout/control-bar";
+import { prisma } from "@aether/db";
 import { MemberPanel } from "@/components/layout/member-panel";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
 import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
@@ -36,6 +37,32 @@ export default async function ServerLayout({
   }
 
   const data = await getServerContext(serverId, context);
+
+  /**
+   * Quem ja tem alguma relacao comigo: amizade (aceita ou pendente, nos dois
+   * sentidos) ou bloqueio. O cartao do membro usa para nao oferecer
+   * "adicionar amigo" a quem ja e amigo, ja recebeu pedido ou esta bloqueado.
+   */
+  const jaRelacionados = new Set<string>();
+  {
+    const eu = context.session.user.id;
+    const [amizades, bloqueios] = await Promise.all([
+      prisma.friendship.findMany({
+        where: { OR: [{ requesterId: eu }, { addresseeId: eu }] },
+        select: { requesterId: true, addresseeId: true },
+      }),
+      prisma.block.findMany({
+        where: { OR: [{ blockerId: eu }, { blockedId: eu }] },
+        select: { blockerId: true, blockedId: true },
+      }),
+    ]);
+    for (const a of amizades) {
+      jaRelacionados.add(a.requesterId === eu ? a.addresseeId : a.requesterId);
+    }
+    for (const b of bloqueios) {
+      jaRelacionados.add(b.blockerId === eu ? b.blockedId : b.blockerId);
+    }
+  }
   if (!data) notFound();
 
   const viewer: ViewerContext = {
@@ -98,6 +125,18 @@ export default async function ServerLayout({
 
           <MemberPanel
             members={data.members}
+            /*
+              Quem JA tem relacao comigo — amigo aceito, pedido pendente em
+              qualquer direcao, ou bloqueio. O cartao usa para nao oferecer
+              "adicionar amigo" a quem ja e amigo.
+
+              Calculado AQUI, no servidor, e nao no store do cliente: quem sabe
+              montar "pendente/aceito" e o banco, e uma copia no navegador
+              seria uma segunda versao da mesma consulta — a mesma razao pela
+              qual `friend:changed` so pede a tela nova em vez de mandar o que
+              mudou.
+            */
+            jaRelacionados={jaRelacionados}
             roles={data.roles}
             ownerId={data.server.ownerId}
             serverId={serverId}
