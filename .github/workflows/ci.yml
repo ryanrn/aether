@@ -49,7 +49,7 @@ jobs:
       # ele usa o proprio diretorio. Sem este passo, sao ~100 MB baixados de
       # novo a cada rodada.
       - name: Cache do binario do Electron
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
