@@ -25,7 +25,16 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
   return (
     <aside
       aria-label="Ativo agora"
-      className="flex w-[260px] shrink-0 flex-col border-l border-white/[0.06] bg-base-900"
+      /**
+       * ESCONDIDO abaixo de 1280px.
+       *
+       * Este painel e supplementar — ele mostra quem esta jogando, coisa que a
+       * propria lista de amigos ja diz na linha de cada pessoa. Mantendo-o
+       * fixo em 260px numa janela estreita, ele e a nav comiam 572px de
+       * moldura: numa janela de 900px sobravam 328px para a lista, e o campo
+       * de adicionar amigo ficava com 177px. Nada aqui se perde ao sumir.
+       */
+      className="hidden w-[260px] shrink-0 flex-col border-l border-white/[0.06] bg-base-900 xl:flex"
     >
       <h2 className="shrink-0 px-4 pb-3 pt-4 text-[14px] font-bold text-ink-100">
         Ativo agora

@@ -30,10 +30,17 @@ export function FriendsNav({
   return (
     <nav
       aria-label="Amigos"
-      className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.06] bg-base-900"
+      /**
+       * Abaixo de 1024px vira TRILHO DE ICONES, e nao some.
+       *
+       * Sumir custaria caro: e por aqui que se chega em "Solicitacoes", e nao
+       * ha outro caminho ate ela. O trilho mantem os dois destinos alcancaveis
+       * em 60px em vez de 244px — o rotulo e o cabecalho e que saem.
+       */
+      className="flex w-[60px] shrink-0 flex-col border-r border-white/[0.06] bg-base-900 lg:w-[244px]"
     >
       <header className="flex h-12 shrink-0 items-center px-4">
-        <h2 className="truncate text-[14px] font-bold uppercase tracking-[0.04em] text-ink-100">
+        <h2 className="hidden truncate text-[14px] font-bold uppercase tracking-[0.04em] text-ink-100 lg:block">
           Aether
         </h2>
       </header>
@@ -83,17 +90,31 @@ function ItemNav({
     <button
       type="button"
       onClick={onClick}
+      title={rotulo}
+      aria-label={rotulo}
       aria-current={ativo ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-[6px] px-3 py-2.5 text-left text-[15px]",
+        "flex items-center gap-3 rounded-[6px] py-2.5 text-left text-[15px]",
+        // No trilho o icone fica centrado; com rotulo, alinhado a esquerda.
+        "justify-center px-0 lg:justify-start lg:px-3",
         "transition-colors duration-150",
         ativo
           ? "bg-accent-500/[0.12] text-accent-400"
           : "text-ink-300 hover:bg-white/[0.03] hover:text-ink-100",
       )}
     >
-      <Icone className="h-[22px] w-[22px] shrink-0" strokeWidth={1.75} />
-      <span className="min-w-0 flex-1 truncate font-medium">{rotulo}</span>
+      {/*
+        O `title` cobre o que o rotulo escondido deixaria de dizer no trilho.
+        Sem ele, dois icones sem texto viram adivinhacao.
+      */}
+      <Icone
+        className="h-[22px] w-[22px] shrink-0"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <span className="hidden min-w-0 flex-1 truncate font-medium lg:block">
+        {rotulo}
+      </span>
       {badge > 0 ? (
         <span className="shrink-0 rounded-lg bg-signal-dnd px-2 py-0.5 text-[11px] font-bold leading-4 text-white">
           {badge > 9 ? "9+" : badge}

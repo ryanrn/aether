@@ -386,11 +386,22 @@ function Linha({ item }: { item: PublicFriendship }) {
       </div>
 
       {/*
-        Acoes so no hover — e tambem no FOCO. Sem o foco, os botoes continuariam
-        alcancaveis pelo teclado enquanto invisiveis: quem navega por Tab cairia
-        num botao que nao consegue ver.
+        "Conversar" fica SEMPRE VISIVEL; o resto so no hover.
+        
+        A primeira versao escondia tudo atras do hover, e o resultado foi
+        exatamente o previsivel: a tela de amigos nao mostrava nenhum caminho
+        para mandar mensagem, e quem olhava nao achava. Acao principal nao pode
+        depender de a pessoa descobrir que passar o mouse revela algo — ainda
+        mais quando ela e o motivo de a tela existir.
+        
+        Desfazer amizade continua no hover, e ai o escondido AJUDA: e destrutivo
+        e nao e o que se vem fazer aqui.
+        
+        O grupo mantem `focus-within` porque, sem ele, os botoes de hover
+        continuariam alcancaveis pelo teclado enquanto invisiveis — quem navega
+        por Tab cairia num botao que nao consegue ver.
       */}
-      <div className="flex shrink-0 items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="flex shrink-0 items-center gap-1.5">
         {item.kind === "incoming" ? (
           <>
             <BotaoAcao
@@ -427,14 +438,16 @@ function Linha({ item }: { item: PublicFriendship }) {
             >
               <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
             </BotaoAcao>
-            <BotaoAcao
-              titulo="Desfazer amizade"
-              perigo
-              pendente={pendente}
-              onClick={() => agir(() => removeFriendAction(item.user.id))}
-            >
-              <UserX className="h-4 w-4" strokeWidth={1.75} />
-            </BotaoAcao>
+            <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+              <BotaoAcao
+                titulo="Desfazer amizade"
+                perigo
+                pendente={pendente}
+                onClick={() => agir(() => removeFriendAction(item.user.id))}
+              >
+                <UserX className="h-4 w-4" strokeWidth={1.75} />
+              </BotaoAcao>
+            </span>
           </>
         )}
       </div>
