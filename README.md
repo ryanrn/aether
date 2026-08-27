@@ -1914,6 +1914,66 @@ Medido na tela: rotulo `none`/`default`, campo `text`/`text`, botao e link
 `none`/`pointer`; e selecionar de verdade devolve texto na mensagem e no
 usuario, e string vazia no nome de canal e de membro.
 
+### Ctrl+K — trocador rapido
+
+Pular para qualquer canal, servidor ou conversa sem tirar a mao do teclado. E
+o atalho que mais faz o app parecer programa.
+
+O INDICE VEM DO SERVIDOR (`server/actions/navegacao.ts`), e nao do que a tela
+conhece: o cliente so recebe a arvore do servidor ABERTO, e um trocador que so
+enxerga onde voce ja esta nao serve para nada.
+
+**A permissao e calculada canal a canal**, com a mesma `getChannelPermissionMap`
+que monta a arvore. Nao e detalhe: `getChannelPermissionMap` devolve TODOS os
+sete canais do servidor de teste para o joao, inclusive os dois que negam
+`@everyone` — quem os remove e o filtro `VIEW_CHANNEL`. Sem ele bastaria
+digitar parte do nome para descobrir que existe um canal que voce nao pode ver,
+justo o que o 404 do resto do sistema evita. As conversas passam por
+`loadDmList`, que ja aplica bloqueio e amizade.
+
+A lista recarrega a cada abertura, e nao uma vez so: canal criado ou amizade
+desfeita mudam o indice, e cache eterno mostraria destino que nao existe mais.
+
+### Clique direito
+
+No navegador o botao direito abre "Recarregar" e "Ver codigo fonte" — nada
+denuncia mais rapido que a coisa e uma pagina. Canal e mensagem agora respondem
+com o menu do proprio app (`components/ui/context-menu.tsx`).
+
+**So substituimos onde temos o que oferecer.** Bloquear o menu nativo no app
+inteiro deixaria a pessoa sem "copiar" e sem nada no lugar — pior do que o menu
+do navegador.
+
+O menu nao tem acao propria: chama o que os botoes de passar o mouse ja
+chamavam e obedece as mesmas `canEdit` / `canDelete`. Uma segunda lista de
+acoes seria uma segunda regra de permissao. Em mensagem, "Copiar" respeita o
+trecho marcado — com selecao copia a selecao, sem selecao copia a mensagem
+inteira —, porque era isso que o menu nativo fazia.
+
+A conta de posicao saiu de `voice-member-menu.tsx` e virou peca, para o proximo
+menu nao ser uma terceira copia. Medido numa janela de 1280x720: cursor em
+(1277,717) poe o menu em (1064,502); no canto superior esquerdo ele para na
+folga de 8px; no meio da tela fica onde o cursor estava.
+
+### Limitacoes que ficaram
+
+- **O trocador nao tem historico nem ordem por uso.** A lista sai na ordem da
+  arvore, entao o canal em que voce vive nao sobe sozinho. Digitar duas letras
+  resolve na pratica, mas nao e o que o Discord faz.
+- **O indice e montado por servidor, em serie.** Sao duas consultas por
+  servidor (`loadMemberAccess` e os canais visiveis) a cada abertura. Com os
+  poucos servidores de hoje nao aparece; com dezenas, apareceria.
+- **O menu de contexto ainda nao cobre tudo.** Icone de servidor, membro da
+  lista e area vazia do chat continuam sem menu proprio — nesses o menu do
+  navegador continua abrindo.
+- **Sem navegacao por setas dentro do menu de contexto.** Esc fecha e Tab anda
+  pelos itens, mas seta para baixo nao percorre como em menu nativo. O
+  trocador, esse, anda com as setas.
+- **`voice-member-menu.tsx` nao foi migrado para a peca nova.** Ele funciona e
+  tem o slider de volume; migrar agora era risco sem ganho. Enquanto nao for,
+  existem duas implementacoes da mesma conta de posicao — a antiga so naquele
+  arquivo.
+
 ## Paleta v2 (superficies, tipografia e acento)
 
 Troca dos valores do `@theme` em `globals.css` para uma paleta de superficies
