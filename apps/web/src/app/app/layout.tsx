@@ -3,6 +3,7 @@ import { getSession } from "@/server/auth/session";
 import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
 import { ServerRail } from "@/components/layout/server-rail";
+import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
 
@@ -38,6 +39,12 @@ export default async function AppLayout({
     <RealtimeProvider>
       <div className="flex h-full w-full overflow-hidden bg-base-950">
         <VoiceSession />
+        {/*
+          No layout do /app, e nao dentro de um servidor: o atalho tem de
+          funcionar tambem na tela de amigos e numa conversa direta — que e
+          justamente de onde mais se quer pular para outro lugar.
+        */}
+        <QuickSwitcher />
         <ServerRail servers={servers} pendingRequests={pendingRequests} />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
