@@ -23,6 +23,7 @@ import {
   ChevronUp,
   FolderPlus,
   Hash,
+  Link2,
   Lock,
   Pencil,
   Plus,
@@ -43,6 +44,12 @@ import {
   moveChannelAction,
 } from "@/server/actions/channels";
 import { channelAllows, viewerCan } from "@/lib/permissions";
+import {
+  ContextMenu,
+  ItemDoMenu,
+  SeparadorDoMenu,
+  useMenuDeContexto,
+} from "@/components/ui/context-menu";
 import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
 import {
   useUnreadCounts,
@@ -460,6 +467,19 @@ function ChannelRow({
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");
   const canDelete = channelAllows(channelPermissions, channel.id, "DELETE_CHANNEL");
 
+  /**
+   * Menu de clique direito do canal.
+   *
+   * Ele NAO tem acoes proprias: chama exatamente o que os botoes de passar o
+   * mouse ja chamam, e obedece as mesmas `canEdit` / `canDelete`. Uma segunda
+   * lista de acoes aqui seria uma segunda regra de permissao — e a que
+   * ficasse para tras viraria falha de autorizacao, nao defeito de tela.
+   *
+   * O ganho e de alcance: os icones so aparecem no hover e sao pequenos, e
+   * este e o mesmo motivo pelo qual os tres pontinhos do card de voz sairam.
+   */
+  const menu = useMenuDeContexto();
+
   const { entrar } = useEntrarNaVoz();
 
   /**
@@ -527,6 +547,7 @@ function ChannelRow({
       className="group/channel"
     >
       <div
+        onContextMenu={menu.abrir}
         className={cn(
           "flex items-center rounded-sm transition-colors duration-100",
           active ? "bg-base-750" : "hover:bg-base-850",
@@ -651,6 +672,80 @@ function ChannelRow({
           voiceChannels={voiceChannels}
         />
       ) : null}
+
+      <ContextMenu ponto={menu.ponto} onClose={menu.fechar} titulo={channel.name}>
+        {/*
+          Copiar o link vem primeiro e aparece para todo mundo: e a unica coisa
+          do menu que nao depende de cargo, e a mais pedida.
+        */}
+        <ItemDoMenu
+          icone={<Link2 className="h-3.5 w-3.5" />}
+          onClick={() => {
+            void navigator.clipboard.writeText(
+              `${window.location.origin}/app/s/${serverId}/c/${channel.id}`,
+            );
+            menu.fechar();
+          }}
+        >
+          Copiar link
+        </ItemDoMenu>
+
+        {canEdit ? (
+          <>
+            <SeparadorDoMenu />
+            <ItemDoMenu
+              icone={<Pencil className="h-3.5 w-3.5" />}
+              onClick={() => {
+                menu.fechar();
+                onEdit();
+              }}
+            >
+              Editar canal
+            </ItemDoMenu>
+            <ItemDoMenu
+              icone={<ChevronUp className="h-3.5 w-3.5" />}
+              disabled={pending}
+              onClick={() => {
+                menu.fechar();
+                startTransition(async () => {
+                  await moveChannelAction(serverId, channel.id, "up");
+                });
+              }}
+            >
+              Mover para cima
+            </ItemDoMenu>
+            <ItemDoMenu
+              icone={<ChevronDown className="h-3.5 w-3.5" />}
+              disabled={pending}
+              onClick={() => {
+                menu.fechar();
+                startTransition(async () => {
+                  await moveChannelAction(serverId, channel.id, "down");
+                });
+              }}
+            >
+              Mover para baixo
+            </ItemDoMenu>
+          </>
+        ) : null}
+
+        {canDelete ? (
+          <>
+            <SeparadorDoMenu />
+            <ItemDoMenu
+              danger
+              icone={<Trash2 className="h-3.5 w-3.5" />}
+              disabled={pending}
+              onClick={() => {
+                menu.fechar();
+                setConfirmandoExclusao(true);
+              }}
+            >
+              Excluir canal
+            </ItemDoMenu>
+          </>
+        ) : null}
+      </ContextMenu>
 
       <ConfirmDialog
         open={confirmandoExclusao}

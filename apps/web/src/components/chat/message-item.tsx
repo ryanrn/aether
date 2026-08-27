@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { AlertCircle, SmilePlus } from "lucide-react";
+import { useRef, useState } from "react";
+import { AlertCircle, Copy, SmilePlus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
 import { useSocket } from "@/components/realtime/realtime-provider";
+import {
+  ContextMenu,
+  ItemDoMenu,
+  useMenuDeContexto,
+} from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
@@ -40,6 +45,34 @@ export function MessageItem({
    */
   const [erroReacao, setErroReacao] = useState<string | null>(null);
 
+  const menu = useMenuDeContexto();
+  const linhaRef = useRef<HTMLLIElement | null>(null);
+  /**
+   * O que "Copiar" vai copiar, decidido no instante em que o menu abre.
+   *
+   * COM TEXTO SELECIONADO, copia a selecao; sem selecao, a mensagem inteira.
+   * O motivo e que este menu toma o lugar do menu do navegador, e o nativo
+   * copiava exatamente o trecho marcado. Trocar isso por "copia tudo" seria
+   * tirar uma coisa que funcionava.
+   *
+   * Fica em estado, e nao lido na hora do clique, porque clicar no menu
+   * desfaz a selecao — na hora de copiar ela ja nao existiria mais.
+   */
+  const [selecao, setSelecao] = useState<string | null>(null);
+
+  function abrirMenu(evento: React.MouseEvent) {
+    const marcado = window.getSelection();
+    const texto = marcado?.toString() ?? "";
+    // So conta a selecao que esta DENTRO desta mensagem: texto marcado numa
+    // mensagem acima nao pode virar o "copiar" desta.
+    const daquiDeDentro =
+      texto.trim().length > 0 &&
+      marcado?.anchorNode != null &&
+      linhaRef.current?.contains(marcado.anchorNode) === true;
+    setSelecao(daquiDeDentro ? texto : null);
+    menu.abrir(evento);
+  }
+
   function alternar(emoji: string) {
     setErroReacao(null);
     socket?.emit(
@@ -62,6 +95,8 @@ export function MessageItem({
 
   return (
     <li
+      ref={linhaRef}
+      onContextMenu={abrirMenu}
       className={cn(
         "group/message relative px-4 transition-colors hover:bg-base-900/40",
         compact ? "py-0.5" : "mt-3 py-0.5 first:mt-0",
@@ -202,6 +237,35 @@ export function MessageItem({
               {message.failed}
             </p>
           ) : null}
+
+          <ContextMenu ponto={menu.ponto} onClose={menu.fechar}>
+            <ItemDoMenu
+              icone={<Copy className="h-3.5 w-3.5" />}
+              onClick={() => {
+                void navigator.clipboard.writeText(selecao ?? message.content);
+                menu.fechar();
+              }}
+            >
+              {selecao ? "Copiar selecao" : "Copiar texto"}
+            </ItemDoMenu>
+
+            {/*
+              Reagir usa o MESMO seletor do botao que aparece no hover, e nao
+              uma copia menor dentro do menu: dois seletores de emoji
+              divergiriam na primeira vez que um deles ganhasse uma aba.
+            */}
+            <ItemDoMenu
+              icone={<SmilePlus className="h-3.5 w-3.5" />}
+              disabled={!podeReagir}
+              onClick={() => {
+                const ponto = menu.ponto;
+                menu.fechar();
+                if (ponto) setSeletor({ x: ponto.x - 340, y: ponto.y + 6 });
+              }}
+            >
+              Reagir
+            </ItemDoMenu>
+          </ContextMenu>
         </div>
       </div>
     </li>
