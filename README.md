@@ -846,6 +846,15 @@ Onde fica:
   lista `NAO_DA_ICONE` e a comparacao passou a incluir o icone, entao ele
   MELHORA assim que o processo do jogo aparece.
 
+  **E o GATEWAY desfazia esse conserto, em silencio.** O `setGame` comparava
+  so o nome — "o icone acompanha o jogo, nao muda sozinho" — entao o desktop
+  reanunciava o icone bom e o gateway descartava por ser "o mesmo jogo". O
+  desktop fazia o trabalho e ninguem via o resultado. Medido: anunciar o mesmo
+  jogo trocando so o icone gerava ZERO eventos para os outros. Hoje o icone
+  conta como mudanca; carimbo e capa continuam presos ao NOME, porque so o
+  icone ter melhorado nao reinicia a sessao nem justifica buscar a arte de
+  novo. Coberto por duas assercoes em `verify-game-activity.mjs`.
+
   **E isso quebrou de outro jeito**, reportado na sequencia: com o anti-cheat
   bloqueado, o Fall Guys passou a nao ter icone NENHUM — enquanto se joga, o
   unico processo visivel daquela pasta pode ser justamente o do anti-cheat.

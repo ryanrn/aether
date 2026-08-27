@@ -70,6 +70,44 @@ function joinServer(socket, serverId) {
   return new Promise((resolve) => socket.emit("server:join", serverId, resolve));
 }
 
+/**
+ * Um data URL de PNG aceito pelo `safeGameIcon`. O mesmo usado mais abaixo.
+ */
+const PNG_1X1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+
+/**
+ * Espera a poeira baixar: resolve quando passar `quietoMs` sem nenhum
+ * `presence:update` do usuario.
+ *
+ * Existe porque um anuncio de jogo gera DOIS eventos — o jogo na hora, e a
+ * capa do IGDB quando ela chega. Medir "nao houve reenvio" no meio disso
+ * captura a capa e reprova codigo correto. Devolve o ultimo evento visto,
+ * para quem quiser olhar o que assentou.
+ */
+function esperarSilencio(socket, userId, quietoMs = 600, tetoMs = 5000) {
+  return new Promise((resolve) => {
+    let ultimo = null;
+    let quantos = 0;
+    let timer = setTimeout(terminar, quietoMs);
+    const limite = setTimeout(terminar, tetoMs);
+
+    function terminar() {
+      clearTimeout(timer);
+      clearTimeout(limite);
+      socket.off("presence:update", ouvinte);
+      resolve({ ultimo, quantos });
+    }
+    function ouvinte(payload) {
+      if (payload?.entry?.userId !== userId) return;
+      ultimo = payload.entry;
+      quantos += 1;
+      clearTimeout(timer);
+      timer = setTimeout(terminar, quietoMs);
+    }
+    socket.on("presence:update", ouvinte);
+  });
+}
+
 /** Espera UM presence:update do usuario pedido, ou desiste. */
 function waitPresence(socket, userId, timeoutMs = 3000) {
   return new Promise((resolve) => {
@@ -134,10 +172,52 @@ async function main() {
   check("o carimbo e uma data valida",
     entrada?.gameSince && !Number.isNaN(new Date(entrada.gameSince).getTime()));
 
+  /**
+   * ESPERA A CAPA ASSENTAR antes de medir a repeticao.
+   *
+   * Sem isto o teste reprovava codigo correto, e demorou a ser entendido: o
+   * anuncio do jogo dispara a busca de metadados em segundo plano, e a capa
+   * chega num SEGUNDO `presence:update` uns 60ms depois. O ouvinte montado
+   * para flagrar um reenvio duplicado capturava essa capa e dava falha.
+   *
+   * A capa nao e trafego repetido — e informacao nova, e o motivo pelo qual
+   * ela vem separada esta no README. Medido: 1o evento em t=1ms sem capa, 2o
+   * em t=61ms com capa; a repeticao em si gerou zero eventos.
+   */
+  const capa = await esperarSilencio(observador, member.id);
+  console.log(
+    capa.ultimo?.gameCover
+      ? "  ..    a capa do IGDB chegou depois, num evento proprio"
+      : "  ..    nenhuma capa veio (IGDB sem o jogo, fora do ar ou sem credencial)",
+  );
+
   // Repetir o MESMO jogo nao pode gerar evento — seria trafego a cada 15s.
   const repetido = waitPresence(observador, member.id, 1200);
   relator.emit("presence:game", { name: "Hollow Knight" });
   check("repetir o mesmo jogo NAO reemite", (await repetido) === null);
+
+  /**
+   * Mas trocar SO O ICONE tem de propagar.
+   *
+   * O vigia do desktop reanuncia de proposito quando o icone melhora: jogo
+   * com anti-cheat sobe em etapas, e existe uma janela em que o unico
+   * processo da pasta e o do anti-cheat — no Fall Guys, o icone daquele
+   * instante era o escudo do EAC. O gateway comparava so o nome e jogava a
+   * melhora fora, desfazendo na ponta um conserto feito do outro lado.
+   */
+  const comIcone = waitPresence(observador, member.id, 1500);
+  relator.emit("presence:game", { name: "Hollow Knight", icon: PNG_1X1 });
+  const melhorado = await comIcone;
+  check(
+    "o mesmo jogo com icone MELHOR propaga",
+    melhorado?.gameIcon === PNG_1X1,
+    `gameIcon=${String(JSON.stringify(melhorado?.gameIcon)).slice(0, 40)}`,
+  );
+  check(
+    "e trocar so o icone NAO reinicia o carimbo",
+    melhorado?.gameSince === entrada?.gameSince,
+    `antes=${entrada?.gameSince} depois=${melhorado?.gameSince}`,
+  );
 
   // Trocar de jogo reinicia o carimbo.
   const antes = entrada.gameSince;
@@ -165,7 +245,7 @@ async function main() {
 
   console.log("\nO icone tambem e dado de cliente");
 
-  const pngValido = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+  const pngValido = PNG_1X1;
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Com Icone", icon: pngValido });
   entrada = await vista;

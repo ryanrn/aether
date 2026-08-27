@@ -105,22 +105,53 @@ export function setGame(
   userId: string,
   game: string | null,
   icon: string | null = null,
-): { servers: string[]; entry: PresenceEntry } | null {
+): { servers: string[]; entry: PresenceEntry; nomeMudou: boolean } | null {
   const user = users.get(userId);
   if (!user) return null;
-  // Comparacao pelo NOME: o icone acompanha o jogo, nao muda sozinho.
-  if (user.game === game) return null;
+
+  const nomeMudou = user.game !== game;
+  /**
+   * O ICONE tambem conta como mudanca, e nao so o nome.
+   *
+   * Comparar so o nome parecia certo — "o icone acompanha o jogo" — e
+   * desfazia, aqui na ponta, um conserto feito do outro lado. O vigia do
+   * desktop reanuncia DE PROPOSITO quando o icone melhora: jogo com
+   * anti-cheat sobe em etapas, existe uma janela em que o unico processo da
+   * pasta e o do anti-cheat, e o icone daquele instante e pior (era o escudo
+   * do EAC no Fall Guys). Ele manda o mesmo nome com o icone bom, e o gateway
+   * jogava fora por ser "o mesmo jogo".
+   *
+   * Medido antes do conserto: anunciar o mesmo jogo trocando so o icone
+   * gerava ZERO eventos para os outros.
+   *
+   * Isto nao cria trafego novo: o desktop so reanuncia quando algo mudou de
+   * verdade, entao repetir o mesmo par nome+icone continua sendo silencio.
+   */
+  const iconeMudou = game !== null && user.gameIcon !== icon;
+  if (!nomeMudou && !iconeMudou) return null;
 
   user.game = game;
-  user.gameSince = game ? Date.now() : null;
   user.gameIcon = game ? icon : null;
-  // A capa do jogo ANTERIOR morre aqui. Ela e resolvida em segundo plano e
-  // chega depois; sem zerar, o jogo novo apareceria por um instante com a
-  // arte do que acabou de ser fechado.
-  user.gameCover = null;
+
+  /**
+   * Carimbo e capa so se mexem quando o JOGO muda.
+   *
+   * Se apenas o icone melhorou, a pessoa continua na mesma sessao: reiniciar
+   * `gameSince` zeraria o tempo de jogo na tela dos outros, e limpar a capa
+   * faria a arte ja resolvida piscar e ser buscada de novo.
+   */
+  if (nomeMudou) {
+    user.gameSince = game ? Date.now() : null;
+    // A capa do jogo ANTERIOR morre aqui. Ela e resolvida em segundo plano e
+    // chega depois; sem zerar, o jogo novo apareceria por um instante com a
+    // arte do que acabou de ser fechado.
+    user.gameCover = null;
+  }
+
   return {
     servers: [...user.servers.keys()],
     entry: toPresenceEntry(userId, user),
+    nomeMudou,
   };
 }
 

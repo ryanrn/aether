@@ -306,7 +306,7 @@ export function registerPresenceHandlers(
      *
      * Sem `await`: nada aqui pode segurar o handler.
      */
-    if (nome) void enriquecer(io, userId, nome);
+    if (nome && mudou.nomeMudou) void enriquecer(io, userId, nome);
   });
 
   socket.on("disconnect", () => {
