@@ -15,82 +15,75 @@
  */
 @theme {
   /*
-   * Superficies — do mais profundo ao mais elevado.
+   * Superficies — Discord / Fluxer Dark Mode High-Contrast.
    *
-   * O fundo NAO e preto puro (#0B0D10, nao #000): preto chapado contra texto
-   * claro cria contraste duro e cansa em sessao longa. Os passos 700 e 600
-   * existem sobretudo como BORDA — 39 e 16 usos respectivamente — e por isso
-   * ficam calibrados para ler como linha discreta sobre o 900, e nao como
-   * outra superficie.
+   * 950: O fundo ultra-profundo (#111214) para trilho de servidores e bordas extremas.
+   * 900: Sidebar de canais, lista de DMs e painel de usuario (#1e1f22).
+   * 850: Hover states de canais, itens de navegacao e modais internos (#232428).
+   * 800: Painel principal de mensagens / chat / palco de audio (#2b2d31).
+   * 750: Caixas de texto, inputs de busca e cards elevados (#313338).
+   * 700: Bordas primarias, divisores e botoes secundarios (#383a40).
+   * 600: Bordas de destaque, selecao e barras de rolagem (#4e5058).
+   * 500: Elementos de alto relevo e foco sutil (#6d6f78).
    */
-  --color-base-950: #0b0d10;
-  --color-base-900: #111318;
-  --color-base-850: #16191f;
-  --color-base-800: #1e2128;
-  --color-base-750: #23272f;
-  --color-base-700: #2a2e38;
-  --color-base-600: #363b45;
-  --color-base-500: #464c58;
+  --color-base-950: #111214;
+  --color-base-900: #1e1f22;
+  --color-base-850: #232428;
+  --color-base-800: #2b2d31;
+  --color-base-750: #313338;
+  --color-base-700: #383a40;
+  --color-base-600: #4e5058;
+  --color-base-500: #6d6f78;
 
   /*
-   * Texto. O topo e #F0F1F5, nao branco puro — pelo mesmo motivo do fundo.
-   * Cinco degraus com distancia real entre eles: hierarquia se faz com peso
-   * E cor, e sem degrau visivel tudo vira a mesma coisa.
+   * Tipografia e Textos — Alto Contraste & Leiturabilidade Discord/Fluxer.
+   *
+   * 100: Titulos e texto ativo de alto contraste (#f2f3f5).
+   * 200: Mensagens, texto de leitura e nomes de canais (#dbdee1).
+   * 300: Textos secundarios, timestamps e icones ativos (#949ba4).
+   * 400: Cabecalhos de categoria e rotulos mudos (#80848e).
+   * 500: Placeholders e dicas sutis (#60646c).
+   * 600: Divisores discretos e texto desativado (#45474f).
    */
-  --color-ink-100: #f0f1f5;
-  --color-ink-200: #c5cad3;
-  --color-ink-300: #8a8f98;
-  --color-ink-400: #6a6f79;
-  --color-ink-500: #4a4f58;
-  /**
-   * O tom mais apagado que ainda e legivel: rotulo de secao, placeholder,
-   * separador escrito. Abaixo disto o texto vira ruido cinza sobre cinza.
-   */
-  --color-ink-600: #3a3f48;
+  --color-ink-100: #f2f3f5;
+  --color-ink-200: #dbdee1;
+  --color-ink-300: #949ba4;
+  --color-ink-400: #80848e;
+  --color-ink-500: #60646c;
+  --color-ink-600: #45474f;
 
   /*
-   * Acento: azul acinzentado, nao mais turquesa neon.
-   *
-   * O turquesa de antes (#19d3b4) era saturado demais para aparecer em 82
-   * lugares — cor forte usada em tudo deixa de significar "aqui" e vira ruido.
-   * Este tom carrega a identidade sem competir com o conteudo.
+   * Acento de Identidade: Discord Blurple & Electric Indigo (#5865f2).
    */
-  --color-accent-300: #7fb3cb;
-  --color-accent-400: #5a9ab8;
-  --color-accent-500: #3b82a0;
-  --color-accent-600: #316b85;
-  --color-accent-700: #27556a;
+  --color-accent-300: #949cf7;
+  --color-accent-400: #7983f5;
+  --color-accent-500: #5865f2;
+  --color-accent-600: #4752c4;
+  --color-accent-700: #3c45a5;
 
-  /* Estados, todos dessaturados na mesma medida do acento. */
-  --color-signal-online: #3daa7a;
-  --color-signal-idle: #c9a96e;
-  --color-signal-dnd: #b5424a;
-  --color-signal-offline: #4a4f58;
-  --color-signal-live: #b5424a;
+  /* Estados e Sinais Gamer (Online, Ausente, Ocupado/DND, Ao Vivo) */
+  --color-signal-online: #23a55a;
+  --color-signal-idle: #f0b232;
+  --color-signal-dnd: #f23f43;
+  --color-signal-offline: #80848e;
+  --color-signal-live: #f23f43;
 
   --font-sans: var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-brand: var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
 
   /*
-   * Raios com nome de FUNCAO, nao de tamanho: icone, botao, cartao, painel.
-   * Antes iam de 4 a 12 e o app inteiro parecia quadrado; agora o menor ja
-   * nasce em 6, que e onde a borda deixa de parecer corte.
-   */
-  /**
-   * Altura da barra de titulo do desktop. Precisa casar com o `height` do
-   * `titleBarOverlay` no main.js — se divergirem, os botoes do Windows ficam
-   * desalinhados com a faixa que desenhamos.
+   * Raios com proporcoes limpas e modernas.
    */
   --altura-barra: env(titlebar-area-height, 36px);
 
-  --radius-xs: 6px;
-  --radius-sm: 8px;
-  --radius-md: 10px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
   --radius-lg: 12px;
 
-  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 8px 32px -12px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 8px 32px rgb(0 0 0 / 0.4);
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -4px rgb(0 0 0 / 0.45);
+  --shadow-pop: 0 8px 32px -4px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
 @layer base {

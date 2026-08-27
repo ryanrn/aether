@@ -1878,6 +1878,56 @@ COMPILAR WebAssembly e nada alem. Nao habilita `eval()`, `new Function()` nem
 producao. O unico binario que carregamos e o que empacotamos, do proprio
 bundle; nao ha origem externa em `script-src` por onde entrar outro.
 
+## Paleta v2 (superficies, tipografia e acento)
+
+Troca dos valores do `@theme` em `globals.css` para uma paleta de superficies
+mais frias, tipografia de contraste alto e acento indigo (`#5865f2`).
+
+Nenhum componente estrutural foi tocado: os 56 arquivos das doze pastas usam
+token, entao a paleta chega a todos por um arquivo so. O `--altura-barra`
+ficou intacto de proposito — ele precisa casar com o `titleBarOverlay` do
+`main.js`, e mexer ali desalinharia os botoes do Windows.
+
+### O contraste foi MEDIDO, e nao estimado
+
+Paleta nova e onde texto some sem ninguem notar. Razao de contraste sobre o
+fundo principal, antes e depois:
+
+| texto | antes | depois | |
+| --- | --- | --- | --- |
+| ink-200 | 11.3 | **12.2** | melhorou |
+| ink-300 | 5.7 | 5.9 | igual |
+| ink-400 | 3.7 | **4.4** | melhorou |
+| ink-500 | 2.3 | **2.8** | melhorou |
+| ink-100 | 16.5 | 14.8 | caiu, irrelevante nessa faixa |
+
+Branco sobre o acento da nova paleta da 4.61 — acima do minimo de corpo (4.5).
+
+`ink-500` e `ink-600` seguem abaixo do minimo de leitura, como antes: eles sao
+placeholder e rotulo de secao, texto de baixa enfase por definicao. O que
+importa e que nao PIORARAM.
+
+### O `danger` mudou de comportamento, e isso limpou codigo meu
+
+A variante saiu de discreta (fundo translucido, texto colorido) para vermelho
+solido. O `ConfirmDialog` tinha uma sobrescrita justamente para gritar, com um
+comentario dizendo que a global era discreta "porque vive dentro de listas".
+
+Essa justificativa nao se sustentava: `variant="danger"` aparece em TRES
+lugares, todos confirmacao deliberada — quem vive em lista e o `IconAction`,
+que nunca usou a variante. Com a global solida, a sobrescrita virou pior que
+redundante: ela apagava a sombra e o `active:` da variante nova. Removida.
+
+### Limitacoes
+
+- **`#6B7280` continua fixo em dois lugares** (`member-panel.tsx` e
+  `roles-tab.tsx`), como cor de cargo sem cor definida. A diferenca para o
+  `base-500` da paleta nova e deltaE 3.55 — visivel, mas na fronteira. Um dos
+  dois GRAVA NO BANCO (e a cor padrao de cargo novo), entao trocar criaria
+  cargos novos diferentes dos antigos por algo que quase ninguem enxerga.
+- **O verde `#68af64` do botao de atualizar segue fixo**, por ser uma escolha
+  explicita e nao um token de tema.
+
 ## Teste de microfone (design v2)
 
 `components/aether-design-v2/microphone-test.tsx` — medidor segmentado com 20

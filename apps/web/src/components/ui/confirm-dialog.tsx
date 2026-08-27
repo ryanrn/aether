@@ -56,24 +56,19 @@ export function ConfirmDialog({
           Cancelar
         </Button>
         {/*
-          VERMELHO SOLIDO aqui, e nao a variante `danger` normal.
+          Sem sobrescrita de cor: a variante `danger` JA e vermelho solido.
           
-          A `danger` do app e discreta de proposito — fundo translucido e texto
-          colorido — porque ela vive dentro de listas, ao lado de outras acoes,
-          e gritar em toda linha cansaria. Aqui e o contrario: esta e a ultima
-          confirmacao de algo que nao se desfaz, a caixa existe so para ela, e
-          o botao precisa parecer o que e.
+          Ate a troca de paleta ela era discreta (fundo translucido, texto
+          colorido) e este componente a sobrescrevia para gritar. Agora o
+          global mudou, e manter a sobrescrita seria pior do que redundante:
+          ela apagava a sombra e o estado `active:` que a variante nova traz.
           
-          Sobrescrito no componente em vez de virar uma variante nova porque e
-          uma decisao DESTE contexto; uma `danger-solid` global convidaria a
-          usar o vermelho cheio em lugares onde ele nao cabe.
+          A justificativa antiga — "a `danger` vive dentro de listas e gritar
+          cansaria" — nao se sustentava: `variant="danger"` aparece em tres
+          lugares, todos confirmacao deliberada. Quem vive em lista e o
+          `IconAction`, que nunca usou esta variante.
         */}
-        <Button
-          variant="danger"
-          onClick={onConfirm}
-          disabled={pending}
-          className="border-transparent bg-signal-dnd text-white hover:bg-signal-dnd/90"
-        >
+        <Button variant="danger" onClick={onConfirm} disabled={pending}>
           {pending ? (pendingLabel ?? "Excluindo...") : confirmLabel}
         </Button>
       </div>

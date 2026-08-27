@@ -6,14 +6,15 @@ type Size = "sm" | "md" | "lg" | "icon";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-accent-500 text-base-950 hover:bg-accent-400 active:bg-accent-600 font-medium shadow-[0_0_20px_-8px_var(--color-accent-500)]",
+    "bg-accent-500 text-white font-medium hover:bg-accent-400 active:bg-accent-600 shadow-[0_0_20px_-6px_var(--color-accent-500)]",
   secondary:
-    "bg-base-700 text-ink-100 hover:bg-base-600 active:bg-base-700 border border-base-600",
+    "bg-base-700 text-ink-100 font-medium hover:bg-base-600 active:bg-base-700 border border-base-600/50 hover:border-base-500/60",
   outline:
-    "border border-base-600 text-ink-200 hover:border-base-500 hover:text-ink-100 hover:bg-base-800",
-  ghost: "text-ink-300 hover:text-ink-100 hover:bg-base-800",
+    "border border-base-600 text-ink-200 font-medium hover:border-base-500 hover:text-ink-100 hover:bg-base-800 active:bg-base-750",
+  ghost:
+    "text-ink-300 font-medium hover:text-ink-100 hover:bg-base-850 active:bg-base-800",
   danger:
-    "bg-signal-dnd/15 text-signal-dnd border border-signal-dnd/30 hover:bg-signal-dnd/25",
+    "bg-signal-dnd text-white font-medium hover:bg-signal-dnd/90 active:bg-signal-dnd/80 shadow-[0_0_16px_-6px_var(--color-signal-dnd)]",
 };
 
 const SIZES: Record<Size, string> = {
