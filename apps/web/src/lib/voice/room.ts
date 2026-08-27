@@ -27,6 +27,8 @@ import {
   type SomDoSistema,
 } from "./system-audio";
 import { mediaDebugEnabled, mediaLog } from "./debug";
+import { lerCodecDeTela } from "./codecs";
+import { lerTratamentoDeAudio, paraConstraints } from "./audio-prefs";
 import {
   readPreferredMicrophone,
   readPreferredSpeaker,
@@ -189,9 +191,12 @@ export async function connectVoiceRoom({
     // Cancelamento de eco e supressao de ruido no proprio navegador: sem isso,
     // caixa de som aberta devolve a voz dos outros para dentro da call.
     audioCaptureDefaults: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
+      /**
+       * Os tres vinham fixos em `true`. Agora saem da preferencia, que nasce
+       * com os tres ligados — o padrao nao mudou, o que mudou e poder
+       * desligar. Ver `audio-prefs.ts` para por que isso importa.
+       */
+      ...paraConstraints(lerTratamentoDeAudio()),
       // Preferencia salva da vez anterior. Se o aparelho nao existir mais, o
       // navegador cai no padrao do sistema em vez de falhar.
       ...(preferredMic ? { deviceId: preferredMic } : {}),
@@ -723,7 +728,21 @@ export async function connectVoiceRoom({
       }
 
       try {
+        /**
+         * O CODEC E DECIDIDO AQUI, na publicacao.
+         *
+         * Nao por `setCodecPreferences` no transceiver: quem possui a
+         * `RTCPeerConnection` e o LiveKit, e ele a recria a cada reconexao e
+         * renegociacao. Uma preferencia posta por fora seria desfeita no
+         * primeiro desses eventos — e em silencio, com a call seguindo no
+         * codec errado.
+         *
+         * `undefined` deixa o SDK escolher, que e o padrao e o recomendado:
+         * ele leva em conta o que o navegador consegue codificar em hardware.
+         */
+        const codecEscolhido = lerCodecDeTela();
         await room.localParticipant.publishTrack(videoTrack, {
+          ...(codecEscolhido ? { videoCodec: codecEscolhido } : {}),
           screenShareEncoding: {
             maxBitrate: preset.maxBitrate,
             maxFramerate: preset.frameRate,

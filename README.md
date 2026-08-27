@@ -1771,6 +1771,72 @@ Achados por video de uso, e os dois eram desta rodada:
 - **Sem toque:** o `PointerSensor` cobre mouse e caneta; celular nao foi
   verificado.
 
+## Midia avancada: codec da tela e tratamento do microfone
+
+Em Configuracoes > Voz e video, no fim da aba.
+
+### Codec: por que NAO e `setCodecPreferences`
+
+A API crua do WebRTC manda mexer no transceiver da `RTCPeerConnection`. Aqui
+isso seria errado: quem cria e possui essa conexao e o LiveKit, e ele a recria
+a cada reconexao, renegociacao e mudanca de publicacao. Uma preferencia posta
+por fora seria desfeita no primeiro desses eventos — em SILENCIO, com a call
+seguindo no codec errado. E mexer no transceiver no meio da negociacao do SDK
+quebra a call inteira em vez de degradar.
+
+O LiveKit decide na PUBLICACAO (`publishTrack({ videoCodec })`), que e onde a
+escolha pertence: ele monta a oferta com esse codec e o mantem atraves das
+renegociacoes.
+
+A lista de opcoes vem do proprio SDK (`videoCodecs` do `livekit-client`:
+vp8, h264, vp9, av1, h265). Uma lista nossa ofereceria na tela algo que o SDK
+recusaria na hora de usar.
+
+### A deteccao usa o SENDER, nao o receiver
+
+`RTCRtpSender.getCapabilities("video")`, e nao `RTCRtpReceiver`. A pergunta e
+"consigo CODIFICAR isto para mandar", nao "consigo decodificar o que chegar" —
+sao listas diferentes. Quase todo navegador ABRE H.265 e quase nenhum o GERA;
+com o receiver, a opcao apareceria disponivel e a transmissao falharia.
+
+O que o navegador nao codifica fica desabilitado, com o motivo escrito na
+opcao. Conferido por mutacao: removendo h265 e av1 da resposta do navegador, as
+duas opcoes ficam cinza e ganham o aviso.
+
+### Tratamento do microfone: a novidade e poder DESLIGAR
+
+Supressao de ruido, cancelamento de eco e ganho automatico ja estavam ligados,
+sempre, sem opcao. Continuam ligados por padrao — o que muda e a chave.
+
+Isso nao e capricho. Os tres processadores do navegador mexem no som para
+favorecer FALA, e destroem quem toca ou canta: a supressao corta sustentacao e
+reverberacao, o cancelamento de eco corta o que julga vir do alto-falante (a
+base que voce toca junto), e o ganho automatico bombeia — sobe nas pausas e
+abaixa no ataque.
+
+### Limitacoes
+
+- **Vale na proxima vez.** O codec entra na proxima transmissao e o tratamento
+  na proxima entrada em call; nada disso troca no meio.
+- **RNNoise (estilo Krisp) NAO foi feito**, e ha um impedimento concreto:
+  **WASM esta bloqueado pela nossa CSP**. Medido em producao —
+  `WebAssembly.instantiate` responde
+  *"violates the following Content Security policy directive"*. Rodar RNNoise
+  exige liberar `wasm-unsafe-eval` em `script-src` (bem mais estreito que
+  `unsafe-eval`: permite compilar WASM, nao `eval()` de JS). Ver a secao
+  seguinte.
+
+### Por que o RNNoise ficou para outra rodada
+
+Alem da CSP, ele toca o caminho que ja custou caro neste projeto: trocar a
+faixa de audio publicada no LiveKit por uma processada. O historico de captura
+de audio aqui (o caso do PRO X2) mostra que esse trecho falha de formas que so
+aparecem com gente numa call de verdade — nao em teste local.
+
+Entregar codec e tratamento nativo funcionando, e o RNNoise como peca propria
+com a CSP resolvida, e mais honesto do que empurrar as tres juntas e descobrir
+depois qual delas derrubou a call.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,

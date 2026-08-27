@@ -16,6 +16,7 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
+import { MediaAdvanced } from "@/components/settings/media-advanced";
 
 /**
  * Voz e video.
@@ -221,6 +222,16 @@ export function VoiceTab() {
           Sensibilidade manual e atalho de push-to-talk. O volume de cada
           pessoa fica no menu dela, na arvore de canais.
         </p>
+      </div>
+
+      {/*
+        Avancado por ultimo: codec e tratamento de microfone sao para quem foi
+        procurar. Antes da escolha de aparelho, seriam a primeira coisa que
+        alguem ve ao abrir "Voz e video" — e nao e a primeira coisa que
+        alguem precisa.
+      */}
+      <div className="border-t border-base-800 pt-5">
+        <MediaAdvanced />
       </div>
     </section>
   );
