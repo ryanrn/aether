@@ -108,6 +108,28 @@ function esperarSilencio(socket, userId, quietoMs = 600, tetoMs = 5000) {
   });
 }
 
+/**
+ * Pausa entre um anuncio de jogo e o proximo.
+ *
+ * O gateway limita presenca a RAJADA DE 10 e recarga de 1/s por usuario, e
+ * este script dispara 12 `presence:game`. Sem cadencia ele estoura o balde no
+ * meio do caminho, e a partir dali os eventos somem em silencio — o efeito
+ * eram falhas que MUDAVAM DE LUGAR a cada rodada, sempre com `undefined`,
+ * porque o `waitPresence` seguinte simplesmente estourava o tempo. Rodadas
+ * seguidas herdavam o balde vazio da anterior: a 1a passava e as outras nao.
+ *
+ * Quem esta irreal aqui e o script, nao o limitador: o app de desktop anuncia
+ * no maximo uma vez a cada 15 segundos. Andar no ritmo da recarga faz o
+ * consumo empatar com ela, entao rodar de novo em seguida tambem fica estavel.
+ */
+let ultimoAnuncio = 0;
+async function respirar() {
+  const desde = Date.now() - ultimoAnuncio;
+  const falta = 1100 - desde;
+  if (falta > 0) await new Promise((r) => setTimeout(r, falta));
+  ultimoAnuncio = Date.now();
+}
+
 /** Espera UM presence:update do usuario pedido, ou desiste. */
 function waitPresence(socket, userId, timeoutMs = 3000) {
   return new Promise((resolve) => {
@@ -161,6 +183,7 @@ async function main() {
   console.log("\nJogo propaga para os outros");
 
   // O `joao` diz que esta jogando; o `ryan` e quem tem de enxergar.
+  await respirar();
   let vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Hollow Knight" });
   let entrada = await vista;
@@ -192,6 +215,7 @@ async function main() {
   );
 
   // Repetir o MESMO jogo nao pode gerar evento — seria trafego a cada 15s.
+  await respirar();
   const repetido = waitPresence(observador, member.id, 1200);
   relator.emit("presence:game", { name: "Hollow Knight" });
   check("repetir o mesmo jogo NAO reemite", (await repetido) === null);
@@ -205,6 +229,7 @@ async function main() {
    * instante era o escudo do EAC. O gateway comparava so o nome e jogava a
    * melhora fora, desfazendo na ponta um conserto feito do outro lado.
    */
+  await respirar();
   const comIcone = waitPresence(observador, member.id, 1500);
   relator.emit("presence:game", { name: "Hollow Knight", icon: PNG_1X1 });
   const melhorado = await comIcone;
@@ -222,6 +247,7 @@ async function main() {
   // Trocar de jogo reinicia o carimbo.
   const antes = entrada.gameSince;
   await new Promise((r) => setTimeout(r, 1100));
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Portal 2" });
   entrada = await vista;
@@ -231,6 +257,7 @@ async function main() {
 
   console.log("\nO nome vem do cliente, entao e tratado como texto de cliente");
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "x".repeat(500) });
   entrada = await vista;
@@ -238,6 +265,7 @@ async function main() {
     typeof entrada?.game === "string" && entrada.game.length <= 64,
     `veio com ${entrada?.game?.length} caracteres`);
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "   " });
   entrada = await vista;
@@ -246,6 +274,7 @@ async function main() {
   console.log("\nO icone tambem e dado de cliente");
 
   const pngValido = PNG_1X1;
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Com Icone", icon: pngValido });
   entrada = await vista;
@@ -255,6 +284,7 @@ async function main() {
     `veio ${String(JSON.stringify(entrada?.gameIcon)).slice(0, 50)}`,
   );
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", {
     name: "Com SVG",
@@ -268,6 +298,7 @@ async function main() {
     `game=${entrada?.game} icon=${JSON.stringify(entrada?.gameIcon)}`,
   );
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", {
     name: "Icone Gigante",
@@ -282,9 +313,11 @@ async function main() {
 
   console.log("\nParar de jogar limpa para todos");
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Hollow Knight" });
   await vista;
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", null);
   entrada = await vista;
@@ -293,10 +326,12 @@ async function main() {
 
   console.log("\nDesconectar nao deixa o jogo preso na tela dos outros");
 
+  await respirar();
   vista = waitPresence(observador, member.id);
   relator.emit("presence:game", { name: "Hollow Knight" });
   await vista;
 
+  await respirar();
   vista = waitPresence(observador, member.id, 4000);
   relator.close();
   entrada = await vista;

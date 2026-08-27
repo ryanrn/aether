@@ -784,6 +784,14 @@ Onde fica:
 - `packages/shared/src/events.ts` — `game`/`gameSince` em `PresenceEntry`
 - `tests/unit/game-detect.test.ts` e `scripts/verify-game-activity.mjs`
 
+**Ao acrescentar assercao em `verify-game-activity.mjs`, use `respirar()` antes
+de cada anuncio.** A presenca e limitada a rajada de 10 e recarga de 1/s por
+usuario, e o script ja dispara 12 `presence:game`. Sem cadencia ele estoura o
+balde no meio e os eventos seguintes somem em silencio — o sintoma sao falhas
+que MUDAM DE LUGAR a cada rodada, sempre com `undefined`, e a primeira rodada
+passando enquanto as seguintes falham (o balde vazio e herdado). Quem esta
+irreal ali e o script: o app anuncia no maximo uma vez a cada 15 segundos.
+
 ### Limitacoes conhecidas da deteccao de jogo
 
 - **Battle.net, EA e jogos avulsos ainda nao sao detectados.** A Battle.net
