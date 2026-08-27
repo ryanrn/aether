@@ -1,6 +1,6 @@
 {
   "name": "@aether/desktop",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "Aether — voz, tela e chat",
   "main": "src/main.js",
