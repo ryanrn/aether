@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Mic, Volume2 } from "lucide-react";
 import {
   listMicrophones,
@@ -11,12 +11,11 @@ import {
   savePreferredSpeaker,
   type AudioDevice,
 } from "@/lib/voice/devices";
-import { startMicLevel, type MicLevelHandle } from "@/lib/voice/mic-level";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
-import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import { MediaAdvanced } from "@/components/settings/media-advanced";
+import { MicrophoneTest } from "@/components/aether-design-v2";
 
 /**
  * Voz e video.
@@ -34,10 +33,6 @@ export function VoiceTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const [speakers, setSpeakers] = useState<AudioDevice[]>([]);
   const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [level, setLevel] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const handleRef = useRef<MicLevelHandle | null>(null);
 
   const roomControls = useRealtimeStore((state) => state.roomControls);
 
@@ -47,40 +42,6 @@ export function VoiceTab() {
     setSelectedSpeaker(readPreferredSpeaker());
     void listSpeakers().then(setSpeakers);
   }, []);
-
-  /** O teste morre junto com a tela: microfone aberto sem dono e vazamento. */
-  useEffect(() => {
-    return () => handleRef.current?.stop();
-  }, []);
-
-  function stopTest() {
-    handleRef.current?.stop();
-    handleRef.current = null;
-    setTesting(false);
-    setLevel(0);
-  }
-
-  async function toggleTest() {
-    if (testing) {
-      stopTest();
-      return;
-    }
-    setError(null);
-    try {
-      handleRef.current = await startMicLevel({
-        deviceId: selected,
-        onLevel: setLevel,
-      });
-      setTesting(true);
-      // Os nomes dos aparelhos so aparecem depois de conceder o microfone
-      // uma vez — agora que concedemos, a lista pode ser preenchida de novo.
-      setDevices(await listMicrophones());
-    } catch {
-      setError(
-        "Nao consegui abrir o microfone. Ele pode estar em uso por outro programa, ou o acesso foi negado.",
-      );
-    }
-  }
 
   async function pickSpeaker(deviceId: string) {
     setSelectedSpeaker(deviceId);
@@ -94,17 +55,6 @@ export function VoiceTab() {
     savePreferredMicrophone(deviceId);
     // Numa call, troca a fonte sem derrubar ninguem.
     await roomControls?.setMicrophone(deviceId);
-    // Testando, reabre no aparelho novo para a barra refletir a escolha.
-    if (testing) {
-      stopTest();
-      setError(null);
-      try {
-        handleRef.current = await startMicLevel({ deviceId, onLevel: setLevel });
-        setTesting(true);
-      } catch {
-        setError("Nao consegui abrir esse microfone.");
-      }
-    }
   }
 
   return (
@@ -172,47 +122,11 @@ export function VoiceTab() {
         )}
       </Field>
 
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => void toggleTest()}>
-            {testing ? "Parar teste" : "Testar microfone"}
-          </Button>
-          <span className="text-[12px] text-ink-500">
-            {testing ? "Fale — a barra deve se mexer." : "O som nao sai daqui."}
-          </span>
-        </div>
-
-        {/* Barra de nivel: segmentada, para nao parecer um carregamento. */}
-        <div
-          className="flex h-2.5 gap-[3px]"
-          role="meter"
-          aria-label="Nivel do microfone"
-          aria-valuenow={Math.round(level * 100)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          {Array.from({ length: 28 }, (_, index) => {
-            const aceso = testing && level * 28 > index;
-            return (
-              <span
-                key={index}
-                className={cn(
-                  "flex-1 rounded-[2px] transition-colors duration-75",
-                  aceso
-                    ? index > 23
-                      ? "bg-signal-dnd"
-                      : "bg-accent-500"
-                    : "bg-base-800",
-                )}
-              />
-            );
-          })}
-        </div>
-
-        {error ? (
-          <p className="text-[13px] text-signal-dnd">{error}</p>
-        ) : null}
-      </div>
+      {/* Teste de microfone (Design v2 isolado) */}
+      <MicrophoneTest
+        deviceId={selected}
+        onDeviceListRefreshed={setDevices}
+      />
 
       <div className="rounded-md border border-base-700 bg-base-900 p-3">
         <p className="text-[11px] uppercase tracking-[0.1em] text-ink-500">

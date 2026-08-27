@@ -1878,6 +1878,32 @@ COMPILAR WebAssembly e nada alem. Nao habilita `eval()`, `new Function()` nem
 producao. O unico binario que carregamos e o que empacotamos, do proprio
 bundle; nao ha origem externa em `script-src` por onde entrar outro.
 
+## Teste de microfone (design v2)
+
+`components/aether-design-v2/microphone-test.tsx` — medidor segmentado com 20
+barras inclinadas de altura crescente e botao de iniciar/parar ao lado.
+
+Substituiu o medidor que vivia solto dentro de `voice-tab.tsx`: **-93 linhas
+la, +7**. O teste de microfone virou componente com contrato proprio
+(`deviceId`, `onDeviceListRefreshed`, `colorScheme`) em vez de estado espalhado
+na aba de configuracoes.
+
+Reusa `startMicLevel` e `listMicrophones`, que ja existiam — o que mudou foi a
+casca, nao a captura. E os tokens sao os do `@theme`: `base-750`, `signal-*`,
+`shadow-panel`. Nada de cor solta.
+
+### Limitacoes
+
+- **A pasta se chama `aether-design-v2`**, que envelhece mal: nao diz o que tem
+  dentro, e as outras doze pastas de `components/` sao nomeadas por dominio
+  (`chat`, `voice`, `settings`). Se entrarem mais pecas de design ali, vale
+  mover para junto dos pares.
+- **O medidor so foi verificado sem microfone.** O painel do navegador de teste
+  bloqueia captura, entao o que ficou provado e a estrutura (20 segmentos,
+  altura 8→24px, inclinacao, botao) e o CAMINHO DE ERRO — pedir o microfone,
+  ser recusado, mostrar a mensagem sem derrubar a tela. A reacao a som real
+  ficou para o teste de uso.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,
