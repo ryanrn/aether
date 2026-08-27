@@ -102,7 +102,7 @@ export function MemberRolesModal({
             <p className="truncate text-[13px] text-ink-100">
               {member.nickname ?? member.user.displayName}
             </p>
-            <p className="truncate font-mono text-[11px] text-ink-500">
+            <p className="select-text truncate font-mono text-[11px] text-ink-500">
               @{member.user.username}
             </p>
           </div>

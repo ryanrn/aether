@@ -374,7 +374,7 @@ export function UserActivityCard({
           <p className="truncate text-[15px] font-semibold text-ink-100">
             {nickname ?? user.displayName}
           </p>
-          <p className="truncate font-mono text-[11px] text-ink-500">
+          <p className="select-text truncate font-mono text-[11px] text-ink-500">
             @{user.username}
             {/* Com apelido, o nome real deixa de aparecer em qualquer lugar. */}
             {nickname ? ` · ${user.displayName}` : ""}

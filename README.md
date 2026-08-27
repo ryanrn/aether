@@ -1878,6 +1878,42 @@ COMPILAR WebAssembly e nada alem. Nao habilita `eval()`, `new Function()` nem
 producao. O unico binario que carregamos e o que empacotamos, do proprio
 bundle; nao ha origem externa em `script-src` por onde entrar outro.
 
+## Cara de aplicativo, e nao de pagina
+
+O que mais denuncia "site" e a SELECAO DE TEXTO. Arrastar o mouse pintava de
+azul o nome do canal, o rotulo da configuracao, o titulo da secao — coisas que
+em nenhum app de desktop se selecionam. Discord e Fluxer nao fazem isso.
+
+A interface inteira nasce `user-select: none`, e o CONTEUDO pede selecao de
+volta com `select-text`. O contrario — marcar tudo que nao pode — daria errado
+no primeiro componente novo que alguem escrevesse.
+
+### O que continua copiavel, e por que
+
+| o que | por que |
+| --- | --- |
+| texto da mensagem | e o unico jeito de citar alguem |
+| `@nome-de-usuario` | **adicionar amigo aqui e por nome EXATO** — copiar e fluxo real, nao conveniencia |
+| campo de digitar | sem isso nao da nem para corrigir o que se escreveu |
+
+O nome de usuario e o caso que quase passou batido: num app onde a busca de
+pessoas nao existe de proposito, tirar a copia do `@` quebraria o unico caminho
+de adicionar alguem.
+
+### Cursor
+
+`cursor: default` no corpo — o cursor de texto (I) sobre um rotulo diz "isto e
+um documento"; sobre um painel de configuracao, nao. Campo de digitar recupera
+o cursor de texto, onde ele esta certo.
+
+E botao e link passam a mostrar os DOIS a mao: o padrao do navegador da mao no
+link e SETA no botao, dois controles clicaveis com cursores diferentes, o que
+nao acontece em app nenhum.
+
+Medido na tela: rotulo `none`/`default`, campo `text`/`text`, botao e link
+`none`/`pointer`; e selecionar de verdade devolve texto na mensagem e no
+usuario, e string vazia no nome de canal e de membro.
+
 ## Paleta v2 (superficies, tipografia e acento)
 
 Troca dos valores do `@theme` em `globals.css` para uma paleta de superficies

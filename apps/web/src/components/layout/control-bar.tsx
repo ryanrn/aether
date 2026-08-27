@@ -283,7 +283,7 @@ export function ControlBar({
           <p className="truncate text-[13px] font-medium text-ink-100">
             {user.displayName}
           </p>
-          <p className="truncate font-mono text-[11px] text-ink-500">
+          <p className="select-text truncate font-mono text-[11px] text-ink-500">
             @{user.username}
           </p>
         </div>

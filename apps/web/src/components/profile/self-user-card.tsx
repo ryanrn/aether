@@ -137,7 +137,7 @@ export function SelfUserCard({
           <p className="truncate text-[14px] font-semibold text-ink-100">
             {user.displayName}
           </p>
-          <p className="truncate font-mono text-[11px] text-ink-500">
+          <p className="select-text truncate font-mono text-[11px] text-ink-500">
             @{user.username}
           </p>
 

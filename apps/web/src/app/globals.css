@@ -103,6 +103,54 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior: none;
+
+    /*
+     * O QUE MAIS DENUNCIA "PAGINA" EM VEZ DE "APLICATIVO".
+     *
+     * Num site, arrastar o mouse pinta de azul o nome do canal, o rotulo da
+     * configuracao, o titulo da secao — coisas que em nenhum app de desktop se
+     * selecionam. Discord e Fluxer nao fazem isso, e e por isso que parecem
+     * programa e nao aba do navegador.
+     *
+     * A interface inteira nasce NAO SELECIONAVEL, e o conteudo pede selecao de
+     * volta com `select-text`. O contrario — marcar tudo que nao pode — daria
+     * errado no primeiro componente novo que alguem escrever.
+     *
+     * `cursor: default` pelo mesmo motivo: o cursor de texto (I) aparecendo
+     * sobre um rotulo diz "isto e um documento". Sobre um documento e certo;
+     * sobre um painel de configuracao, nao.
+     */
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+
+    /* Sem o flash cinza do toque em webview. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * O QUE CONTINUA SELECIONAVEL, sem precisar de classe.
+   *
+   * Campo de digitar e obvio — sem isto nao da nem para corrigir o que se
+   * escreveu. O cursor de texto volta junto, porque ali ele esta certo.
+   */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+  }
+
+  /*
+   * Botao e link mostram a mao. O padrao do navegador da a MAO no link e a
+   * SETA no botao — dois controles clicaveis com cursores diferentes, o que
+   * nao acontece em app nenhum.
+   */
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
   }
 
   ::selection {

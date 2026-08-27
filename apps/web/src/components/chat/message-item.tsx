@@ -135,7 +135,12 @@ export function MessageItem({
             </div>
           )}
 
-          <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-300">
+          {/*
+            `select-text` porque a interface inteira nasce nao selecionavel
+            (ver globals.css). Conteudo de mensagem e o caso mais obvio de algo
+            que precisa ser copiavel — e o unico jeito de citar alguem.
+          */}
+          <p className="select-text whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-300">
             {message.content}
           </p>
 

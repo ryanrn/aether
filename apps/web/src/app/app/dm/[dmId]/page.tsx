@@ -70,7 +70,7 @@ export default async function DmPage({
         <span className="text-[13px] font-medium text-ink-100">
           {outro.displayName}
         </span>
-        <span className="text-[12px] text-ink-500">@{outro.username}</span>
+        <span className="select-text text-[12px] text-ink-500">@{outro.username}</span>
       </div>
 
       {/*

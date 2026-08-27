@@ -66,7 +66,7 @@ export function BansTab({
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] text-ink-100">
                 {ban.user.displayName}
-                <span className="ml-1.5 font-mono text-[11px] text-ink-500">
+                <span className="select-text ml-1.5 font-mono text-[11px] text-ink-500">
                   @{ban.user.username}
                 </span>
               </p>
