@@ -92,7 +92,7 @@ export function ActivityTab() {
         </h3>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
           {noDesktop
-            ? "O app procura jogos da Steam e da Epic Games abertos e mostra o nome e o icone no seu cartao de atividade, junto do tempo de sessao."
+            ? "O app procura jogos abertos da Steam, Epic Games, Riot Games, Ubisoft, GOG e Xbox, e mostra o nome e a capa no seu cartao de atividade, junto do tempo de sessao."
             : "So funciona no app de desktop: o navegador nao consegue ver os programas abertos."}
         </p>
       </div>

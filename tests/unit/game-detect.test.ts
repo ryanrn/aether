@@ -19,7 +19,7 @@ const {
   ehJogo,
   jogosEmSaida,
   nomeNoManifesto,
-  jogoEpicEm,
+  jogoDeCatalogoEm,
   comoPasta,
   podeDarIcone,
 } = detect;
@@ -140,14 +140,14 @@ describe("Epic Games — casamento por caminho de instalacao", () => {
   ];
 
   it("reconhece o executavel principal", () => {
-    expect(jogoEpicEm("E:\\GTAV\\PlayGTAV.exe", catalogo)).toBe(
+    expect(jogoDeCatalogoEm("E:\\GTAV\\PlayGTAV.exe", catalogo)).toBe(
       "Grand Theft Auto V",
     );
   });
 
   it("reconhece tambem os auxiliares do jogo", () => {
     // Caso real: o GTA sobe PlayGTAV.exe, GTA5.exe e GTA5_BE.exe juntos.
-    expect(jogoEpicEm("E:\\GTAV\\GTA5_BE.exe", catalogo)).toBe(
+    expect(jogoDeCatalogoEm("E:\\GTAV\\GTA5_BE.exe", catalogo)).toBe(
       "Grand Theft Auto V",
     );
   });
@@ -156,13 +156,13 @@ describe("Epic Games — casamento por caminho de instalacao", () => {
     // `E:\GTA` nao pode reivindicar `E:\GTAV\`: o casamento e por PASTA, e
     // sem a barra final "GTA" engoliria "GTAV" e nomearia o jogo errado.
     const soGta = [{ pasta: comoPasta("E:\\GTA"), nome: "Outro Jogo" }];
-    expect(jogoEpicEm("E:\\GTAV\\PlayGTAV.exe", soGta)).toBeNull();
+    expect(jogoDeCatalogoEm("E:\\GTAV\\PlayGTAV.exe", soGta)).toBeNull();
   });
 
   it("ignora o proprio launcher da Epic", () => {
     // Os manifestos apontam para pastas de JOGO; o launcher nao e nenhuma.
     expect(
-      jogoEpicEm(
+      jogoDeCatalogoEm(
         "C:\\Program Files\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
         catalogo,
       ),
@@ -170,15 +170,15 @@ describe("Epic Games — casamento por caminho de instalacao", () => {
   });
 
   it("nao se importa com maiusculas nem com o tipo de barra", () => {
-    expect(jogoEpicEm("e:/gtav/PlayGTAV.exe", catalogo)).toBe(
+    expect(jogoDeCatalogoEm("e:/gtav/PlayGTAV.exe", catalogo)).toBe(
       "Grand Theft Auto V",
     );
   });
 
   it("nao quebra com lixo", () => {
-    expect(jogoEpicEm("", catalogo)).toBeNull();
-    expect(jogoEpicEm(undefined, catalogo)).toBeNull();
-    expect(jogoEpicEm("E:\\GTAV\\PlayGTAV.exe", [])).toBeNull();
+    expect(jogoDeCatalogoEm("", catalogo)).toBeNull();
+    expect(jogoDeCatalogoEm(undefined, catalogo)).toBeNull();
+    expect(jogoDeCatalogoEm("E:\\GTAV\\PlayGTAV.exe", [])).toBeNull();
   });
 
   it("a Unreal Engine nao conta como jogo", () => {
@@ -358,3 +358,131 @@ describe("jogo com anti-cheat continua tendo icone", () => {
   });
 });
 
+
+/**
+ * Riot Games — o nome sai do que a propria Riot escreveu.
+ *
+ * Os dois casos abaixo sao REAIS, lidos de uma maquina com os jogos
+ * instalados: o VALORANT tem `shortcut_name`, o League of Legends NAO tem, e
+ * cada um cobre o buraco do outro.
+ */
+describe("Riot — nome do produto", () => {
+  const { nomeRiot } = detect;
+
+  it("prefere o shortcut_name, sem o .lnk", () => {
+    const yaml = `product_install_full_path: "D:/Riot Games/VALORANT/live"\nshortcut_name: "VALORANT.lnk"`;
+    expect(nomeRiot(yaml, "D:/Riot Games/VALORANT/live")).toBe("VALORANT");
+  });
+
+  it("sem shortcut_name, usa o caminho e PULA a linha de atualizacao", () => {
+    // Caso real do League of Legends: nao ha shortcut_name no arquivo.
+    const yaml = `product_install_full_path: "C:/Riot Games/League of Legends"`;
+    expect(nomeRiot(yaml, "C:/Riot Games/League of Legends")).toBe(
+      "League of Legends",
+    );
+  });
+
+  it("nao devolve 'live' como se fosse o nome do jogo", () => {
+    expect(nomeRiot("", "C:/Riot Games/Teamfight Tactics/Live")).toBe(
+      "Teamfight Tactics",
+    );
+  });
+});
+
+/**
+ * Registro do Windows — Ubisoft e GOG.
+ *
+ * O primeiro caso e o defeito que a maquina real revelou e que nenhuma
+ * fixture escrita a mao teria pego.
+ */
+describe("leitura do registro", () => {
+  const { blocosDoRegistro, nomePelaPasta } = detect;
+
+  it("le valor mesmo com fim de linha do Windows (CRLF)", () => {
+    // Exatamente o que o `reg query` devolve, \r inclusive.
+    const saida =
+      "\r\nHKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\635\r\n" +
+      "    Language    REG_SZ    pt-BR\r\n" +
+      "    InstallDir    REG_SZ    D:/Tom Clancy's Rainbow Six Siege/\r\n";
+    const blocos = blocosDoRegistro(saida);
+    expect(blocos).toHaveLength(1);
+    expect(blocos[0].valores.get("installdir")).toBe(
+      "D:/Tom Clancy's Rainbow Six Siege/",
+    );
+  });
+
+  it("mantem cada valor na SUA sub-chave", () => {
+    // No GOG, nome e caminho sao irmaos: trocar de bloco poria o nome de um
+    // jogo na pasta de outro.
+    const saida =
+      "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\GOG.com\Games\1\r\n" +
+      "    gameName    REG_SZ    The Witcher 3\r\n" +
+      "    path    REG_SZ    D:/GOG/Witcher3\r\n" +
+      "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\GOG.com\Games\2\r\n" +
+      "    gameName    REG_SZ    Cyberpunk 2077\r\n" +
+      "    path    REG_SZ    D:/GOG/Cyberpunk\r\n";
+    const blocos = blocosDoRegistro(saida);
+    expect(blocos).toHaveLength(2);
+    expect(blocos[0].valores.get("gamename")).toBe("The Witcher 3");
+    expect(blocos[0].valores.get("path")).toBe("D:/GOG/Witcher3");
+    expect(blocos[1].valores.get("gamename")).toBe("Cyberpunk 2077");
+  });
+
+  it("chave inexistente devolve lista vazia, e nao erro", () => {
+    expect(blocosDoRegistro("")).toEqual([]);
+  });
+
+  it("o nome pela pasta ignora a barra final", () => {
+    expect(nomePelaPasta("D:/Tom Clancy's Rainbow Six Siege/")).toBe(
+      "Tom Clancy's Rainbow Six Siege",
+    );
+  });
+});
+
+/**
+ * O catalogo generico serve qualquer loja — e nenhum LAUNCHER casa.
+ *
+ * Este e o caso que motivou o desenho: o Riot Client fica aberto o tempo todo
+ * em quem joga VALORANT. Se ele casasse, a pessoa apareceria "jogando" sem
+ * ter aberto jogo nenhum.
+ */
+describe("catalogo de loja — jogo casa, launcher nao", () => {
+  const catalogoRiot = [
+    {
+      pasta: "d:/riot games/valorant/live/",
+      nome: "VALORANT",
+      launch: null,
+      icone: "C:/ProgramData/Riot Games/Metadata/valorant.live/valorant.live.ico",
+    },
+  ];
+
+  /**
+   * Caminhos em `String.raw`, e nao com aspas normais.
+   *
+   * Escrito com aspas, `"D:\Riot Games\VALORANT\live"` vira
+   * `D:Riot GamesVALORANTlive` — `\R`, `\V` e `\l` sao escapes. O teste do
+   * launcher entao PASSAVA por acidente: caminho corrompido nao casa com
+   * nada, e "nao achou jogo" era exatamente o que ele esperava.
+   */
+  const EXE_VALORANT = String.raw`D:\Riot Games\VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe`;
+
+  it("reconhece o executavel do jogo no disco onde ele esta", () => {
+    const achados = jogosEmSaida(EXE_VALORANT, catalogoRiot);
+    expect(achados.map((j: JogoAchado) => j.nome)).toEqual(["VALORANT"]);
+  });
+
+  it("o Riot Client sozinho NAO e jogo", () => {
+    const achados = jogosEmSaida(
+      String.raw`C:\Riot Games\Riot Client\RiotClientServices.exe` +
+        "\n" +
+        String.raw`C:\Program Files\Riot Vanguard\vgtray.exe`,
+      catalogoRiot,
+    );
+    expect(achados).toEqual([]);
+  });
+
+  it("leva junto o icone que a loja ja tinha pronto", () => {
+    const achados = jogosEmSaida(EXE_VALORANT, catalogoRiot);
+    expect(achados[0].icone).toContain("valorant.live.ico");
+  });
+});

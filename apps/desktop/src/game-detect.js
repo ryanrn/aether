@@ -1,6 +1,6 @@
 "use strict";
 
-const { app } = require("electron");
+const { app, nativeImage } = require("electron");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -22,9 +22,25 @@ const path = require("node:path");
  *    `InstallLocation` — melhor estruturado que o da Steam. Casamos por
  *    caminho de instalacao.
  *
- * Isso cobre qualquer jogo dessas duas lojas, inclusive os instalados depois,
- * sem cadastrar nada. O que ainda NAO cobre: GOG, Battle.net, Xbox e jogos
- * avulsos. Esta anotado nas limitacoes do README.
+ *  - RIOT: como a Epic, sem convencao de pasta (o VALORANT desta maquina esta
+ *    em `D:/Riot Games/VALORANT/live`). Escreve `product_install_full_path`
+ *    num YAML por produto, e ainda deixa um `.ico` pronto ao lado.
+ *
+ *  - UBISOFT e GOG: a biblioteca mora no REGISTRO. A Ubisoft da so o caminho,
+ *    mas ali a pasta ja e o nome de marca; o GOG da caminho e `gameName`.
+ *
+ *  - XBOX: instala em `<disco>:/XboxGames/<Nome>/`, e a pasta e o nome.
+ *
+ * Isso cobre qualquer jogo dessas lojas, inclusive os instalados depois, sem
+ * cadastrar nada.
+ *
+ * POR QUE NAO OLHAMOS O NOME DO EXECUTAVEL. Seria o caminho obvio para o
+ * VALORANT (`VALORANT-Win64-Shipping.exe`), e e uma armadilha: exige uma
+ * tabela `executavel -> jogo` mantida a mao, que so cobre o que alguem
+ * cadastrou e envelhece a cada lancamento. Perguntar a loja onde ela instalou
+ * cobre a biblioteca inteira de graca, hoje e daqui a um ano.
+ *
+ * O que ainda NAO cobre: Battle.net, EA e jogos avulsos. Anotado no README.
  *
  * PRIVACIDADE — a regra que decide o desenho deste arquivo:
  * a lista de processos NUNCA sai desta maquina. Ela e lida aqui, no processo
@@ -185,24 +201,291 @@ function jogosEpic() {
   return epicCache.jogos;
 }
 
-/**
- * Um jogo da Epic rodando neste caminho? Devolve o nome, ou `null`.
+/* -------------------------------------------------------------------------
+ * Riot Games
  *
- * O proprio launcher da Epic nao casa: os manifestos apontam para pastas de
- * JOGO, e o launcher mora em `Program Files/Epic Games/Launcher`, que nao e
- * a pasta de instalacao de nenhum jogo.
+ * Mesmo problema da Epic — nao ha convencao de pasta. O VALORANT desta
+ * maquina esta em `D:/Riot Games/VALORANT/live`, e nao no `C:\Riot Games`
+ * padrao. E a mesma solucao: a propria Riot escreve onde instalou.
+ *
+ * `Metadata/<produto>/<produto>.product_settings.yaml` traz
+ * `product_install_full_path`. Dois campos de um YAML nao justificam um
+ * parser de YAML — a mesma decisao ja tomada para o `.acf` da Steam.
+ *
+ * O LAUNCHER se exclui sozinho, sem lista negra: `Riot Client` tem
+ * `Riot Client.settings.yaml`, e nao `.product_settings.yaml`. Exigir o
+ * sufixo de produto deixa o cliente de fora — e ele fica de pe o tempo todo,
+ * entao casar com ele diria "jogando" para quem so abriu o launcher.
+ * ------------------------------------------------------------------------- */
+
+const METADATA_RIOT = "C:/ProgramData/Riot Games/Metadata";
+
+/** Segmentos que sao LINHA DE ATUALIZACAO, e nao nome de jogo. */
+const PATCHLINES = new Set(["live", "pbe", "beta", "esports"]);
+
+/**
+ * O nome do jogo a partir do que a Riot escreveu.
+ *
+ * `shortcut_name` primeiro, porque e o nome de marca ("VALORANT.lnk",
+ * "Teamfight Tactics.lnk"). Quando ele nao existe — e no League of Legends
+ * nao existe — vale o ultimo segmento util do caminho de instalacao, que na
+ * Riot ja vem com a grafia certa: `C:/Riot Games/League of Legends`.
+ *
+ * Por que nao derivar da pasta de metadata: ela e `league_of_legends.live`, e
+ * qualquer conversao daria "League Of Legends", com o "Of" maiusculo errado.
  */
-function jogoEpicEm(caminho, catalogo) {
-  return entradaEpicDe(caminho, catalogo)?.nome ?? null;
+function nomeRiot(conteudo, caminhoInstalado) {
+  const atalho = String(conteudo).match(/^shortcut_name:\s*"([^"]+)"/m);
+  if (atalho) return atalho[1].replace(/\.lnk$/i, "");
+
+  const partes = String(caminhoInstalado)
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((parte) => parte.length > 0);
+  for (let i = partes.length - 1; i >= 0; i -= 1) {
+    if (!PATCHLINES.has(partes[i].toLowerCase())) return partes[i];
+  }
+  return null;
+}
+
+function lerJogosRiot() {
+  const jogos = [];
+  try {
+    for (const produto of fs.readdirSync(METADATA_RIOT)) {
+      try {
+        const pastaProduto = path.join(METADATA_RIOT, produto);
+        const conteudo = fs.readFileSync(
+          path.join(pastaProduto, `${produto}.product_settings.yaml`),
+          "utf8",
+        );
+        const local = conteudo.match(/^product_install_full_path:\s*"([^"]+)"/m);
+        if (!local) continue;
+
+        const nome = nomeRiot(conteudo, local[1]);
+        if (!nome) continue;
+
+        /**
+         * O `.ico` do proprio produto, ao lado do YAML.
+         *
+         * A Riot e a unica das lojas que entrega a arte pronta. Nas outras o
+         * icone sai do `.exe`, que e 48x48; aqui ha um arquivo de icone de
+         * verdade, e ele existe mesmo com o jogo fechado — o que importa em
+         * jogo com anti-cheat, cujos processos nem sempre podem ser lidos.
+         */
+        const ico = path.join(pastaProduto, `${produto}.ico`);
+        jogos.push({
+          pasta: comoPasta(local[1]),
+          nome,
+          launch: null,
+          icone: fs.existsSync(ico) ? ico : null,
+        });
+      } catch {
+        // Produto sendo escrito ou ilegivel: perde este, nao a deteccao.
+      }
+    }
+  } catch {
+    // Riot nao instalada nesta maquina — caso normal, nao erro.
+  }
+  return jogos;
+}
+
+let riotCache = { assinatura: null, jogos: [] };
+
+function jogosRiot() {
+  let assinatura = null;
+  try {
+    assinatura = String(fs.statSync(METADATA_RIOT).mtimeMs);
+  } catch {
+    return [];
+  }
+  if (riotCache.assinatura !== assinatura) {
+    const jogos = lerJogosRiot();
+    // Vazio nao vira cache, pelo mesmo motivo da Epic.
+    if (jogos.length > 0) riotCache = { assinatura, jogos };
+    return jogos;
+  }
+  return riotCache.jogos;
+}
+
+/* -------------------------------------------------------------------------
+ * Lojas que guardam a biblioteca no REGISTRO (Ubisoft, GOG)
+ *
+ * Lidas com `reg query`, e nao com uma dependencia nativa: o arquivo ja fala
+ * com o Windows por linha de comando (`wmic`, `powershell`), e trazer um
+ * modulo compilado so para ler duas chaves custaria rebuild a cada versao de
+ * Electron.
+ * ------------------------------------------------------------------------- */
+
+/** `reg query` que devolve texto vazio quando a chave nao existe. */
+async function lerRegistro(chave) {
+  try {
+    return await executar("reg", ["query", chave, "/s"]);
+  } catch {
+    // Chave ausente = loja nao instalada. Nao e erro.
+    return "";
+  }
+}
+
+/**
+ * Um bloco por sub-chave, como `[{ chave, valores }]`.
+ *
+ * A saida do `reg query /s` vem em blocos: uma linha com o caminho da chave e
+ * abaixo `  NOME    REG_SZ    valor`. Agrupar por bloco importa porque no GOG
+ * o nome e o caminho do jogo sao dois valores da MESMA sub-chave — casa-los
+ * por posicao daria jogo com o nome do vizinho.
+ */
+function blocosDoRegistro(texto) {
+  const blocos = [];
+  let atual = null;
+  /**
+   * Quebra em `\r?\n`, e nao so em `\n`.
+   *
+   * O `reg` termina cada linha em CRLF, e o `\r` que sobrava impedia o `$` do
+   * regex de valor de casar — `.` nao casa `\r`. O efeito era SILENCIOSO e
+   * pior que um erro: a chave era encontrada, o bloco existia, e a lista de
+   * valores vinha vazia. Na pratica, a loja inteira ficava sem jogo nenhum.
+   *
+   * Um teste de fixture escrito a mao, com `\n`, teria passado.
+   */
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const limpa = linha.trim();
+    if (/^HKEY_/i.test(limpa)) {
+      atual = { chave: limpa, valores: new Map() };
+      blocos.push(atual);
+      continue;
+    }
+    const valor = linha.match(/^\s+(.+?)\s+REG_[A-Z_]+\s+(.*)$/);
+    if (valor && atual) {
+      atual.valores.set(valor[1].trim().toLowerCase(), valor[2].trim());
+    }
+  }
+  return blocos;
+}
+
+/** O nome do jogo a partir da pasta de instalacao. */
+function nomePelaPasta(caminho) {
+  const partes = String(caminho)
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((parte) => parte.length > 0);
+  return partes.length > 0 ? partes[partes.length - 1] : null;
+}
+
+/**
+ * Ubisoft Connect.
+ *
+ * `HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\<id>\InstallDir`.
+ * O registro so da o caminho, mas na Ubisoft a pasta JA e o nome de marca —
+ * nesta maquina, `D:/Tom Clancy's Rainbow Six Siege/`, com o apostrofo certo
+ * que na Steam so existe dentro do manifesto.
+ */
+async function jogosUbisoft() {
+  const texto = await lerRegistro(
+    "HKLM\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs",
+  );
+  const jogos = [];
+  for (const bloco of blocosDoRegistro(texto)) {
+    const dir = bloco.valores.get("installdir");
+    if (!dir) continue;
+    const nome = nomePelaPasta(dir);
+    if (nome) {
+      jogos.push({ pasta: comoPasta(dir), nome, launch: null, icone: null });
+    }
+  }
+  return jogos;
+}
+
+/**
+ * GOG Galaxy.
+ *
+ * `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<id>` guarda `path` e `gameName`
+ * na mesma sub-chave — a unica loja que entrega os dois juntos.
+ */
+async function jogosGog() {
+  const texto = await lerRegistro(
+    "HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games",
+  );
+  const jogos = [];
+  for (const bloco of blocosDoRegistro(texto)) {
+    const dir = bloco.valores.get("path");
+    if (!dir) continue;
+    const nome = bloco.valores.get("gamename") || nomePelaPasta(dir);
+    if (nome) {
+      jogos.push({ pasta: comoPasta(dir), nome, launch: null, icone: null });
+    }
+  }
+  return jogos;
+}
+
+/**
+ * Xbox / Microsoft Store.
+ *
+ * Instala em `<disco>:/XboxGames/<Nome do Jogo>/`, e ali a pasta e o nome de
+ * marca. NAO lemos `WindowsApps`: aquela pasta e protegida por ACL e listar
+ * dela exige elevacao, que um app de bandeja nao deve pedir.
+ */
+function jogosXbox() {
+  const jogos = [];
+  for (const letra of "CDEFGH") {
+    const raiz = `${letra}:/XboxGames`;
+    try {
+      for (const pasta of fs.readdirSync(raiz)) {
+        jogos.push({
+          pasta: comoPasta(`${raiz}/${pasta}`),
+          nome: pasta,
+          launch: null,
+          icone: null,
+        });
+      }
+    } catch {
+      // Disco sem XboxGames: o caso normal.
+    }
+  }
+  return jogos;
+}
+
+/**
+ * O catalogo de TODAS as lojas que dizem o que instalaram.
+ *
+ * A Steam nao entra aqui: ela e a unica com convencao de pasta
+ * (`steamapps/common/<Jogo>/`), entao e reconhecida pelo caminho do processo,
+ * sem catalogo. As outras precisam dizer onde puseram o jogo.
+ *
+ * Uma loja com problema nao derruba as outras — `allSettled`, e nao `all`: se
+ * o `reg query` travar, o jogo da Riot continua sendo detectado.
+ */
+async function catalogoDeLojas() {
+  const doRegistro = await Promise.allSettled([jogosUbisoft(), jogosGog()]);
+  return [
+    ...jogosEpic(),
+    ...jogosRiot(),
+    ...jogosXbox(),
+    ...doRegistro.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
+  ];
+}
+
+/**
+ * Um jogo de CATALOGO rodando neste caminho? Devolve o nome, ou `null`.
+ *
+ * Serve Epic, Riot, Ubisoft, GOG e Xbox com a mesma conta, porque todas
+ * respondem a mesma pergunta: "onde voce instalou?". So a Steam fica de fora,
+ * e por ter convencao de pasta propria.
+ *
+ * Nenhum LAUNCHER casa: os catalogos apontam para pastas de JOGO, e o
+ * launcher mora fora delas. E o que impede o Riot Client — que fica aberto o
+ * tempo todo — de virar "jogando VALORANT".
+ */
+function jogoDeCatalogoEm(caminho, catalogo) {
+  return entradaDeCatalogo(caminho, catalogo)?.nome ?? null;
 }
 
 /**
  * A entrada INTEIRA do catalogo, para quem tambem precisa do `launch`.
  *
- * Separada de `jogoEpicEm` porque a maioria dos chamadores so quer o nome, e
+ * Separada de `jogoDeCatalogoEm` porque a maioria dos chamadores so quer o nome, e
  * devolver o objeto em todo lugar convidaria a depender de campos por acidente.
  */
-function entradaEpicDe(caminho, catalogo) {
+function entradaDeCatalogo(caminho, catalogo) {
   if (typeof caminho !== "string" || caminho.length === 0) return null;
   const alvo = String(caminho).replace(/\\/g, "/").toLowerCase();
   for (const jogo of catalogo) {
@@ -225,7 +508,7 @@ function entradaEpicDe(caminho, catalogo) {
  * `caminhos` sao TODOS os executaveis daquele jogo que estao rodando, porque
  * e entre eles que se escolhe de onde tirar o icone.
  */
-function jogosEmSaida(texto, catalogoEpic = jogosEpic()) {
+function jogosEmSaida(texto, catalogo = []) {
   const achados = new Map();
 
   function registrar(chave, nome, caminho) {
@@ -243,8 +526,8 @@ function jogosEmSaida(texto, catalogoEpic = jogosEpic()) {
       if (ehJogo(pasta)) registrar(pasta, null, caminho);
       continue;
     }
-    // So tentamos a Epic quando NAO e da Steam: um jogo nao esta nas duas.
-    const entrada = entradaEpicDe(caminho, catalogoEpic);
+    // So olhamos o catalogo quando NAO e da Steam: um jogo nao esta nas duas.
+    const entrada = entradaDeCatalogo(caminho, catalogo);
     if (entrada && ehJogo(entrada.nome)) {
       registrar(entrada.nome, entrada.nome, caminho);
       /**
@@ -252,12 +535,16 @@ function jogosEmSaida(texto, catalogoEpic = jogosEpic()) {
        * E o que garante icone para jogo com anti-cheat, cujos processos
        * "livres" podem nao existir enquanto se joga.
        */
-      if (entrada.launch) {
-        const registro = achados.get(entrada.nome);
-        if (registro && !registro.caminhos.includes(entrada.launch)) {
-          registro.caminhos.push(entrada.launch);
-        }
+      const registro = achados.get(entrada.nome);
+      if (entrada.launch && registro && !registro.caminhos.includes(entrada.launch)) {
+        registro.caminhos.push(entrada.launch);
       }
+      /**
+       * O `.ico` que a Riot ja deixa pronto. Guardado a parte dos caminhos
+       * porque nao e executavel: `app.getFileIcon` le programa, e este e
+       * arquivo de icone.
+       */
+      if (entrada.icone && registro) registro.icone = entrada.icone;
     }
   }
   return [...achados.values()];
@@ -384,6 +671,35 @@ function podeDarIcone(caminho) {
   return !/^(vc_redist|vcredist|dxsetup|dotnet|oalinst|ueprereq)/.test(minusculo);
 }
 
+/** Icones ja lidos de arquivo `.ico`, por caminho. */
+const iconesDeArquivo = new Map();
+
+/**
+ * O icone que a loja ja deixou pronto em disco, como data URL.
+ *
+ * REDIMENSIONADO PARA 48px de proposito, e nao usado no tamanho original: o
+ * `.ico` da Riot tem varias resolucoes, e a maior passa de 256px. Este data
+ * URL nao fica na maquina — ele viaja para o gateway e de la para TODO MUNDO
+ * que ve o seu cartao de atividade, a cada troca de jogo. 48px e o tamanho em
+ * que ele aparece, e e o mesmo que `app.getFileIcon` devolve para as outras
+ * lojas; a arte grande de verdade e a capa do IGDB, que vem por outro caminho.
+ */
+function iconeDeArquivo(caminho) {
+  if (!caminho) return null;
+  const emCache = iconesDeArquivo.get(caminho);
+  if (emCache !== undefined) return emCache;
+  try {
+    const imagem = nativeImage.createFromPath(caminho);
+    if (imagem.isEmpty()) return null;
+    const url = imagem.resize({ width: 48, height: 48 }).toDataURL();
+    iconesDeArquivo.set(caminho, url);
+    return url;
+  } catch {
+    // Arquivo ilegivel: cai no icone do executavel, como antes.
+    return null;
+  }
+}
+
 /**
  * O melhor icone entre os processos de um jogo.
  *
@@ -464,7 +780,7 @@ async function jogoAtual() {
   if (process.platform !== "win32") return null;
 
   const saida = await caminhosDeProcessos();
-  const achados = jogosEmSaida(saida);
+  const achados = jogosEmSaida(saida, await catalogoDeLojas());
   if (achados.length === 0) return null;
 
   /**
@@ -473,7 +789,13 @@ async function jogoAtual() {
    * alternando entre os dois a cada verificacao.
    */
   const escolhido = achados.sort((a, b) => a.chave.localeCompare(b.chave))[0];
-  const icone = await melhorIcone(escolhido.caminhos);
+  /**
+   * O `.ico` da loja ganha do icone do executavel quando existe: e arte de
+   * verdade, e nao os 48x48 que o Windows guarda dentro do programa. So a
+   * Riot entrega isso hoje.
+   */
+  const icone =
+    iconeDeArquivo(escolhido.icone) ?? (await melhorIcone(escolhido.caminhos));
 
   // Epic ja trouxe o nome pronto do manifesto; Steam precisa resolver.
   if (escolhido.nome) return { nome: escolhido.nome, icone };
@@ -562,8 +884,13 @@ module.exports = {
   ehJogo,
   jogosEmSaida,
   nomeNoManifesto,
-  jogoEpicEm,
+  jogoDeCatalogoEm,
   comoPasta,
   podeDarIcone,
   jogosEpic,
+  jogosRiot,
+  catalogoDeLojas,
+  nomeRiot,
+  blocosDoRegistro,
+  nomePelaPasta,
 };

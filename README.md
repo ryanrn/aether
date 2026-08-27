@@ -731,8 +731,37 @@ instalou, e cada uma diz de um jeito:
   `C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests/*.item`, com
   `DisplayName` JA PRONTO e `InstallLocation` — melhor estruturado que o da
   Steam. Casamos por caminho de instalacao.
+- **Riot** tem o mesmo problema da Epic — sem convencao de pasta. O VALORANT
+  da maquina de teste estava em `D:/Riot Games/VALORANT/live`, e nao no
+  `C:\Riot Games` padrao. Ela escreve `product_install_full_path` num YAML por
+  produto, em `C:/ProgramData/Riot Games/Metadata/<produto>/`, e e a **unica
+  loja que deixa um `.ico` pronto** ao lado.
+- **Ubisoft** e **GOG** guardam a biblioteca no REGISTRO, lido com `reg query`
+  — nao com dependencia nativa, que custaria rebuild a cada versao de Electron.
+  A Ubisoft da so o caminho, mas ali a pasta ja e o nome de marca
+  (`D:/Tom Clancy's Rainbow Six Siege/`, com o apostrofo que na Steam so
+  existe dentro do manifesto); o GOG da caminho e `gameName` na mesma
+  sub-chave.
+- **Xbox** instala em `<disco>:/XboxGames/<Nome do Jogo>/`, e ali a pasta e o
+  nome. Nao lemos `WindowsApps`: e protegida por ACL e listar dela exigiria
+  elevacao, que um app de bandeja nao deve pedir.
 
-Isso cobre qualquer jogo dessas duas lojas, inclusive os instalados depois.
+Isso cobre qualquer jogo dessas lojas, inclusive os instalados depois.
+
+**Por que nao olhamos o nome do executavel.** Seria o caminho obvio para o
+VALORANT (`VALORANT-Win64-Shipping.exe`) e e uma armadilha: exige uma tabela
+`executavel -> jogo` mantida a mao, que so cobre o que alguem cadastrou e
+envelhece a cada lancamento. Perguntar a loja onde ela instalou cobre a
+biblioteca inteira de graca, hoje e daqui a um ano.
+
+**Nenhum LAUNCHER casa, e isso e o que segura o caso do VALORANT.** Os
+catalogos apontam para pastas de JOGO, e o launcher mora fora delas. O Riot
+Client fica aberto o tempo todo em quem joga VALORANT; se ele casasse, a
+pessoa apareceria "jogando" sem ter aberto jogo nenhum. Ele se exclui sozinho,
+sem lista negra: tem `Riot Client.settings.yaml`, e nao
+`.product_settings.yaml` — exigir o sufixo de produto ja o deixa de fora.
+Verificado na maquina real com o cliente de pe e o jogo fechado: nenhum jogo
+detectado.
 
 **Privacidade e o que decide o desenho.** O casamento acontece no processo
 principal do Electron, e a lista de processos NUNCA sai da maquina — o unico
@@ -757,10 +786,28 @@ Onde fica:
 
 ### Limitacoes conhecidas da deteccao de jogo
 
-- **So Steam e Epic.** GOG, Battle.net, Xbox e jogos avulsos ainda nao sao
-  detectados — cada loja guarda o catalogo de um jeito, e cobrir mais uma e
-  escrever mais uma regra. A alternativa geral seria uma tela de "adicionar
-  jogo" manual.
+- **Battle.net, EA e jogos avulsos ainda nao sao detectados.** A Battle.net
+  guarda o catalogo num `product.db` BINARIO (protobuf), que e trabalho de
+  outra ordem — nao um YAML de dois campos. A EA nao foi feita porque nao ha
+  instalacao dela nesta maquina para verificar contra, e escrever o parser as
+  cegas seria demonstracao, nao codigo de producao. Jogo avulso, fora de
+  qualquer loja, nao tem quem responda "onde voce instalou": a saida ali seria
+  uma tela de "adicionar jogo" manual.
+- **GOG e Xbox foram escritos, mas NAO verificados contra uma instalacao
+  real.** Nenhum dos dois esta instalado na maquina de teste: o que existe e
+  teste de unidade sobre a saida do `reg query` e sobre o formato de pasta.
+  Se o formato real divergir, a loja simplesmente nao devolve jogo — falha
+  fechada, sem quebrar as outras (`Promise.allSettled`, e nao `all`). Riot e
+  Ubisoft, sim, foram verificados contra as instalacoes desta maquina.
+- **A leitura do registro quebra em `\r?\n`, e nao em `\n`.** Nao e detalhe: o
+  `reg` termina cada linha em CRLF, e o `\r` que sobrava impedia o `$` do
+  regex de casar (`.` nao casa `\r`). O efeito era silencioso e pior que um
+  erro — a chave era encontrada, o bloco existia, e a lista de valores vinha
+  vazia, entao a loja inteira ficava sem jogo nenhum. Um teste de fixture
+  escrito a mao, com `\n`, teria passado; quem pegou foi rodar contra o
+  registro de verdade.
+- **Um jogo instalado por DUAS lojas conta como Steam.** A regra da Steam e
+  avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
 - **Um jogo instalado pelas DUAS lojas conta como Steam.** A regra da Steam e
   avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
 - **O cache dos manifestos da Epic e invalidado pela data da PASTA**, nao por
@@ -773,6 +820,14 @@ Onde fica:
 - **O icone vem do EXECUTAVEL**, via `app.getFileIcon` — sem CDN, sem banco de
   imagens, sem consultar a internet, e funciona igual para qualquer loja. Nao e
   a arte de capa que outros apps mostram: aquilo vem do catalogo deles.
+
+  **Excecao: a Riot entrega um `.ico` pronto**, e ele ganha do icone do
+  executavel. Duas razoes — e arte de verdade em vez dos 48x48 embutidos no
+  programa, e existe em disco mesmo com o jogo FECHADO, o que importa em jogo
+  com anti-cheat, cujos processos nem sempre podem ser lidos. Ele e
+  redimensionado para 48px de proposito: o `.ico` tem varias resolucoes, e
+  esse data URL nao fica na maquina — viaja para o gateway e de la para todo
+  mundo que ve o cartao, a cada troca de jogo.
 
   Entre os processos do mesmo jogo escolhemos o de MAIOR data URL, e isso nao e
   chute: medido no GTA V, o `PlayGTAV.exe` devolve 550 bytes (praticamente um
