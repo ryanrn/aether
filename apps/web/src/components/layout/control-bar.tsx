@@ -252,8 +252,14 @@ export function ControlBar({
        * a 20px do fundo e centrada — nao presa a borda da janela nem ocupando
        * a largura toda. `z-30` a mantem sobre o conteudo do canal; `w-max`
        * impede que ela estique.
+       *
+       * NO CELULAR ela tambem nao pode ESTOURAR. `w-max` so cuida do lado de
+       * cima: medido numa tela de 375px, a barra pedia 386 e saia 5px para
+       * cada lado, cortando o botao de camera. O teto deixa o nome truncar —
+       * ele ja nasce com `min-w-0` e `truncate` — em vez de empurrar os
+       * botoes para fora, que sao o que se vem clicar aqui.
        */
-      className="absolute bottom-5 left-1/2 z-30 flex w-max -translate-x-1/2 items-center gap-2 rounded-lg border border-base-800 bg-base-800/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm"
+      className="absolute bottom-5 left-1/2 z-30 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-800 bg-base-800/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm md:max-w-none"
     >
       {/*
         O nome abre o CARTAO, nao as configuracoes.

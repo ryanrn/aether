@@ -6,6 +6,7 @@ import { getSession } from "@/server/auth/session";
 import { listRecentDmMessages } from "@/server/services/messages";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { Avatar } from "@/components/ui/avatar";
+import { NavToggle } from "@/components/layout/nav-mobile";
 
 /**
  * Pagina de uma conversa direta.
@@ -57,6 +58,7 @@ export default async function DmPage({
   return (
     <>
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-base-800 px-5">
+        <NavToggle />
         <Avatar
           userId={outro.id}
           name={outro.displayName}

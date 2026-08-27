@@ -26,6 +26,7 @@ import { useSocket } from "@/components/realtime/realtime-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { SecaoAmigos } from "./friends-nav";
+import { NavToggle } from "@/components/layout/nav-mobile";
 
 /**
  * Painel central — a lista, com o formulario de adicionar INLINE.
@@ -101,7 +102,13 @@ export function FriendsList({
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-white/[0.06] px-5">
-        <h1 className="shrink-0 text-[16px] font-bold text-ink-100">
+        <NavToggle />
+        {/*
+          O TITULO SAI no celular. As abas logo ao lado ja dizem onde se esta,
+          e numa tela de 375px esta linha inteira nao cabe: com o titulo, o
+          botao de adicionar terminava em 495px, 120 alem da tela.
+        */}
+        <h1 className="hidden shrink-0 text-[16px] font-bold text-ink-100 md:block">
           {secao === "solicitacoes"
             ? "Solicitacoes"
             : secao === "bloqueados"
@@ -128,9 +135,16 @@ export function FriendsList({
             setFormAberto(true);
             inputRef.current?.focus();
           }}
-          className="shrink-0 rounded-[5px] bg-accent-500 px-3.5 py-1.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400"
+          aria-label="Adicionar amigo"
+          className="grid shrink-0 place-items-center rounded-[5px] bg-accent-500 px-3.5 py-1.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400 max-md:h-8 max-md:w-8 max-md:px-0"
         >
-          Adicionar amigo
+          {/*
+            No celular vira so o simbolo. O texto custa ~100px numa linha que
+            ja disputa espaco com o botao de menu e as abas — e "adicionar
+            pessoa" e o unico significado que este simbolo tem aqui.
+          */}
+          <span className="max-md:hidden">Adicionar amigo</span>
+          <UserPlus className="hidden h-4 w-4 max-md:block" strokeWidth={2.25} />
         </button>
       </header>
 

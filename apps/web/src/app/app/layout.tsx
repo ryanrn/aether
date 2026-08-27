@@ -4,6 +4,7 @@ import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
 import { ServerRail } from "@/components/layout/server-rail";
 import { QuickSwitcher } from "@/components/layout/quick-switcher";
+import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
 
@@ -45,6 +46,11 @@ export default async function AppLayout({
           justamente de onde mais se quer pular para outro lugar.
         */}
         <QuickSwitcher />
+        {/*
+          O fundo da gaveta do celular. No layout de `/app` para cobrir
+          qualquer tela — canal, conversa ou amigos — e nao so uma delas.
+        */}
+        <NavBackdrop />
         <ServerRail servers={servers} pendingRequests={pendingRequests} />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>

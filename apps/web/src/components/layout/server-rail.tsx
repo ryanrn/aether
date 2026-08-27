@@ -25,6 +25,11 @@ import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 import { useShellStore } from "@/lib/stores/shell-store";
+import {
+  NAV_ESCONDIDA,
+  NAV_GAVETA,
+  NAV_VISIVEL,
+} from "@/components/layout/nav-mobile";
 import { reorderServersAction } from "@/server/actions/servers";
 import { useUnreadByServer } from "@/lib/stores/realtime-store";
 
@@ -89,11 +94,23 @@ export function ServerRail({
   const setServers = useShellStore((estado) => estado.setServers);
   useEffect(() => setServers(servers), [servers, setServers]);
 
+  const navAberta = useShellStore((estado) => estado.navAberta);
+
   return (
     <>
       <nav
         aria-label="Servidores"
-        className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-base-800 bg-base-900 py-3"
+        className={cn(
+          "flex w-16 shrink-0 flex-col items-center gap-3 border-r border-base-800 bg-base-900 py-3",
+          /*
+            No CELULAR esta trilha nao e uma coluna, e a metade de tras de uma
+            gaveta: `fixed` a tira do fluxo, e ai o conteudo ocupa a tela
+            inteira em vez de sobrar com 91px. No desktop nada disto vale.
+          */
+          NAV_GAVETA,
+          "max-md:left-0",
+          navAberta ? NAV_VISIVEL : NAV_ESCONDIDA,
+        )}
       >
         {/**
          * Amigos primeiro, e separado dos servidores por uma linha: nao e um

@@ -44,6 +44,12 @@ import {
   moveChannelAction,
 } from "@/server/actions/channels";
 import { channelAllows, viewerCan } from "@/lib/permissions";
+import { useShellStore } from "@/lib/stores/shell-store";
+import {
+  NAV_ESCONDIDA,
+  NAV_GAVETA,
+  NAV_VISIVEL,
+} from "@/components/layout/nav-mobile";
 import {
   ContextMenu,
   ItemDoMenu,
@@ -92,6 +98,7 @@ export function ChannelSidebar({
 }) {
   const params = useParams<{ channelId?: string }>();
   const activeChannelId = params?.channelId;
+  const navAberta = useShellStore((estado) => estado.navAberta);
   /**
    * "Soltos" tambem e um container, e precisa de um id proprio: `null` nao
    * serve como chave de `Map` nem como id de area soltavel.
@@ -179,7 +186,19 @@ export function ChannelSidebar({
 
   return (
     <>
-      <aside className="flex w-[220px] shrink-0 flex-col border-r border-base-800 bg-base-900">
+      <aside
+        className={cn(
+          "flex w-[220px] shrink-0 flex-col border-r border-base-800 bg-base-900",
+          /*
+            A outra metade da gaveta. Comeca em `left-16` para encostar na
+            trilha, e usa o MESMO deslocamento que ela — deslocar cada uma pela
+            propria largura deixaria esta com a borda direita em cima daquela.
+          */
+          NAV_GAVETA,
+          "max-md:left-16",
+          navAberta ? NAV_VISIVEL : NAV_ESCONDIDA,
+        )}
+      >
         {/*
           Cabecalho proprio, de 48px. Antes o nome do servidor vivia numa barra
           que atravessava a tela inteira por cima das quatro colunas; agora cada

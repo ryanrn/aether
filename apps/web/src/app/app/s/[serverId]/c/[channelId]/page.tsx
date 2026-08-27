@@ -8,6 +8,7 @@ import { listRecentMessages } from "@/server/services/messages";
 import { EmptyState } from "@/components/layout/empty-state";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { VoiceStage } from "@/components/voice/voice-stage";
+import { NavToggle } from "@/components/layout/nav-mobile";
 
 /**
  * Pagina do canal.
@@ -75,6 +76,7 @@ export default async function ChannelPage({
   return (
     <>
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-base-800 px-5">
+        <NavToggle />
         <Icon className="h-4 w-4 text-ink-500" />
         <span className="text-[13px] font-medium text-ink-100">{channel.name}</span>
         {channel.topic ? (

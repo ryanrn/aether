@@ -1892,6 +1892,57 @@ abaixa no ataque.
   na proxima entrada em call; nada disso troca no meio.
 - **Vale na proxima entrada em call**, como as outras chaves de audio.
 
+## Celular: a gaveta de navegacao
+
+O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:
+
+| coluna | largura |
+| --- | --- |
+| trilha de servidores | 64px |
+| arvore de canais | 220px |
+| **sobra para a conversa** | **91px** numa tela de 375 |
+
+Nao e problema que se resolva apertando as colunas — tres paineis nao cabem.
+O que muda e QUANTOS aparecem por vez: no celular as duas barras viram uma
+GAVETA sobreposta, como no Discord.
+
+O truque e `fixed`: tirando as duas do fluxo, o conteudo passa a ocupar a tela
+inteira sozinho, sem precisar mexer no layout de desktop. Medido em 375px —
+antes 91px para a conversa, agora 375.
+
+**As duas metades usam o MESMO deslocamento** (`-284px`), e nao a largura de
+cada uma. A trilha comeca em `left-0` e a arvore em `left-16`; deslocar cada
+uma pela propria largura deixaria a borda direita da arvore exatamente em
+64px, em cima da trilha. Elas nascem em ARQUIVOS DE LAYOUT DIFERENTES — a
+trilha no layout de `/app`, a arvore no do servidor —, e por isso o estado
+mora no `shell-store`: nao ha ancestral comum que seja componente de cliente.
+
+Trocar de rota fecha a gaveta, preso ao `usePathname` em vez de a um `onClick`
+por link: assim vale para canal, conversa e amigos, inclusive telas que ainda
+nao existem.
+
+Duas coisas que so apareceram medindo, e que a gaveta sozinha nao resolveria:
+
+- **A barra de controles pedia 386px numa tela de 375** e saia 5px para cada
+  lado, cortando o botao de camera. `w-max` cuida de nao esticar, mas nao de
+  nao estourar. Com teto de largura, quem encolhe e o NOME (ja nascia com
+  `min-w-0` e `truncate`) e os botoes ficam todos com os 32px — sao eles que
+  se vem clicar ali.
+- **Na tela de amigos, "Adicionar amigo" terminava em 495px**, 120 alem da
+  tela. No celular o titulo sai (as abas ao lado ja dizem onde se esta) e o
+  botao vira so o simbolo.
+
+### Limitacoes que ficaram
+
+- **A gaveta abre por botao, sem gesto de arrastar da borda.** E o que se
+  espera num app de celular, e nao esta feito.
+- **A tela de voz nao foi repensada para o celular.** Ela cabe, mas o palco de
+  compartilhamento continua com proporcoes pensadas para tela larga — a
+  miniatura fica pequena num telefone.
+- **Testado em 375px e 1280px.** Entre 640 e 768 o layout ainda e o de
+  celular, com a conversa em tela cheia; e uma escolha razoavel para tablet em
+  pe, mas nao foi verificada num aparelho de verdade.
+
 ## Som da tela sem eco, e o botao de tela cheia
 
 Duas regressoes do compartilhamento, com causas sem relacao entre si — e
