@@ -1738,6 +1738,30 @@ o droppable existe pela categoria VAZIA: sem area soltavel propria nao haveria
 sobre o que soltar ali, e mover um canal para uma categoria sem canais seria
 impossivel. Que e justamente o caso em que arrastar bate as setas.
 
+### Dois bugs de "a tela pula" que isto causou
+
+Achados por video de uso, e os dois eram desta rodada:
+
+1. **O canal TREMIA ao arrastar.** `setNodeRef` estava no `<Link>` e o
+   `transform` no `<li>`. O dnd-kit MEDE o no do `setNodeRef` e eu movia outro:
+   mover o pai desloca o filho medido, a medicao muda, o transform recalcula, e
+   move de novo — um laco de realimentacao que na tela e tremor.
+
+   Quem mede e quem se move tem de ser o mesmo no. A alca de arrasto e outra
+   coisa, e para ela existe `setActivatorNodeRef` — que e o que o `<Link>` usa
+   agora, deixando os botoes de mover/editar/excluir livres.
+
+2. **A conversa inteira descia de uma vez ao conectar.** A fileira de reacoes
+   era renderizada sempre que se PODIA reagir, com o botao escondido por
+   `opacity-0` — e invisivel ainda ocupa altura. Como `podeReagir` depende do
+   socket, que comeca nulo, a pagina carregava compacta e ao conectar TODA
+   mensagem ganhava uma faixa junto. Repetia a cada reconexao.
+
+   Agora a fileira so existe quando ha reacao de verdade, e o botao de reagir e
+   `absolute` — fora do fluxo, entao ligar ou desligar nao move nada.
+   Verificado com 30 amostras de altura ao longo de 6s durante o carregamento:
+   722px em todas.
+
 ### Limitacoes
 
 - **Categorias nao se reordenam** arrastando; so canais e servidores.

@@ -68,6 +68,31 @@ export function MessageItem({
         message.pending && "opacity-55",
       )}
     >
+      {/*
+        Acao FLUTUANTE, ancorada no canto da mensagem. `absolute` de proposito:
+        no fluxo, ela mudaria a altura de toda mensagem — e como ela depende do
+        socket, essa mudanca chegaria de repente ao conectar.
+      */}
+      {podeReagir ? (
+        <button
+          type="button"
+          onClick={(evento) => {
+            const r = evento.currentTarget.getBoundingClientRect();
+            setSeletor({ x: r.left - 340, y: r.bottom + 6 });
+          }}
+          title="Reagir"
+          aria-label="Reagir a esta mensagem"
+          className={cn(
+            "absolute right-4 top-0 z-10 grid h-6 w-6 place-items-center rounded-md",
+            "border border-base-700 bg-base-850 text-ink-400 shadow-sm",
+            "opacity-0 transition-opacity duration-150",
+            "group-hover/message:opacity-100 focus:opacity-100 hover:text-ink-100",
+          )}
+        >
+          <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+
       <div className="flex gap-3">
         <div className="w-8 shrink-0">
           {compact ? (
@@ -115,11 +140,19 @@ export function MessageItem({
           </p>
 
           {/*
-            REACOES. So ocupam espaco quando existem — uma faixa vazia embaixo
-            de cada mensagem empurraria a conversa inteira para baixo a troco
-            de nada.
+            A FILEIRA SO EXISTE QUANDO HA REACAO.
+            
+            A primeira versao renderizava a fileira sempre que se PODIA reagir,
+            com o botao invisivel por `opacity-0` — mas invisivel ainda ocupa
+            altura. Pior: `podeReagir` depende do socket, que comeca nulo e
+            conecta depois. O resultado era a pagina carregar compacta e, ao
+            conectar, TODA mensagem ganhar uma faixa de uma vez — a conversa
+            inteira pulava para baixo. E repetia a cada reconexao.
+            
+            Agora a fileira so aparece com reacao de verdade, e o botao de
+            reagir virou acao flutuante (abaixo), fora do fluxo.
           */}
-          {message.reactions.length > 0 || podeReagir ? (
+          {message.reactions.length > 0 ? (
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {message.reactions.map((reacao) => (
                 <button
@@ -140,34 +173,6 @@ export function MessageItem({
                   <span className="font-mono tabular-nums">{reacao.count}</span>
                 </button>
               ))}
-
-              {/*
-                O botao de ABRIR o seletor so no hover: sem isso, cada mensagem
-                da conversa carregaria um icone permanente, e a coluna vira uma
-                fileira de botoes em vez de um texto para ler.
-              */}
-              {podeReagir ? (
-                <button
-                  type="button"
-                  onClick={(evento) => {
-                    const r = evento.currentTarget.getBoundingClientRect();
-                    setSeletor({ x: r.left, y: r.bottom + 6 });
-                  }}
-                  title="Reagir"
-                  aria-label="Reagir a esta mensagem"
-                  className={cn(
-                    "flex items-center rounded-full border border-base-700 bg-base-800/60 p-1 text-ink-500",
-                    "transition-opacity duration-150 hover:text-ink-200",
-                    // Fica visivel quando ja ha reacoes: ali o botao e parte
-                    // da fileira, e sumir deixaria um buraco.
-                    message.reactions.length > 0
-                      ? "opacity-100"
-                      : "opacity-0 group-hover/message:opacity-100 focus:opacity-100",
-                  )}
-                >
-                  <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                </button>
-              ) : null}
             </div>
           ) : null}
 

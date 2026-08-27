@@ -477,6 +477,7 @@ function ChannelRow({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -506,6 +507,18 @@ function ChannelRow({
 
   return (
     <li
+      /**
+       * `setNodeRef` E O TRANSFORM NO MESMO ELEMENTO.
+       *
+       * A primeira versao registrava o `<Link>` como no medido e movia o
+       * `<li>`. Isso cria um laco: mover o pai desloca o filho medido, a
+       * medicao muda, o dnd-kit recalcula o transform, e move de novo — na
+       * tela, o canal TREME enquanto se arrasta.
+       *
+       * Quem mede e quem se move tem de ser o mesmo no. A alca de arrasto e
+       * outra coisa, e para ela existe `setActivatorNodeRef`.
+       */
+      ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -520,7 +533,11 @@ function ChannelRow({
         )}
       >
         <Link
-          ref={setNodeRef}
+          /**
+           * Alca de arrasto: e daqui que o gesto comeca, e nao dos botoes de
+           * mover/editar/excluir ao lado — que continuam clicaveis.
+           */
+          ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
           href={`/app/s/${serverId}/c/${channel.id}`}
