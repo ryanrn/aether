@@ -260,6 +260,16 @@ class HandlerDeAtivacao : public IActivateAudioInterfaceCompletionHandler,
   }
   ~HandlerDeAtivacao() {
     if (pronto_) CloseHandle(pronto_);
+    /**
+     * O cliente TAMBEM e solto aqui se ninguem o tomou.
+     *
+     * Faltava esta linha, e ela custou o eco inteiro: o `QueryInterface`
+     * abaixo deixa o cliente com uma referencia nossa, e o destrutor nao a
+     * devolvia. O objeto nunca morria, a ativacao por processo ficava ocupada
+     * para sempre, e como o Windows so admite UMA por processo, a captura
+     * seguinte recebia `0x8000FFFF`.
+     */
+    if (cliente_) cliente_->Release();
   }
 
   /** Espera a ativacao terminar. Devolve o HRESULT dela. */
@@ -271,7 +281,20 @@ class HandlerDeAtivacao : public IActivateAudioInterfaceCompletionHandler,
     return resultado_;
   }
 
-  IAudioClient* Cliente() { return cliente_; }
+  /**
+   * Entrega o cliente e ABRE MAO dele — quem chama passa a ser o dono.
+   *
+   * Transferencia, e nao emprestimo com `AddRef` do outro lado: era assim
+   * antes, e sobrava sempre uma referencia sem dono, que e o que segurava a
+   * ativacao.
+   */
+  IAudioClient* Tomar() {
+    IAudioClient* c = cliente_;
+    cliente_ = nullptr;
+    return c;
+  }
+
+  bool TemCliente() const { return cliente_ != nullptr; }
 
   HRESULT STDMETHODCALLTYPE ActivateCompleted(
       IActivateAudioInterfaceAsyncOperation* operacao) override {
@@ -352,13 +375,12 @@ HRESULT AbrirLoopbackSemNosMesmos(IAudioClient** saida, HANDLE evento) {
 
   hr = handler->Esperar(3000);
   if (operacao) operacao->Release();
-  if (FAILED(hr) || !handler->Cliente()) {
+  if (FAILED(hr) || !handler->TemCliente()) {
     handler->Release();
     return FAILED(hr) ? hr : E_FAIL;
   }
 
-  IAudioClient* cliente = handler->Cliente();
-  cliente->AddRef();
+  IAudioClient* cliente = handler->Tomar();
   handler->Release();
 
   WAVEFORMATEXTENSIBLE formato = FormatoDaExclusao();
@@ -764,6 +786,24 @@ void Loopback::CaptureLoop() {
     }
 
     cliente->Stop();
+
+    /**
+     * O CLIENTE DE CAPTURA MORRE PRIMEIRO. A ordem e o conserto inteiro.
+     *
+     * `captura` e um servico obtido DO cliente de audio, e segura uma
+     * referencia a ele. Soltando o cliente com ela ainda viva, o objeto nao e
+     * destruido de verdade — e a ativacao por processo continua ocupada.
+     * Como o Windows so admite UMA por processo, a captura seguinte recebia
+     * `0x8000FFFF`.
+     *
+     * O efeito era cruel de achar: o PRIMEIRO compartilhamento saia sem eco, e
+     * todos os outros da mesma sessao caiam no loopback de dispositivo — que
+     * devolve a call inteira. Reiniciar o app "consertava", porque zerava a
+     * contagem. Um teste que abre e fecha uma vez so nunca veria isso; foi
+     * preciso abrir seis.
+     */
+    captura.Reset();
+
     // Quem abriu foi o `Start`, mas quem fecha e quem terminou de usar.
     SoltarSemEco();
     return;

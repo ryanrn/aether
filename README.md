@@ -1987,6 +1987,28 @@ ativacao por processo **nao pode acontecer duas vezes** (a segunda devolve
 bytes), e `ActivateAudioInterfaceAsync` mora em `mmdevapi.lib` — sem ela o
 link falha com `LNK2001`.
 
+### O eco que voltou, e o que ele ensinou
+
+A primeira versao deste conserto passou em todos os testes e o eco continuou
+em uso real. O motivo: os testes abriam UMA captura e fechavam.
+
+O handler de ativacao pegava o cliente por `QueryInterface` e o destrutor nao
+devolvia essa referencia. O objeto nunca morria, a ativacao por processo
+ficava ocupada — e como o Windows so admite uma por processo, **da segunda
+captura em diante** a exclusao falhava. Na versao com recuo silencioso, ela
+caia no loopback de dispositivo, que devolve a call inteira.
+
+Por isso o primeiro compartilhamento de cada sessao saia limpo e todos os
+outros ecoavam, e por isso reiniciar o app "consertava": zerava a contagem.
+
+`testar-repeticao.js` existe para isso — abre e fecha seis vezes e falha se
+`semEco` cair em qualquer uma. Antes do conserto: 5 de 6 falhavam. Depois:
+6 de 6 com exclusao.
+
+**A licao vale alem deste arquivo:** um recurso que abre e fecha ao longo do
+dia precisa de teste que ABRA E FECHE. Um teste de uma passagem so nao
+distingue "funciona" de "funciona uma vez".
+
 ### A tela cheia: negada por uma lista, engolida por um `catch`
 
 O botao parou de funcionar sem que o codigo dele mudasse uma linha — `git
@@ -2005,9 +2027,13 @@ diferentes sobre a mesma politica e divergiriam na proxima edicao.
 
 ### Limitacoes que ficaram
 
-- **O eco de verdade, entre duas pessoas, nao foi verificado por mim.** O que
-  esta medido e o mecanismo: o som da propria arvore de processos nao entra na
-  captura, e o dos outros entra. Confirmar a call inteira exige duas pessoas.
+- **Sem a exclusao, NAO capturamos som nenhum.** O recuo para o loopback de
+  dispositivo foi removido: ele mandava a call de volta para a call, e fazia
+  isso em silencio. A tela vai muda e o app avisa. Entre tela sem som e
+  conversa impossivel para todos, a escolha nao e dificil.
+- **O eco entre duas pessoas foi confirmado em uso**, depois de duas rodadas:
+  a primeira correcao passava nos testes e falhava na segunda captura de cada
+  sessao (ver acima).
 - **Windows anterior ao 20H1 continua com eco.** Ali nao existe loopback por
   processo, e o recuo e o comportamento antigo. Nao ha aviso na interface.
 - **Escolher a saida de audio a mao desliga a exclusao.** A captura por
