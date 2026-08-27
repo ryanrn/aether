@@ -322,11 +322,27 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     /**
-     * Microfone e captura de tela sao concedidos sem perguntar; camera e todo
-     * o resto sao NEGADOS. Camera entrou quando o recurso passou a existir;
-     * antes era negada de proposito, porque permissao que nao se usa e
-     * superficie de ataque de graca.
+     * Microfone, captura de tela e TELA CHEIA sao concedidos sem perguntar;
+     * camera entrou quando o recurso passou a existir. Todo o resto e NEGADO,
+     * porque permissao que nao se usa e superficie de ataque de graca.
      *
+     * `fullscreen` estava faltando, e o sintoma era mudo: no Electron, o
+     * `Element.requestFullscreen()` da pagina passa por AQUI como permissao
+     * `"fullscreen"`. Negada, a promessa e rejeitada — e o botao da tela
+     * engolia o erro num `.catch`, entao clicar simplesmente nao fazia nada.
+     * O codigo do botao nunca mudou; quem mudou foi esta lista.
+     *
+     * A lista de permitidas fica numa constante so, usada pelos DOIS handlers
+     * abaixo: eles respondem perguntas diferentes sobre a mesma politica, e
+     * duas listas divergiriam na proxima vez que alguem mexesse em uma.
+     */
+    const PERMISSOES_LIBERADAS = new Set([
+      "media",
+      "display-capture",
+      "fullscreen",
+    ]);
+
+    /**
      * Nao ha dialogo de permissao aqui de proposito: quem instalou um
      * aplicativo de voz ja consentiu em usar o microfone, e o Windows continua
      * mostrando o indicador de microfone em uso.
@@ -338,7 +354,7 @@ if (!app.requestSingleInstanceLock()) {
           callback(false);
           return;
         }
-        callback(permission === "media" || permission === "display-capture");
+        callback(PERMISSOES_LIBERADAS.has(permission));
       },
     );
 
@@ -360,7 +376,7 @@ if (!app.requestSingleInstanceLock()) {
       (webContents, permission, requestingOrigin) => {
         const url = webContents?.getURL() ?? requestingOrigin ?? "";
         if (!isAllowedUrl(url)) return false;
-        return permission === "media" || permission === "display-capture";
+        return PERMISSOES_LIBERADAS.has(permission);
       },
     );
 

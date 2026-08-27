@@ -1892,6 +1892,80 @@ abaixa no ataque.
   na proxima entrada em call; nada disso troca no meio.
 - **Vale na proxima entrada em call**, como as outras chaves de audio.
 
+## Som da tela sem eco, e o botao de tela cheia
+
+Duas regressoes do compartilhamento, com causas sem relacao entre si — e
+nenhuma das duas no codigo que parecia culpado.
+
+### O eco: o microfone da tela era o alto-falante inteiro
+
+Quem assistia a uma tela compartilhada com som ouvia a propria voz voltando.
+
+A causa nao era volume, mistura nem duplicacao de faixa: era **o que se
+capturava**. `AUDCLNT_STREAMFLAGS_LOOPBACK` num endpoint captura tudo o que sai
+daquele dispositivo — inclusive a call que o Aether esta tocando. Quem
+compartilhava mandava de volta a voz das outras pessoas, atrasada. Nao ha
+filtro que conserte isso; o que precisa mudar e a fonte.
+
+O conserto e o loopback por PROCESSO do Windows 10 20H1 (build 19041), com
+`PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE` apontando para o nosso
+proprio PID. **A arvore importa, e nao so o processo**: no Chromium quem toca
+audio e um utilitario FILHO do principal, entao excluir so o PID do main
+deixaria o eco igualzinho.
+
+Medido, e nao suposto — `apps/desktop/native/testar-exclusao.js` toca um WAV
+num processo filho e compara duas janelas:
+
+| modo | piso de silencio | com o WAV tocando | diferenca |
+| --- | --- | --- | --- |
+| exclusao (o certo) | 0,01386 | 0,01547 | **0,00162** |
+| inclusao (contraprova) | 0,00000 | 0,07549 | 0,07549 |
+
+A contraprova existe porque "capturar nada" tambem passaria num teste que so
+olhasse o silencio. E `testar-sem-eco.js` cobre o outro lado: 4,00s continuos
+de audio, com pico acima de zero — o som dos OUTROS programas continua indo.
+
+**Recuo seguro:** falhando qualquer passo (Windows anterior ao 20H1, ativacao
+recusada, aparelho escolhido a mao), voltamos ao loopback de dispositivo de
+antes. O pior caso passa a ser o comportamento de hoje, nunca ficar sem som.
+`format()` expoe `semEco` para o log dizer qual caminho pegou.
+
+Duas armadilhas que custaram tentativa e ficaram anotadas no arquivo: a
+ativacao por processo **nao pode acontecer duas vezes** (a segunda devolve
+`0x8000FFFF`, com o `Start` respondendo sucesso e a captura entregando zero
+bytes), e `ActivateAudioInterfaceAsync` mora em `mmdevapi.lib` — sem ela o
+link falha com `LNK2001`.
+
+### A tela cheia: negada por uma lista, engolida por um `catch`
+
+O botao parou de funcionar sem que o codigo dele mudasse uma linha — `git
+log -L` na funcao mostra que ela esta intacta desde que foi escrita.
+
+No Electron, o `Element.requestFullscreen()` da pagina passa pelo handler de
+permissoes do processo principal como `"fullscreen"`. O handler foi apertado
+junto com a correcao da camera e liberava so `media` e `display-capture`.
+Negada, a promessa era rejeitada — e o botao fazia `.catch(() => undefined)`.
+
+Sem erro, sem log, sem pista. **Silenciar um `catch` de API do navegador
+economiza uma linha e custa a proxima investigacao inteira**; agora a recusa
+vai para o `mediaLog`. A lista de permissoes virou uma constante usada pelos
+DOIS handlers (o de pedido e o de verificacao), que respondem perguntas
+diferentes sobre a mesma politica e divergiriam na proxima edicao.
+
+### Limitacoes que ficaram
+
+- **O eco de verdade, entre duas pessoas, nao foi verificado por mim.** O que
+  esta medido e o mecanismo: o som da propria arvore de processos nao entra na
+  captura, e o dos outros entra. Confirmar a call inteira exige duas pessoas.
+- **Windows anterior ao 20H1 continua com eco.** Ali nao existe loopback por
+  processo, e o recuo e o comportamento antigo. Nao ha aviso na interface.
+- **Escolher a saida de audio a mao desliga a exclusao.** A captura por
+  processo nao e de um endpoint, entao as duas coisas nao se combinam: com
+  aparelho escolhido, volta o loopback de dispositivo — e o eco junto.
+- **A captura por processo ignora a saida padrao.** Isso e o esperado, mas
+  muda o diagnostico antigo: trocar a saida do Windows deixa de influenciar o
+  som da tela quando este caminho esta ativo.
+
 ## Supressao de ruido avancada (RNNoise)
 
 Chave em Configuracoes > Voz e video, DESLIGADA por padrao: ela carrega ~1,9 MB

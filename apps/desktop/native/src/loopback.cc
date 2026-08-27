@@ -22,7 +22,9 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <audioclientactivationparams.h>
 #include <functiondiscoverykeys_devpkey.h>
+#include <mmreg.h>
 
 #include <atomic>
 #include <mutex>
@@ -192,6 +194,201 @@ Downmix MontarDownmix(uint16_t canais, DWORD mascara) {
   return m;
 }
 
+/* -------------------------------------------------------------------------
+ * Loopback POR PROCESSO, excluindo o proprio Aether
+ *
+ * O PROBLEMA QUE ISTO RESOLVE — e ele nao era do aparelho, era do desenho:
+ * `AUDCLNT_STREAMFLAGS_LOOPBACK` num endpoint captura TUDO o que sai daquele
+ * dispositivo. Inclusive a call. Quem compartilha a tela com som estava
+ * mandando de volta a voz das outras pessoas, misturada ao som do jogo — e do
+ * outro lado isso chega como a propria voz atrasada. O sintoma que se relata e
+ * "eco"; a causa e que o microfone da tela era o alto-falante inteiro.
+ *
+ * Nao ha volume nem filtro que conserte isso: o que precisa mudar e O QUE se
+ * captura. O Windows 10 20H1 (build 19041) trouxe o loopback por PROCESSO, com
+ * um modo que captura tudo MENOS uma arvore de processos. Passamos o nosso
+ * proprio PID: sai o som do jogo e do navegador, fica de fora o que o Aether
+ * esta tocando.
+ *
+ * A arvore importa, e nao so o processo: no Chromium quem toca audio nao e o
+ * processo principal, e um utilitario filho. Excluir so o PID do main deixaria
+ * o eco exatamente igual. Por isso `EXCLUDE_TARGET_PROCESS_TREE`.
+ *
+ * RECUO SEGURO: se qualquer passo daqui falhar — Windows antigo, API ausente,
+ * ativacao recusada — voltamos ao loopback de dispositivo de antes. O pior
+ * caso passa a ser o comportamento de hoje, nunca ficar sem som.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * O formato do loopback por processo e FIXO, e nao negociado.
+ *
+ * O dispositivo virtual nao responde `GetMixFormat` — nao ha endpoint de onde
+ * tirar um formato de mixagem. Entao declaramos um: 48 kHz, estereo, float32,
+ * que e o formato nativo do WebRTC e o que o worklet do lado do JavaScript ja
+ * espera. O Windows converte o que for preciso.
+ */
+WAVEFORMATEXTENSIBLE FormatoDaExclusao() {
+  WAVEFORMATEXTENSIBLE wf{};
+  wf.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+  wf.Format.nChannels = 2;
+  wf.Format.nSamplesPerSec = 48000;
+  wf.Format.wBitsPerSample = 32;
+  wf.Format.nBlockAlign = (wf.Format.nChannels * wf.Format.wBitsPerSample) / 8;
+  wf.Format.nAvgBytesPerSec = wf.Format.nSamplesPerSec * wf.Format.nBlockAlign;
+  wf.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+  wf.Samples.wValidBitsPerSample = 32;
+  wf.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+  wf.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+  return wf;
+}
+
+/**
+ * `ActivateAudioInterfaceAsync` responde por callback, e nao no retorno.
+ *
+ * Este handler existe so para transformar essa resposta assincrona em algo que
+ * a thread possa esperar. `IAgileObject` porque a chamada de volta pode vir de
+ * outro apartamento COM — sem ele, o marshalling recusa.
+ *
+ * O contador de referencia e escrito a mao para nao trazer o WRL so por causa
+ * de tres metodos.
+ */
+class HandlerDeAtivacao : public IActivateAudioInterfaceCompletionHandler,
+                          public IAgileObject {
+ public:
+  HandlerDeAtivacao() {
+    pronto_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  }
+  ~HandlerDeAtivacao() {
+    if (pronto_) CloseHandle(pronto_);
+  }
+
+  /** Espera a ativacao terminar. Devolve o HRESULT dela. */
+  HRESULT Esperar(DWORD limiteMs) {
+    if (!pronto_) return E_FAIL;
+    if (WaitForSingleObject(pronto_, limiteMs) != WAIT_OBJECT_0) {
+      return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
+    }
+    return resultado_;
+  }
+
+  IAudioClient* Cliente() { return cliente_; }
+
+  HRESULT STDMETHODCALLTYPE ActivateCompleted(
+      IActivateAudioInterfaceAsyncOperation* operacao) override {
+    HRESULT hrAtivacao = E_FAIL;
+    IUnknown* bruto = nullptr;
+    HRESULT hr = operacao->GetActivateResult(&hrAtivacao, &bruto);
+    if (SUCCEEDED(hr) && SUCCEEDED(hrAtivacao) && bruto) {
+      hr = bruto->QueryInterface(__uuidof(IAudioClient),
+                                 reinterpret_cast<void**>(&cliente_));
+      bruto->Release();
+      resultado_ = hr;
+    } else {
+      resultado_ = FAILED(hr) ? hr : hrAtivacao;
+    }
+    if (pronto_) SetEvent(pronto_);
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+    if (!ppv) return E_POINTER;
+    if (riid == __uuidof(IUnknown) ||
+        riid == __uuidof(IActivateAudioInterfaceCompletionHandler)) {
+      *ppv = static_cast<IActivateAudioInterfaceCompletionHandler*>(this);
+    } else if (riid == __uuidof(IAgileObject)) {
+      *ppv = static_cast<IAgileObject*>(this);
+    } else {
+      *ppv = nullptr;
+      return E_NOINTERFACE;
+    }
+    AddRef();
+    return S_OK;
+  }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++refs_; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    ULONG restantes = --refs_;
+    if (restantes == 0) delete this;
+    return restantes;
+  }
+
+ private:
+  std::atomic<ULONG> refs_{1};
+  HANDLE pronto_ = nullptr;
+  HRESULT resultado_ = E_FAIL;
+  IAudioClient* cliente_ = nullptr;
+};
+
+/**
+ * Abre um `IAudioClient` que captura tudo MENOS a arvore deste processo.
+ *
+ * Devolve `S_OK` com o cliente ja INICIALIZADO e com o evento preso, ou uma
+ * falha — e nesse caso quem chama volta para o loopback de dispositivo.
+ */
+HRESULT AbrirLoopbackSemNosMesmos(IAudioClient** saida, HANDLE evento) {
+  if (!saida) return E_POINTER;
+  *saida = nullptr;
+
+  AUDIOCLIENT_ACTIVATION_PARAMS parametros{};
+  parametros.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
+  parametros.ProcessLoopbackParams.TargetProcessId = GetCurrentProcessId();
+  parametros.ProcessLoopbackParams.ProcessLoopbackMode =
+      PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
+
+  PROPVARIANT valor{};
+  valor.vt = VT_BLOB;
+  valor.blob.cbSize = sizeof(parametros);
+  valor.blob.pBlobData = reinterpret_cast<BYTE*>(&parametros);
+
+  IActivateAudioInterfaceAsyncOperation* operacao = nullptr;
+  auto* handler = new HandlerDeAtivacao();
+
+  HRESULT hr = ActivateAudioInterfaceAsync(
+      VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &valor,
+      handler, &operacao);
+  if (FAILED(hr)) {
+    handler->Release();
+    return hr;
+  }
+
+  hr = handler->Esperar(3000);
+  if (operacao) operacao->Release();
+  if (FAILED(hr) || !handler->Cliente()) {
+    handler->Release();
+    return FAILED(hr) ? hr : E_FAIL;
+  }
+
+  IAudioClient* cliente = handler->Cliente();
+  cliente->AddRef();
+  handler->Release();
+
+  WAVEFORMATEXTENSIBLE formato = FormatoDaExclusao();
+  /**
+   * `EVENTCALLBACK` e OBRIGATORIO no loopback por processo — sem ele o
+   * `Initialize` recusa. O laco continua sondando como antes; o evento so
+   * precisa existir e estar preso.
+   *
+   * A PERIODICIDADE VAI ZERO, que e o valor certo em modo compartilhado. O
+   * exemplo oficial da Microsoft passa `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM`
+   * nessa posicao — uma flag no lugar de um tempo. Copiar aquilo funcionava
+   * (medido: 4,00s de audio continuo), mas e uma linha que o proximo leitor
+   * teria de decifrar. Com zero, tambem medido em 4,00s continuos.
+   */
+  hr = cliente->Initialize(
+      AUDCLNT_SHAREMODE_SHARED,
+      AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+      2000000 /* 200ms */, 0,
+      reinterpret_cast<WAVEFORMATEX*>(&formato), nullptr);
+  if (SUCCEEDED(hr)) hr = cliente->SetEventHandle(evento);
+
+  if (FAILED(hr)) {
+    cliente->Release();
+    return hr;
+  }
+
+  *saida = cliente;
+  return S_OK;
+}
+
 }  // namespace
 
 /**
@@ -236,6 +433,32 @@ class Loopback : public Napi::ObjectWrap<Loopback> {
   std::wstring device_id_;
 
   /**
+   * Estamos capturando com a nossa propria arvore de processos DE FORA?
+   *
+   * Guardado para o `format()` poder contar ao JavaScript, e o log dizer qual
+   * caminho pegou. Sem isso, "tem eco" e "nao tem eco" seriam dois misterios
+   * indistinguiveis do lado de fora.
+   */
+  bool sem_nos_mesmos_ = false;
+
+  /**
+   * O cliente da captura por processo, ABERTO UMA VEZ SO.
+   *
+   * Diferente do loopback de dispositivo, que a thread reabre por conta
+   * propria, este e ativado no `Start` e ENTREGUE a thread. Tentar ativar duas
+   * vezes no mesmo processo devolve `0x8000FFFF` na segunda — o `Start`
+   * respondia sucesso e a thread morria em seguida, capturando zero bytes.
+   *
+   * Passar o ponteiro entre threads e legitimo aqui: o objeto e agil
+   * (`IAgileObject`) e as duas pontas vivem em apartamento multithread.
+   */
+  IAudioClient* cliente_sem_eco_ = nullptr;
+  HANDLE evento_sem_eco_ = nullptr;
+
+  /** Solta o cliente da captura por processo, venha de onde vier. */
+  void SoltarSemEco();
+
+  /**
    * Teto do buffer: 2 segundos de audio.
    *
    * Se o JavaScript parar de ler (aba travada, GC longo), o buffer cresceria
@@ -264,9 +487,26 @@ Loopback::~Loopback() {
   StopInternal();
 }
 
+void Loopback::SoltarSemEco() {
+  if (cliente_sem_eco_) {
+    cliente_sem_eco_->Release();
+    cliente_sem_eco_ = nullptr;
+  }
+  if (evento_sem_eco_) {
+    CloseHandle(evento_sem_eco_);
+    evento_sem_eco_ = nullptr;
+  }
+}
+
 void Loopback::StopInternal() {
   running_ = false;
   if (thread_.joinable()) thread_.join();
+  /**
+   * Tambem aqui, e nao so no fim da thread: se o `Start` ativou a captura por
+   * processo e a thread nunca chegou a rodar, o cliente ficaria preso — e a
+   * proxima ativacao falharia, pelo mesmo motivo que ja custou uma tentativa.
+   */
+  SoltarSemEco();
 }
 
 Napi::Value Loopback::Start(const Napi::CallbackInfo& info) {
@@ -288,6 +528,57 @@ Napi::Value Loopback::Start(const Napi::CallbackInfo& info) {
   // Abrimos o dispositivo AQUI, na thread do JS, para poder devolver o erro
   // de verdade em vez de a thread falhar em silencio.
   ComScope com;
+
+  /**
+   * PRIMEIRO tentamos capturar sem o nosso proprio som.
+   *
+   * E este caminho que tira o eco: sem ele, o loopback do dispositivo devolve
+   * a call inteira de volta para a call. So caimos no caminho antigo quando
+   * este nao existe (Windows anterior ao 20H1) ou e recusado — e ai o
+   * comportamento e o de sempre, com som e com eco, que ainda e melhor do que
+   * ficar sem compartilhar som nenhum.
+   *
+   * O `deviceId` escolhido a mao NAO vale aqui, e nao ha o que fazer: a
+   * captura por processo nao e de um endpoint, e sim do que o processo toca.
+   * Por isso a exclusao so e tentada quando ninguem pediu um aparelho
+   * especifico.
+   */
+  sem_nos_mesmos_ = false;
+  SoltarSemEco();
+  if (device_id_.empty()) {
+    HANDLE evento = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    IAudioClient* semNos = nullptr;
+    HRESULT hrExclusao = AbrirLoopbackSemNosMesmos(&semNos, evento);
+    if (FAILED(hrExclusao) || !semNos) {
+      if (evento) CloseHandle(evento);
+    }
+    if (SUCCEEDED(hrExclusao) && semNos) {
+      // O formato aqui e o que declaramos, e nao o do endpoint.
+      sample_rate_ = 48000;
+      channels_ = 2;
+      bits_ = 32;
+      block_align_ = 8;
+      is_float_ = true;
+      channel_mask_ = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+      sem_nos_mesmos_ = true;
+
+      /**
+       * O cliente vai INTEIRO para a thread, em vez de ser reaberto la.
+       *
+       * A primeira versao ativava aqui so para descobrir o formato, soltava, e
+       * deixava a thread ativar de novo. A segunda ativacao respondia
+       * `0x8000FFFF` — o `Start` dizia que deu certo e a captura entregava
+       * zero bytes, sem erro visivel. Soltar antes de iniciar a thread nao
+       * resolveu: nao era corrida, e a segunda ativacao mesmo.
+       */
+      cliente_sem_eco_ = semNos;
+      evento_sem_eco_ = evento;
+
+      running_ = true;
+      thread_ = std::thread([this]() { CaptureLoop(); });
+      return Napi::Boolean::New(env, true);
+    }
+  }
 
   ComPtr<IMMDeviceEnumerator> enumerator;
   HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
@@ -361,6 +652,73 @@ void Loopback::CaptureLoop() {
   // A thread tem o proprio apartamento COM e reabre o dispositivo: ponteiro
   // COM de apartamento multithread nao atravessa de graca entre threads.
   ComScope com;
+
+  /**
+   * O caminho SEM O NOSSO SOM tem laco proprio, e nao passa pelo enumerador
+   * de dispositivos: nao ha endpoint envolvido. O formato ja e o que
+   * declaramos — estereo float32 —, entao nao ha mistura de canais a fazer.
+   */
+  if (sem_nos_mesmos_) {
+    IAudioClient* cliente = cliente_sem_eco_;
+    HANDLE evento = evento_sem_eco_;
+    if (!cliente || !evento) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      error_ = "captura por processo sem cliente — o Start nao a entregou";
+      return;
+    }
+
+    ComPtr<IAudioCaptureClient> captura;
+    if (FAILED(cliente->GetService(IID_PPV_ARGS(&captura))) ||
+        FAILED(cliente->Start())) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      error_ = "nao consegui iniciar a captura por processo";
+      return;
+    }
+
+    while (running_) {
+      /**
+       * Espera o evento em vez de dormir um tempo fixo: o loopback por
+       * processo so entrega quando ha o que entregar. O limite existe para o
+       * `running_` ser reavaliado mesmo em silencio absoluto — sem ele, parar
+       * de compartilhar num momento sem som travaria aqui.
+       */
+      WaitForSingleObject(evento, 200);
+
+      UINT32 pacote = 0;
+      if (FAILED(captura->GetNextPacketSize(&pacote))) break;
+
+      while (pacote > 0 && running_) {
+        BYTE* dados = nullptr;
+        UINT32 quadros = 0;
+        DWORD flags = 0;
+        if (FAILED(captura->GetBuffer(&dados, &quadros, &flags, nullptr, nullptr))) {
+          break;
+        }
+
+        const size_t bytes = static_cast<size_t>(quadros) * 8;  // 2ch * float32
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) || !dados) {
+            buffer_.insert(buffer_.end(), bytes, 0);
+          } else {
+            buffer_.insert(buffer_.end(), dados, dados + bytes);
+          }
+          if (buffer_.size() > kMaxBufferBytes) {
+            const size_t sobra = buffer_.size() - kMaxBufferBytes;
+            buffer_.erase(buffer_.begin(), buffer_.begin() + sobra);
+          }
+        }
+
+        captura->ReleaseBuffer(quadros);
+        if (FAILED(captura->GetNextPacketSize(&pacote))) break;
+      }
+    }
+
+    cliente->Stop();
+    // Quem abriu foi o `Start`, mas quem fecha e quem terminou de usar.
+    SoltarSemEco();
+    return;
+  }
 
   ComPtr<IMMDeviceEnumerator> enumerator;
   if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
@@ -523,6 +881,12 @@ Napi::Value Loopback::Format(const Napi::CallbackInfo& info) {
   out.Set("bitsPerSample", Napi::Number::New(env, bits_));
   out.Set("blockAlign", Napi::Number::New(env, convertido ? 8 : block_align_));
   out.Set("isFloat", Napi::Boolean::New(env, is_float_));
+  /**
+   * Se o nosso proprio som ficou de fora da captura. E a diferenca entre a
+   * pessoa do outro lado ouvir a si mesma ou nao, entao precisa ser
+   * verificavel de fora — nao uma promessa do comentario.
+   */
+  out.Set("semEco", Napi::Boolean::New(env, sem_nos_mesmos_));
 
   // O formato de origem fica visivel para diagnostico: e ele que explica por
   // que o Chromium recusa este aparelho.

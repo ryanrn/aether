@@ -22,6 +22,7 @@ import {
   readScreenVolume,
   saveScreenVolume,
 } from "@/lib/voice/volumes";
+import { mediaLog } from "@/lib/voice/debug";
 import { cn } from "@/lib/utils";
 
 /**
@@ -148,24 +149,50 @@ function FocusedStream({
     );
   }, []);
 
+  /**
+   * O erro e REGISTRADO, e nao engolido.
+   *
+   * Aqui havia `.catch(() => undefined)`, e foi isso que deixou uma falha
+   * viver escondida: no app de desktop, o `requestFullscreen` passa pelo
+   * handler de permissoes do Electron como `"fullscreen"`, e ele so liberava
+   * `media` e `display-capture`. A promessa era rejeitada, o `catch` apagava a
+   * rejeicao, e o botao "simplesmente nao fazia nada" — sem erro, sem pista,
+   * com o codigo do botao intacto desde que foi escrito.
+   *
+   * Silenciar um `catch` de API do navegador economiza uma linha e custa a
+   * proxima investigacao inteira.
+   */
   async function toggleFullscreen() {
     const element = containerRef.current;
     if (!element) return;
-    if (document.fullscreenElement) {
-      await document.exitFullscreen().catch(() => undefined);
-      return;
+    try {
+      /**
+       * Sai da tela cheia so quando somos NOS que estamos nela. Com outro
+       * elemento em tela cheia, o certo e assumir o lugar, e nao apagar a dele
+       * e nao mostrar nada.
+       */
+      if (document.fullscreenElement === element) {
+        await document.exitFullscreen();
+        return;
+      }
+      await element.requestFullscreen();
+    } catch (error) {
+      mediaLog("tela cheia recusada", error);
     }
-    await element.requestFullscreen().catch(() => undefined);
   }
 
   async function togglePip() {
     const video = videoRef.current;
     if (!video) return;
-    if (document.pictureInPictureElement) {
-      await document.exitPictureInPicture().catch(() => undefined);
-      return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        return;
+      }
+      await video.requestPictureInPicture();
+    } catch (error) {
+      mediaLog("picture-in-picture recusado", error);
     }
-    await video.requestPictureInPicture().catch(() => undefined);
   }
 
   return (
