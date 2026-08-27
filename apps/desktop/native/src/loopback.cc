@@ -367,15 +367,30 @@ HRESULT AbrirLoopbackSemNosMesmos(IAudioClient** saida, HANDLE evento) {
    * `Initialize` recusa. O laco continua sondando como antes; o evento so
    * precisa existir e estar preso.
    *
-   * A PERIODICIDADE VAI ZERO, que e o valor certo em modo compartilhado. O
-   * exemplo oficial da Microsoft passa `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM`
-   * nessa posicao — uma flag no lugar de um tempo. Copiar aquilo funcionava
-   * (medido: 4,00s de audio continuo), mas e uma linha que o proximo leitor
-   * teria de decifrar. Com zero, tambem medido em 4,00s continuos.
+   * `AUTOCONVERTPCM` E OBRIGATORIO, e custou o conserto inteiro uma vez.
+   *
+   * O formato aqui e FIXO (48 kHz, estereo, float32) porque o dispositivo
+   * virtual nao responde `GetMixFormat`. Sem pedir conversao, o `Initialize`
+   * so aceita esse formato exato — e falha em qualquer aparelho que use
+   * outro. Justamente o caso que motivou este modulo: o PRO X2 se anuncia com
+   * OITO canais.
+   *
+   * Numa versao anterior eu tirei esta flag por achar que era um parametro
+   * fora de lugar (o exemplo da Microsoft a passa na posicao da
+   * periodicidade). O teste passou porque a saida padrao da maquina de teste
+   * era 48 kHz estereo, e o efeito so apareceu em uso real: a ativacao
+   * falhava, caia no recuo, e o recuo e o loopback de DISPOSITIVO — que
+   * devolve a call inteira. Era o eco relatado.
+   *
+   * Aqui ela vai na posicao CERTA, em `StreamFlags`, junto com a qualidade de
+   * reamostragem. A periodicidade fica zero, que e o valor correto em modo
+   * compartilhado.
    */
   hr = cliente->Initialize(
       AUDCLNT_SHAREMODE_SHARED,
-      AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+      AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+          AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+          AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
       2000000 /* 200ms */, 0,
       reinterpret_cast<WAVEFORMATEX*>(&formato), nullptr);
   if (SUCCEEDED(hr)) hr = cliente->SetEventHandle(evento);
@@ -440,6 +455,12 @@ class Loopback : public Napi::ObjectWrap<Loopback> {
    * indistinguiveis do lado de fora.
    */
   bool sem_nos_mesmos_ = false;
+
+  /**
+   * Deixa capturar mesmo sem a exclusao? So os scripts de diagnostico pedem
+   * isso, para poder comparar os dois caminhos. O app nunca pede.
+   */
+  bool permitir_eco_ = false;
 
   /**
    * O cliente da captura por processo, ABERTO UMA VEZ SO.
@@ -518,6 +539,7 @@ Napi::Value Loopback::Start(const Napi::CallbackInfo& info) {
     std::u16string id = info[0].As<Napi::String>().Utf16Value();
     device_id_.assign(id.begin(), id.end());
   }
+  permitir_eco_ = info.Length() > 1 && info[1].ToBoolean().Value();
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -552,6 +574,33 @@ Napi::Value Loopback::Start(const Napi::CallbackInfo& info) {
     if (FAILED(hrExclusao) || !semNos) {
       if (evento) CloseHandle(evento);
     }
+    /**
+     * FALHOU A EXCLUSAO? Entao nao capturamos nada.
+     *
+     * O recuo para o loopback de DISPOSITIVO parecia a escolha generosa —
+     * "melhor com som do que sem". Nao e: aquele caminho captura tudo o que
+     * sai da maquina, a call inclusive, e devolve a voz de cada pessoa para
+     * ela mesma. Quem esta do outro lado nao consegue nem conversar.
+     *
+     * Pior, ele falhava em SILENCIO: a captura "funcionava", ninguem via erro,
+     * e o defeito so aparecia na chamada dos outros. Entre ficar sem o som da
+     * tela e mandar a conversa de volta para a sala, ficar sem o som e
+     * claramente o menor dano — e agora isso e dito em voz alta.
+     *
+     * `permitirEco` existe para os scripts de diagnostico, que precisam
+     * comparar os dois caminhos. O app nunca passa isso.
+     */
+    if ((FAILED(hrExclusao) || !semNos) && !permitir_eco_) {
+      Napi::Error::New(
+          env,
+          HrToText("captura sem eco (loopback por processo)", hrExclusao) +
+              " — sem ela, o som da tela levaria a propria call junto; "
+              "por isso nao capturamos nada. Exige Windows 10 20H1 (build "
+              "19041) ou mais novo.")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
     if (SUCCEEDED(hrExclusao) && semNos) {
       // O formato aqui e o que declaramos, e nao o do endpoint.
       sample_rate_ = 48000;

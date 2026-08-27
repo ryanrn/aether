@@ -823,9 +823,20 @@ export async function connectVoiceRoom({
             );
           }
         } else {
+          /**
+           * A recusa aqui pode ser DELIBERADA, e nao so uma falha.
+           *
+           * O modulo nativo so captura o som da tela quando consegue deixar o
+           * proprio Aether de fora. Sem isso ele mandaria a call inteira de
+           * volta para a call — cada pessoa ouvindo a propria voz. Entre a
+           * tela ir sem som e a conversa ficar impossivel para todos, ele
+           * escolhe ir sem som, e a mensagem diz isso.
+           */
           callbacks.onError(
-            "A tela esta indo, porem sem som: a captura de audio do sistema " +
-              "nao abriu nesta saida. O log do app registra o motivo.",
+            "A tela esta indo, porem SEM som. So mandamos o som da tela " +
+              "quando da para tirar a propria chamada da captura — senao " +
+              "todo mundo ouviria a propria voz de volta. O log do app " +
+              "registra o motivo exato.",
           );
         }
       }

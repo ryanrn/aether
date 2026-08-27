@@ -104,14 +104,30 @@ function instalarLoopback() {
        * disso que deixou o problema original semanas sem causa conhecida.
        */
       log.registrar("loopback.start.falhou", { deviceId, erro: erro.message });
+      console.error("[loopback] NAO iniciou:", erro.message);
       sessao = null;
       return { ok: false, erro: erro.message };
     }
 
     const formato = sessao.format();
+    /**
+     * `semEco` PRIMEIRO, porque e o campo que decide se a call volta para a
+     * call. Quando ele e falso, todo mundo na sala ouve a propria voz — e sem
+     * este registro a unica forma de descobrir isso e alguem reclamar.
+     *
+     * Vai tambem para o console: o log em arquivo ja falhou em aparecer uma
+     * vez, e um diagnostico que depende de um so caminho e um diagnostico que
+     * some na hora que voce precisa dele. Rodando o .exe por um terminal, esta
+     * linha aparece.
+     */
     log.registrar("loopback.start", {
+      semEco: formato.semEco === true,
       canaisDoAparelho: formato.origem.channels,
       misturado: formato.origem.downmix,
+      taxa: formato.sampleRate,
+    });
+    console.log("[loopback] captura iniciada", {
+      semEco: formato.semEco === true,
       taxa: formato.sampleRate,
     });
 
