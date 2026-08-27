@@ -29,6 +29,7 @@ import {
 import { mediaDebugEnabled, mediaLog } from "./debug";
 import { lerCodecDeTela } from "./codecs";
 import { lerTratamentoDeAudio, paraConstraints } from "./audio-prefs";
+import { criarFiltroDeRuido } from "./noise-filter";
 import {
   readPreferredMicrophone,
   readPreferredSpeaker,
@@ -169,6 +170,36 @@ function audioContainer(): HTMLElement {
     "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
   document.body.appendChild(element);
   return element;
+}
+
+/**
+ * Liga o RNNoise na faixa do microfone, se a pessoa pediu.
+ *
+ * SEPARADA E ENVOLVIDA EM try: falhar aqui nao pode impedir a entrada na call.
+ * O pior caso aceitavel e entrar sem supressao avancada; entrar sem microfone,
+ * ou nao entrar, nao e.
+ *
+ * `setProcessor` e do proprio SDK — ele republica na reconexao e acompanha
+ * mudo e troca de aparelho sozinho, coisas que trocar a faixa na mao obrigaria
+ * a reimplementar.
+ */
+async function aplicarFiltroDeRuido(room: Room): Promise<void> {
+  if (!lerTratamentoDeAudio().rnnoise) return;
+
+  try {
+    const publicacao = room.localParticipant.getTrackPublication(
+      Track.Source.Microphone,
+    );
+    const faixa = publicacao?.audioTrack;
+    if (!faixa) return;
+
+    await faixa.setProcessor(criarFiltroDeRuido());
+    mediaLog("filtro de ruido ligado");
+  } catch (erro) {
+    // O som cru segue publicado: `setProcessor` so troca a faixa quando o
+    // processador devolve uma.
+    mediaLog("nao consegui ligar o filtro de ruido", erro);
+  }
 }
 
 export async function connectVoiceRoom({
@@ -479,6 +510,7 @@ export async function connectVoiceRoom({
   if (canPublish) {
     try {
       await room.localParticipant.setMicrophoneEnabled(true);
+      await aplicarFiltroDeRuido(room);
     } catch {
       callbacks.onError(
         "Nao foi possivel abrir o microfone. Voce continua ouvindo os outros.",

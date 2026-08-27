@@ -192,6 +192,25 @@ function TratamentoDoMicrofone() {
         />
       </div>
 
+      {/*
+        RNNoise separado das tres nativas por uma linha: as outras sao chaves
+        do navegador, esta baixa um modelo e roda a cada 10ms. Juntas, pareceria
+        que custam a mesma coisa.
+      */}
+      <div className="mt-4 border-t border-base-800 pt-4">
+        <Chave
+          ligada={tratamento.rnnoise}
+          onChange={() => alternar("rnnoise")}
+          titulo="Supressao de ruido avancada (RNNoise)"
+          detalhe="Modelo de IA rodando na sua maquina, alem da supressao do navegador. Corta teclado, ventilador e ar-condicionado que a nativa deixa passar. Baixa ~1,9 MB na primeira vez e usa mais CPU."
+        />
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
+          Nada do seu audio sai da maquina para isso: o modelo roda no proprio
+          navegador. Se ele nao carregar, sua voz continua indo normalmente —
+          so sem o filtro.
+        </p>
+      </div>
+
       <p className="mt-3 text-[11px] text-ink-500">
         A mudanca vale na proxima vez que voce entrar numa call.
       </p>

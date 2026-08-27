@@ -22,12 +22,22 @@ export interface TratamentoDeAudio {
   supressaoDeRuido: boolean;
   cancelamentoDeEco: boolean;
   ganhoAutomatico: boolean;
+  /**
+   * Supressao por RNNoise, alem da nativa.
+   *
+   * DESLIGADA por padrao, ao contrario das outras tres. Ela carrega ~1,9 MB de
+   * WASM e roda um modelo a cada 10ms — cobrar isso de quem nao pediu seria
+   * gastar bateria e banda de todo mundo por um problema que nem todos tem.
+   * As nativas ja resolvem o caso comum.
+   */
+  rnnoise: boolean;
 }
 
 export const TRATAMENTO_PADRAO: TratamentoDeAudio = {
   supressaoDeRuido: true,
   cancelamentoDeEco: true,
   ganhoAutomatico: true,
+  rnnoise: false,
 };
 
 const STORAGE_KEY = "aether.tratamento-audio";
@@ -57,6 +67,10 @@ export function lerTratamentoDeAudio(): TratamentoDeAudio {
         typeof salvo.ganhoAutomatico === "boolean"
           ? salvo.ganhoAutomatico
           : TRATAMENTO_PADRAO.ganhoAutomatico,
+      rnnoise:
+        typeof salvo.rnnoise === "boolean"
+          ? salvo.rnnoise
+          : TRATAMENTO_PADRAO.rnnoise,
     };
   } catch {
     return TRATAMENTO_PADRAO;

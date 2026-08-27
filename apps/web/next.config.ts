@@ -138,7 +138,22 @@ const csp = [
    * codigo em tempo de execucao. Em producao nao entra — e a linha existe
    * separada justamente para nao virar permanente por descuido.
    */
-  `script-src 'self' 'unsafe-inline'${emDev ? " 'unsafe-eval'" : ""}`,
+  /**
+   * `'wasm-unsafe-eval'` libera COMPILAR WebAssembly, e nada alem disso.
+   *
+   * Existe pela supressao de ruido: o RNNoise e um modulo WASM, e sem esta
+   * diretiva o Chrome recusa com
+   * "Compiling or instantiating WebAssembly module violates the following
+   * Content Security policy directive" — medido em producao antes de escrever
+   * o recurso.
+   *
+   * E MUITO mais estreito que `'unsafe-eval'`: nao permite `eval()`,
+   * `new Function()` nem `setTimeout("string")`. O que ele abre e a
+   * possibilidade de rodar um binario WASM, e o unico que carregamos e o que
+   * empacotamos nos mesmos, do proprio bundle — nao ha origem externa em
+   * `script-src` por onde entrar outro.
+   */
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${emDev ? " 'unsafe-eval'" : ""}`,
 
   // Tailwind e o Next emitem style inline; sem isto a pagina vem sem estilo.
   "style-src 'self' 'unsafe-inline'",

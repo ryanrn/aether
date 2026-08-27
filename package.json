@@ -17,6 +17,7 @@
     "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "typecheck:tests": "tsc -p tsconfig.tests.json",
+    "build:worklet": "node scripts/build-rnnoise-worklet.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "env:check": "node scripts/check-env.js .env",

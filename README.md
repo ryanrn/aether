@@ -1818,24 +1818,65 @@ abaixa no ataque.
 
 - **Vale na proxima vez.** O codec entra na proxima transmissao e o tratamento
   na proxima entrada em call; nada disso troca no meio.
-- **RNNoise (estilo Krisp) NAO foi feito**, e ha um impedimento concreto:
-  **WASM esta bloqueado pela nossa CSP**. Medido em producao —
-  `WebAssembly.instantiate` responde
-  *"violates the following Content Security policy directive"*. Rodar RNNoise
-  exige liberar `wasm-unsafe-eval` em `script-src` (bem mais estreito que
-  `unsafe-eval`: permite compilar WASM, nao `eval()` de JS). Ver a secao
-  seguinte.
+- **Vale na proxima entrada em call**, como as outras chaves de audio.
 
-### Por que o RNNoise ficou para outra rodada
+## Supressao de ruido avancada (RNNoise)
 
-Alem da CSP, ele toca o caminho que ja custou caro neste projeto: trocar a
-faixa de audio publicada no LiveKit por uma processada. O historico de captura
-de audio aqui (o caso do PRO X2) mostra que esse trecho falha de formas que so
-aparecem com gente numa call de verdade — nao em teste local.
+Chave em Configuracoes > Voz e video, DESLIGADA por padrao: ela carrega ~1,9 MB
+de WASM e roda um modelo a cada 10ms — cobrar isso de quem nao pediu seria
+gastar bateria e banda por um problema que nem todos tem.
 
-Entregar codec e tratamento nativo funcionando, e o RNNoise como peca propria
-com a CSP resolvida, e mais honesto do que empurrar as tres juntas e descobrir
-depois qual delas derrubou a call.
+### Roda na THREAD DE AUDIO, nao na principal
+
+O modelo executa dentro do `AudioWorklet`. A alternativa — worklet manda o
+quadro para a pagina, ela processa e devolve — amarraria o audio ao event loop
+do React: qualquer render longo viraria falha no som. E a defesa contra isso
+seria um buffer grande, ou seja, latencia permanente cobrada de todo mundo para
+proteger de um travamento ocasional.
+
+Isso exigiu um passo de build (`npm run build:worklet`): `addModule` carrega
+script CLASSICO, e o escopo do worklet nao tem `import`, `fetch` nem
+`import.meta` — o pacote ESM do RNNoise nao carrega la dentro de jeito nenhum.
+O esbuild monta um bundle autocontido com o WASM embutido, versionado em
+`public/` para o dev e a Vercel nao dependerem de um passo extra.
+
+### A escala de 16 bits e a parte que silencia tudo se errada
+
+O RNNoise assume PCM de 16 bits; o WebAudio entrega float de -1 a 1. Passar o
+float cru faz o modelo ver um sinal ~32000 vezes mais fraco, classificar tudo
+como silencio e devolver silencio — o audio "funciona" e some, sem erro nenhum,
+que e o modo de falha mais confuso possivel.
+
+Por isso o teste nao e "carregou", e sim se ele DISCRIMINA. Medido em
+`OfflineAudioContext`:
+
+| sinal | atenuacao |
+| --- | --- |
+| parecido com voz (140Hz + harmonicos) | **-0,3 dB** |
+| ruido branco | **-84,9 dB** |
+
+84,6 dB de diferenca. Com a escala errada, os dois iriam a zero junto.
+
+### Caminho de volta em toda falha
+
+Se o worklet nao carregar, se o WASM for recusado, se o modelo falhar no meio:
+`processedTrack` fica sem definir e o LiveKit publica o som CRU. O proprio
+worklet tambem repassa a entrada intacta enquanto nao esta pronto. Perder a
+supressao e um degrau; perder a voz e uma queda, e nenhuma melhoria de audio
+vale calar alguem.
+
+Usa `LocalAudioTrack.setProcessor` do proprio SDK, e nao troca de faixa na mao:
+o LiveKit ja republica na reconexao e acompanha mudo e troca de aparelho —
+fazer por fora obrigaria a reimplementar tudo isso, no trecho que ja custou
+caro aqui (o caso do PRO X2).
+
+### `wasm-unsafe-eval` na CSP
+
+Foi preciso liberar, e vale saber o tamanho: `'wasm-unsafe-eval'` permite
+COMPILAR WebAssembly e nada alem. Nao habilita `eval()`, `new Function()` nem
+`setTimeout("string")` — para isso seria `'unsafe-eval'`, que continua fora de
+producao. O unico binario que carregamos e o que empacotamos, do proprio
+bundle; nao ha origem externa em `script-src` por onde entrar outro.
 
 ## CI (GitHub Actions)
 
