@@ -147,8 +147,26 @@ const supabase = origem(process.env.SUPABASE_URL);
  * CSP desatualizada nao avisa que esta errada — ela so bloqueia.
  */
 const r2Envio = process.env.R2_ACCOUNT_ID
-  ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-  : null;
+  ? [
+      /**
+       * DUAS FORMAS DO MESMO ENDERECO, e as duas precisam estar aqui.
+       *
+       * O SDK da AWS enderecα no estilo "virtual-hosted": o nome do bucket vai
+       * no HOSTNAME, virando `<bucket>.<conta>.r2.cloudflarestorage.com`.
+       * Liberar so `<conta>.r2...` deixa o navegador bloquear o PUT — e o
+       * sintoma e "falha de rede" com status 0, que nao diz que foi o CSP.
+       *
+       * A forma sem bucket fica junto porque o estilo de enderecamento e
+       * escolha do SDK e pode mudar de versao. Listar as duas custa uma linha
+       * e evita que uma atualizacao de dependencia derrube o envio em
+       * producao, calada.
+       */
+      `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      process.env.R2_BUCKET
+        ? `https://${process.env.R2_BUCKET}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+        : null,
+    ].filter(Boolean)
+  : [];
 const r2Leitura = origem(process.env.R2_PUBLIC_URL);
 
 const csp = [
@@ -204,7 +222,7 @@ const csp = [
    * O upload para o Supabase passa pelo servidor (server-only), entao o
    * navegador nunca fala com o Storage — so le imagem, que e `img-src`.
    */
-  ["connect-src 'self'", ...gateway, ...livekit, r2Envio]
+  ["connect-src 'self'", ...gateway, ...livekit, ...r2Envio]
     .filter(Boolean)
     .join(" "),
 
