@@ -130,6 +130,27 @@ const gateway = exigirEmProducao(
 const livekit = ["https://*.livekit.cloud", "wss://*.livekit.cloud"];
 const supabase = origem(process.env.SUPABASE_URL);
 
+/**
+ * O R2 aparece em DOIS lugares da politica, por dois motivos diferentes.
+ *
+ *  - `r2Envio` e o endpoint S3, para onde o navegador faz PUT do anexo. Vai em
+ *    `connect-src`. Sem ele o upload morre com "falha de rede" e nenhum
+ *    status — o navegador bloqueia antes de a requisicao sair, e o erro nao
+ *    diz que foi CSP.
+ *  - `r2Leitura` e a URL publica de onde a imagem e o video sao BAIXADOS. Vai
+ *    em `img-src` e `media-src`.
+ *
+ * Sao hosts diferentes (`*.r2.cloudflarestorage.com` contra `pub-*.r2.dev` ou
+ * dominio proprio), entao um so nao serve para os dois.
+ *
+ * Derivados do ambiente como todo o resto: host fixo aqui envelhece calado, e
+ * CSP desatualizada nao avisa que esta errada — ela so bloqueia.
+ */
+const r2Envio = process.env.R2_ACCOUNT_ID
+  ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  : null;
+const r2Leitura = origem(process.env.R2_PUBLIC_URL);
+
 const csp = [
   "default-src 'self'",
 
@@ -163,7 +184,7 @@ const csp = [
    * `blob:` para preview de imagem antes do upload. Os dois hosts remotos sao
    * capa de jogo (IGDB) e icone de servidor (Supabase Storage).
    */
-  ["img-src 'self' data: blob:", supabase, "https://images.igdb.com"]
+  ["img-src 'self' data: blob:", supabase, r2Leitura, "https://images.igdb.com"]
     .filter(Boolean)
     .join(" "),
 
@@ -171,7 +192,11 @@ const csp = [
   "font-src 'self' data:",
 
   // Tela e camera chegam como MediaStream; o worklet de audio vem de /public.
-  "media-src 'self' blob:",
+  /**
+   * Video e audio anexados sao baixados do R2, entao a leitura entra aqui
+   * tambem — nao so em `img-src`.
+   */
+  ["media-src 'self' blob:", r2Leitura].filter(Boolean).join(" "),
   "worker-src 'self' blob:",
 
   /**
@@ -179,7 +204,9 @@ const csp = [
    * O upload para o Supabase passa pelo servidor (server-only), entao o
    * navegador nunca fala com o Storage — so le imagem, que e `img-src`.
    */
-  ["connect-src 'self'", ...gateway, ...livekit].join(" "),
+  ["connect-src 'self'", ...gateway, ...livekit, r2Envio]
+    .filter(Boolean)
+    .join(" "),
 
   "frame-ancestors 'none'",
   "object-src 'none'",
