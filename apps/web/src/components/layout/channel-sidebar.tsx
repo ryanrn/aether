@@ -264,7 +264,12 @@ export function ChannelSidebar({
                   <button
                     type="button"
                     onClick={() => toggle(category.id)}
-                    className="flex flex-1 items-center gap-1 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500 transition-colors hover:text-ink-300"
+                    /*
+                      Um ponto maior e um tom mais claro que antes: a
+                      categoria e o que da estrutura a lista, e estava
+                      apagada demais para cumprir esse papel.
+                    */
+                    className="flex flex-1 items-center gap-1 py-1 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 transition-colors hover:text-ink-200"
                   >
                     <ChevronDown
                       className={cn(
@@ -568,8 +573,12 @@ function ChannelRow({
       <div
         onContextMenu={menu.abrir}
         className={cn(
-          "flex items-center rounded-sm transition-colors duration-100",
-          active ? "bg-base-750" : "hover:bg-base-850",
+          /*
+            `rounded-md` no lugar de `rounded-sm`: a linguagem do app ficou
+            mais arredondada, e a arvore era o canto mais quadrado que sobrou.
+          */
+          "flex items-center rounded-md transition-colors duration-100",
+          active ? "bg-base-800" : "hover:bg-base-850",
         )}
       >
         <Link
@@ -598,7 +607,15 @@ function ChannelRow({
 
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]",
-            active ? "text-ink-100" : "text-ink-300 hover:text-ink-100",
+            /*
+              O canal aberto fica em NEGRITO, e nao so com fundo e cor
+              diferentes. E o mesmo raciocinio dos icones da trilha: quem nao
+              distingue bem o tom do fundo ainda percebe o peso da fonte. Cor
+              sozinha nunca deveria ser o unico sinal de estado.
+            */
+            active
+              ? "font-semibold text-ink-100"
+              : "text-ink-300 hover:text-ink-100",
           )}
         >
           <Icon
