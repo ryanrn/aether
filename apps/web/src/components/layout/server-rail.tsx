@@ -37,6 +37,33 @@ import { useUnreadByServer } from "@/lib/stores/realtime-store";
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
  * na borda esquerda (nao por preenchimento) para manter a interface calma.
  */
+/**
+ * O ARREDONDAMENTO DOS ICONES DA TRILHA.
+ *
+ * Circulo quando em repouso, quadrado-arredondado quando ativo ou sob o
+ * cursor. Nao e enfeite: e o que torna o item ativo reconhecivel SEM cor —
+ * quem nao distingue o azul do acento ainda percebe a forma mudando. A barra
+ * branca a esquerda diz a mesma coisa por um terceiro caminho.
+ *
+ * `transition-all` na mesma classe faz a forma MORFAR em vez de saltar. Sem a
+ * transicao o efeito parece defeito de renderizacao.
+ *
+ * Os valores sao absolutos (`24px` e `16px`) e nao `rounded-full`: num
+ * elemento de 44px, `full` daria 22px e o repouso ficaria indistinguivel do
+ * ativo. A diferenca entre os dois estados e o ponto.
+ */
+/**
+ * As duas constantes carregam a variante `group-hover:` DENTRO da string, e
+ * nao montada por interpolacao.
+ *
+ * O Tailwind varre o TEXTO dos arquivos procurando classes completas. Escrito
+ * como `group-hover:${ICONE_ATIVO}`, ele nunca veria `group-hover:rounded-[16px]`
+ * e a regra simplesmente nao existiria no CSS — o hover nao faria nada, sem
+ * erro em lugar nenhum. Foi o que eu escrevi primeiro.
+ */
+const ICONE_REPOUSO = "rounded-[22px] group-hover:rounded-[16px]";
+const ICONE_ATIVO = "rounded-[16px]";
+
 export function ServerRail({
   servers,
   pendingRequests = 0,
@@ -131,10 +158,10 @@ export function ServerRail({
           />
           <span
             className={cn(
-              "grid h-11 w-11 place-items-center rounded-xl transition-all duration-150",
+              "grid h-11 w-11 place-items-center transition-all duration-150",
               emAmigos
-                ? "bg-base-800 text-ink-100"
-                : "bg-base-800 text-ink-300 group-hover:scale-105 group-hover:text-ink-100",
+                ? `${ICONE_ATIVO} bg-base-800 text-ink-100`
+                : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
             )}
           >
             <Users className="h-5 w-5" />
@@ -173,10 +200,10 @@ export function ServerRail({
           />
           <span
             className={cn(
-              "grid h-11 w-11 place-items-center rounded-xl transition-all duration-150",
+              "grid h-11 w-11 place-items-center transition-all duration-150",
               emOlimpo
-                ? "bg-amber-400/15 text-amber-300"
-                : "bg-base-800 text-amber-400/80 group-hover:scale-105 group-hover:bg-amber-400/10 group-hover:text-amber-300",
+                ? `${ICONE_ATIVO} bg-amber-400/15 text-amber-300`
+                : `${ICONE_REPOUSO} bg-base-800 text-amber-400/80 group-hover:bg-amber-400/10 group-hover:text-amber-300`,
             )}
           >
             <Crown className="h-5 w-5" />
@@ -214,7 +241,7 @@ export function ServerRail({
           onClick={() => setModalOpen(true)}
           title="Adicionar servidor"
           className={cn(
-            "grid h-11 w-11 place-items-center rounded-xl bg-base-800 text-ink-300",
+            `grid h-11 w-11 place-items-center ${ICONE_REPOUSO} bg-base-800 text-ink-300 transition-all duration-150`,
             "transition-colors duration-150 hover:text-ink-100",
           )}
         >
@@ -284,9 +311,11 @@ function ItemDeServidor({
       <span className="relative">
         <span
           className={cn(
-            "grid h-11 w-11 place-items-center overflow-hidden rounded-xl text-[13px] font-semibold text-ink-100",
+            "grid h-11 w-11 place-items-center overflow-hidden text-[13px] font-semibold text-ink-100",
             "transition-all duration-150",
-            ativo ? "bg-base-800" : "group-hover:scale-105",
+            ativo
+              ? `${ICONE_ATIVO} bg-base-800`
+              : ICONE_REPOUSO,
           )}
           style={
             server.iconUrl

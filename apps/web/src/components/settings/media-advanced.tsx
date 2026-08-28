@@ -26,16 +26,19 @@ import { cn } from "@/lib/utils";
  * `videoCodec` significa para o LiveKit.
  */
 
-export function MediaAdvanced() {
-  return (
-    <div className="flex flex-col gap-6">
-      <CodecDaTela />
-      <TratamentoDoMicrofone />
-    </div>
-  );
-}
-
-function CodecDaTela() {
+/**
+ * As duas metades sao EXPORTADAS SEPARADAS, e nao mais empacotadas juntas.
+ *
+ * Elas estavam sob um titulo unico de "avancado", e isso misturava duas coisas
+ * que nao tem relacao: como o SEU MICROFONE e tratado antes de sair, e como a
+ * SUA TELA e codificada quando voce transmite. Quem foi procurar o codec da
+ * tela passava por tres chaves de microfone; quem foi desligar a supressao de
+ * ruido esbarrava em AV1.
+ *
+ * Agora cada uma entra no grupo a que pertence, e o agrupamento e feito por
+ * quem monta a tela — nao aqui.
+ */
+export function CodecDaTela() {
   const [escolha, setEscolha] = useState<EscolhaDeCodec>(null);
   const [suportados, setSuportados] = useState<Set<string> | null>(null);
 
@@ -55,9 +58,11 @@ function CodecDaTela() {
 
   return (
     <div>
-      <h3 className="text-[13px] font-medium text-ink-100">
-        Codec do compartilhamento de tela
-      </h3>
+      {/*
+        Sem titulo proprio: o grupo "Transmissao" ja diz do que se trata, e
+        repetir aqui empilharia dois cabecalhos dizendo a mesma coisa.
+      */}
+      <h4 className="text-[13px] font-medium text-ink-100">Codec do video</h4>
       <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
         Vale para a proxima transmissao. Quem ja estiver assistindo continua no
         codec em que a atual comecou.
@@ -144,7 +149,7 @@ function descricao(codec: EscolhaDeCodec): string {
   }
 }
 
-function TratamentoDoMicrofone() {
+export function TratamentoDoMicrofone() {
   const [tratamento, setTratamento] = useState<TratamentoDeAudio | null>(null);
 
   useEffect(() => setTratamento(lerTratamentoDeAudio()), []);
@@ -162,9 +167,9 @@ function TratamentoDoMicrofone() {
 
   return (
     <div className="border-t border-base-800 pt-5">
-      <h3 className="text-[13px] font-medium text-ink-100">
+      <h4 className="text-[13px] font-medium text-ink-100">
         Tratamento do microfone
-      </h3>
+      </h4>
       <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
         Os tres vem ligados e sao o certo para conversa. Desligue se voce toca,
         canta ou passa uma mesa de som pelo microfone — eles foram feitos para

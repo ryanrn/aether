@@ -364,7 +364,7 @@ export function PremiumShowcaseScreen({
               </div>
             </div>
 
-            {/* PLANO PLUTONIUM COMPLETO (Print 4) */}
+            {/* PLANO OLIMPO COMPLETO (Print 4) */}
             <div className="relative flex flex-col justify-between rounded-2xl border border-accent-500/50 bg-gradient-to-b from-[#282b52] via-base-900 to-base-900 p-6 md:p-8 shadow-[0_0_32px_-8px_rgba(88,101,242,0.4)]">
               <div className="absolute -top-3 right-6 rounded-full bg-accent-500 px-3 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md">
                 Em Alta

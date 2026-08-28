@@ -2014,17 +2014,18 @@ motivo para assinar. **Gratuito nao recebe selo** — marcar quem nao paga com u
 rotulo de ausencia e humilhacao de graca.
 
 O nome e **Olimpo** (`OLIMPO` / `OLIMPO PRO`), e mora em `rotulo`, separado do
-`tier`. A separacao ja provou o valor: o nome passou por "AETHER+", "VIP" e
-"Plutonium" antes de virar Olimpo, e nenhuma dessas trocas encostou no banco —
+`tier`. A separacao ja provou o valor: o nome passou por "AETHER+", "VIP" e um
+terceiro antes de virar Olimpo, e nenhuma dessas trocas encostou no banco —
 o enum continua `FREE/PLUS/PRO`.
 
 Por que Olimpo: Aether e um deus primordial grego, e o Olimpo e onde ficam os
 deuses — mesma familia do nome do app, e legivel na hora em portugues.
 
-Duas coisas descartadas por motivo, e nao por gosto: **Plutonium** e elemento
-da tabela periodica igual ao Nitro do Discord (nasce parecendo copia) e plutonio
-e material de bomba; **Prisma** casaria com os beneficios cosmeticos, mas o
-projeto USA o Prisma como ORM e ficariam dois no mesmo repositorio.
+Duas coisas descartadas por motivo, e nao por gosto: um nome de elemento da
+tabela periodica nasceria parecendo copia do Nitro do Discord — e o elemento
+cogitado e material de bomba, que nao e a associacao que se quer vender;
+**Prisma** casaria com os beneficios cosmeticos, mas o projeto USA o Prisma
+como ORM e ficariam dois no mesmo repositorio.
 
 O selo e um chip pequeno em maiusculas — nome longo nao cabe ali. Vale lembrar
 disso no dia de trocar de novo.

@@ -7,7 +7,7 @@ export {
 export { ResgatarChave } from "./resgatar-chave";
 
 /**
- * `PlutoniumModal` NAO e exportado: ele leva a um checkout que nao existe.
+ * `ModalDeAssinatura` NAO e exportado: ele leva a um checkout que nao existe.
  *
  * O arquivo continua no repositorio porque o desenho dele serve para quando
  * houver provedor de pagamento — mas exportar seria convidar alguem a

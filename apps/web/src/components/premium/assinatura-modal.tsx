@@ -6,17 +6,17 @@ import { Button } from "@/components/ui/button";
 import { ComparisonTable } from "./comparison-table";
 import { cn } from "@/lib/utils";
 
-export interface PlutoniumModalProps {
+export interface ModalDeAssinaturaProps {
   open: boolean;
   onClose: () => void;
   onSelectPlan?: (plan: "monthly" | "yearly", currency: "BRL" | "USD", recipient: "self" | "gift") => void;
 }
 
 /**
- * Modal completo de Assinatura Premium (Plutonium / Aether Pro).
+ * Modal completo de Assinatura Premium (Olimpo / Aether Pro).
  * Baseado com fidelidade milimétrica nos prints 1 e 2.
  */
-export function PlutoniumModal({ open, onClose, onSelectPlan }: PlutoniumModalProps) {
+export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssinaturaProps) {
   const [recipient, setRecipient] = useState<"self" | "gift">("self");
   const [currency, setCurrency] = useState<"BRL" | "USD">("BRL");
   const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">("yearly");
@@ -77,7 +77,7 @@ export function PlutoniumModal({ open, onClose, onSelectPlan }: PlutoniumModalPr
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-accent-400" />
               <h2 id="premium-title" className="text-xl font-bold tracking-tight text-ink-100">
-                Aether Plutonium
+                Aether Olimpo
               </h2>
             </div>
             <p className="text-[13px] text-ink-300 max-w-[440px] leading-relaxed">
@@ -245,7 +245,7 @@ export function PlutoniumModal({ open, onClose, onSelectPlan }: PlutoniumModalPr
               . Reembolsos self-service disponíveis em até 5 dias após o pagamento, uma vez a cada 90 dias.
             </p>
             <p className="text-[11px] font-medium text-ink-400 flex items-center justify-center gap-1 mt-1">
-              Role para baixo para ver todos os benefícios incluídos no Plutonium
+              Role para baixo para ver todos os benefícios incluídos no Olimpo
               <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
             </p>
           </div>

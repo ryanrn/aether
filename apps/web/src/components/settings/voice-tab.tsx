@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mic, Volume2 } from "lucide-react";
+import { Mic, MonitorUp, Volume2 } from "lucide-react";
 import {
   listMicrophones,
   listSpeakers,
@@ -14,7 +14,10 @@ import {
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
-import { MediaAdvanced } from "@/components/settings/media-advanced";
+import {
+  CodecDaTela,
+  TratamentoDoMicrofone,
+} from "@/components/settings/media-advanced";
 import { MicrophoneTest } from "@/components/aether-design-v2";
 
 /**
@@ -139,13 +142,36 @@ export function VoiceTab() {
       </div>
 
       {/*
-        Avancado por ultimo: codec e tratamento de microfone sao para quem foi
-        procurar. Antes da escolha de aparelho, seriam a primeira coisa que
-        alguem ve ao abrir "Voz e video" — e nao e a primeira coisa que
-        alguem precisa.
+        DOIS GRUPOS, e nao um bloco de "avancado".
+        Estavam juntos sob um titulo so, e isso misturava coisas sem relacao:
+        como o SEU MICROFONE e tratado antes de sair, e como a SUA TELA e
+        codificada quando voce transmite. Quem ia mexer no codec passava por
+        tres chaves de microfone; quem ia desligar a supressao de ruido
+        esbarrava em AV1.
       */}
       <div className="border-t border-base-800 pt-5">
-        <MediaAdvanced />
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
+          Microfone — avancado
+        </h3>
+        <div className="mt-3">
+          <TratamentoDoMicrofone />
+        </div>
+      </div>
+
+      <div className="border-t border-base-800 pt-5">
+        <div className="flex items-center gap-2">
+          <MonitorUp className="h-3.5 w-3.5 text-ink-500" />
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
+            Transmissao
+          </h3>
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
+          Vale para quando VOCE compartilha a tela. Nao afeta o que voce ve de
+          quem esta transmitindo.
+        </p>
+        <div className="mt-3">
+          <CodecDaTela />
+        </div>
       </div>
     </section>
   );

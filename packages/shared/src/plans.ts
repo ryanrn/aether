@@ -23,7 +23,7 @@ export interface PlanLimits {
    * O nome que aparece na tela.
    *
    * SEPARADO DO `tier` de proposito, e isso ja provou o valor: o nome passou
-   * por "AETHER+", "VIP" e "Plutonium" antes de virar Olimpo, e nenhuma dessas
+   * por "AETHER+", "VIP" e um terceiro nome antes de virar Olimpo, e nenhuma
    * trocas encostou no banco. O enum continua FREE/PLUS/PRO — nome de marca
    * muda, identificador de dado nao.
    *
