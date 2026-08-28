@@ -4,7 +4,7 @@ import { getSession } from "@/server/auth/session";
 import { PremiumShowcaseScreen } from "@/components/premium";
 
 /**
- * A pagina do VIP.
+ * A pagina do Olimpo.
  *
  * Fica FORA de `/app/s/[serverId]` pelo mesmo motivo da tela de amigos:
  * assinatura e da PESSOA, nao de um servidor. Entrar nela a partir de um
@@ -15,7 +15,7 @@ import { PremiumShowcaseScreen } from "@/components/premium";
  * comprou — e buscar isso no cliente faria a pagina piscar "assine agora" para
  * quem ja assinou.
  */
-export default async function VipPage() {
+export default async function OlimpoPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 

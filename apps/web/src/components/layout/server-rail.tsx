@@ -49,7 +49,7 @@ export function ServerRail({
   const activeId = params?.serverId;
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
-  const emVip = pathname === "/app/vip";
+  const emOlimpo = pathname === "/app/olimpo";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
 
@@ -151,7 +151,7 @@ export function ServerRail({
         </Link>
 
         {/**
-         * VIP logo abaixo de amigos, e ANTES da linha que separa os
+         * O Olimpo logo abaixo de amigos, e ANTES da linha que separa os
          * servidores. As duas coisas acima da linha sao "do app"; abaixo dela
          * sao "seus servidores" — e assinatura nao e servidor.
          *
@@ -160,21 +160,21 @@ export function ServerRail({
          * icone cinza ali seria lido como mais um botao de navegacao.
          */}
         <Link
-          href="/app/vip"
-          title="VIP"
+          href="/app/olimpo"
+          title="Olimpo"
           draggable={false}
           className="group relative flex w-full justify-center"
         >
           <span
             className={cn(
               "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emVip ? "h-7" : "group-hover:h-3.5",
+              emOlimpo ? "h-7" : "group-hover:h-3.5",
             )}
           />
           <span
             className={cn(
               "grid h-11 w-11 place-items-center rounded-xl transition-all duration-150",
-              emVip
+              emOlimpo
                 ? "bg-amber-400/15 text-amber-300"
                 : "bg-base-800 text-amber-400/80 group-hover:scale-105 group-hover:bg-amber-400/10 group-hover:text-amber-300",
             )}

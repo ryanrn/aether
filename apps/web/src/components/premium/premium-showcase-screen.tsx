@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 type TabId = "inicio" | "novidades" | "planos" | "comparar";
 
 /**
- * A tela do VIP.
+ * A tela do Olimpo.
  *
  * TODO NUMERO VEM DE `packages/shared/plans.ts`. O desenho original trazia os
  * proprios — prometia 500 MB onde o plano da 250, e "ate 4K" onde o plano da
@@ -128,8 +128,13 @@ export function PremiumShowcaseScreen({
               </div>
 
               <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight text-white leading-tight">
+                {/*
+                  Para quem JA assina, o titulo usa o rotulo do plano DELA, e
+                  nao o do plano de entrada: dizer "Voce e Olimpo" a quem
+                  comprou o Olimpo Pro apaga justamente o que ela pagou a mais.
+                */}
                 {assinante
-                  ? `Voce e ${rotulo}`
+                  ? `Você é ${PLANS[tierAtual].rotulo}`
                   : `Desbloqueie um mundo de vantagens com o ${rotulo}`}
               </h1>
 
@@ -140,8 +145,8 @@ export function PremiumShowcaseScreen({
               */}
               <p className="text-sm md:text-base text-ink-200 leading-relaxed max-w-lg">
                 Transmita em {PLANS.PLUS.alturaMax}p a {PLANS.PLUS.quadrosMax}fps,
-                envie arquivos de ate {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB
-                e apoie o desenvolvimento continuo da comunidade.
+                envie arquivos de até {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB
+                e apoie o desenvolvimento contínuo da comunidade.
               </p>
 
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
@@ -157,7 +162,7 @@ export function PremiumShowcaseScreen({
                     <SeloPlano tier={tierAtual} />
                     <span className="text-[13px] text-ink-200">
                       {expiraEm
-                        ? `Ativo ate ${new Date(expiraEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}`
+                        ? `Ativo até ${new Date(expiraEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}`
                         : "Ativo, sem data para acabar"}
                     </span>
                   </div>
@@ -172,8 +177,8 @@ export function PremiumShowcaseScreen({
               </div>
 
               <span className="text-[11px] text-ink-400">
-                A assinatura ainda nao esta aberta — por enquanto o acesso vem
-                por chave. Os precos abaixo sao um estudo.
+                A assinatura ainda não está aberta — por enquanto o acesso vem
+                por chave. Os preços abaixo são um estudo.
               </span>
             </div>
 
@@ -205,7 +210,7 @@ export function PremiumShowcaseScreen({
                 </div>
                 <div className="min-w-0">
                   <h4 className="text-xs font-bold text-ink-100">Emojis e Efeitos Globais</h4>
-                  <p className="text-[11px] text-ink-400 truncate">Em construcao</p>
+                  <p className="text-[11px] text-ink-400 truncate">Em construção</p>
                 </div>
               </div>
             </div>
@@ -219,7 +224,7 @@ export function PremiumShowcaseScreen({
               Novidades em Destaque
             </h2>
             <p className="text-xs text-ink-400">
-              Recursos recém-chegados exclusivos para membros Plutonium.
+              Recursos recém-chegados exclusivos para membros {rotulo}.
             </p>
           </div>
 
@@ -335,11 +340,11 @@ export function PremiumShowcaseScreen({
                 <div className="flex flex-col gap-3 border-t border-base-800 pt-5">
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Uploads de ate {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB</span>
+                    <span>Uploads de até {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span className="text-ink-400">Emojis em qualquer lugar (em construcao)</span>
+                    <span className="text-ink-400">Emojis em qualquer lugar (em construção)</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />
@@ -347,7 +352,7 @@ export function PremiumShowcaseScreen({
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Insígnia Plutonium especial no perfil</span>
+                    <span className="text-ink-400">Selo {rotulo} no perfil (em construção)</span>
                   </div>
                 </div>
               </div>
@@ -389,7 +394,7 @@ export function PremiumShowcaseScreen({
                   </p>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Uploads de ate {Math.round(PLANS.PRO.uploadMaxBytes / 1048576 / 1024)} GB</span>
+                    <span>Uploads de até {Math.round(PLANS.PRO.uploadMaxBytes / 1048576 / 1024)} GB</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
                     <Check className="h-4 w-4 text-signal-online shrink-0" />

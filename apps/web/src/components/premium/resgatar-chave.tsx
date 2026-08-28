@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 /**
  * O campo de resgatar chave.
  *
- * UM SO, usado na aba de configuracoes e na pagina do VIP. Duas copias
+ * UM SO, usado na aba de configuracoes e na pagina do Olimpo. Duas copias
  * divergiriam na primeira mensagem de erro que alguem ajustasse — e sao
  * justamente as mensagens de recusa que a pessoa le quando algo deu errado.
  *
@@ -62,7 +62,7 @@ export function ResgatarChave({
               if (e.key === "Enter") resgatar();
             }}
             placeholder="AETHER-XXXX-XXXX-XXXX"
-            aria-label="Codigo da chave"
+            aria-label="Código da chave"
             spellCheck={false}
             autoComplete="off"
             className="min-w-0 flex-1 bg-transparent font-mono text-[13px] uppercase text-ink-100 outline-none placeholder:font-sans placeholder:normal-case placeholder:text-ink-500"

@@ -59,7 +59,7 @@ export function ComparisonTable({
       valor: (t) => `${PLANS[t].alturaMax}p / ${PLANS[t].quadrosMax}fps`,
     },
     {
-      nome: "Bitrate da transmissao",
+      nome: "Bitrate da transmissão",
       valor: (t) =>
         `${(PLANS[t].bitrateMax / 1_000_000).toLocaleString("pt-BR")} Mbps`,
     },
@@ -137,7 +137,7 @@ export function ComparisonTable({
                 colSpan={COLUNAS.length + 1}
                 className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500"
               >
-                Em construcao — ainda nao disponivel
+                Em construção — ainda não disponível
               </td>
             </tr>
             {RECURSOS_PLANEJADOS.map((recurso) => (

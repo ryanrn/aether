@@ -22,10 +22,14 @@ export interface PlanLimits {
   /**
    * O nome que aparece na tela.
    *
-   * SEPARADO DO `tier` de proposito. "VIP" e provisorio — quando o nome
-   * definitivo for escolhido, muda-se esta string e mais nada: o enum do banco
-   * continua FREE/PLUS/PRO, sem migracao, sem tocar em quem ja assinou. Nome
-   * de marca muda; identificador de dado, nao.
+   * SEPARADO DO `tier` de proposito, e isso ja provou o valor: o nome passou
+   * por "AETHER+", "VIP" e "Plutonium" antes de virar Olimpo, e nenhuma dessas
+   * trocas encostou no banco. O enum continua FREE/PLUS/PRO — nome de marca
+   * muda, identificador de dado nao.
+   *
+   * Olimpo veio da mesma familia do nome do app: Aether e um deus primordial
+   * grego, e o Olimpo e onde ficam os deuses. Cabe no selo, que e um chip
+   * pequeno em maiusculas — nome longo nao entra ali.
    */
   rotulo: string;
 
@@ -60,7 +64,7 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   },
   PLUS: {
     tier: "PLUS",
-    rotulo: "VIP",
+    rotulo: "Olimpo",
     larguraMax: 1920,
     alturaMax: 1080,
     quadrosMax: 60,
@@ -71,7 +75,7 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   },
   PRO: {
     tier: "PRO",
-    rotulo: "VIP Pro",
+    rotulo: "Olimpo Pro",
     larguraMax: 2560,
     alturaMax: 1440,
     quadrosMax: 60,

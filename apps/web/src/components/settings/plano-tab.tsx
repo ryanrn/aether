@@ -54,9 +54,9 @@ export function PlanoTab() {
 
         <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
           {atual === "FREE"
-            ? "Voce esta no plano gratuito."
+            ? "Você está no plano gratuito."
             : plano?.expiraEm
-              ? `Ativo ate ${formatarData(plano.expiraEm)}.`
+              ? `Ativo até ${formatarData(plano.expiraEm)}.`
               : "Ativo, sem data para acabar."}
         </p>
       </div>
@@ -123,8 +123,8 @@ export function PlanoTab() {
         cobrar por isso seria vender o que nao existe.
       */}
       <p className="rounded-md border border-base-750 bg-base-900 px-3 py-2.5 text-[11px] leading-relaxed text-ink-400">
-        <strong className="text-ink-300">Em construcao.</strong> Os limites
-        acima ainda nao sao aplicados — todo mundo transmite e envia igual hoje.
+        <strong className="text-ink-300">Em construção.</strong> Os limites
+        acima ainda não são aplicados — todo mundo transmite e envia igual hoje.
         A tabela mostra para onde vai, e o plano ja fica registrado na sua
         conta.
       </p>
@@ -134,7 +134,7 @@ export function PlanoTab() {
           Resgatar uma chave
         </h3>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
-          Recebeu um codigo? Cole aqui. Os dias somam ao que voce ja tem, e uma
+          Recebeu um código? Cole aqui. Os dias somam ao que voce ja tem, e uma
           chave menor nunca rebaixa o seu plano.
         </p>
 
@@ -148,7 +148,7 @@ export function PlanoTab() {
           duplicar a segunda aqui faria as duas divergirem.
         */}
         <Link
-          href="/app/vip"
+          href="/app/olimpo"
           className="mt-4 inline-block text-[12px] text-accent-300 hover:text-accent-200"
         >
           Ver todos os planos
