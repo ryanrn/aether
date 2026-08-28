@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Gamepad2, Mic, User } from "lucide-react";
+import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
 
 /**
@@ -21,7 +22,7 @@ import { VoiceTab } from "./voice-tab";
  * propria etiqueta.
  */
 
-type Tab = "conta" | "voz" | "atividade";
+type Tab = "conta" | "voz" | "atividade" | "plano";
 
 const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "conta", label: "Minha conta", icon: User },
@@ -32,6 +33,14 @@ const TABS: { id: Tab; label: string; icon: typeof User }[] = [
    * na hora — e "onde coube" nao e criterio de organizacao.
    */
   { id: "atividade", label: "Atividade", icon: Gamepad2 },
+  /**
+   * O plano fica por ULTIMO, e nao no topo.
+   *
+   * Vender e legitimo; empurrar nao. Quem abre as configuracoes quase sempre
+   * vai trocar o microfone ou a foto, e a assinatura no primeiro item faria a
+   * tela inteira parecer uma loja.
+   */
+  { id: "plano", label: "Plano", icon: Sparkles },
 ];
 
 export function AppSettingsModal({
@@ -108,6 +117,8 @@ export function AppSettingsModal({
             <AccountTab user={user} server={server} />
           ) : active === "voz" ? (
             <VoiceTab />
+          ) : active === "plano" ? (
+            <PlanoTab />
           ) : (
             <ActivityTab />
           )}

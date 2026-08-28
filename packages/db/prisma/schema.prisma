@@ -64,21 +64,22 @@ model User {
 
   sessions           Session[]
   passwordResets     PasswordReset[]
-  friendsAsRequester Friendship[]    @relation("FriendshipRequester")
-  friendsAsAddressee Friendship[]    @relation("FriendshipAddressee")
-  dmsComoA           DmChannel[]     @relation("DmUserA")
-  dmsComoB           DmChannel[]     @relation("DmUserB")
-  bloqueiosFeitos    Block[]         @relation("Blocker")
-  bloqueiosRecebidos Block[]         @relation("Blocked")
+  friendsAsRequester Friendship[]        @relation("FriendshipRequester")
+  friendsAsAddressee Friendship[]        @relation("FriendshipAddressee")
+  dmsComoA           DmChannel[]         @relation("DmUserA")
+  dmsComoB           DmChannel[]         @relation("DmUserB")
+  bloqueiosFeitos    Block[]             @relation("Blocker")
+  bloqueiosRecebidos Block[]             @relation("Blocked")
   reacoes            Reaction[]
   memberships        ServerMember[]
-  ownedServers       Server[]        @relation("ServerOwner")
+  ownedServers       Server[]            @relation("ServerOwner")
   assinatura         Subscription?
+  resgatesDeChave    PlanKeyRedemption[]
   messages           Message[]
   createdInvites     Invite[]
-  auditEntries       AuditLog[]      @relation("AuditActor")
-  bans               Ban[]           @relation("BannedUser")
-  issuedBans         Ban[]           @relation("BanIssuer")
+  auditEntries       AuditLog[]          @relation("AuditActor")
+  bans               Ban[]               @relation("BannedUser")
+  issuedBans         Ban[]               @relation("BanIssuer")
 
   @@index([status])
 }
@@ -539,4 +540,75 @@ model Subscription {
 
   /// O webhook do provedor chega com o id DELE, nao com o nosso.
   @@index([provedor, idExterno])
+}
+
+/// Uma chave que troca por plano.
+///
+/// POR QUE EXISTE: dar acesso a quem nao vai pagar — sorteio, parceiro, teste,
+/// amigo — sem depender de cobranca nenhuma. E o unico caminho hoje, e vai
+/// continuar existindo depois que houver pagamento, porque cobranca nao
+/// resolve o caso de dar de presente.
+///
+/// O CODIGO NAO FICA GUARDADO. Vale o mesmo raciocinio do token de
+/// recuperacao de senha: uma chave e credencial ao portador, e um vazamento do
+/// banco viraria plano de graca para quem lesse a tabela. Guardamos o sha256 e
+/// mostramos o codigo UMA vez, na criacao.
+model PlanKey {
+  id String @id @default(cuid())
+
+  /// sha256 do codigo entregue. Unico para o resgate achar a linha.
+  codigoHash String @unique
+  /// Os primeiros caracteres, em claro, so para reconhecer a chave numa
+  /// lista ("AE-7F3K..."). Curto de proposito: nao serve para adivinhar o
+  /// resto, serve para saber de qual chave se esta falando.
+  prefixo    String
+
+  tier PlanTier
+
+  /// Por quantos dias o plano vale ao resgatar. NULO = sem validade.
+  dias Int?
+
+  /// Quantas pessoas podem resgatar. 1 = chave pessoal; N = campanha.
+  maxUsos Int @default(1)
+  usos    Int @default(0)
+
+  /// Ate quando a CHAVE aceita resgate. Diferente da validade do plano: a
+  /// chave pode morrer em uma semana e dar 30 dias a quem resgatar dentro
+  /// dela.
+  expiraEm DateTime?
+
+  /// Cancelada a mao. Preenchida em vez de apagar a linha, para o historico
+  /// dizer que existiu e foi revogada — apagar esconderia o que aconteceu.
+  revogadaEm DateTime?
+
+  criadaPor String?
+  motivo    String?
+  createdAt DateTime @default(now())
+
+  resgates PlanKeyRedemption[]
+
+  @@index([revogadaEm])
+}
+
+/// Quem resgatou qual chave.
+///
+/// Existe por duas razoes, e a segunda e a que importa: dar historico, e
+/// impedir que a MESMA pessoa resgate a MESMA chave de campanha varias vezes.
+/// Sem o par unico, uma chave de 100 usos seria 100 meses para uma pessoa so.
+model PlanKeyRedemption {
+  id     String  @id @default(cuid())
+  keyId  String
+  key    PlanKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// O que a pessoa ganhou, congelado no momento do resgate — a chave pode
+  /// ser revogada depois, e o historico precisa continuar dizendo a verdade.
+  tierConcedido PlanTier
+  expiraEm      DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([keyId, userId])
+  @@index([userId])
 }

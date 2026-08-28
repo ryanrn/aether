@@ -19,7 +19,14 @@ export const PLAN_ORDER: PlanTier[] = ["FREE", "PLUS", "PRO"];
 
 export interface PlanLimits {
   tier: PlanTier;
-  /** O nome que aparece na tela. */
+  /**
+   * O nome que aparece na tela.
+   *
+   * SEPARADO DO `tier` de proposito. "VIP" e provisorio — quando o nome
+   * definitivo for escolhido, muda-se esta string e mais nada: o enum do banco
+   * continua FREE/PLUS/PRO, sem migracao, sem tocar em quem ja assinou. Nome
+   * de marca muda; identificador de dado, nao.
+   */
   rotulo: string;
 
   /* ---- compartilhamento de tela ---- */
@@ -53,7 +60,7 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   },
   PLUS: {
     tier: "PLUS",
-    rotulo: "AETHER+",
+    rotulo: "VIP",
     larguraMax: 1920,
     alturaMax: 1080,
     quadrosMax: 60,
@@ -64,7 +71,7 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   },
   PRO: {
     tier: "PRO",
-    rotulo: "AETHER Pro",
+    rotulo: "VIP Pro",
     larguraMax: 2560,
     alturaMax: 1440,
     quadrosMax: 60,

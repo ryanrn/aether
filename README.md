@@ -1951,6 +1951,73 @@ npx dotenv -e .env -- node scripts/definir-plano.mjs ryan FREE
 Quando entrar Stripe ou Mercado Pago, o webhook escreve NESTAS MESMAS colunas
 e o resto do sistema nao muda.
 
+### Chaves: dar VIP para quem voce quiser
+
+O jeito de conceder acesso sem cobranca nenhuma — sorteio, parceiro, brinde,
+amigo. Vai continuar existindo depois que houver pagamento, porque cobranca nao
+resolve o caso de dar de presente.
+
+```bash
+npx dotenv -e .env -- node scripts/gerar-chave.mjs PRO 30
+npx dotenv -e .env -- node scripts/gerar-chave.mjs PLUS 30 --usos 50 --validade 7 --motivo "sorteio"
+npx dotenv -e .env -- node scripts/gerar-chave.mjs --listar
+npx dotenv -e .env -- node scripts/gerar-chave.mjs --revogar <id>
+```
+
+A pessoa cola o codigo em **Configuracoes -> Plano**.
+
+**O CODIGO NAO FICA GUARDADO.** So o sha256, do mesmo jeito que o token de
+recuperacao de senha: chave e credencial ao portador, e um vazamento do banco
+viraria plano de graca para quem lesse a tabela. Ele aparece uma vez, na
+criacao. Perdeu, revogue e gere outra.
+
+**Alfabeto sem `0 O 1 I L`.** Chave se le em voz alta e se digita a mao, e esses
+cinco sao onde o erro acontece. O resgate tambem aceita minusculas e ignora
+hifen e espaco — recusar quem colou com espaco no fim seria recusar quem tem a
+chave certa.
+
+**Revogar nao tira de quem ja resgatou**, so impede novos resgates. A linha
+tambem nao e apagada: o historico precisa dizer que existiu e foi cancelada.
+
+#### Como soma com o que a pessoa ja tem
+
+Duas regras, e as duas erram para o lado do cliente de proposito:
+
+- o **tier** fica o mais alto entre o que ela tinha e o que a chave da —
+  resgatar chave menor nunca rebaixa ninguem;
+- os **dias somam** ao que restava. Verificado na tela: quem tinha ate 27/set
+  resgatou 90 dias e ficou com 26/dez, e nao com 90 dias a partir de hoje.
+
+Numa troca que a pessoa fez de propria vontade, errar para menos gera
+reclamacao e desconfianca; errar para mais custa alguns dias.
+
+#### As duas corridas, e como cada uma e barrada
+
+| corrida | o que impede | verificado |
+| --- | --- | --- |
+| duas PESSOAS na mesma chave de 1 uso | `updateMany` com `usos < maxUsos` no WHERE | 1 ganhou, 1 recusado, `usos 1/1` |
+| a MESMA pessoa duas vezes numa chave de 50 usos | par unico `(keyId, userId)` | recusado, e sem gastar uso |
+
+E o mesmo formato do resgate de convite, que ja documenta por que a checagem
+lida fora da transacao nao basta.
+
+### Como a pessoa sabe que tem o plano
+
+**Configuracoes -> Plano** mostra o selo, ate quando vale, e a tabela inteira —
+nao so o plano atual. Mostrar so o que a pessoa tem transformaria a tela num
+recibo; quem esta no gratuito precisa ver o que ganha, e quem assina precisa
+ver o que ainda nao tem.
+
+O `SeloPlano` existe desde ja porque metade do valor de um plano cosmetico e
+SOCIAL: sem o selo, o assinante paga e ninguem nota, e a proxima pessoa nao tem
+motivo para assinar. **Gratuito nao recebe selo** — marcar quem nao paga com um
+rotulo de ausencia e humilhacao de graca.
+
+O nome "VIP" e PROVISORIO e mora em `rotulo`, separado do `tier`. Trocar pelo
+nome definitivo e uma linha: o enum do banco continua `FREE/PLUS/PRO`, sem
+migracao e sem tocar em quem ja assinou. Nome de marca muda; identificador de
+dado, nao.
+
 ### Limitacoes que ficaram — leia antes de vender
 
 - **NADA e barrado ainda.** Esta fase entrega o plano e a leitura; os presets
@@ -1973,7 +2040,14 @@ e o resto do sistema nao muda.
   silencioso.
 - **"Multiplas transmissoes" tambem nao existe.** Uma pessoa transmite uma tela
   de cada vez; o numero na tabela e o teto de quando o recurso existir.
-- **Sem cobranca, sem tela de assinatura, sem selo.** Nada disso foi construido.
+- **O selo so aparece na aba Plano, ainda nao ao lado do nome.** Para ele
+  cumprir o papel social precisa estar na lista de membros e no autor da
+  mensagem — isso exige o tier entrar no `PublicUser`, que passa por varias
+  consultas. E a proxima entrega natural.
+- **Sem cobranca e sem tela de assinatura.** Nao ha como comprar: so chave e
+  concessao a mao.
+- **Cosmeticos (avatar animado, banner, moldura) nao existem.** A escada de cor
+  do selo ja foi pensada para eles, mas nenhum foi construido.
 
 ### Sobre trocar o Supabase por S3
 
