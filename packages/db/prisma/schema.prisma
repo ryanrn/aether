@@ -35,19 +35,19 @@ enum OverwriteTarget {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  username     String     @unique
-  displayName  String
-  email        String     @unique
-  passwordHash String
-  avatarUrl    String?
-  status       UserStatus @default(OFFLINE)
+  id                        String     @id @default(cuid())
+  username                  String     @unique
+  displayName               String
+  email                     String     @unique
+  passwordHash              String
+  avatarUrl                 String?
+  status                    UserStatus @default(OFFLINE)
   /// Aceita conversa direta de quem NAO e amigo, mas divide um servidor.
   ///
   /// Ligado por padrao: e o comportamento que as pessoas esperam de um app de
   /// comunidade, e quem incomoda ainda pode desligar. Amizade passa por cima
   /// disto — esta chave so governa o caminho "conheci num servidor".
-  allowServerDms Boolean  @default(true)
+  allowServerDms            Boolean    @default(true)
   /// Aceita PEDIDO DE AMIZADE de quem divide um servidor.
   ///
   /// Separada de `allowServerDms` de proposito: sao decisoes diferentes. Da
@@ -57,10 +57,10 @@ model User {
   ///
   /// Nao afeta o caminho por NOME DE USUARIO EXATO: quem passou o proprio nome
   /// para alguem ja decidiu ser encontravel por ali.
-  allowServerFriendRequests Boolean @default(true)
-  lastSeenAt   DateTime   @default(now())
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  allowServerFriendRequests Boolean    @default(true)
+  lastSeenAt                DateTime   @default(now())
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
 
   sessions           Session[]
   passwordResets     PasswordReset[]
@@ -73,6 +73,7 @@ model User {
   reacoes            Reaction[]
   memberships        ServerMember[]
   ownedServers       Server[]        @relation("ServerOwner")
+  assinatura         Subscription?
   messages           Message[]
   createdInvites     Invite[]
   auditEntries       AuditLog[]      @relation("AuditActor")
@@ -487,4 +488,55 @@ model Block {
   /// "quem me bloqueou" percorre a outra coluna; sem este indice, metade das
   /// consultas sairia em varredura sequencial. Mesma razao dos dois em Friendship.
   @@index([blockedId])
+}
+
+/// Os planos pagos. A ESCADA importa: comparacao e por posicao, nunca por
+/// igualdade — `=== PLUS` esqueceria o PRO, e quem paga mais receberia menos.
+enum PlanTier {
+  FREE
+  PLUS
+  PRO
+}
+
+/// A assinatura de uma pessoa. UMA por usuario.
+///
+/// POR QUE UM MODEL PROPRIO, e nao dois campos no User: cobranca traz consigo
+/// estado que nao e do usuario — de qual provedor veio, qual o id la, quando
+/// renova, se foi cancelada mas ainda vale ate o fim do periodo. Enfiar isso
+/// no User faria a tabela mais lida do sistema crescer por um motivo que nada
+/// tem a ver com identidade.
+///
+/// AGNOSTICA DE PROVEDOR de proposito: `provedor` e `idExterno` sao opcionais
+/// e ninguem os preenche ainda. Hoje o plano e concedido a mao
+/// (`scripts/definir-plano.mjs`); quando entrar Stripe ou Mercado Pago, o
+/// webhook deles escreve NESTAS MESMAS colunas e o resto do sistema nao muda.
+model Subscription {
+  id     String   @id @default(cuid())
+  userId String   @unique
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier   PlanTier @default(FREE)
+
+  /// Ate quando vale. NULO = sem validade, para conta concedida a mao
+  /// (equipe, teste, cortesia) que nao deve virar abobora sozinha.
+  ///
+  /// Quem decide se venceu e a LEITURA (`planoEfetivo`), e nao um job que
+  /// altera linhas: job que falha deixa a pessoa premium para sempre, e o
+  /// defeito e silencioso porque favorece quem tem.
+  expiraEm DateTime?
+
+  /// De onde veio, quando vier de algum lugar. "stripe", "mercadopago"...
+  provedor  String?
+  /// O id da assinatura no provedor, para o webhook achar a linha.
+  idExterno String?
+
+  /// Quem concedeu a mao, quando foi a mao. Serve para auditoria — uma conta
+  /// premium que ninguem pagou precisa ter dono.
+  concedidoPor String?
+  motivo       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// O webhook do provedor chega com o id DELE, nao com o nosso.
+  @@index([provedor, idExterno])
 }

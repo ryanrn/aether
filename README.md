@@ -1892,6 +1892,100 @@ abaixa no ataque.
   na proxima entrada em call; nada disso troca no meio.
 - **Vale na proxima entrada em call**, como as outras chaves de audio.
 
+## Planos pagos — a fundacao
+
+O comeco do AETHER+ e do AETHER Pro. **Esta fase e so a fundacao**: existe o
+plano, existe quem le, e existe como conceder. Nada e barrado ainda.
+
+### Plano NAO e permissao de servidor
+
+Por isso `plans.ts` fica ao lado de `permissions.ts` e nao dentro dele. Os bits
+sao POR SERVIDOR e concedidos por cargo — o dono decide quem modera. O plano e
+da PESSOA e vale em todo lugar. Se virasse bit, um dono de servidor poderia
+distribuir "premium" para quem quisesse.
+
+### A tabela de limites mora em `packages/shared`
+
+Uma so, lida por web, gateway e `@aether/access`. Duas copias divergem na
+primeira vez que alguem mexe num lado — e divergencia aqui nao e defeito de
+tela: e alguem pagando por 1080p e recebendo 720.
+
+| | Aether | AETHER+ | AETHER Pro |
+| --- | --- | --- | --- |
+| tela | 720p 30fps | 1080p 60fps | 1440p 60fps |
+| bitrate | 2,5 Mbps | 6 Mbps | 10 Mbps |
+| telas ao mesmo tempo | 1 | 2 | 3 |
+| envio | 25 MB | 250 MB | 1 GB |
+
+### O vencimento e decidido na LEITURA
+
+Nao ha job que vire linhas. Um trabalho agendado que falha, atrasa ou nunca
+sobe deixaria a pessoa premium para sempre — e o defeito e silencioso, porque
+favorece quem tem. Lendo, a conta expira sozinha no segundo exato, com o resto
+do sistema parado.
+
+A linha continua no banco com o tier antigo depois de vencer, de proposito: o
+historico permite oferecer renovacao. `expiraEm` nulo significa SEM VALIDADE,
+para concessao a mao (equipe, teste, cortesia).
+
+Diante de data corrompida a leitura cai para GRATUITO, e nao para o tier
+guardado: errar para menos custa uma reclamacao, errar para mais entrega de
+graca e ninguem avisa.
+
+### Comparacao por ESCADA, nunca por igualdade
+
+`planoAtende(a, b)` existe para ninguem escrever `tier === "PLUS"` por ai —
+essa comparacao esquece o PRO, e quem paga mais receberia menos. E um erro
+facil de escrever e dificil de ver numa revisao.
+
+### Agnostica de provedor
+
+`provedor` e `idExterno` existem e ninguem os preenche. Hoje o plano e
+concedido a mao:
+
+```bash
+npx dotenv -e .env -- node scripts/definir-plano.mjs ryan PRO 30
+npx dotenv -e .env -- node scripts/definir-plano.mjs ryan FREE
+```
+
+Quando entrar Stripe ou Mercado Pago, o webhook escreve NESTAS MESMAS colunas
+e o resto do sistema nao muda.
+
+### Limitacoes que ficaram — leia antes de vender
+
+- **NADA e barrado ainda.** Esta fase entrega o plano e a leitura; os presets
+  de tela continuam livres e o limite de envio nao existe. Cobrar hoje seria
+  vender o que nao esta trancado.
+- **O gate da TELA nao pode ser so na interface, e isso e trabalho de verdade.**
+  A qualidade e escolhida no cliente (`screenShareEncoding` no `publishTrack`),
+  e o token do LiveKit controla QUEM publica e quais fontes — nao bitrate nem
+  resolucao. Esconder o preset na tela seria decorativo: bastaria editar o
+  `localStorage`. O enforcement real exige o gateway receber o webhook
+  `track_published`, ler a resolucao publicada e derrubar quem excede — com uma
+  janela de alguns segundos ate isso acontecer.
+- **"Envio premium" nao tem o que limitar.** Nao existe anexo em mensagem no
+  app: os unicos uploads sao icone de servidor e avatar. Os 25/250/1024 MB da
+  tabela nao governam nada hoje — anexos sao uma fase inteira antes de virarem
+  recurso pago.
+- **"Som da tela" esta LIVRE nos tres planos, de proposito.** Foi pedido como
+  exclusivo de premium, mas hoje todo mundo tem. Tirar de quem ja usa e
+  decisao de produto com custo real de confianca, e nao passa por um commit
+  silencioso.
+- **"Multiplas transmissoes" tambem nao existe.** Uma pessoa transmite uma tela
+  de cada vez; o numero na tabela e o teto de quando o recurso existir.
+- **Sem cobranca, sem tela de assinatura, sem selo.** Nada disso foi construido.
+
+### Sobre trocar o Supabase por S3
+
+Para anexos, o custo que explode nao e guardar: e EGRESS, porque todo mundo
+baixa o arquivo dos outros. Supabase cobra egress, e a S3 da Amazon tambem, e
+caro. **Cloudflare R2 tem egress zero e API compativel com S3** — para este
+caso e melhor que S3 ou Oracle.
+
+A troca so faz sentido QUANDO os anexos existirem. Hoje o storage guarda icone
+de servidor e avatar, que sao poucos e pequenos; migrar agora seria trabalho
+sem retorno.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:
