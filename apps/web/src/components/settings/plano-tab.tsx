@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Check, KeyRound, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { SeloPlano } from "@/components/ui/selo-plano";
+import { ResgatarChave } from "@/components/premium/resgatar-chave";
 import { PLANS, type PlanTier } from "@aether/shared";
-import {
-  meuPlano,
-  resgatarChaveAction,
-  type PlanoNaTela,
-} from "@/server/actions/planos";
+import { meuPlano, type PlanoNaTela } from "@/server/actions/planos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,10 +24,6 @@ import { cn } from "@/lib/utils";
 export function PlanoTab() {
   const [plano, setPlano] = useState<PlanoNaTela | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [codigo, setCodigo] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
-  const [resgatado, setResgatado] = useState(false);
-  const [enviando, iniciar] = useTransition();
 
   useEffect(() => {
     void (async () => {
@@ -39,22 +32,6 @@ export function PlanoTab() {
       setCarregando(false);
     })();
   }, []);
-
-  function resgatar() {
-    if (!codigo.trim() || enviando) return;
-    setErro(null);
-    setResgatado(false);
-    iniciar(async () => {
-      const r = await resgatarChaveAction(codigo);
-      if (!r.ok) {
-        setErro(r.error);
-        return;
-      }
-      setPlano(r.data);
-      setCodigo("");
-      setResgatado(true);
-    });
-  }
 
   if (carregando) {
     return (
@@ -66,7 +43,6 @@ export function PlanoTab() {
   }
 
   const atual = plano?.tier ?? "FREE";
-  const limites = PLANS[atual];
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,40 +138,21 @@ export function PlanoTab() {
           chave menor nunca rebaixa o seu plano.
         </p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-700 bg-base-950 px-3 py-2 focus-within:border-accent-600/60">
-            <KeyRound className="h-3.5 w-3.5 shrink-0 text-ink-500" />
-            <input
-              value={codigo}
-              onChange={(e) => {
-                setCodigo(e.target.value);
-                setErro(null);
-                setResgatado(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") resgatar();
-              }}
-              placeholder="AETHER-XXXX-XXXX-XXXX"
-              aria-label="Codigo da chave"
-              spellCheck={false}
-              autoComplete="off"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[13px] uppercase text-ink-100 outline-none placeholder:normal-case placeholder:font-sans placeholder:text-ink-500"
-            />
-          </div>
-          <Button onClick={resgatar} disabled={enviando || !codigo.trim()}>
-            {enviando ? "Resgatando..." : "Resgatar"}
-          </Button>
+        <div className="mt-3">
+          <ResgatarChave onResgatado={(novo) => setPlano(novo)} />
         </div>
 
-        {erro ? (
-          <p className="mt-2 text-[12px] text-signal-dnd">{erro}</p>
-        ) : null}
-        {resgatado ? (
-          <p className="mt-2 flex items-center gap-1.5 text-[12px] text-signal-online">
-            <Check className="h-3.5 w-3.5" />
-            Pronto — seu plano foi atualizado.
-          </p>
-        ) : null}
+        {/*
+          O caminho para a pagina inteira. Esta aba responde "o que eu tenho";
+          a pagina responde "o que existe" — sao perguntas diferentes, e
+          duplicar a segunda aqui faria as duas divergirem.
+        */}
+        <Link
+          href="/app/vip"
+          className="mt-4 inline-block text-[12px] text-accent-300 hover:text-accent-200"
+        >
+          Ver todos os planos
+        </Link>
       </div>
     </div>
   );

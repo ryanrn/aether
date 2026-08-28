@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Plus, Users } from "lucide-react";
+import { Crown, Plus, Users } from "lucide-react";
 import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
@@ -49,6 +49,7 @@ export function ServerRail({
   const activeId = params?.serverId;
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
+  const emVip = pathname === "/app/vip";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
 
@@ -147,6 +148,39 @@ export function ServerRail({
               {pendingRequests > 9 ? "9+" : pendingRequests}
             </span>
           ) : null}
+        </Link>
+
+        {/**
+         * VIP logo abaixo de amigos, e ANTES da linha que separa os
+         * servidores. As duas coisas acima da linha sao "do app"; abaixo dela
+         * sao "seus servidores" — e assinatura nao e servidor.
+         *
+         * A coroa fica dourada mesmo desligada, de proposito: e o unico item
+         * da trilha que nao e um lugar onde voce ja esta, e sim um convite. Um
+         * icone cinza ali seria lido como mais um botao de navegacao.
+         */}
+        <Link
+          href="/app/vip"
+          title="VIP"
+          draggable={false}
+          className="group relative flex w-full justify-center"
+        >
+          <span
+            className={cn(
+              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+              emVip ? "h-7" : "group-hover:h-3.5",
+            )}
+          />
+          <span
+            className={cn(
+              "grid h-11 w-11 place-items-center rounded-xl transition-all duration-150",
+              emVip
+                ? "bg-amber-400/15 text-amber-300"
+                : "bg-base-800 text-amber-400/80 group-hover:scale-105 group-hover:bg-amber-400/10 group-hover:text-amber-300",
+            )}
+          >
+            <Crown className="h-5 w-5" />
+          </span>
         </Link>
 
         <span className="h-px w-8 bg-base-700" />
