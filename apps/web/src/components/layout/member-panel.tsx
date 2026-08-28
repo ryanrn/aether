@@ -72,7 +72,17 @@ export function MemberPanel({
           {[...groups.entries()].map(([name, group]) => (
             <section key={name} className="mb-4">
               <h3
-                className="px-1.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                /*
+                  Mesma escala que os cabecalhos de categoria da arvore
+                  passaram a usar. Os dois paineis ficam lado a lado, e
+                  titulos de tamanhos diferentes nas duas colunas fazem a tela
+                  parecer montada por duas pessoas.
+
+                  A COR continua vindo do cargo (`style`), e nao de uma classe:
+                  e ela que diz de qual cargo e o grupo, e essa informacao nao
+                  pode ser trocada por uma decisao de estilo.
+                */
+                className="px-1.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em]"
                 style={{ color: group.color }}
               >
                 {name} — {group.members.length}
@@ -87,7 +97,13 @@ export function MemberPanel({
 
                   return (
                     <li key={member.id}>
-                      <div className="group/member flex items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-base-850">
+                      {/*
+                        `rounded-md` e mais respiro, como a linha de canal.
+                        Este painel e a mesma lista vertical de nomes que a
+                        arvore, do outro lado da tela — se um dos dois tem
+                        cantos redondos e o outro nao, a diferenca salta.
+                      */}
+                      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-base-850">
                         {/*
                           O nome inteiro abre o cartao de atividade. O cartao
                           sai para a ESQUERDA: este painel encosta na borda
