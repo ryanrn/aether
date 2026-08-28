@@ -99,7 +99,19 @@ export function MessageItem({
       ref={linhaRef}
       onContextMenu={abrirMenu}
       className={cn(
-        "group/message relative px-4 transition-colors hover:bg-base-900/40",
+        /*
+          O REALCE E RECUADO E ARREDONDADO, e nao uma faixa de ponta a ponta.
+
+          `mx-2` afasta das bordas e `rounded-lg` tira os cantos retos: o
+          destaque passa a parecer um cartao sob a mensagem em vez de uma
+          listra atravessando a coluna. E o que mais muda a sensacao da lista,
+          porque acontece a cada linha em que o cursor passa.
+
+          O `px-2` compensa o `mx-2` para o texto nao andar de lugar entre
+          repouso e hover — sem ele, cada mensagem daria um passo lateral
+          quando o cursor chegasse.
+        */
+        "group/message relative mx-2 rounded-lg px-2 transition-colors hover:bg-base-900/50",
         compact ? "py-0.5" : "mt-3 py-0.5 first:mt-0",
         message.pending && "opacity-55",
       )}
@@ -119,7 +131,12 @@ export function MessageItem({
           title="Reagir"
           aria-label="Reagir a esta mensagem"
           className={cn(
-            "absolute right-4 top-0 z-10 grid h-6 w-6 place-items-center rounded-md",
+            /*
+              `right-2` porque o `<li>` passou de `px-4` para `mx-2 px-2`: a
+              caixa dele encolheu 8px de cada lado, e manter `right-4` faria o
+              botao andar para dentro sem que ninguem tivesse pedido.
+            */
+            "absolute right-2 top-0 z-10 grid h-6 w-6 place-items-center rounded-md",
             "border border-base-700 bg-base-850 text-ink-400 shadow-sm",
             "opacity-0 transition-opacity duration-150",
             "group-hover/message:opacity-100 focus:opacity-100 hover:text-ink-100",
@@ -129,7 +146,7 @@ export function MessageItem({
         </button>
       ) : null}
 
-      <div className="flex gap-3">
+      <div className="flex gap-3.5">
         <div className="w-8 shrink-0">
           {compact ? (
             // Horario aparece no hover, ocupando o lugar do avatar
@@ -176,7 +193,12 @@ export function MessageItem({
             (ver globals.css). Conteudo de mensagem e o caso mais obvio de algo
             que precisa ser copiavel — e o unico jeito de citar alguem.
           */}
-          <p className="select-text whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-300">
+          {/*
+            `ink-200` no lugar de `ink-300`: o corpo da mensagem e o texto que
+            mais se le no app inteiro, e estava no mesmo tom de coisas
+            secundarias como rotulo e legenda.
+          */}
+          <p className="select-text whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-200">
             {message.content}
           </p>
 
