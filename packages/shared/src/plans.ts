@@ -133,3 +133,31 @@ export function planoEfetivo(
 
   return fim.getTime() > agora.getTime() ? assinatura.tier : "FREE";
 }
+
+/**
+ * Uma tela publicada nesta altura passa do teto do plano?
+ *
+ * MORA AQUI, e nao dentro do gateway, por duas razoes. A regra precisa ser a
+ * mesma que a interface usa para trancar o perfil — se as duas discordarem, a
+ * pessoa escolhe algo que a tela oferece e o servidor derruba, que e a pior
+ * combinacao possivel. E porque assim ela e testavel sem SFU, sem sala e sem
+ * ninguem transmitindo.
+ *
+ * A TOLERANCIA de 10% existe porque o codificador nem sempre entrega o que foi
+ * pedido: 1080p pode sair 1082 conforme o recorte da janela, e a altura varia
+ * com o formato da tela capturada. Barrar por dois pixels puniria quem esta
+ * dentro do plano — e o que se quer impedir e 1440p com plano de 720, nao
+ * arredondamento.
+ *
+ * Altura ZERO nao e violacao: e o SFU ainda nao sabendo as dimensoes da faixa.
+ * Tratar como excesso silenciaria toda transmissao no instante em que comeca.
+ */
+export const TOLERANCIA_DE_ALTURA = 1.1;
+
+export function alturaExcedeOPlano(
+  alturaPublicada: number,
+  alturaMax: number,
+): boolean {
+  if (!Number.isFinite(alturaPublicada) || alturaPublicada <= 0) return false;
+  return alturaPublicada > alturaMax * TOLERANCIA_DE_ALTURA;
+}

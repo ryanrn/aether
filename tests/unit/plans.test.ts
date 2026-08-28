@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PLANS,
+  alturaExcedeOPlano,
   limitesDoPlano,
   planoAtende,
   planoEfetivo,
@@ -120,5 +121,71 @@ describe("limites", () => {
     expect(PLANS.FREE.uploadMaxBytes).toBe(25 * MB);
     expect(PLANS.PLUS.uploadMaxBytes).toBe(250 * MB);
     expect(PLANS.PRO.uploadMaxBytes).toBe(1024 * MB);
+  });
+});
+
+/**
+ * Teto de altura da tela — a regra que o gateway usa para silenciar quem
+ * excede, e que a interface usa para trancar o perfil.
+ *
+ * Vale teste porque os dois erros possiveis sao caros e opostos: barrar quem
+ * esta dentro do plano (a pessoa paga e a tela dela apaga) ou deixar passar
+ * quem esta fora (o plano vira decoracao).
+ */
+describe("altura da tela contra o teto do plano", () => {
+  it("dentro do teto passa", () => {
+    expect(alturaExcedeOPlano(720, 720)).toBe(false);
+    expect(alturaExcedeOPlano(1080, 1080)).toBe(false);
+    expect(alturaExcedeOPlano(480, 720)).toBe(false);
+  });
+
+  it("bem acima do teto e barrado", () => {
+    // o caso que motiva tudo: 1440p com plano de 720
+    expect(alturaExcedeOPlano(1440, 720)).toBe(true);
+    expect(alturaExcedeOPlano(1080, 720)).toBe(true);
+    expect(alturaExcedeOPlano(1440, 1080)).toBe(true);
+  });
+
+  /**
+   * O codificador nem sempre entrega o pedido exato: 1080p pode sair 1082
+   * conforme o recorte da janela. Barrar por dois pixels puniria quem esta
+   * dentro do plano.
+   */
+  it("tolera a folga do codificador", () => {
+    expect(alturaExcedeOPlano(1082, 1080)).toBe(false);
+    expect(alturaExcedeOPlano(792, 720)).toBe(false);
+  });
+
+  it("nao tolera muito alem da folga", () => {
+    expect(alturaExcedeOPlano(1200, 1080)).toBe(true);
+  });
+
+  /**
+   * A FRONTEIRA EXATA, fixada de proposito.
+   *
+   * 1080 x 1,1 da 1188. Sem este caso, trocar `>` por `>=` na regra nao
+   * quebraria teste nenhum — o limite ficaria livre para escorregar um pixel a
+   * cada refatoracao, e ninguem notaria ate alguem reclamar. Verificado: com a
+   * mutacao, estes dois falham.
+   */
+  it("o limite exato da tolerancia ainda passa", () => {
+    expect(alturaExcedeOPlano(1188, 1080)).toBe(false);
+    expect(alturaExcedeOPlano(792, 720)).toBe(false); // 720 x 1,1
+  });
+
+  it("um pixel alem do limite ja e barrado", () => {
+    expect(alturaExcedeOPlano(1189, 1080)).toBe(true);
+    expect(alturaExcedeOPlano(793, 720)).toBe(true);
+  });
+
+  /**
+   * Altura zero e o SFU ainda nao sabendo as dimensoes, e nao uma tela de zero
+   * pixels. Tratar como excesso silenciaria toda transmissao no instante em
+   * que ela comeca.
+   */
+  it("altura desconhecida NAO e violacao", () => {
+    expect(alturaExcedeOPlano(0, 720)).toBe(false);
+    expect(alturaExcedeOPlano(Number.NaN, 720)).toBe(false);
+    expect(alturaExcedeOPlano(-1, 720)).toBe(false);
   });
 });

@@ -274,6 +274,18 @@ export interface ServerToClientEvents {
    * da voz — um evento so para entrar, sair, trocar de canal e mutar evita
    * que o cliente precise reconciliar tres fluxos diferentes.
    */
+  /**
+   * A tela publicada passou do teto do plano e foi silenciada NO SFU.
+   *
+   * Existe para a pessoa entender por que a transmissao dela ficou preta.
+   * Sem o aviso, o sintoma seria indistinguivel de um defeito — e ela abriria
+   * um chamado em vez de trocar o perfil de qualidade.
+   */
+  "voice:qualidade-excedida": (payload: {
+    alturaPublicada: number;
+    alturaMax: number;
+    plano: string;
+  }) => void;
   "voice:update": (payload: {
     serverId: string;
     participant: VoiceParticipant;

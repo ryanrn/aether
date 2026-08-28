@@ -4,7 +4,11 @@ import {
   TrackSource,
   TrackType,
 } from "livekit-server-sdk";
-import { has, type PermissionBits } from "@aether/shared";
+import {
+  alturaExcedeOPlano,
+  has,
+  type PermissionBits,
+} from "@aether/shared";
 import { env } from "./env";
 
 /**
@@ -179,5 +183,92 @@ export async function applyServerMute(params: {
   } catch (error) {
     console.error("[gateway] falha ao aplicar mudo no SFU:", error);
     return false;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Qualidade da tela por plano
+ *
+ * POR QUE ISTO PRECISA EXISTIR NO SERVIDOR: a resolucao e escolhida no
+ * CLIENTE. O app oferece so os perfis que o plano permite, mas isso e
+ * interface — quem editar o `localStorage` ou reescrever o cliente publica em
+ * 1440p com plano gratuito. Num recurso pago, gate de interface nao e
+ * decoracao inofensiva: e receita que nao entra.
+ *
+ * O token do SFU nao resolve. Ele governa QUEM publica e de quais fontes;
+ * bitrate e resolucao nao cabem num grant. Entao a imposicao e por
+ * verificacao: depois que a faixa sobe, perguntamos ao SFU quanto ela tem de
+ * verdade e silenciamos a que passou do teto.
+ *
+ * ISSO TEM UMA JANELA, e ela e honesta de reconhecer: entre publicar e ser
+ * checado passam alguns segundos, e nesse intervalo a transmissao acima do
+ * plano acontece. Fechar essa janela exigiria o SFU recusar na entrada, o que
+ * o LiveKit nao oferece. Alguns segundos de 1440p nao sao o que ameaca o
+ * negocio; transmitir o dia inteiro sem pagar, sim.
+ * ------------------------------------------------------------------------- */
+
+export interface QualidadeExcedida {
+  alturaPublicada: number;
+  alturaMax: number;
+  silenciada: boolean;
+}
+
+/**
+ * Confere a tela publicada contra o teto do plano e SILENCIA o que exceder.
+ *
+ * Devolve `null` quando esta tudo certo, quando nao ha faixa de tela ainda, ou
+ * quando o LiveKit nao esta configurado — nos tres casos nao ha o que fazer.
+ *
+ * A tolerancia existe porque o codificador nem sempre entrega exatamente o
+ * pedido: 1080p pode sair como 1082 dependendo do recorte da janela. Barrar
+ * por dois pixels seria punir quem esta dentro do plano.
+ */
+export async function conferirQualidadeDaTela(params: {
+  channelId: string;
+  userId: string;
+  alturaMax: number;
+}): Promise<QualidadeExcedida | null> {
+  const client = service();
+  if (!client) return null;
+
+  const room = roomName(params.channelId);
+
+  try {
+    const participants = await client.listParticipants(room);
+    const target = participants.find((p) => p.identity === params.userId);
+    if (!target) return null;
+
+    /**
+     * So a faixa de TELA. A camera tem teto proprio e o microfone nao tem
+     * resolucao — filtrar pela fonte evita silenciar a webcam de alguem por
+     * causa do plano de compartilhamento.
+     */
+    const tela = target.tracks.find(
+      (track) =>
+        track.type === TrackType.VIDEO &&
+        track.source === TrackSource.SCREEN_SHARE,
+    );
+    if (!tela) return null;
+
+    /**
+     * A REGRA MORA EM `@aether/shared`, e nao aqui: e a mesma que a interface
+     * usa para trancar o perfil. Duas copias discordariam, e a pessoa
+     * escolheria algo que a tela oferece e o servidor derruba.
+     */
+    const altura = tela.height ?? 0;
+    if (!alturaExcedeOPlano(altura, params.alturaMax)) return null;
+
+    let silenciada = false;
+    try {
+      await client.mutePublishedTrack(room, params.userId, tela.sid, true);
+      silenciada = true;
+    } catch (error) {
+      console.error("[gateway] nao consegui silenciar a tela acima do plano:", error);
+    }
+
+    return { alturaPublicada: altura, alturaMax: params.alturaMax, silenciada };
+  } catch (error) {
+    console.error("[gateway] falha ao conferir a qualidade da tela:", error);
+    return null;
   }
 }

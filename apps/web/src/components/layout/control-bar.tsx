@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Headphones,
   HeadphoneOff,
+  Lock,
   LogOut,
   Mic,
   MicOff,
@@ -24,6 +25,8 @@ import {
   type SelfCardAnchor,
 } from "@/components/profile/self-user-card";
 import { viewerCan } from "@/lib/permissions";
+import { meuPlano } from "@/server/actions/planos";
+import { PLANS } from "@aether/shared";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useConnectionStatus,
@@ -109,6 +112,23 @@ export function ControlBar({
   const [camId, setCamId] = useState<string | null>(null);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [micId, setMicId] = useState<string | null>(null);
+
+  /**
+   * O teto de altura do plano, para TRANCAR os perfis acima dele.
+   *
+   * Comeca no gratuito e sobe quando a resposta chega. Comecar pelo maior
+   * mostraria 1440p liberado por um instante para quem nao tem — oferecer e
+   * tirar e pior do que demorar a oferecer.
+   */
+  const [alturaMaxDoPlano, setAlturaMaxDoPlano] = useState(
+    PLANS.FREE.alturaMax,
+  );
+  useEffect(() => {
+    void (async () => {
+      const r = await meuPlano();
+      if (r.ok) setAlturaMaxDoPlano(r.data.limites.alturaMax);
+    })();
+  }, []);
 
   // localStorage nao existe no servidor: so lemos depois de montar.
   useEffect(() => setMicId(readPreferredMicrophone()), []);
@@ -568,13 +588,32 @@ export function ControlBar({
                 ) : null}
                 {PRESET_LIST.map((preset) => {
                   const active = localSharing && preset.id === sharePreset;
+                  /**
+                   * Perfil acima do plano aparece TRANCADO, e nao escondido.
+                   *
+                   * Esconder faria a pessoa nunca saber que existe 1080p — e o
+                   * unico jeito de ela descobrir seria alguem contar. Trancado,
+                   * o cadeado explica o limite e diz onde ele muda. Isto e
+                   * INTERFACE: quem burlar publica assim mesmo, e o gateway
+                   * silencia a faixa no SFU alguns segundos depois.
+                   */
+                  const bloqueado = preset.height > alturaMaxDoPlano;
                   return (
                     <button
                       key={preset.id}
                       type="button"
+                      disabled={bloqueado}
                       onClick={() => void pickPreset(preset.id)}
+                      title={
+                        bloqueado
+                          ? `Ate ${alturaMaxDoPlano}p no seu plano`
+                          : undefined
+                      }
                       className={cn(
-                        "flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-base-800",
+                        "flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors",
+                        bloqueado
+                          ? "cursor-not-allowed opacity-45"
+                          : "hover:bg-base-800",
                         active && "bg-base-800",
                       )}
                     >
@@ -585,7 +624,9 @@ export function ControlBar({
                         )}
                       >
                         {preset.label}
-                        {active ? (
+                        {bloqueado ? (
+                          <Lock className="h-3 w-3 shrink-0 text-amber-400/80" />
+                        ) : active ? (
                           <Check className="h-3 w-3 shrink-0" />
                         ) : null}
                       </span>

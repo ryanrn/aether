@@ -5,9 +5,14 @@ import {
   loadMemberAccess,
 } from "@aether/access";
 import { has, room } from "@aether/shared";
+import { loadPlan } from "@aether/access";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
-import { applyServerMute, createMediaCredentials } from "../livekit";
+import {
+  applyServerMute,
+  conferirQualidadeDaTela,
+  createMediaCredentials,
+} from "../livekit";
 import {
   countInChannel,
   joinVoice,
@@ -198,6 +203,46 @@ export function registerVoiceHandlers(
     if (updated) broadcast(updated.serverId, updated.participant);
   });
 
+  /**
+   * Espera a faixa aparecer e conferir contra o plano.
+   *
+   * Silenciar quem excede acontece no SFU (`conferirQualidadeDaTela`), e nao
+   * na interface — cliente reescrito nao contorna. O aviso pelo socket serve
+   * para a pessoa entender por que a tela dela ficou preta em vez de achar
+   * que quebrou.
+   */
+  async function conferirTelaEmSegundoPlano(quem: string, canal: string) {
+    const plano = await loadPlan(quem).catch(() => null);
+    if (!plano) return;
+
+    const ESPERAS = [2000, 4000, 8000];
+    for (const espera of ESPERAS) {
+      await new Promise((r) => setTimeout(r, espera));
+
+      // Parou de transmitir no meio da espera: nao ha o que conferir.
+      const aqui = voiceLocation(quem);
+      if (!aqui || aqui.channelId !== canal) return;
+
+      const excedeu = await conferirQualidadeDaTela({
+        channelId: canal,
+        userId: quem,
+        alturaMax: plano.limites.alturaMax,
+      });
+      if (!excedeu) continue;
+
+      console.warn(
+        `[gateway] tela de ${quem} em ${excedeu.alturaPublicada}p excede o plano ` +
+          `${plano.tier} (${excedeu.alturaMax}p) — silenciada: ${excedeu.silenciada}`,
+      );
+      socket.emit("voice:qualidade-excedida", {
+        alturaPublicada: excedeu.alturaPublicada,
+        alturaMax: excedeu.alturaMax,
+        plano: plano.tier,
+      });
+      return;
+    }
+  }
+
   socket.on("voice:streaming", async (streaming) => {
     if (typeof streaming !== "boolean") return;
 
@@ -231,6 +276,22 @@ export function registerVoiceHandlers(
 
     const updated = setVoiceStreaming(userId, streaming);
     if (updated) broadcast(updated.serverId, updated.participant);
+
+    /**
+     * A QUALIDADE E CONFERIDA DEPOIS, e nao aqui na hora.
+     *
+     * Quando este evento chega, a faixa quase nunca esta publicada ainda: o
+     * cliente avisa o servidor e comeca a subir a tela em paralelo. Perguntar
+     * ao SFU agora devolveria "sem faixa" e a checagem passaria sempre.
+     *
+     * Por isso as tentativas espacadas: a primeira pega o caso rapido, as
+     * seguintes cobrem conexao lenta e negociacao demorada. Param assim que
+     * encontrarem a faixa — em resolucao boa ou ruim.
+     *
+     * `void` de proposito: nada disto pode segurar o handler. Quem comeca a
+     * transmitir nao espera pela conferencia.
+     */
+    if (streaming) void conferirTelaEmSegundoPlano(userId, location.channelId);
   });
 
   /**
