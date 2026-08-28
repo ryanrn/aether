@@ -10,11 +10,11 @@
     "typecheck": "echo \"@aether/desktop e JavaScript puro; sem typecheck\"",
     "release": "npm run build:native && electron-builder --win --publish always",
     "diagnose:audio": "electron diagnose-audio.js",
-    "build:native": "cd native && npx --yes node-gyp@11 rebuild --target=33.4.11 --arch=x64 --dist-url=https://electronjs.org/headers"
+    "build:native": "cd native && npx --yes node-gyp@11 rebuild --target=44.0.0 --arch=x64 --dist-url=https://electronjs.org/headers"
   },
   "devDependencies": {
-    "electron": "33.4.11",
-    "electron-builder": "^25.1.8"
+    "electron": "44.0.0",
+    "electron-builder": "^26.15.3"
   },
   "author": "Ryan",
   "dependencies": {
