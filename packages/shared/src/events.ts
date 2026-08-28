@@ -338,7 +338,20 @@ export interface ClientToServerEvents {
    * evento: e o que torna o reenvio apos reconexao idempotente na tela.
    */
   "message:send": (
-    payload: { conversationId: string; content: string; nonce: string },
+    payload: {
+      conversationId: string;
+      content: string;
+      nonce: string;
+      /**
+       * Ids de anexo ja autorizados e confirmados pelo app web.
+       *
+       * IDS, e nao os dados do arquivo: o gateway confere no banco que cada um
+       * e do remetente, ja chegou no R2 e ainda nao foi usado. Se o cliente
+       * mandasse nome e tamanho, o teto por plano viraria enfeite — bastaria
+       * declarar 1 KB.
+       */
+      anexoIds?: string[];
+    },
     ack: (result: SendMessageAck) => void,
   ) => void;
   /**

@@ -75,6 +75,7 @@ model User {
   ownedServers       Server[]            @relation("ServerOwner")
   assinatura         Subscription?
   resgatesDeChave    PlanKeyRedemption[]
+  anexos             Attachment[]
   messages           Message[]
   createdInvites     Invite[]
   auditEntries       AuditLog[]          @relation("AuditActor")
@@ -262,6 +263,7 @@ model Message {
   createdAt   DateTime   @default(now())
 
   reactions Reaction[]
+  anexos    Attachment[]
 
   @@index([channelId, createdAt])
   @@index([dmChannelId, createdAt])
@@ -611,4 +613,60 @@ model PlanKeyRedemption {
 
   @@unique([keyId, userId])
   @@index([userId])
+}
+
+/// Um arquivo anexado a uma mensagem.
+///
+/// A LINHA NASCE ANTES DO ARQUIVO. Quem cria e a action que autoriza o envio,
+/// depois de conferir o plano — e e ela que sorteia a `chave`. O cliente nunca
+/// escolhe onde grava: se escolhesse, poderia apontar para o objeto de outra
+/// pessoa ou sobrescrever o proprio anexo de uma mensagem antiga.
+///
+/// O CICLO tem tres estados, e nenhum deles e um booleano solto:
+///   1. criada aqui, `prontoEm` nulo — autorizado, ainda nao enviado;
+///   2. `prontoEm` preenchido — o servidor perguntou ao R2 e o objeto esta la,
+///      com o tamanho certo;
+///   3. `messageId` preenchido — virou anexo de uma mensagem.
+///
+/// Linha que fica no passo 1 ou 2 e lixo: alguem abriu o seletor e desistiu.
+/// Ela aponta para um objeto que talvez exista no bucket, e limpar isso e
+/// trabalho de faxina que ainda nao existe (anotado nas limitacoes).
+model Attachment {
+  id String @id @default(cuid())
+
+  /// Quem autorizou. A mensagem so aceita anexo de quem a esta enviando.
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Nulo ate virar anexo de uma mensagem.
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Onde o objeto vive no bucket. Sorteada pelo servidor.
+  chave String @unique
+
+  /// O nome que a pessoa deu, so para exibir e baixar. NUNCA usado para montar
+  /// caminho — nome de arquivo com `../` viraria travessia de diretorio.
+  nome String
+
+  /// O tipo com que o objeto foi GRAVADO, que nao e necessariamente o que o
+  /// navegador declarou: o que nao for imagem, video ou audio conhecido vira
+  /// `application/octet-stream`, para o bucket publico nao servir HTML como
+  /// pagina.
+  mime String
+
+  tamanho Int
+
+  /// Dimensoes, quando e imagem. Servem para reservar o espaco antes de a
+  /// imagem carregar — sem isso o chat pula quando cada uma chega.
+  largura Int?
+  altura  Int?
+
+  /// Quando o servidor confirmou o objeto no R2. Nulo = autorizado e nao
+  /// enviado.
+  prontoEm  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, prontoEm])
+  @@index([messageId])
 }

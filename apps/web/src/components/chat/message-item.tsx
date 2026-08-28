@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { AlertCircle, Copy, SmilePlus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
+import { AnexosDaMensagem } from "@/components/chat/anexos-pendentes";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   ContextMenu,
@@ -178,6 +179,8 @@ export function MessageItem({
           <p className="select-text whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink-300">
             {message.content}
           </p>
+
+          <AnexosDaMensagem anexos={message.anexos ?? []} />
 
           {/*
             A FILEIRA SO EXISTE QUANDO HA REACAO.

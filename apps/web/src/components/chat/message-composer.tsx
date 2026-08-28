@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizontal, Smile } from "lucide-react";
+import { Paperclip, SendHorizontal, Smile } from "lucide-react";
 import type { PublicUser } from "@aether/shared";
 import {
   useConnectionStatus,
@@ -10,6 +10,12 @@ import {
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { cn } from "@/lib/utils";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
+import {
+  AnexosPendentes,
+  ehImagem,
+  type AnexoPendente,
+} from "@/components/chat/anexos-pendentes";
+import { enviarAnexo } from "@/lib/anexos/enviar";
 
 /**
  * Campo de envio.
@@ -23,6 +29,9 @@ import { EmojiPicker } from "@/components/chat/emoji-picker";
  * fazemos aqui e evitar a ida de rede inutil, nao decidir o que e valido.
  */
 const MAX_LENGTH = 4000;
+
+/** O mesmo teto que o gateway aplica. Duas contas diferentes divergiriam. */
+const MAX_ANEXOS = 10;
 
 export function MessageComposer({
   channelId,
@@ -61,9 +70,95 @@ export function MessageComposer({
   const disabled = !canSend || !connected;
   const tooLong = value.length > MAX_LENGTH;
 
+  const [anexos, setAnexos] = useState<AnexoPendente[]>([]);
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
+  /** Nenhum anexo pode estar subindo na hora de enviar. */
+  const subindo = anexos.some((a) => a.estado === "enviando");
+  const prontos = anexos.filter((a) => a.estado === "pronto" && a.id);
+
+  function removerAnexo(chaveLocal: string) {
+    setAnexos((atuais) => {
+      const alvo = atuais.find((a) => a.chaveLocal === chaveLocal);
+      // A previa e um `blob:` que segura memoria ate ser revogado.
+      if (alvo?.previa) URL.revokeObjectURL(alvo.previa);
+      return atuais.filter((a) => a.chaveLocal !== chaveLocal);
+    });
+  }
+
+  async function escolherArquivos(lista: FileList | null) {
+    if (!lista || lista.length === 0) return;
+    const arquivos = Array.from(lista).slice(0, MAX_ANEXOS - anexos.length);
+
+    for (const arquivo of arquivos) {
+      const chaveLocal =
+        globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${arquivo.name}`;
+
+      setAnexos((atuais) => [
+        ...atuais,
+        {
+          chaveLocal,
+          id: null,
+          nome: arquivo.name,
+          tamanho: arquivo.size,
+          mime: arquivo.type || "application/octet-stream",
+          estado: "enviando",
+          progresso: 0,
+          previa: ehImagem(arquivo.type)
+            ? URL.createObjectURL(arquivo)
+            : undefined,
+        },
+      ]);
+
+      /**
+       * O envio comeca NA HORA DE ESCOLHER, e nao ao apertar enviar.
+       *
+       * Assim o arquivo grande sobe enquanto a pessoa escreve o texto, em vez
+       * de ela clicar em enviar e esperar olhando. E o mesmo motivo de o botao
+       * de enviar ficar bloqueado enquanto algo sobe: a mensagem so pode sair
+       * com anexo que ja chegou.
+       */
+      void (async () => {
+        try {
+          const pronto = await enviarAnexo(arquivo, {
+            onProgresso: (fracao) =>
+              setAnexos((atuais) =>
+                atuais.map((a) =>
+                  a.chaveLocal === chaveLocal ? { ...a, progresso: fracao } : a,
+                ),
+              ),
+          });
+          setAnexos((atuais) =>
+            atuais.map((a) =>
+              a.chaveLocal === chaveLocal
+                ? { ...a, id: pronto.id, estado: "pronto", progresso: 1 }
+                : a,
+            ),
+          );
+        } catch (erro) {
+          setAnexos((atuais) =>
+            atuais.map((a) =>
+              a.chaveLocal === chaveLocal
+                ? {
+                    ...a,
+                    estado: "erro",
+                    erro: erro instanceof Error ? erro.message : "falhou",
+                  }
+                : a,
+            ),
+          );
+        }
+      })();
+    }
+  }
+
   function send() {
     const content = value.trim();
-    if (!content || tooLong || disabled || !socket) return;
+    // Com anexo pronto, mensagem sem texto e legitima — mandar so uma imagem
+    // e o caso comum. O gateway aplica a mesma regra.
+    if ((!content && prontos.length === 0) || tooLong || disabled || !socket) {
+      return;
+    }
+    if (subindo) return;
 
     const nonce =
       globalThis.crypto?.randomUUID?.() ??
@@ -78,18 +173,39 @@ export function MessageComposer({
       editedAt: null,
       // Mensagem que ainda nao existe no banco nao tem reacao.
       reactions: [],
+      /**
+       * A mensagem otimista ja mostra os anexos, com a URL local da previa
+       * quando e imagem. Sem isso a imagem sumiria entre o envio e a
+       * confirmacao do gateway, e voltaria depois — um piscar que parece erro.
+       */
+      anexos: prontos.map((a) => ({
+        id: a.id!,
+        nome: a.nome,
+        mime: a.mime,
+        tamanho: a.tamanho,
+        url: a.previa ?? "",
+        largura: null,
+        altura: null,
+      })),
       pending: true,
       nonce,
     });
 
+    const anexoIds = prontos.map((a) => a.id!);
+
     setValue("");
     resetHeight();
+    setAnexos([]);
 
-    socket.emit("message:send", { conversationId: channelId, content, nonce }, (result) => {
+    socket.emit(
+      "message:send",
+      { conversationId: channelId, content, nonce, anexoIds },
+      (result) => {
       // O sucesso chega pelo evento message:new (que tambem atende as outras
       // abas); aqui so tratamos a falha.
-      if (!result.ok) failPending(channelId, nonce, result.error);
-    });
+        if (!result.ok) failPending(channelId, nonce, result.error);
+      },
+    );
   }
 
   /**
@@ -142,15 +258,36 @@ export function MessageComposer({
 
   return (
     <div className="shrink-0 px-4 pb-4 pt-1">
+      {/*
+        O seletor de arquivo fica ESCONDIDO e e acionado pelo clipe: o
+        `<input type=file>` nativo nao tem como ser estilizado, e um botao
+        proprio disparando o clique dele e o caminho padrao.
+      */}
+      <input
+        ref={inputArquivoRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(evento) => {
+          void escolherArquivos(evento.target.files);
+          // Zerar o valor permite escolher O MESMO arquivo de novo depois de
+          // remover; sem isso, o `change` nao dispara na segunda vez.
+          evento.target.value = "";
+        }}
+      />
+
       <div
         className={cn(
-          "flex items-end gap-2 rounded-lg border bg-base-900 px-3 py-2 transition-colors",
+          "flex flex-col rounded-lg border bg-base-900 transition-colors",
           tooLong
             ? "border-signal-dnd/50"
             : "border-base-700 focus-within:border-base-600",
           disabled && "opacity-60",
         )}
       >
+        <AnexosPendentes anexos={anexos} onRemover={removerAnexo} />
+
+        <div className="flex items-end gap-2 px-3 py-2">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -204,15 +341,47 @@ export function MessageComposer({
           <Smile className="h-4 w-4" />
         </button>
 
+        {/*
+          O clipe fica ao lado do emoji, e nao no comeco da linha: sao os dois
+          botoes de "acrescentar algo a mensagem", e separa-los faria procurar
+          em dois lugares.
+        */}
+        <button
+          type="button"
+          onClick={() => inputArquivoRef.current?.click()}
+          disabled={disabled || anexos.length >= MAX_ANEXOS}
+          title={
+            anexos.length >= MAX_ANEXOS
+              ? `Maximo de ${MAX_ANEXOS} arquivos por mensagem`
+              : "Anexar arquivo"
+          }
+          aria-label="Anexar arquivo"
+          className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-ink-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
+        >
+          <Paperclip className="h-4 w-4" />
+        </button>
+
         <button
           type="button"
           onClick={send}
-          disabled={disabled || value.trim().length === 0 || tooLong}
+          /**
+           * Bloqueado enquanto algo SOBE: a mensagem so pode sair com anexo
+           * que ja chegou ao R2 e foi confirmado. Deixar enviar antes faria o
+           * gateway recusar a mensagem inteira, e a pessoa perderia o texto.
+           */
+          disabled={
+            disabled ||
+            tooLong ||
+            subindo ||
+            (value.trim().length === 0 && prontos.length === 0)
+          }
+          title={subindo ? "Aguarde o envio dos arquivos" : "Enviar"}
           aria-label="Enviar mensagem"
           className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
         >
           <SendHorizontal className="h-4 w-4" />
         </button>
+        </div>
       </div>
 
       {seletor ? (

@@ -155,6 +155,25 @@ export interface PublicReaction {
   mine: boolean;
 }
 
+/**
+ * Um arquivo anexado, como a tela recebe.
+ *
+ * A `url` ja vem montada pelo servidor. O cliente NAO monta caminho de bucket:
+ * juntar `R2_PUBLIC_URL` com a chave no navegador significaria a chave do
+ * objeto virar parte do contrato publico, e trocar de provedor depois passaria
+ * a exigir mexer no cliente.
+ */
+export interface PublicAttachment {
+  id: string;
+  nome: string;
+  /** o tipo com que o objeto foi GRAVADO, que decide como a tela desenha */
+  mime: string;
+  tamanho: number;
+  url: string;
+  largura: number | null;
+  altura: number | null;
+}
+
 export interface PublicMessage {
   id: string;
   /**
@@ -174,6 +193,7 @@ export interface PublicMessage {
   createdAt: string;
   editedAt: string | null;
   reactions: PublicReaction[];
+  anexos: PublicAttachment[];
 }
 
 /**
@@ -191,6 +211,16 @@ export interface MessageRow {
   editedAt: Date | null;
   /** Cru do banco: uma linha por pessoa por emoji. O agrupamento e aqui. */
   reactions?: Array<{ emoji: string; userId: string }>;
+  /** Cru do banco. A URL publica e montada em `toPublicMessage`. */
+  anexos?: Array<{
+    id: string;
+    nome: string;
+    mime: string;
+    tamanho: number;
+    chave: string;
+    largura: number | null;
+    altura: number | null;
+  }>;
   author: {
     id: string;
     username: string;
@@ -237,6 +267,14 @@ function agruparReacoes(
 export function toPublicMessage(
   row: MessageRow,
   selfUserId: string | null = null,
+  /**
+   * A base publica do armazenamento. Chega por parametro, e nao lida de
+   * `process.env` aqui dentro, porque este arquivo roda nos DOIS lados: no
+   * gateway ha variavel de ambiente, no navegador nao. Lendo `process.env`
+   * direto, a URL sairia vazia no cliente e o anexo apareceria quebrado sem
+   * ninguem entender por que.
+   */
+  baseDeArquivos = "",
 ): PublicMessage {
   /**
    * Exatamente um dos dois esta preenchido — garantido pelo CHECK
@@ -256,6 +294,15 @@ export function toPublicMessage(
     createdAt: row.createdAt.toISOString(),
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     reactions: agruparReacoes(row.reactions ?? [], selfUserId),
+    anexos: (row.anexos ?? []).map((a) => ({
+      id: a.id,
+      nome: a.nome,
+      mime: a.mime,
+      tamanho: a.tamanho,
+      url: `${baseDeArquivos.replace(/\/+$/, "")}/${a.chave}`,
+      largura: a.largura,
+      altura: a.altura,
+    })),
     author: {
       id: row.author.id,
       username: row.author.username,

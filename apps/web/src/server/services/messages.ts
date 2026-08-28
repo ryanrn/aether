@@ -49,6 +49,17 @@ async function historicoInicial(
       channelId: true,
       dmChannelId: true,
       reactions: { select: { emoji: true, userId: true } },
+      anexos: {
+        select: {
+          id: true,
+          nome: true,
+          mime: true,
+          tamanho: true,
+          chave: true,
+          largura: true,
+          altura: true,
+        },
+      },
       content: true,
       createdAt: true,
       editedAt: true,
@@ -72,7 +83,20 @@ async function historicoInicial(
   const page = hasMore ? rows.slice(0, MESSAGE_PAGE_SIZE) : rows;
 
   return {
-    messages: page.map((row) => toPublicMessage(row, selfUserId)).reverse(),
+    /**
+     * A base publica entra AQUI tambem, e nao so no gateway: o historico da
+     * primeira carga vem por este caminho. Esquecer significaria a imagem
+     * aparecer quebrada ate a pessoa recarregar e o gateway reenviar.
+     */
+    messages: page
+      .map((row) =>
+        toPublicMessage(
+          row,
+          selfUserId,
+          (process.env.R2_PUBLIC_URL ?? "").replace(/\/+$/, ""),
+        ),
+      )
+      .reverse(),
     hasMore,
   };
 }

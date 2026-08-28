@@ -33,11 +33,37 @@ import { createRateLimiter } from "../rate-limit";
 const limiter = createRateLimiter({ capacity: 8, refillPerSecond: 2 });
 
 /** Campos que viram PublicMessage — os mesmos no gateway e no app web. */
+/**
+ * De onde os anexos sao servidos. Lida uma vez, aqui — `toPublicMessage`
+ * recebe por parametro porque ela tambem roda no navegador, onde nao ha
+ * `process.env`.
+ */
+const BASE_DE_ARQUIVOS = (process.env.R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+
+/** Quantos arquivos por mensagem. O mesmo teto vale na tela. */
+const MAX_ANEXOS = 10;
+
+/** Anexo que nao e seu, nao chegou, ou ja foi usado em outra mensagem. */
+class AnexosInvalidos extends Error {
+  override name = "AnexosInvalidos";
+}
+
 const MESSAGE_SELECT = {
   id: true,
   channelId: true,
   dmChannelId: true,
   reactions: { select: { emoji: true, userId: true } },
+  anexos: {
+    select: {
+      id: true,
+      nome: true,
+      mime: true,
+      tamanho: true,
+      chave: true,
+      largura: true,
+      altura: true,
+    },
+  },
   content: true,
   createdAt: true,
   editedAt: true,
@@ -148,13 +174,36 @@ export function registerMessageHandlers(
     }
     const { content, nonce } = payload;
     const conversationId = idDaConversa(payload);
+    /**
+     * Os anexos chegam como IDS, e nao como nome/tamanho/url.
+     *
+     * O que o cliente manda aqui e so um ponteiro para uma linha que o app web
+     * ja criou depois de conferir o plano e a assinatura do R2. Aceitar os
+     * dados do arquivo por aqui deixaria qualquer um dizer "meu anexo tem 1 KB
+     * e se chama foto.png" apontando para outra coisa — e o teto por plano
+     * viraria enfeite.
+     */
+    const anexoIds = Array.isArray(payload.anexoIds)
+      ? payload.anexoIds
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+          .slice(0, MAX_ANEXOS)
+      : [];
 
     if (!limiter.take(userId)) {
       respond({ ok: false, error: "Muitas mensagens seguidas. Respire." });
       return;
     }
 
-    const parsed = messageContentSchema.safeParse(content);
+    /**
+     * COM ANEXO, o texto pode ser vazio — mandar so uma imagem e o caso comum.
+     * Sem anexo, continua valendo a validacao de sempre: mensagem vazia nao
+     * existe.
+     */
+    const conteudoBruto = typeof content === "string" ? content : "";
+    const parsed =
+      anexoIds.length > 0 && conteudoBruto.trim().length === 0
+        ? ({ success: true, data: "" } as const)
+        : messageContentSchema.safeParse(content);
     if (!parsed.success) {
       respond({
         ok: false,
@@ -178,14 +227,65 @@ export function registerMessageHandlers(
         return;
       }
 
-      const created = await prisma.message.create({
-        data:
-          conversa.tipo === "canal"
-            ? { channelId: conversa.channelId, authorId: userId, content: parsed.data }
-            : { dmChannelId: conversa.dmId, authorId: userId, content: parsed.data },
-        select: MESSAGE_SELECT,
+      /**
+       * A mensagem e os anexos entram JUNTOS, numa transacao.
+       *
+       * Sem ela, uma falha ao ligar os anexos deixaria a mensagem publicada
+       * sem os arquivos — e a pessoa veria o texto sair sozinho, sem entender
+       * por que a imagem sumiu.
+       */
+      const created = await prisma.$transaction(async (tx) => {
+        const msg = await tx.message.create({
+          data:
+            conversa.tipo === "canal"
+              ? { channelId: conversa.channelId, authorId: userId, content: parsed.data }
+              : { dmChannelId: conversa.dmId, authorId: userId, content: parsed.data },
+          select: { id: true },
+        });
+
+        if (anexoIds.length > 0) {
+          /**
+           * AS TRES CONDICOES VAO NO WHERE, e nao numa leitura antes.
+           *
+           *  - `userId`: anexo de outra pessoa nao entra na sua mensagem;
+           *  - `prontoEm` nao nulo: o servidor ja confirmou o objeto no R2, e
+           *    sem isso a mensagem sairia apontando para o vazio;
+           *  - `messageId` nulo: cada anexo vale UMA vez. Sem esta, o mesmo id
+           *    poderia ser reenviado em varias mensagens, e uma delas apagada
+           *    levaria o arquivo das outras junto.
+           *
+           * O banco avalia isso sob trava de linha, e por isso duas mensagens
+           * simultaneas com o mesmo anexo nao passam as duas — mesmo formato do
+           * resgate de convite e de chave.
+           */
+          const { count } = await tx.attachment.updateMany({
+            where: {
+              id: { in: anexoIds },
+              userId,
+              prontoEm: { not: null },
+              messageId: null,
+            },
+            data: { messageId: msg.id },
+          });
+
+          /**
+           * Faltou algum? A mensagem inteira volta atras.
+           *
+           * Publicar com menos arquivos do que a pessoa anexou seria pior que
+           * recusar: ela veria a mensagem no ar e teria de conferir um por um
+           * para notar o que sumiu.
+           */
+          if (count !== anexoIds.length) {
+            throw new AnexosInvalidos();
+          }
+        }
+
+        return tx.message.findUniqueOrThrow({
+          where: { id: msg.id },
+          select: MESSAGE_SELECT,
+        });
       });
-      const message: PublicMessage = toPublicMessage(created, userId);
+      const message: PublicMessage = toPublicMessage(created, userId, BASE_DE_ARQUIVOS);
 
       /**
        * Para onde a mensagem vai depende do tipo, e as duas entregas incluem
@@ -217,6 +317,13 @@ export function registerMessageHandlers(
 
       respond({ ok: true, message });
     } catch (error) {
+      if (error instanceof AnexosInvalidos) {
+        respond({
+          ok: false,
+          error: "Algum arquivo nao esta mais disponivel. Anexe de novo.",
+        });
+        return;
+      }
       console.error("[gateway] message:send falhou:", error);
       respond({ ok: false, error: "Falha ao enviar" });
     }
@@ -273,7 +380,9 @@ export function registerMessageHandlers(
 
       const hasMore = rows.length > MESSAGE_PAGE_SIZE;
       const page = hasMore ? rows.slice(0, MESSAGE_PAGE_SIZE) : rows;
-      const messages = page.map((row) => toPublicMessage(row, userId));
+      const messages = page.map((row) =>
+        toPublicMessage(row, userId, BASE_DE_ARQUIVOS),
+      );
 
       respond({
         ok: true,
