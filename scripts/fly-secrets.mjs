@@ -140,6 +140,26 @@ if (twitchMissing.length === 0) {
   for (const key of TWITCH_KEYS) payload[key] = env[key];
 }
 
+/**
+ * R2, e SO a URL publica (anexo no chat).
+ *
+ * O gateway nao envia nem assina nada: ele so monta o endereco publico do
+ * arquivo ao serializar a mensagem. As credenciais de escrita ficam na Vercel,
+ * onde a assinatura acontece — mandar chave secreta para ca seria ampliar o
+ * alcance de um vazamento sem ganhar nada.
+ *
+ * Sem ela a mensagem chega sem o link do anexo, e o arquivo fica invisivel
+ * para quem recebe pelo tempo real.
+ */
+if (env.R2_PUBLIC_URL) {
+  payload.R2_PUBLIC_URL = env.R2_PUBLIC_URL;
+} else {
+  console.log(
+    "aviso: R2_PUBLIC_URL ausente no .env — mensagem com anexo chega sem o" +
+      "\n       link do arquivo para quem recebe pelo tempo real.",
+  );
+}
+
 console.log(`App Fly:  ${flyApp}`);
 console.log(`Origem liberada no CORS:  ${payload.NEXT_PUBLIC_APP_URL}`);
 if (bumped) console.log("connection_limit ajustado para 5 na URL de producao.");

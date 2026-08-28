@@ -49,6 +49,25 @@ const OPTIONAL_REDIS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
  * enviar nada. Em producao a consequencia seria a mesma, e silenciosa.
  */
 const OPTIONAL_EMAIL = ["RESEND_API_KEY", "EMAIL_FROM"];
+
+/**
+ * Cloudflare R2 (anexo no chat). Opcionais e em BLOCO: as cinco andam juntas.
+ *
+ * Tres delas o next.config.ts le para montar o CSP, e isso acontece em TEMPO
+ * DE BUILD — mesmo motivo das NEXT_PUBLIC_*. Definidas depois do deploy, o CSP
+ * publicado sai sem o R2 e o navegador bloqueia o envio com "falha de rede",
+ * sem status e sem dizer em lugar nenhum que foi CSP.
+ *
+ * Sem as cinco o app sobe igual e so o anexo responde que nao esta
+ * configurado. Por isso opcionais, e nao obrigatorias.
+ */
+const OPTIONAL_R2 = [
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+  "R2_PUBLIC_URL",
+];
 const TARGETS = ["production", "preview", "development"];
 
 const gatewayUrl = process.argv[2];
@@ -125,6 +144,11 @@ if (redisMissing.length === 0) {
   for (const key of OPTIONAL_REDIS) payload[key] = env[key];
 }
 
+const r2Missing = OPTIONAL_R2.filter((key) => !env[key]);
+if (r2Missing.length === 0) {
+  for (const key of OPTIONAL_R2) payload[key] = env[key];
+}
+
 const emailMissing = OPTIONAL_EMAIL.filter((key) => !env[key]);
 if (emailMissing.length === 0) {
   for (const key of OPTIONAL_EMAIL) payload[key] = env[key];
@@ -177,6 +201,12 @@ if (redisMissing.length > 0) {
   console.log(
     `Redis nao configurado (falta ${redisMissing.join(", ")}) — o rate limit` +
       " ficara em memoria, que na Vercel serverless quase nao protege.",
+  );
+}
+if (r2Missing.length > 0) {
+  console.log(
+    `R2 nao configurado (falta ${r2Missing.join(", ")}) — o anexo no chat vai` +
+      "\n       responder que nao esta configurado, e o CSP subira sem o R2.",
   );
 }
 console.log("\nEnviando (valores nao sao exibidos):");
