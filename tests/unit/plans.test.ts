@@ -3,6 +3,7 @@ import {
   PLANS,
   alturaExcedeOPlano,
   limitesDoPlano,
+  perfilCabeNoPlano,
   planoAtende,
   planoEfetivo,
   type PlanTier,
@@ -108,12 +109,21 @@ describe("limites", () => {
     expect(limitesDoPlano("INVENTADO" as PlanTier).tier).toBe("FREE");
   });
 
-  it("os numeros pedidos para a tela estao na tabela", () => {
+  /**
+   * A ESCADA COMBINADA: gratuito 720p30, Olimpo 1080p30, Pro 1440p60.
+   *
+   * O `quadrosMax` do Olimpo era 60 e virou 30 de proposito — a diferenca
+   * entre os dois planos pagos precisava ser algo que se sente, e so
+   * resolucao deixava os dois quase iguais. Este teste segue a decisao de
+   * produto; mudou o numero, muda aqui junto.
+   */
+  it("os numeros da tela estao na tabela", () => {
     expect(PLANS.FREE.alturaMax).toBe(720);
     expect(PLANS.FREE.quadrosMax).toBe(30);
     expect(PLANS.PLUS.alturaMax).toBe(1080);
-    expect(PLANS.PLUS.quadrosMax).toBe(60);
+    expect(PLANS.PLUS.quadrosMax).toBe(30);
     expect(PLANS.PRO.alturaMax).toBe(1440);
+    expect(PLANS.PRO.quadrosMax).toBe(60);
   });
 
   it("os limites de envio sao 25 MB, 250 MB e 1 GB", () => {
@@ -187,5 +197,64 @@ describe("altura da tela contra o teto do plano", () => {
     expect(alturaExcedeOPlano(0, 720)).toBe(false);
     expect(alturaExcedeOPlano(Number.NaN, 720)).toBe(false);
     expect(alturaExcedeOPlano(-1, 720)).toBe(false);
+  });
+});
+
+/**
+ * Qual perfil de tela cada plano libera.
+ *
+ * Este bloco nasceu de um defeito real: quando o teto por plano entrou, o
+ * perfil mais baixo era 1080p e o gratuito teto em 720p — todos os perfis
+ * ficavam trancados, e quem nao paga simplesmente nao conseguia compartilhar.
+ * Limite que zera o recurso nao e limite, e remocao.
+ */
+describe("perfis de tela liberados por plano", () => {
+  const PERFIS = {
+    leve: { height: 720, frameRate: 30 },
+    padrao: { height: 1080, frameRate: 30 },
+    gameplay: { height: 1080, frameRate: 60 },
+    ultra: { height: 1440, frameRate: 60 },
+    nitidez: { height: 1440, frameRate: 15 },
+  };
+
+  /** O caso que motivou o bloco: nenhum plano pode ficar sem nada. */
+  it("todo plano tem PELO MENOS um perfil", () => {
+    for (const tier of ["FREE", "PLUS", "PRO"] as PlanTier[]) {
+      const liberados = Object.values(PERFIS).filter((p) =>
+        perfilCabeNoPlano(p, PLANS[tier]),
+      );
+      expect(liberados.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("o gratuito fica so com o mais leve", () => {
+    expect(perfilCabeNoPlano(PERFIS.leve, PLANS.FREE)).toBe(true);
+    expect(perfilCabeNoPlano(PERFIS.padrao, PLANS.FREE)).toBe(false);
+    expect(perfilCabeNoPlano(PERFIS.ultra, PLANS.FREE)).toBe(false);
+  });
+
+  it("o Olimpo chega a 1080p, mas so a 30fps", () => {
+    expect(perfilCabeNoPlano(PERFIS.leve, PLANS.PLUS)).toBe(true);
+    expect(perfilCabeNoPlano(PERFIS.padrao, PLANS.PLUS)).toBe(true);
+    // a taxa de quadros e o que separa os dois planos pagos
+    expect(perfilCabeNoPlano(PERFIS.gameplay, PLANS.PLUS)).toBe(false);
+    expect(perfilCabeNoPlano(PERFIS.ultra, PLANS.PLUS)).toBe(false);
+  });
+
+  it("o Olimpo Pro libera tudo", () => {
+    for (const perfil of Object.values(PERFIS)) {
+      expect(perfilCabeNoPlano(perfil, PLANS.PRO)).toBe(true);
+    }
+  });
+
+  /**
+   * `Nitidez` e 1440p com 15 quadros: passa no teto de fps de qualquer plano e
+   * cai no de altura. Serve de guarda contra alguem "simplificar" a regra para
+   * olhar so os quadros.
+   */
+  it("Nitidez e barrado por ALTURA, nao por quadros", () => {
+    expect(PERFIS.nitidez.frameRate).toBeLessThan(PLANS.FREE.quadrosMax);
+    expect(perfilCabeNoPlano(PERFIS.nitidez, PLANS.FREE)).toBe(false);
+    expect(perfilCabeNoPlano(PERFIS.nitidez, PLANS.PLUS)).toBe(false);
   });
 });

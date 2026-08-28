@@ -26,7 +26,7 @@ import {
 } from "@/components/profile/self-user-card";
 import { viewerCan } from "@/lib/permissions";
 import { meuPlano } from "@/server/actions/planos";
-import { PLANS } from "@aether/shared";
+import { PLANS, perfilCabeNoPlano } from "@aether/shared";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useConnectionStatus,
@@ -120,13 +120,19 @@ export function ControlBar({
    * mostraria 1440p liberado por um instante para quem nao tem — oferecer e
    * tirar e pior do que demorar a oferecer.
    */
-  const [alturaMaxDoPlano, setAlturaMaxDoPlano] = useState(
-    PLANS.FREE.alturaMax,
-  );
+  const [limitesDeTela, setLimitesDeTela] = useState({
+    alturaMax: PLANS.FREE.alturaMax,
+    quadrosMax: PLANS.FREE.quadrosMax,
+  });
   useEffect(() => {
     void (async () => {
       const r = await meuPlano();
-      if (r.ok) setAlturaMaxDoPlano(r.data.limites.alturaMax);
+      if (r.ok) {
+        setLimitesDeTela({
+          alturaMax: r.data.limites.alturaMax,
+          quadrosMax: r.data.limites.quadrosMax,
+        });
+      }
     })();
   }, []);
 
@@ -597,7 +603,7 @@ export function ControlBar({
                    * INTERFACE: quem burlar publica assim mesmo, e o gateway
                    * silencia a faixa no SFU alguns segundos depois.
                    */
-                  const bloqueado = preset.height > alturaMaxDoPlano;
+                  const bloqueado = !perfilCabeNoPlano(preset, limitesDeTela);
                   return (
                     <button
                       key={preset.id}
@@ -606,7 +612,7 @@ export function ControlBar({
                       onClick={() => void pickPreset(preset.id)}
                       title={
                         bloqueado
-                          ? `Ate ${alturaMaxDoPlano}p no seu plano`
+                          ? `Seu plano vai ate ${limitesDeTela.alturaMax}p a ${limitesDeTela.quadrosMax}fps`
                           : undefined
                       }
                       className={cn(

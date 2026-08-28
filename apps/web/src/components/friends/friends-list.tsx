@@ -101,7 +101,7 @@ export function FriendsList({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-white/[0.06] px-5">
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-base-800 px-5">
         <NavToggle />
         {/*
           O TITULO SAI no celular. As abas logo ao lado ja dizem onde se esta,
@@ -150,8 +150,8 @@ export function FriendsList({
 
       {formAberto ? <AddFriend inputRef={inputRef} /> : null}
 
-      <div className="shrink-0 border-b border-white/[0.06] px-5 pb-3">
-        <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5">
+      <div className="shrink-0 border-b border-base-800 px-5 pb-3">
+        <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-base-800 bg-base-850/60 px-3.5 py-2.5">
           <Search className="h-[18px] w-[18px] shrink-0 text-ink-600" strokeWidth={1.75} />
           <input
             value={busca}
@@ -209,8 +209,8 @@ function Aba({
       className={cn(
         "rounded-[5px] px-3 py-1.5 text-[13px] font-bold transition-colors duration-150",
         ativa
-          ? "bg-white/[0.03] text-ink-100"
-          : "text-ink-300 hover:bg-white/[0.03] hover:text-ink-100",
+          ? "bg-base-850/60 text-ink-100"
+          : "text-ink-300 hover:bg-base-850/60 hover:text-ink-100",
       )}
     >
       {children}
@@ -220,7 +220,12 @@ function Aba({
 
 function Categoria({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="px-5 pb-2 pt-5 text-[12px] font-bold uppercase tracking-[0.04em] text-ink-600">
+    /*
+      `ink-400`, como os cabecalhos de categoria da arvore e de cargo no
+      painel de membros. Estava em `ink-600` — quase invisivel sobre o fundo,
+      e e ele que separa "online" de "todos" numa lista longa.
+    */
+    <h2 className="px-5 pb-2 pt-5 text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">
       {children}
     </h2>
   );
@@ -246,7 +251,7 @@ function Vazio({
           : "Sua lista esta vazia. Peca o nome de usuario de alguem e mande o convite acima.";
 
   return (
-    <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-white/[0.06] px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
+    <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-base-800 px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
       {texto}
     </p>
   );
@@ -283,7 +288,7 @@ function AddFriend({
   }
 
   return (
-    <div className="mx-auto my-4 w-full max-w-[960px] shrink-0 rounded-[10px] border border-white/[0.06] bg-base-850 px-5 py-4">
+    <div className="mx-auto my-4 w-full max-w-[960px] shrink-0 rounded-[10px] border border-base-800 bg-base-850 px-5 py-4">
       <h2 className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink-100">
         Adicionar amigo
       </h2>
@@ -304,7 +309,7 @@ function AddFriend({
           className={cn(
             "min-w-0 flex-1 rounded-[6px] border bg-base-950 px-3.5 py-2.5 text-[14px] text-ink-100",
             "outline-none transition-colors duration-150 placeholder:text-ink-600",
-            erro ? "border-signal-dnd" : "border-white/[0.06] focus:border-accent-500",
+            erro ? "border-signal-dnd" : "border-base-800 focus:border-accent-500",
           )}
         />
         <button
@@ -386,7 +391,7 @@ function Linha({ item }: { item: PublicFriendship }) {
   }
 
   return (
-    <div className="group mx-2 flex items-center gap-3.5 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-white/[0.03]">
+    <div className="group mx-2 flex items-center gap-3.5 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-base-850/60">
       <Avatar
         userId={item.user.id}
         name={item.user.displayName}
@@ -530,7 +535,7 @@ function BotaoAcao({
       disabled={pendente}
       onClick={onClick}
       className={cn(
-        "grid h-9 w-9 place-items-center rounded-full border border-white/[0.06] bg-base-850 text-ink-300",
+        "grid h-9 w-9 place-items-center rounded-full border border-base-800 bg-base-850 text-ink-300",
         "transition-colors duration-150 disabled:opacity-40",
         perigo
           ? "hover:bg-signal-dnd hover:text-white"

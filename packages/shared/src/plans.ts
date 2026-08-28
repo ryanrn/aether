@@ -67,8 +67,13 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
     rotulo: "Olimpo",
     larguraMax: 1920,
     alturaMax: 1080,
-    quadrosMax: 60,
-    bitrateMax: 6_000_000,
+    /**
+     * 30 quadros no Olimpo, 60 so no Pro. A diferenca entre os dois planos
+     * pagos precisava ser algo que se SENTE — e entre 1080p30 e 1080p60, em
+     * jogo, a diferenca e obvia. So resolucao deixaria os dois quase iguais.
+     */
+    quadrosMax: 30,
+    bitrateMax: 4_000_000,
     somDaTela: true,
     telasSimultaneas: 2,
     uploadMaxBytes: 250 * MB,
@@ -160,4 +165,25 @@ export function alturaExcedeOPlano(
 ): boolean {
   if (!Number.isFinite(alturaPublicada) || alturaPublicada <= 0) return false;
   return alturaPublicada > alturaMax * TOLERANCIA_DE_ALTURA;
+}
+
+/**
+ * Este perfil de tela cabe no plano?
+ *
+ * OLHA OS DOIS: altura e quadros. Checar so a altura deixaria 1080p60 passar
+ * num plano de 1080p30 — e a taxa de quadros e justamente o que separa o
+ * Olimpo do Olimpo Pro.
+ *
+ * LIMITE HONESTO: no servidor so da para impor a ALTURA. O `TrackInfo` que o
+ * LiveKit devolve traz largura e altura, e nao traz taxa de quadros — entao a
+ * trava de fps vive apenas na interface, e quem reescrever o cliente publica
+ * 60fps num plano de 30. A resolucao continua sendo derrubada no SFU.
+ */
+export function perfilCabeNoPlano(
+  perfil: { height: number; frameRate: number },
+  limites: { alturaMax: number; quadrosMax: number },
+): boolean {
+  return (
+    perfil.height <= limites.alturaMax && perfil.frameRate <= limites.quadrosMax
+  );
 }

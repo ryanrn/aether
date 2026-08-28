@@ -19,7 +19,12 @@
  * sobrando.
  */
 
-export type SharePresetId = "leitura" | "equilibrado" | "movimento";
+export type SharePresetId =
+  | "leve"
+  | "padrao"
+  | "gameplay"
+  | "ultra"
+  | "nitidez";
 
 export interface SharePreset {
   id: SharePresetId;
@@ -34,19 +39,27 @@ export interface SharePreset {
 }
 
 export const SHARE_PRESETS: Record<SharePresetId, SharePreset> = {
-  leitura: {
-    id: "leitura",
-    label: "Leitura",
-    description: "Codigo e documentos — prioriza nitidez, poucos quadros",
-    width: 2560,
-    height: 1440,
-    frameRate: 15,
+  /**
+   * A ESCADA COMECA EM 720p, e isso nao e detalhe.
+   *
+   * Antes o perfil mais baixo era 1080p. Quando o teto por plano entrou, o
+   * gratuito (720p) ficou com os TRES perfis trancados — quem nao paga
+   * simplesmente nao conseguia compartilhar. Um limite que zera o recurso nao
+   * e limite, e remocao.
+   */
+  leve: {
+    id: "leve",
+    label: "Leve",
+    description: "720p a 30fps — gasta pouca banda, funciona em qualquer conexao",
+    width: 1280,
+    height: 720,
+    frameRate: 30,
     contentHint: "detail",
-    maxBitrate: 2_500_000,
+    maxBitrate: 1_500_000,
   },
-  equilibrado: {
-    id: "equilibrado",
-    label: "Equilibrado",
+  padrao: {
+    id: "padrao",
+    label: "Padrao",
     description: "1080p a 30fps — serve para quase tudo",
     width: 1920,
     height: 1080,
@@ -54,24 +67,61 @@ export const SHARE_PRESETS: Record<SharePresetId, SharePreset> = {
     contentHint: "detail",
     maxBitrate: 3_000_000,
   },
-  movimento: {
-    id: "movimento",
-    label: "Movimento",
-    description: "Jogos e video — 1080p a 60fps, prioriza fluidez",
+  gameplay: {
+    id: "gameplay",
+    label: "Gameplay",
+    description: "1080p a 60fps — movimento fluido, para jogo e video",
     width: 1920,
     height: 1080,
     frameRate: 60,
     contentHint: "motion",
     maxBitrate: 6_000_000,
   },
+  ultra: {
+    id: "ultra",
+    label: "Ultra",
+    description: "1440p a 60fps — o maximo, exige banda e placa boa",
+    width: 2560,
+    height: 1440,
+    frameRate: 60,
+    contentHint: "motion",
+    maxBitrate: 10_000_000,
+  },
+  /**
+   * NITIDEZ e o antigo "Leitura", e o nome novo diz o que ele faz.
+   *
+   * Ele nao esta na escada de qualidade: e 1440p com apenas 15 quadros, o que
+   * o torna o MELHOR perfil para ler codigo e o PIOR para jogo. Chamado de
+   * "Leitura" e listado primeiro, parecia o mais basico — e a duvida
+   * "por que o mais simples esta trancado?" era inevitavel, porque ele e, na
+   * verdade, o de maior resolucao.
+   */
+  nitidez: {
+    id: "nitidez",
+    label: "Nitidez",
+    description: "1440p a 15fps — para ler codigo e texto pequeno",
+    width: 2560,
+    height: 1440,
+    frameRate: 15,
+    contentHint: "detail",
+    maxBitrate: 2_500_000,
+  },
 };
 
-export const DEFAULT_PRESET: SharePresetId = "equilibrado";
+export const DEFAULT_PRESET: SharePresetId = "padrao";
 
+/**
+ * A ordem da lista e a ESCADA DE QUALIDADE, do mais leve ao mais pesado, com
+ * o perfil de texto no fim. Ordenar por outra coisa faria o cadeado aparecer
+ * no meio da lista, e "por que o de cima esta trancado e o de baixo nao?" nao
+ * tem resposta boa.
+ */
 export const PRESET_LIST: SharePreset[] = [
-  SHARE_PRESETS.leitura,
-  SHARE_PRESETS.equilibrado,
-  SHARE_PRESETS.movimento,
+  SHARE_PRESETS.leve,
+  SHARE_PRESETS.padrao,
+  SHARE_PRESETS.gameplay,
+  SHARE_PRESETS.ultra,
+  SHARE_PRESETS.nitidez,
 ];
 
 /** O navegador suporta captura de tela? Exige contexto seguro (HTTPS ou localhost). */
