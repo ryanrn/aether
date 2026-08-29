@@ -1,6 +1,7 @@
 export * from "./block";
 export * from "./channels";
 export * from "./dm";
+export * from "./equipe";
 export * from "./friends";
 export * from "./member";
 export * from "./plan";

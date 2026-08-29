@@ -828,6 +828,52 @@ Verificado de ponta a ponta com o jogo aberto, dentro do Electron: nome
 `VALORANT` e icone vindo do `.ico` que a propria Riot deixa em
 `ProgramData/Riot Games/Metadata`.
 
+### Biblioteca de jogos da comunidade (parte 1: fila e revisao)
+
+A deteccao so conhece jogo que alguma LOJA declarou ter instalado. Jogo fora de
+loja nao tem quem responda "onde voce esta" — entao as pessoas respondem: quem
+abre um jogo que o app nao reconheceu pode ensina-lo, e a equipe revisa antes
+de aquilo valer para a base inteira.
+
+**O QUE VIAJA E O EXECUTAVEL, NUNCA O CAMINHO.** Duas razoes, cada uma bastando
+sozinha: o caminho carrega o nome de usuario do Windows quase sempre
+(`C:/Users/fulano/...`), e uma biblioteca compartilhada o exporia para todo
+mundo, para sempre; e ele nem funcionaria, porque cada pessoa instala em disco
+e pasta diferentes, enquanto o nome do executavel e o mesmo em toda maquina.
+
+Barra e dois-pontos sao RECUSADOS pelo schema, e nao apenas desencorajados —
+sao exatamente o que transforma nome de arquivo em caminho.
+
+**A revisao existe porque um jogo aprovado vale para todo mundo.** Sem ela,
+bastaria uma pessoa sugerir `chrome.exe = Google Chrome` para a base inteira
+aparecer jogando Chrome, e nada no sistema teria como saber que esta errado.
+
+**O contador conta PESSOAS, nao cliques.** O par (jogo, pessoa) e unico no
+banco. Contador inflavel seria pior que contador nenhum: faria "dez pessoas
+pediram" parecer sinal forte quando e uma pessoa clicando dez vezes.
+
+`User.equipe` e administracao GLOBAL, e nao tem relacao com dono de servidor —
+sao eixos diferentes de proposito, para que ter um servidor nao de a ninguem
+poder de escrever no catalogo dos outros. Concede-se por
+`scripts/definir-equipe.mjs`, e a regra de leitura mora em `@aether/access`.
+
+- **A aba de revisao some para quem nao e equipe, mas isso e CORTESIA.** Quem
+  barra sao as actions, que rechecam no servidor e respondem como se a
+  funcionalidade nao existisse — 404, e nao 403, pela regra de nao revelar
+  existencia de recurso.
+- **A parte 2 nao existe ainda.** Nada no desktop sugere jogo nem baixa o
+  catalogo aprovado: hoje da para revisar uma fila que so enche por chamada
+  direta da action. E deliberado — a parte 1 e verificavel inteira no
+  navegador, antes de mexer no processo que roda na maquina das pessoas.
+- **As duas normalizacoes sao implementacoes SEPARADAS.** O desktop e
+  JavaScript puro e nao importa `@aether/shared`; o que as mantem iguais e um
+  teste que compara as duas caso a caso. Se divergirem, um jogo aprovado deixa
+  de casar com o processo que o originou — sem erro, so o jogo continuando
+  invisivel.
+- **Nao ha limite de sugestoes por pessoa.** Alguem determinado enche a fila de
+  lixo. O par unico impede inflar o contador, e a sugestao guarda quem a fez,
+  mas nao ha rate limit nem bloqueio automatico ainda.
+
 ### Limitacoes conhecidas da deteccao de jogo
 
 - **O icone do VALORANT vem da Riot, e nao do executavel.** Nao ha escolha:

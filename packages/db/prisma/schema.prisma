@@ -40,6 +40,17 @@ model User {
   displayName               String
   email                     String     @unique
   passwordHash              String
+  /// Administracao GLOBAL do produto — nao tem nada a ver com dono de
+  /// servidor, que e por servidor e ja existe.
+  ///
+  /// Hoje governa uma coisa so: quem revisa a fila de jogos sugeridos. Fica
+  /// como coluna, e nao como lista de ids numa variavel de ambiente, pelo
+  /// mesmo motivo do plano — conceder e um comando (`definir-equipe.mjs`), e
+  /// nao um redeploy.
+  ///
+  /// A regra de LEITURA disto mora em `@aether/access`, e nao espalhada em
+  /// comparacoes de username pelas telas.
+  equipe                    Boolean    @default(false)
   avatarUrl                 String?
   /// O mesmo avatar, PARADO — gerado no envio quando o arquivo e animado.
   ///
@@ -101,6 +112,7 @@ model User {
   auditEntries       AuditLog[]          @relation("AuditActor")
   bans               Ban[]               @relation("BannedUser")
   issuedBans         Ban[]               @relation("BanIssuer")
+  jogosSugeridos     SugestaoDeJogo[]
 
   @@index([status])
 }
@@ -689,4 +701,78 @@ model Attachment {
 
   @@index([userId, prontoEm])
   @@index([messageId])
+}
+
+/// Um jogo que a comunidade ensinou ao app.
+///
+/// POR QUE EXISTE: a deteccao so conhece jogo que alguma LOJA declarou ter
+/// instalado. Jogo fora de loja — instalado a mao, de outra plataforma, ou de
+/// uma loja que ainda nao lemos — nao tem quem responda "onde voce esta". As
+/// pessoas respondem.
+///
+/// GUARDA O EXECUTAVEL, NUNCA O CAMINHO. O caminho carrega o nome de usuario
+/// do Windows quase sempre (`C:/Users/fulano/...`), entao subi-lo vazaria o
+/// nome real de quem contribuiu para todo mundo, para sempre. E ele nem
+/// serviria: cada pessoa instala em lugar diferente, enquanto o nome do
+/// executavel e o mesmo em toda maquina.
+model JogoDaComunidade {
+  id String @id @default(cuid())
+
+  /// O executavel normalizado — minusculas, sem extensao, sem pontuacao.
+  /// E a chave de deduplicacao: `VALORANT-Win64-Shipping.exe` e
+  /// `valorant-win64-shipping.EXE` sao a mesma sugestao.
+  chave String @unique
+
+  /// Como o executavel foi visto, para a fila mostrar algo reconhecivel.
+  /// Nao e usado para casar — quem casa e a `chave`.
+  executavel String
+
+  /// O nome que aparece na atividade. Editavel na revisao: quem sugere
+  /// costuma mandar o nome do processo, e nem sempre e o nome do jogo.
+  nome String
+
+  status StatusDeJogo @default(PENDENTE)
+
+  /// Quem revisou, e quando. Um jogo aprovado passa a valer para TODA a base,
+  /// entao precisa ter dono.
+  revisadoPor String?
+  revisadoEm  DateTime?
+
+  sugestoes SugestaoDeJogo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// A fila e sempre filtrada por status; sem indice ela varre a tabela.
+  @@index([status])
+}
+
+/// Quem sugeriu o que.
+///
+/// Tabela propria, e nao um contador na linha do jogo, porque contador
+/// inflavel e pior do que contador nenhum: uma pessoa clicando dez vezes faria
+/// "dez pessoas pediram" parecer sinal forte quando nao e. Com o par unico, o
+/// numero volta a significar o que diz.
+///
+/// Guarda QUEM de proposito, para haver a quem responsabilizar por enxurrada
+/// de sugestao inventada. E o mesmo raciocinio do log de auditoria.
+model SugestaoDeJogo {
+  id     String           @id @default(cuid())
+  jogoId String
+  jogo   JogoDaComunidade @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([jogoId, userId])
+  @@index([userId])
+}
+
+enum StatusDeJogo {
+  PENDENTE
+  APROVADO
+  /// Recusado fica na tabela em vez de sumir: apagar faria a mesma sugestao
+  /// voltar para a fila na proxima vez que alguem abrisse o jogo.
+  RECUSADO
 }

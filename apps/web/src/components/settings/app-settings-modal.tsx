@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
+import { Gamepad2, Library, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { JogosTab } from "./jogos-tab";
 import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
 
@@ -23,7 +24,7 @@ import { VoiceTab } from "./voice-tab";
  * propria etiqueta.
  */
 
-type Tab = "conta" | "voz" | "atividade" | "plano";
+type Tab = "conta" | "voz" | "atividade" | "plano" | "jogos";
 
 const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "conta", label: "Minha conta", icon: User },
@@ -44,6 +45,20 @@ const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "plano", label: "Plano", icon: Sparkles },
 ];
 
+/**
+ * A aba de revisao da biblioteca de jogos, que so a equipe ve.
+ *
+ * Fora da lista fixa de proposito: nao e uma aba que existe para todo mundo e
+ * fica desabilitada — ela simplesmente nao e desenhada para quem nao revisa.
+ * Isso e cortesia de interface, e nao seguranca: as actions da aba recusam
+ * sozinhas, respondendo como se nao existissem.
+ */
+const ABA_DA_EQUIPE = {
+  id: "jogos" as const,
+  label: "Biblioteca",
+  icon: Library,
+};
+
 export function AppSettingsModal({
   open,
   onClose,
@@ -61,10 +76,17 @@ export function AppSettingsModal({
   user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
+    /**
+     * Administracao global. Governa apenas se a aba de revisao APARECE — quem
+     * barra de verdade sao as actions, que recheam a regra no servidor.
+     */
+    equipe: boolean;
   };
   server: { id: string; memberId: string; nickname: string | null };
 }) {
   const [active, setActive] = useState<Tab>("conta");
+
+  const abas = user.equipe ? [...TABS, ABA_DA_EQUIPE] : TABS;
 
   return (
     <Modal
@@ -88,7 +110,7 @@ export function AppSettingsModal({
           atalhos, notificacoes) sem virar uma fileira apertada.
         */}
         <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-base-800 pr-3">
-          {TABS.map((tab) => {
+          {abas.map((tab) => {
             const Icon = tab.icon;
             const selected = active === tab.id;
             return (
@@ -122,6 +144,8 @@ export function AppSettingsModal({
             <VoiceTab />
           ) : active === "plano" ? (
             <PlanoTab />
+          ) : active === "jogos" ? (
+            <JogosTab />
           ) : (
             <ActivityTab />
           )}

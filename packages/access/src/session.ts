@@ -28,6 +28,12 @@ export interface AuthenticatedSession {
    */
   user: PublicUser & {
     email: string;
+    /**
+     * Administracao global. Fica FORA de `PublicUser` de proposito: quem e da
+     * equipe nao e atributo publico de perfil, e nao tem por que aparecer no
+     * navegador de outra pessoa.
+     */
+    equipe: boolean;
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };
@@ -64,6 +70,7 @@ export async function loadSession(
         select: {
           ...SELECT_USUARIO_PUBLICO,
           email: true,
+          equipe: true,
           // Preferencia de contato: quem pode abrir conversa comigo sem ser
           // amigo. Vem na sessao para a tela de configuracoes nao precisar de
           // uma ida ao banco so para desenhar uma chave.
@@ -90,6 +97,7 @@ export async function loadSession(
     user: {
       ...toPublicUser(session.user),
       email: session.user.email,
+      equipe: session.user.equipe,
       allowServerDms: session.user.allowServerDms,
       allowServerFriendRequests: session.user.allowServerFriendRequests,
     },
