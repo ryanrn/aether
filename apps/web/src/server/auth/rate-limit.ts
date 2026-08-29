@@ -1,7 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import { readRedisConfig, redisEval } from "@aether/shared";
+import { limitarJanelaDeslizante, readRedisConfig } from "@aether/shared";
 
 /**
  * Rate limit de janela deslizante, com dois armazenamentos.
@@ -65,44 +65,6 @@ export function rateLimitInMemory(
 }
 
 /**
- * Janela deslizante em Redis, com sorted set.
- *
- * Um script Lua, e nao uma sequencia de comandos: precisa ser ATOMICO. Com
- * comandos separados, duas tentativas simultaneas leem o mesmo contador antes
- * de qualquer uma escrever, e as duas passam — que e exatamente a corrida que
- * um limite de tentativas existe para impedir.
- *
- * Espelha `rateLimitInMemory` de proposito, incluindo o detalhe que importa:
- * a tentativa RECUSADA nao entra no conjunto. Se entrasse, insistir empurraria
- * a liberacao para sempre adiante, e quem errou a senha ficaria trancado
- * enquanto continuasse tentando.
- */
-const SLIDING_WINDOW_LUA = `
-local key = KEYS[1]
-local now = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local limit = tonumber(ARGV[3])
-local member = ARGV[4]
-
-redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
-local count = redis.call('ZCARD', key)
-
-if count >= limit then
-  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
-  local retry = 1
-  if oldest[2] then
-    retry = math.ceil((tonumber(oldest[2]) + window - now) / 1000)
-    if retry < 1 then retry = 1 end
-  end
-  return {0, retry}
-end
-
-redis.call('ZADD', key, now, member)
-redis.call('PEXPIRE', key, window)
-return {1, 0}
-`;
-
-/**
  * Aplica o limite. Assincrona porque o backend distribuido fala pela rede —
  * o custo de uma ida ao Redis por tentativa de login e irrelevante perto do
  * scrypt que vem logo depois.
@@ -121,16 +83,7 @@ export async function rateLimit(
   if (!config) return rateLimitInMemory(key, limit, windowMs);
 
   try {
-    const now = Date.now();
-    const member = `${now}-${Math.random().toString(16).slice(2)}`;
-    const result = (await redisEval(
-      config,
-      SLIDING_WINDOW_LUA,
-      [`ratelimit:${key}`],
-      [now, windowMs, limit, member],
-    )) as [number, number];
-
-    return { ok: result[0] === 1, retryAfter: Number(result[1]) || 0 };
+    return await limitarJanelaDeslizante(config, key, limit, windowMs);
   } catch (error) {
     console.error("[rate-limit] Redis indisponivel, liberando:", error);
     return { ok: true, retryAfter: 0 };

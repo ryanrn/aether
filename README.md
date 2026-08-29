@@ -2659,12 +2659,15 @@ limite de tentativas e um consumo unico existem para impedir.
   esta pronto, mas ate o Upstash ser provisionado e as variaveis subirem, a
   Vercel segue com contador por instancia — ou seja, quase nenhuma protecao
   contra forca bruta no login.
-- **A semantica da janela deslizante no Redis nao e testada de verdade.** Os
+- **A semantica do Lua so e provada pelo `scripts/verificar-redis.mts`.** Os
   doze testes de `rate-limit-redis.test.ts` dublam o `fetch` e cobrem o
   CONTRATO (um EVAL atomico, prefixo de chave, autenticacao, e as tres formas
   de falha). O algoritmo em si e testado contra a implementacao em memoria,
   que espelha a mesma regra. Um duble que interpretasse Lua estaria testando o
-  duble.
+  duble — por isso a prova do interpretador ficou num script separado, que
+  precisa de um Redis de verdade para rodar. E o mesmo desenho do R2: `fetch`
+  de servidor ignora CORS, e la o teste em Node passava enquanto o navegador
+  era bloqueado.
 - **`rateLimit()` virou assincrona.** Os cinco pontos de chamada ganharam
   `await`. O custo de uma ida ao Redis por tentativa de login e irrelevante
   perto do scrypt que vem logo depois.
@@ -2672,8 +2675,15 @@ limite de tentativas e um consumo unico existem para impedir.
   E a 7c-2, e e a parte que de fato destrava a segunda maquina de gateway. O
   `fly.toml` segue com `min_machines_running = 1` por isso.
 - **Nada disso foi exercitado contra um Redis real ainda** — nao ha instancia
-  provisionada. O caminho sem Redis (o de hoje) esta coberto pelos testes e
-  pela regressao de integracao.
+  provisionada. O script de verificacao esta escrito e compila, mas nunca
+  rodou de ponta a ponta: ate existir um Upstash, ele so sabe dizer que o
+  Redis nao esta configurado. O caminho sem Redis (o de hoje) segue coberto
+  pelos testes e pela regressao de integracao.
+- **`verificar-redis.mts` e `.mts`, e nao `.mjs` como os outros.** Foi
+  deliberado: assim ele importa `limitarJanelaDeslizante` e
+  `consumirTicketUnico` de `@aether/shared` e exercita o codigo que roda em
+  producao, em vez de uma copia do Lua que divergiria na primeira mudanca.
+  Roda por `tsx`, o mesmo que ja executa o gateway.
 
 ## Limitacoes conhecidas da FASE 7b (revalidacao de sessao e recalculo de salas)
 

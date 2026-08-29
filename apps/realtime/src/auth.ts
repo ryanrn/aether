@@ -5,7 +5,11 @@ import {
   SESSION_COOKIE,
   SOCKET_TICKET_TTL_SECONDS,
 } from "@aether/access";
-import { readRedisConfig, redisEval, type SocketData } from "@aether/shared";
+import {
+  consumirTicketUnico,
+  readRedisConfig,
+  type SocketData,
+} from "@aether/shared";
 
 /**
  * Autenticacao do handshake WebSocket.
@@ -83,31 +87,16 @@ function consumeTicketInMemory(jti: string): boolean {
   return true;
 }
 
-/**
- * `SET key 1 NX PX ttl` — grava so se ainda nao existir, e expira sozinho.
- * Uma operacao atomica: duas instancias apresentando o mesmo ticket ao mesmo
- * tempo, so uma escreve. Um GET seguido de SET teria a corrida exata que o
- * consumo unico existe para impedir.
- */
-const CONSUME_TICKET_LUA = `
-if redis.call('SET', KEYS[1], '1', 'NX', 'PX', ARGV[1]) then
-  return 1
-end
-return 0
-`;
-
 async function consumeTicket(jti: string): Promise<boolean> {
   const config = readRedisConfig();
   if (!config) return consumeTicketInMemory(jti);
 
   try {
-    const result = await redisEval(
+    return await consumirTicketUnico(
       config,
-      CONSUME_TICKET_LUA,
-      [`ticket:${jti}`],
-      [SOCKET_TICKET_TTL_SECONDS * 1000],
+      jti,
+      SOCKET_TICKET_TTL_SECONDS * 1000,
     );
-    return result === 1;
   } catch (error) {
     /**
      * Fail-CLOSED, ao contrario do rate limit. Aqui a duvida e "este ticket ja
