@@ -577,6 +577,110 @@ function jogosPorNomes(texto, catalogo = []) {
   return [...achados.values()];
 }
 
+/* -------------------------------------------------------------------------
+ * Biblioteca da comunidade
+ *
+ * O que as pessoas ensinaram ao app e a equipe aprovou. Chega da PAGINA, por
+ * IPC, e nao e buscado aqui: o processo principal nao tem a sessao (os cookies
+ * vivem no renderer), e dar-lhe uma seria criar um segundo lugar com
+ * credencial para nada.
+ *
+ * Guardado em memoria e tambem em disco pelo `main.js`, para valer ja na
+ * primeira deteccao depois de abrir — antes de a pagina carregar.
+ *
+ * CASAMENTO POR IGUALDADE EXATA, e nao por prefixo como o catalogo das lojas.
+ * A diferenca tem razao: no catalogo da loja a chave e o NOME DO JOGO, e o
+ * executavel costuma ser o nome mais um sufixo de motor; aqui a chave JA E o
+ * executavel normalizado. Aceitar prefixo faria `sot` casar com qualquer
+ * `sotsomething.exe`.
+ * ------------------------------------------------------------------------- */
+
+let catalogoDaComunidade = [];
+
+/** Trocado inteiro, e nao mesclado: a lista aprovada e a verdade completa. */
+function definirCatalogoDaComunidade(lista) {
+  catalogoDaComunidade = Array.isArray(lista)
+    ? lista
+        .filter((j) => j && typeof j.chave === "string" && typeof j.nome === "string")
+        .map((j) => ({ chave: j.chave, nome: j.nome }))
+    : [];
+  return catalogoDaComunidade.length;
+}
+
+function lerCatalogoDaComunidade() {
+  return catalogoDaComunidade;
+}
+
+/** Jogos da comunidade presentes numa lista de NOMES de processo. */
+function jogosDaComunidadeEm(texto, comunidade = catalogoDaComunidade) {
+  if (comunidade.length === 0) return [];
+  const porChave = new Map(comunidade.map((j) => [j.chave, j]));
+  const achados = new Map();
+
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const chave = normalizarNomeDeJogo(linha.trim());
+    if (chave.length === 0) continue;
+    const jogo = porChave.get(chave);
+    if (!jogo || achados.has(jogo.nome)) continue;
+    achados.set(jogo.nome, { chave: jogo.nome, nome: jogo.nome, caminhos: [] });
+  }
+  return [...achados.values()];
+}
+
+/**
+ * Processos que a pessoa poderia sugerir como jogo.
+ *
+ * Devolve NOMES, nunca caminhos — pelo mesmo motivo de a biblioteca guardar
+ * executavel: caminho carrega o nome de usuario do Windows.
+ *
+ * Tira o que ja e reconhecido (nao ha o que sugerir) e o ruido obvio do
+ * sistema. A lista NAO tenta adivinhar o que e jogo: adivinhar erraria para os
+ * dois lados, e quem sabe se aquilo e um jogo e a pessoa que esta olhando.
+ */
+function candidatosParaSugerir(texto, catalogo = [], comunidade = catalogoDaComunidade) {
+  const conhecidos = new Set(comunidade.map((j) => j.chave));
+  const vistos = new Set();
+  const candidatos = [];
+
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const nome = linha.trim();
+    if (nome.length === 0 || nome.toLowerCase() === "name") continue;
+
+    const chave = normalizarNomeDeJogo(nome);
+    if (chave.length < 3 || vistos.has(chave)) continue;
+    if (conhecidos.has(chave)) continue;
+    if (RUIDO_DO_SISTEMA.has(chave)) continue;
+    if (entradaPorNomeDeProcesso(nome, catalogo)) continue;
+
+    vistos.add(chave);
+    candidatos.push(nome);
+  }
+
+  return candidatos.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * O que nunca e jogo.
+ *
+ * Lista curta e do OBVIO de proposito. Ela nao existe para acertar o que e
+ * jogo — existe para a lista nao abrir com trinta processos do Windows antes
+ * do primeiro nome reconhecivel. Errar para menos aqui custa uma linha a mais
+ * para a pessoa ler; errar para mais esconderia o jogo que ela veio sugerir.
+ */
+const RUIDO_DO_SISTEMA = new Set(
+  [
+    "system", "systemidleprocess", "registry", "smss", "csrss", "wininit",
+    "winlogon", "services", "lsass", "svchost", "fontdrvhost", "dwm",
+    "explorer", "taskhostw", "ctfmon", "runtimebroker", "searchhost",
+    "startmenuexperiencehost", "shellexperiencehost", "sihost", "conhost",
+    "dllhost", "spoolsv", "audiodg", "wmiprvse", "backgroundtaskhost",
+    "applicationframehost", "textinputhost", "lockapp", "useroobebroker",
+    "securityhealthservice", "securityhealthsystray", "msmpeng", "nissrv",
+    "aether", "electron", "node", "cmd", "powershell", "pwsh", "wsl",
+    "chrome", "msedge", "firefox", "opera", "brave",
+  ].map((n) => n),
+);
+
 /**
  * Jogos distintos presentes numa saida de processos.
  *
@@ -911,7 +1015,17 @@ async function jogoAtual() {
     (j) => !jaAchados.has(j.chave),
   );
 
-  const achados = [...porCaminho, ...porNome];
+  /*
+   * A comunidade vem POR ULTIMO, de proposito: o que uma loja declarou ter
+   * instalado e informacao de primeira mao, e o que as pessoas ensinaram e de
+   * segunda. Empatando, ganha a loja — e ela tambem e a unica que traz icone.
+   */
+  for (const j of porNome) jaAchados.add(j.chave);
+  const daComunidade = jogosDaComunidadeEm(saidaDeNomes).filter(
+    (j) => !jaAchados.has(j.chave),
+  );
+
+  const achados = [...porCaminho, ...porNome, ...daComunidade];
   if (achados.length === 0) return null;
 
   /**
@@ -938,6 +1052,22 @@ async function jogoAtual() {
     }
   }
   return { nome: escolhido.chave, icone };
+}
+
+/**
+ * Os processos que a pessoa poderia sugerir como jogo, prontos para a tela.
+ *
+ * Monta o catalogo das lojas aqui dentro em vez de receber por parametro: quem
+ * chama e o processo principal, e ele nao tem por que saber que existe
+ * catalogo de loja para poder perguntar "o que da para sugerir?".
+ */
+async function listarCandidatos() {
+  if (process.platform !== "win32") return [];
+  const [nomes, catalogo] = await Promise.all([
+    nomesDeProcessos(),
+    catalogoDeLojas(),
+  ]);
+  return candidatosParaSugerir(nomes, catalogo);
 }
 
 /**
@@ -1017,6 +1147,11 @@ module.exports = {
   jogosPorNomes,
   entradaPorNomeDeProcesso,
   normalizarNomeDeJogo,
+  definirCatalogoDaComunidade,
+  lerCatalogoDaComunidade,
+  jogosDaComunidadeEm,
+  candidatosParaSugerir,
+  listarCandidatos,
   nomeNoManifesto,
   jogoDeCatalogoEm,
   comoPasta,

@@ -8,6 +8,7 @@ import type {
   ServerToClientEvents,
 } from "@aether/shared";
 import { createSocketTicketAction } from "@/server/actions/realtime";
+import { sincronizarCatalogoDeJogos } from "@/lib/desktop/game-activity";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 
 /**
@@ -65,6 +66,21 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
    */
   const refreshRef = useRef(() => router.refresh());
   refreshRef.current = () => router.refresh();
+
+  /**
+   * Entrega ao desktop o catalogo de jogos aprovado pela comunidade.
+   *
+   * AQUI porque este provedor monta uma vez por sessao autenticada, que e
+   * exatamente a frequencia certa: o catalogo muda quando a equipe aprova algo,
+   * e nao a cada navegacao. No navegador a funcao nao faz nada — nao ha
+   * processo principal a quem entregar.
+   *
+   * Sem `await` e sem tratamento: e um extra sobre a deteccao que ja funciona,
+   * e falhar em busca-lo nao pode atrapalhar quem so quer conversar.
+   */
+  useEffect(() => {
+    void sincronizarCatalogoDeJogos();
+  }, []);
 
   // 1. conexao: criada uma vez e mantida entre navegacoes de canal
   useEffect(() => {

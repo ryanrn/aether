@@ -861,10 +861,38 @@ poder de escrever no catalogo dos outros. Concede-se por
   barra sao as actions, que rechecam no servidor e respondem como se a
   funcionalidade nao existisse — 404, e nao 403, pela regra de nao revelar
   existencia de recurso.
-- **A parte 2 nao existe ainda.** Nada no desktop sugere jogo nem baixa o
-  catalogo aprovado: hoje da para revisar uma fila que so enche por chamada
-  direta da action. E deliberado — a parte 1 e verificavel inteira no
-  navegador, antes de mexer no processo que roda na maquina das pessoas.
+**No desktop (parte 2):** a aba Atividade ganha "Nao esta vendo seu jogo?
+Adicione-o", e o catalogo aprovado desce da pagina para o processo principal.
+
+A PAGINA busca o catalogo e repassa por IPC — o processo principal nao o busca
+sozinho porque a sessao vive no renderer, e dar-lhe credencial propria seria
+criar um segundo lugar com segredo para resolver o que a pagina ja resolve. Uma
+copia fica em disco (`jogos-comunidade.json`) para valer ja na primeira
+deteccao, 8 segundos depois de abrir, antes de a pagina carregar.
+
+O CASAMENTO DA COMUNIDADE E POR IGUALDADE EXATA, ao contrario do catalogo das
+lojas, que aceita prefixo. A diferenca tem razao: na loja a chave e o NOME DO
+JOGO e o executavel costuma ser o nome mais um sufixo de motor; aqui a chave JA
+E o executavel, entao prefixo faria `sot` casar com qualquer
+`sotqualquercoisa.exe`.
+
+A comunidade entra por ULTIMO na deteccao: o que uma loja declarou e informacao
+de primeira mao, o que as pessoas ensinaram e de segunda — e so a loja traz
+icone.
+
+- **A tela de adicionar ENFRAQUECE, de proposito, o invariante de que a pagina
+  nunca ve a lista de processos.** O que o torna aceitavel: acontece so quando
+  a pessoa abre aquela tela, nunca continuamente; o processo principal recusa
+  se a deteccao estiver desligada; e o que desce sao NOMES, jamais caminhos.
+  Ainda assim, e a unica tela do app em que a pessoa ve a propria lista de
+  programas, e ela diz isso na propria tela.
+- **O filtro de ruido do sistema e curto e do obvio.** Ele nao tenta adivinhar
+  o que e jogo — adivinhar erraria para os dois lados, e quem sabe se aquilo e
+  um jogo e a pessoa que esta olhando. Medido numa maquina real: 45 candidatos,
+  com o ruido do Windows fora.
+- **Nao ha faxina do catalogo em disco.** Um jogo que a equipe RECUSAR depois
+  de ter aprovado continua no arquivo de quem ja baixou, ate a proxima
+  sincronizacao — que acontece a cada carregamento da pagina.
 - **As duas normalizacoes sao implementacoes SEPARADAS.** O desktop e
   JavaScript puro e nao importa `@aether/shared`; o que as mantem iguais e um
   teste que compara as duas caso a caso. Se divergirem, um jogo aprovado deixa

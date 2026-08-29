@@ -5,7 +5,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
 const { instalarLoopback, encerrarLoopback } = require("./loopback-ipc");
-const { criarVigia } = require("./game-detect");
+const {
+  criarVigia,
+  definirCatalogoDaComunidade,
+  listarCandidatos,
+} = require("./game-detect");
 const { instalarAtualizador } = require("./updater");
 
 /**
@@ -151,9 +155,44 @@ function salvarDeteccaoLigada(enabled) {
   }
 }
 
+/**
+ * O catalogo da comunidade guardado em disco.
+ *
+ * EXISTE PARA A PRIMEIRA DETECCAO. A deteccao roda 8 segundos depois de abrir;
+ * a pagina so manda a lista depois de carregar e autenticar. Sem a copia em
+ * disco, toda abertura teria uma janela em que jogo da comunidade nao seria
+ * reconhecido — e quem tem um jogo desses acharia que o recurso e intermitente.
+ *
+ * E so cache: se o arquivo sumir ou vier corrompido, a lista fica vazia ate a
+ * pagina mandar a de verdade. Nunca e a fonte da verdade.
+ */
+function arquivoDoCatalogo() {
+  return path.join(app.getPath("userData"), "jogos-comunidade.json");
+}
+
+function salvarCatalogoDaComunidade(lista) {
+  try {
+    fs.writeFileSync(arquivoDoCatalogo(), JSON.stringify(lista ?? []), "utf8");
+  } catch {
+    // Sem disco, o catalogo vale so nesta execucao.
+  }
+}
+
+function carregarCatalogoSalvo() {
+  try {
+    const lista = JSON.parse(fs.readFileSync(arquivoDoCatalogo(), "utf8"));
+    return definirCatalogoDaComunidade(lista);
+  } catch {
+    return 0;
+  }
+}
+
 let vigiaDeJogo = null;
 
 function instalarDeteccaoDeJogo() {
+  // A copia em disco vale ja na primeira verificacao, antes de a pagina abrir.
+  carregarCatalogoSalvo();
+
   vigiaDeJogo = criarVigia((jogo) => {
     for (const janela of BrowserWindow.getAllWindows()) {
       if (!janela.isDestroyed()) {
@@ -169,6 +208,44 @@ function instalarDeteccaoDeJogo() {
   ipcMain.handle("desktop:game-current", () =>
     lerDeteccaoLigada() ? vigiaDeJogo.atual() : null,
   );
+
+  /**
+   * O catalogo da comunidade, entregue pela PAGINA.
+   *
+   * Vem de la, e nao e buscado aqui, porque a sessao vive no renderer: dar ao
+   * processo principal uma credencial propria seria criar um segundo lugar
+   * com segredo para resolver um problema que a pagina ja resolve.
+   *
+   * Guardado em disco tambem, para valer na primeira deteccao depois de abrir
+   * — antes de a pagina carregar e mandar a lista.
+   */
+  ipcMain.handle("desktop:jogos-catalogo-set", (_evento, lista) => {
+    const quantos = definirCatalogoDaComunidade(lista);
+    salvarCatalogoDaComunidade(lista);
+    return quantos;
+  });
+
+  /**
+   * Os processos que a pessoa poderia sugerir.
+   *
+   * ISTO ENFRAQUECE, DE PROPOSITO, o invariante de que a pagina nunca ve a
+   * lista de processos. A diferenca que o torna aceitavel: acontece SO quando
+   * a pessoa abre a tela de adicionar jogo — nunca continuamente —, e o que
+   * desce sao NOMES, jamais caminhos. Caminho carregaria o nome de usuario do
+   * Windows, que e o dado que a biblioteca inteira foi desenhada para nao
+   * tocar.
+   *
+   * Recusa quando a deteccao esta desligada: quem nao quis que lessemos a
+   * lista de programas nao passa a querer por ter aberto um menu.
+   */
+  ipcMain.handle("desktop:jogos-candidatos", async () => {
+    if (!lerDeteccaoLigada()) return [];
+    try {
+      return await listarCandidatos();
+    } catch {
+      return [];
+    }
+  });
 
   /**
    * Abrir junto com o Windows.

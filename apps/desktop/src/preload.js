@@ -108,5 +108,25 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
       ipcRenderer.on("desktop:game-changed", ouvinte);
       return () => ipcRenderer.removeListener("desktop:game-changed", ouvinte);
     },
+
+    /**
+     * Entrega ao processo principal o catalogo aprovado pela equipe.
+     *
+     * A pagina busca e repassa porque a SESSAO vive aqui: dar ao processo
+     * principal uma credencial propria seria criar um segundo lugar com
+     * segredo para resolver um problema que a pagina ja resolve.
+     */
+    definirCatalogo: (lista) =>
+      ipcRenderer.invoke("desktop:jogos-catalogo-set", lista),
+
+    /**
+     * Os processos que a pessoa poderia sugerir como jogo.
+     *
+     * A UNICA porta pela qual nomes de processo chegam a pagina, e ela so
+     * responde quando a deteccao esta ligada. Devolve NOMES, jamais caminhos —
+     * caminho carrega o nome de usuario do Windows, que e exatamente o dado
+     * que a biblioteca foi desenhada para nunca tocar.
+     */
+    listarCandidatos: () => ipcRenderer.invoke("desktop:jogos-candidatos"),
   },
 });

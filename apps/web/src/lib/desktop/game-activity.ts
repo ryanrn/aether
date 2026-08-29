@@ -23,6 +23,8 @@ interface GameDetectionBridge {
   getCurrent: () => Promise<DetectedGame | null>;
   /** devolve a funcao que cancela a inscricao */
   onChange: (callback: (game: DetectedGame | null) => void) => () => void;
+  definirCatalogo: (lista: { chave: string; nome: string }[]) => Promise<number>;
+  listarCandidatos: () => Promise<string[]>;
 }
 
 function bridge(): GameDetectionBridge | null {
@@ -141,5 +143,50 @@ export async function setIniciarComWindows(ligar: boolean): Promise<boolean> {
     return (await api.setEnabled(ligar)) === true;
   } catch {
     return false;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Biblioteca da comunidade
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Busca o catalogo aprovado e entrega ao processo principal.
+ *
+ * A PAGINA busca porque a sessao vive aqui. O processo principal so recebe —
+ * dar-lhe credencial propria seria criar um segundo lugar com segredo.
+ *
+ * Silencioso em qualquer falha: catalogo da comunidade e um extra sobre a
+ * deteccao que ja funciona, e nao pode virar erro na tela de quem so abriu o
+ * app.
+ */
+export async function sincronizarCatalogoDeJogos(): Promise<number> {
+  const api = bridge();
+  if (!api) return 0;
+  try {
+    const resposta = await fetch("/api/jogos", { cache: "no-store" });
+    if (!resposta.ok) return 0;
+    const dados = (await resposta.json()) as {
+      jogos?: { chave: string; nome: string }[];
+    };
+    return await api.definirCatalogo(dados.jogos ?? []);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Os processos que a pessoa poderia sugerir como jogo.
+ *
+ * Lista vazia quando a deteccao esta desligada — quem nao quis que lessemos a
+ * lista de programas nao passa a querer por ter aberto um menu.
+ */
+export async function listarCandidatosAJogo(): Promise<string[]> {
+  const api = bridge();
+  if (!api) return [];
+  try {
+    return await api.listarCandidatos();
+  } catch {
+    return [];
   }
 }

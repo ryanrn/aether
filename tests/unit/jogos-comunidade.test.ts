@@ -133,3 +133,135 @@ describe("o que recusamos receber", () => {
     if (r.success) expect(r.data).toBe("jogo.exe");
   });
 });
+
+/**
+ * O catalogo da comunidade dentro do desktop.
+ *
+ * Cobre o que decide, sem tocar no sistema: como uma lista aprovada vira
+ * casamento, e o que entra na lista de candidatos a sugestao.
+ */
+describe("o catalogo da comunidade no desktop", () => {
+  const COMUNIDADE = [
+    { chave: "sotwin64shipping", nome: "Sea of Thieves" },
+    { chave: "ballatro", nome: "Ballatro" },
+  ];
+
+  it("casa o executavel aprovado com o nome do jogo", () => {
+    const achados = detect.jogosDaComunidadeEm(
+      "explorer.exe\nSoT-Win64-Shipping.exe\nchrome.exe",
+      COMUNIDADE,
+    );
+    expect(achados.map((j: { nome: string }) => j.nome)).toEqual(["Sea of Thieves"]);
+  });
+
+  /**
+   * IGUALDADE EXATA, e nao prefixo como no catalogo das lojas.
+   *
+   * A diferenca tem razao: na loja a chave e o NOME DO JOGO, e o executavel
+   * costuma ser o nome mais um sufixo de motor. Aqui a chave JA E o executavel,
+   * entao aceitar prefixo faria `sot` casar com qualquer `sotqualquercoisa.exe`
+   * que a pessoa tivesse aberto.
+   */
+  it("NAO casa por prefixo", () => {
+    expect(
+      detect.jogosDaComunidadeEm("SoT-Win64-Shipping-Beta.exe", COMUNIDADE),
+    ).toEqual([]);
+    expect(detect.jogosDaComunidadeEm("ballatro2.exe", COMUNIDADE)).toEqual([]);
+  });
+
+  it("nao repete quando o mesmo jogo tem varios processos", () => {
+    const achados = detect.jogosDaComunidadeEm(
+      "ballatro.exe\nBallatro.EXE\nBallatro.exe",
+      COMUNIDADE,
+    );
+    expect(achados).toHaveLength(1);
+  });
+
+  it("catalogo vazio nao acha nada, e nao quebra", () => {
+    expect(detect.jogosDaComunidadeEm("qualquer.exe", [])).toEqual([]);
+    expect(detect.jogosDaComunidadeEm("", COMUNIDADE)).toEqual([]);
+  });
+
+  it("a lista trocada substitui a anterior por inteiro", () => {
+    detect.definirCatalogoDaComunidade(COMUNIDADE);
+    expect(detect.lerCatalogoDaComunidade()).toHaveLength(2);
+    detect.definirCatalogoDaComunidade([]);
+    expect(detect.lerCatalogoDaComunidade()).toHaveLength(0);
+  });
+
+  it("ignora entrada malformada em vez de quebrar", () => {
+    const n = detect.definirCatalogoDaComunidade([
+      { chave: "ok", nome: "Ok" },
+      { chave: 123 },
+      null,
+      "lixo",
+    ]);
+    expect(n).toBe(1);
+  });
+});
+
+/**
+ * A lista de candidatos a sugestao.
+ *
+ * E a UNICA porta pela qual nomes de processo chegam a pagina. O que ela nao
+ * filtra, a pessoa le — entao o que importa aqui e nao esconder o jogo que ela
+ * veio sugerir, e nao abrir com trinta processos do Windows.
+ */
+describe("candidatos a sugestao", () => {
+  const PROCESSOS = [
+    "Name",
+    "System",
+    "svchost.exe",
+    "explorer.exe",
+    "dwm.exe",
+    "chrome.exe",
+    "Ballatro.exe",
+    "MeuJogoIndie.exe",
+    "VALORANT-Win64-Shipping.exe",
+  ].join("\n");
+
+  const CATALOGO_DE_LOJA = [
+    { pasta: "d:/riot games/valorant/live/", nome: "VALORANT", launch: null, icone: null },
+  ];
+
+  it("descarta ruido conhecido do sistema", () => {
+    const c = detect.candidatosParaSugerir(PROCESSOS, [], []);
+    for (const lixo of ["System", "svchost.exe", "explorer.exe", "dwm.exe"]) {
+      expect(c).not.toContain(lixo);
+    }
+  });
+
+  it("descarta o cabecalho da saida do wmic", () => {
+    expect(detect.candidatosParaSugerir(PROCESSOS, [], [])).not.toContain("Name");
+  });
+
+  /** Nao ha o que sugerir sobre um jogo que a loja ja declarou. */
+  it("descarta o que o catalogo da LOJA ja reconhece", () => {
+    const c = detect.candidatosParaSugerir(PROCESSOS, CATALOGO_DE_LOJA, []);
+    expect(c).not.toContain("VALORANT-Win64-Shipping.exe");
+  });
+
+  /** Nem sobre um que a comunidade ja aprovou. */
+  it("descarta o que a COMUNIDADE ja reconhece", () => {
+    const c = detect.candidatosParaSugerir(PROCESSOS, [], [
+      { chave: "ballatro", nome: "Ballatro" },
+    ]);
+    expect(c).not.toContain("Ballatro.exe");
+  });
+
+  /** O que a pessoa veio sugerir precisa sobreviver a todos os filtros. */
+  it("MANTEM o jogo desconhecido, que e o motivo da tela existir", () => {
+    const c = detect.candidatosParaSugerir(PROCESSOS, CATALOGO_DE_LOJA, []);
+    expect(c).toContain("MeuJogoIndie.exe");
+  });
+
+  it("nao repete o mesmo programa", () => {
+    const c = detect.candidatosParaSugerir("jogo.exe\nJOGO.EXE\njogo.exe", [], []);
+    expect(c).toEqual(["jogo.exe"]);
+  });
+
+  it("vem em ordem, para a lista nao dancar entre aberturas", () => {
+    const c = detect.candidatosParaSugerir("zeta.exe\nalfa.exe\nmeio.exe", [], []);
+    expect(c).toEqual(["alfa.exe", "meio.exe", "zeta.exe"]);
+  });
+});

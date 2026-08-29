@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, Gamepad2, RefreshCw } from "lucide-react";
+import { AdicionarJogo } from "./adicionar-jogo";
 import {
   canDetectGames,
   iniciaComWindows,
@@ -149,6 +150,13 @@ export function ActivityTab() {
               </p>
             </div>
           ) : null}
+
+          {/*
+            Fica sob a chave LIGADA de proposito: nao ha o que sugerir com a
+            deteccao desligada, e o processo principal recusa responder nesse
+            estado. Mostrar o link ali seria oferecer um caminho sem saida.
+          */}
+          {ligada ? <AdicionarJogo /> : null}
 
           {/*
             A privacidade nao fica escondida num aviso pequeno: e o motivo de
