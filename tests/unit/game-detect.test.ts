@@ -18,6 +18,8 @@ const {
   pastaDoJogo,
   ehJogo,
   jogosEmSaida,
+  jogosPorNomes,
+  entradaPorNomeDeProcesso,
   nomeNoManifesto,
   jogoDeCatalogoEm,
   comoPasta,
@@ -484,5 +486,110 @@ describe("catalogo de loja — jogo casa, launcher nao", () => {
   it("leva junto o icone que a loja ja tinha pronto", () => {
     const achados = jogosEmSaida(EXE_VALORANT, catalogoRiot);
     expect(achados[0].icone).toContain("valorant.live.ico");
+  });
+});
+
+/**
+ * Deteccao por NOME de processo — o caminho para jogo com anti-cheat.
+ *
+ * POR QUE EXISTE: o Vanguard, do VALORANT, protege o processo do jogo, e o
+ * Windows passa a devolver caminho VAZIO para ele. Medido na maquina de
+ * desenvolvimento com o jogo aberto: `wmic process get ExecutablePath` lista
+ * o Riot Client e o `vgtray`, e NAO lista `VALORANT-Win64-Shipping.exe`.
+ * Como toda a deteccao era por caminho, o jogo mais jogado da maquina era
+ * justamente o unico invisivel.
+ *
+ * O nome do processo o anti-cheat nao esconde. E ele basta porque o catalogo
+ * ja diz o que esta INSTALADO aqui — nao e lista de nomes conhecidos mantida
+ * a mao, e sim o cruzamento de "o que a loja instalou" com "o que roda".
+ */
+describe("jogo com anti-cheat: casar pelo nome do processo", () => {
+  const CATALOGO = [
+    {
+      pasta: "d:/riot games/valorant/live/",
+      nome: "VALORANT",
+      launch: null,
+      icone: "C:/ProgramData/Riot Games/Metadata/valorant.live/valorant.live.ico",
+    },
+    {
+      pasta: "c:/riot games/league of legends/",
+      nome: "League of Legends",
+      launch: null,
+      icone: null,
+    },
+  ];
+
+  /** O caso real, com os tres processos que a maquina lista de fato. */
+  const PROCESSOS_REAIS = [
+    "Name",
+    "explorer.exe",
+    "Riot Client.exe",
+    "vgc.exe",
+    "VALORANT.exe",
+    "VALORANT-Win64-Shipping.exe",
+    "chrome.exe",
+  ].join("\n");
+
+  it("acha o VALORANT pelo nome, com o sufixo do motor", () => {
+    const achados = jogosPorNomes(PROCESSOS_REAIS, CATALOGO);
+    expect(achados.map((j: { nome: string }) => j.nome)).toEqual(["VALORANT"]);
+  });
+
+  it("traz o icone que a Riot deixou pronto", () => {
+    const [jogo] = jogosPorNomes(PROCESSOS_REAIS, CATALOGO);
+    expect(jogo.icone).toContain("valorant.live.ico");
+  });
+
+  /**
+   * O anti-cheat NAO e o jogo. `vgc.exe` roda junto e ficaria anunciado como
+   * "jogando vgc" se o casamento fosse por qualquer semelhanca.
+   */
+  it("o processo do anti-cheat nao vira jogo", () => {
+    expect(entradaPorNomeDeProcesso("vgc.exe", CATALOGO)).toBeNull();
+    expect(entradaPorNomeDeProcesso("vgtray.exe", CATALOGO)).toBeNull();
+  });
+
+  it("o launcher nao vira jogo", () => {
+    expect(entradaPorNomeDeProcesso("Riot Client.exe", CATALOGO)).toBeNull();
+    expect(entradaPorNomeDeProcesso("RiotClientServices.exe", CATALOGO)).toBeNull();
+  });
+
+  it("nome exato tambem casa, com e sem extensao", () => {
+    expect(entradaPorNomeDeProcesso("VALORANT.exe", CATALOGO)?.nome).toBe("VALORANT");
+    expect(entradaPorNomeDeProcesso("VALORANT", CATALOGO)?.nome).toBe("VALORANT");
+  });
+
+  it("nao inventa jogo que nao esta instalado", () => {
+    expect(jogosPorNomes("Fortnite.exe\nnotepad.exe", CATALOGO)).toEqual([]);
+  });
+
+  /**
+   * O PISO DE TAMANHO PARA PREFIXO, fixado de proposito.
+   *
+   * Sem ele, um jogo de nome curto viraria curinga: "Rust" no catalogo faria
+   * qualquer `rustdesk.exe` anunciar que a pessoa esta jogando Rust. Nome
+   * curto continua casando, mas so EXATO.
+   */
+  it("nome curto nao casa por prefixo, so exato", () => {
+    const curto = [{ pasta: "c:/jogos/rust/", nome: "Rust", launch: null, icone: null }];
+    expect(entradaPorNomeDeProcesso("rustdesk.exe", curto)).toBeNull();
+    expect(entradaPorNomeDeProcesso("rust.exe", curto)?.nome).toBe("Rust");
+  });
+
+  it("nome longo casa por prefixo", () => {
+    const longo = [{ pasta: "c:/jogos/f/", nome: "Fortnite", launch: null, icone: null }];
+    expect(entradaPorNomeDeProcesso("FortniteClient-Win64-Shipping.exe", longo)?.nome).toBe(
+      "Fortnite",
+    );
+  });
+
+  it("saida vazia nao acha nada, e nao quebra", () => {
+    expect(jogosPorNomes("", CATALOGO)).toEqual([]);
+    expect(jogosPorNomes("Name\n\n  \n", CATALOGO)).toEqual([]);
+  });
+
+  it("o mesmo jogo em dois processos aparece UMA vez", () => {
+    const achados = jogosPorNomes("VALORANT.exe\nVALORANT-Win64-Shipping.exe", CATALOGO);
+    expect(achados).toHaveLength(1);
   });
 });

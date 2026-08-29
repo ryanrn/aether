@@ -495,6 +495,89 @@ function entradaDeCatalogo(caminho, catalogo) {
 }
 
 /**
+ * Nome de processo ou de jogo reduzido ao que da para comparar.
+ *
+ * Tira extensao, pontuacao e caixa: "VALORANT-Win64-Shipping.exe" e
+ * "VALORANT" precisam se encontrar, e o executavel raramente se chama
+ * exatamente como o jogo.
+ */
+function normalizarNomeDeJogo(texto) {
+  return String(texto ?? "")
+    .toLowerCase()
+    .replace(/\.exe$/, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Nome curto demais nao pode casar por prefixo.
+ *
+ * Sem este piso, um jogo chamado "Rust" faria qualquer `rustdesk.exe` virar
+ * "voce esta jogando Rust". Nome curto ainda casa, mas so EXATO.
+ */
+const MINIMO_PARA_PREFIXO = 5;
+
+/**
+ * A entrada do catalogo que corresponde a um processo, olhando SO o nome.
+ *
+ * POR QUE EXISTE: jogo com anti-cheat de kernel esconde o proprio caminho. O
+ * Vanguard, do VALORANT, faz o `wmic` e o `Get-Process` devolverem caminho
+ * VAZIO para `VALORANT-Win64-Shipping.exe` — nao e erro nosso, e protecao do
+ * anti-cheat contra leitura de processo. Como toda a deteccao era por
+ * caminho, o jogo mais pedido da maquina era justamente o unico invisivel.
+ *
+ * O nome, esse o Vanguard nao esconde. E ele basta, porque o catalogo ja diz
+ * quais jogos ESTAO INSTALADOS aqui — nao e uma lista de nomes conhecidos
+ * mantida a mao, e sim o cruzamento de "o que a loja instalou" com "o que
+ * esta rodando".
+ */
+function entradaPorNomeDeProcesso(nomeProcesso, catalogo) {
+  const alvo = normalizarNomeDeJogo(nomeProcesso);
+  if (alvo.length === 0) return null;
+
+  for (const jogo of catalogo) {
+    const nome = normalizarNomeDeJogo(jogo.nome);
+    if (nome.length === 0) continue;
+    if (alvo === nome) return jogo;
+    /**
+     * Prefixo cobre o sufixo de motor que quase todo jogo carrega:
+     * `VALORANT-Win64-Shipping`, `FortniteClient-Win64-Shipping`. O piso de
+     * tamanho impede que nome curto vire curinga.
+     */
+    if (nome.length >= MINIMO_PARA_PREFIXO && alvo.startsWith(nome)) return jogo;
+  }
+  return null;
+}
+
+/**
+ * Jogos reconhecidos pelos NOMES dos processos.
+ *
+ * Devolve no mesmo formato de `jogosEmSaida` para os dois se juntarem sem
+ * tratamento especial. `caminhos` sai vazio de proposito: quando o anti-cheat
+ * esconde o caminho, nao ha executavel legivel para tirar icone — e por isso
+ * o `launch` do manifesto e o `.ico` da loja entram aqui, que e exatamente
+ * para o que eles ja existiam.
+ */
+function jogosPorNomes(texto, catalogo = []) {
+  const achados = new Map();
+
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const nome = linha.trim();
+    if (nome.length === 0) continue;
+
+    const entrada = entradaPorNomeDeProcesso(nome, catalogo);
+    if (!entrada || !ehJogo(entrada.nome)) continue;
+    if (achados.has(entrada.nome)) continue;
+
+    const registro = { chave: entrada.nome, nome: entrada.nome, caminhos: [] };
+    if (entrada.launch) registro.caminhos.push(entrada.launch);
+    if (entrada.icone) registro.icone = entrada.icone;
+    achados.set(entrada.nome, registro);
+  }
+
+  return [...achados.values()];
+}
+
+/**
  * Jogos distintos presentes numa saida de processos.
  *
  * Recebe TEXTO cru (a saida do wmic ou do powershell) em vez de uma lista
@@ -771,6 +854,30 @@ async function caminhosDeProcessos() {
 }
 
 /**
+ * Lista os NOMES dos processos em execucao.
+ *
+ * Consulta separada da de caminhos porque responde a uma pergunta que a outra
+ * nao consegue: jogo com anti-cheat de kernel devolve caminho VAZIO. Medido
+ * nesta maquina com o VALORANT aberto, `VALORANT-Win64-Shipping` aparece na
+ * lista de nomes e some na de caminhos.
+ *
+ * As duas rodam EM PARALELO em `jogoAtual`, entao o custo em tempo e o da
+ * mais lenta, e nao a soma.
+ */
+async function nomesDeProcessos() {
+  try {
+    return await executar("wmic", ["process", "get", "Name"]);
+  } catch {
+    return executar("powershell", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "(Get-Process).ProcessName",
+    ]);
+  }
+}
+
+/**
  * O jogo rodando agora como `{ nome, icone }`, ou `null`.
  *
  * O icone pode vir `null` sozinho: nem todo executavel entrega um, e nome sem
@@ -779,8 +886,32 @@ async function caminhosDeProcessos() {
 async function jogoAtual() {
   if (process.platform !== "win32") return null;
 
-  const saida = await caminhosDeProcessos();
-  const achados = jogosEmSaida(saida, await catalogoDeLojas());
+  const catalogo = await catalogoDeLojas();
+
+  /*
+   * As duas leituras em paralelo: o custo em tempo e o da mais lenta, e nao a
+   * soma. Caminho continua sendo o caminho principal — ele diz de onde tirar
+   * icone e cobre jogo fora do catalogo (Steam pela convencao de pasta). Nome
+   * cobre o que o anti-cheat esconde.
+   */
+  const [saidaDeCaminhos, saidaDeNomes] = await Promise.all([
+    caminhosDeProcessos(),
+    nomesDeProcessos(),
+  ]);
+
+  const porCaminho = jogosEmSaida(saidaDeCaminhos, catalogo);
+
+  /*
+   * O que ja apareceu por caminho NAO e procurado de novo por nome: o achado
+   * por caminho traz os executaveis rodando, e e deles que sai o melhor
+   * icone. Substituir por um registro de `caminhos` vazio seria perder isso.
+   */
+  const jaAchados = new Set(porCaminho.map((j) => j.chave));
+  const porNome = jogosPorNomes(saidaDeNomes, catalogo).filter(
+    (j) => !jaAchados.has(j.chave),
+  );
+
+  const achados = [...porCaminho, ...porNome];
   if (achados.length === 0) return null;
 
   /**
@@ -883,6 +1014,9 @@ module.exports = {
   pastaDoJogo,
   ehJogo,
   jogosEmSaida,
+  jogosPorNomes,
+  entradaPorNomeDeProcesso,
+  normalizarNomeDeJogo,
   nomeNoManifesto,
   jogoDeCatalogoEm,
   comoPasta,

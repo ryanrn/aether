@@ -792,8 +792,51 @@ que MUDAM DE LUGAR a cada rodada, sempre com `undefined`, e a primeira rodada
 passando enquanto as seguintes falham (o balde vazio e herdado). Quem esta
 irreal ali e o script: o app anuncia no maximo uma vez a cada 15 segundos.
 
+### Jogo com anti-cheat: por que so o caminho nao bastava
+
+O VALORANT nao aparecia, e a causa nao era a Riot: era o VANGUARD. O anti-cheat
+de kernel protege o processo do jogo, e o Windows passa a devolver caminho
+VAZIO para ele. Medido nesta maquina com o jogo aberto:
+
+```
+11936 VALORANT                    (Path vazio)
+20228 VALORANT-Win64-Shipping     (Path vazio)
+12876 vgc                         (Path vazio)
+```
+
+Nem `wmic process get ExecutablePath` nem `(Get-Process).Path` trazem esses
+tres. Como TODA a deteccao era por caminho, o jogo mais jogado da maquina era
+justamente o unico invisivel — e o sintoma nao apontava para lugar nenhum,
+porque nao havia erro: a lista simplesmente nao continha o jogo.
+
+O NOME do processo o Vanguard nao esconde. Entao existe uma segunda passada,
+`jogosPorNomes`, que cruza os nomes dos processos com o catalogo de jogos
+INSTALADOS. Nao e uma tabela `executavel -> jogo` mantida a mao (que so cobre o
+que alguem lembrou de cadastrar): e o cruzamento de "o que a loja instalou" com
+"o que esta rodando".
+
+As duas passadas rodam em paralelo, entao o custo em tempo e o da mais lenta.
+Caminho continua sendo o caminho principal — e dele que sai o icone do
+executavel, e ele cobre jogo fora do catalogo (Steam, pela convencao de pasta).
+
+O casamento por nome aceita PREFIXO, para pegar o sufixo de motor que quase
+todo jogo carrega (`VALORANT-Win64-Shipping`, `FortniteClient-Win64-Shipping`),
+com um piso de 5 caracteres: sem ele, um jogo chamado "Rust" faria qualquer
+`rustdesk.exe` anunciar que a pessoa esta jogando Rust.
+
+Verificado de ponta a ponta com o jogo aberto, dentro do Electron: nome
+`VALORANT` e icone vindo do `.ico` que a propria Riot deixa em
+`ProgramData/Riot Games/Metadata`.
+
 ### Limitacoes conhecidas da deteccao de jogo
 
+- **O icone do VALORANT vem da Riot, e nao do executavel.** Nao ha escolha:
+  `app.getFileIcon` precisa abrir o programa, e o Vanguard nao deixa. Para
+  jogos com anti-cheat cuja loja NAO entrega `.ico` pronto, a atividade fica
+  com nome e sem icone.
+- **O casamento por nome depende de o jogo estar no catalogo de uma loja.**
+  Jogo com anti-cheat instalado fora de loja continua invisivel: sem caminho
+  legivel e sem entrada de catalogo, nao ha o que cruzar.
 - **Battle.net, EA e jogos avulsos ainda nao sao detectados.** A Battle.net
   guarda o catalogo num `product.db` BINARIO (protobuf), que e trabalho de
   outra ordem — nao um YAML de dois campos. A EA nao foi feita porque nao ha
