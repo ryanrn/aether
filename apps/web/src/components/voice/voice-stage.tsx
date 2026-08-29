@@ -256,6 +256,7 @@ function ParticipantCard({
           userId={participant.userId}
           name={participant.user.displayName}
           src={participant.user.avatarUrl}
+          moldura={participant.user.moldura}
           size={compact ? "sm" : "lg"}
           speaking={speaking}
         />

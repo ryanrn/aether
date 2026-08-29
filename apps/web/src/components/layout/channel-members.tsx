@@ -67,6 +67,7 @@ export function ChannelMembers({
                 userId={state.userId}
                 name={state.user.displayName}
                 src={state.user.avatarUrl}
+                moldura={state.user.moldura}
                 size="xs"
                 speaking={state.speaking && !muted}
               />

@@ -130,6 +130,7 @@ export function SelfUserCard({
               userId={user.id}
               name={user.displayName}
               src={user.avatarUrl}
+              moldura={user.moldura}
               status={status}
               size="lg"
             />
@@ -176,6 +177,7 @@ export function SelfUserCard({
                       userId={participante.userId}
                       name={participante.user.displayName}
                       src={participante.user.avatarUrl}
+                      moldura={participante.user.moldura}
                       size="xs"
                       speaking={
                         participante.speaking &&

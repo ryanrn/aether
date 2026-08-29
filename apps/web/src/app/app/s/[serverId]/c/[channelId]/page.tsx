@@ -67,6 +67,7 @@ export default async function ChannelPage({
     avatarUrl: context.session.user.avatarUrl,
     status: context.session.user.status,
     plano: context.session.user.plano,
+    moldura: context.session.user.moldura,
   };
 
   const history =

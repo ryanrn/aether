@@ -1,5 +1,10 @@
 import type { UserStatus } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
+import {
+  MOLDURA_ESPESSURA,
+  MOLDURA_ESTILO,
+  MOLDURA_RAIO,
+} from "./molduras";
 
 const STATUS_COLOR: Record<UserStatus, string> = {
   ONLINE: "bg-signal-online",
@@ -23,6 +28,7 @@ export function Avatar({
   size = "sm",
   speaking = false,
   round = false,
+  moldura = null,
   ring = "border-base-900",
   className,
 }: {
@@ -43,6 +49,17 @@ export function Avatar({
    */
   round?: boolean;
   /**
+   * A moldura JA RESOLVIDA contra o plano — vem do `PublicUser`.
+   *
+   * O componente NAO consulta plano nenhum: recebe um id que ja passou pela
+   * regra no servidor. Se ele decidisse aqui, a regra existiria em dois
+   * lugares e um deles ficaria para tras.
+   *
+   * Id sem estilo conhecido nao desenha nada, em vez de quebrar: uma moldura
+   * retirada do catalogo some da tela e o avatar continua inteiro.
+   */
+  moldura?: string | null;
+  /**
    * Cor do anel do ponto de status.
    *
    * O anel existe para SEPARAR o ponto do que esta atras dele, entao precisa
@@ -53,11 +70,30 @@ export function Avatar({
   ring?: string;
   className?: string;
 }) {
+  const estiloDaMoldura = moldura ? MOLDURA_ESTILO[moldura] : undefined;
+
   return (
     <div className={cn("relative shrink-0", className)}>
+      {estiloDaMoldura ? (
+        /*
+         * ANTES do avatar no DOM, e por isso atras dele na pintura. Sem
+         * z-index: no mesmo contexto de empilhamento, quem vem depois cobre
+         * quem veio antes, e o avatar e opaco (imagem ou cor de fundo). So a
+         * beirada do anel sobra a vista.
+         */
+        <span
+          aria-hidden
+          className={cn(
+            "absolute",
+            MOLDURA_ESPESSURA[size],
+            round ? MOLDURA_RAIO.redondo : MOLDURA_RAIO.quadrado[size],
+            estiloDaMoldura,
+          )}
+        />
+      ) : null}
       <div
         className={cn(
-          "flex items-center justify-center overflow-hidden font-medium text-ink-100 transition-shadow duration-100",
+          "relative flex items-center justify-center overflow-hidden font-medium text-ink-100 transition-shadow duration-100",
           round ? "rounded-full" : "rounded-md",
           SIZES[size],
           speaking && "speaking-ring",
@@ -74,7 +110,7 @@ export function Avatar({
       {status ? (
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 rounded-full border-2",
+            "absolute -bottom-0.5 -right-0.5 z-10 rounded-full border-2",
             ring,
             size === "lg" ? "h-4 w-4" : "h-3 w-3",
             STATUS_COLOR[status],

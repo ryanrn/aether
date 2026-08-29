@@ -41,6 +41,16 @@ model User {
   email                     String     @unique
   passwordHash              String
   avatarUrl                 String?
+  /// A moldura de avatar ESCOLHIDA, e nao a que esta valendo.
+  ///
+  /// Quem escolhe uma moldura paga e depois deixa de pagar continua com a
+  /// escolha guardada aqui; quem decide se ela aparece e a LEITURA
+  /// (`molduraEfetiva`), do mesmo jeito que o vencimento do plano. Apagar a
+  /// linha ao vencer obrigaria a pessoa a lembrar qual era ao voltar.
+  ///
+  /// Guarda o id do catalogo em codigo (`MOLDURAS`), nao o visual. Moldura
+  /// retirada do catalogo vira nulo na leitura, sem quebrar a tela.
+  molduraId                 String?
   status                    UserStatus @default(OFFLINE)
   /// Aceita conversa direta de quem NAO e amigo, mas divide um servidor.
   ///

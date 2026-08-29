@@ -132,6 +132,7 @@ export function MemberPanel({
                             userId={member.user.id}
                             name={member.nickname ?? member.user.displayName}
                             src={member.user.avatarUrl}
+                            moldura={member.user.moldura}
                             status={presence[member.user.id] ?? "OFFLINE"}
                             size="xs"
                           />

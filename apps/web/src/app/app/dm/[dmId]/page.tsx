@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@aether/db";
 import { loadDmAccess } from "@aether/access";
-import { SELECT_USUARIO_PUBLICO, type PublicUser } from "@aether/shared";
+import {
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
+  type PublicUser,
+} from "@aether/shared";
 import { getSession } from "@/server/auth/session";
 import { listRecentDmMessages } from "@/server/services/messages";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -32,11 +36,18 @@ export default async function DmPage({
   const acesso = await loadDmAccess(session.user.id, dmId);
   if (!acesso) notFound();
 
-  const outro = await prisma.user.findUnique({
+  const linhaDoOutro = await prisma.user.findUnique({
     where: { id: acesso.outroId },
     select: SELECT_USUARIO_PUBLICO,
   });
-  if (!outro) notFound();
+  if (!linhaDoOutro) notFound();
+
+  /*
+   * Passa pelo serializador em vez de ir cru para a tela: e ele que aplica o
+   * vencimento do plano e resolve a moldura contra ele. Cru, esta pagina
+   * desenharia moldura paga de conta vencida.
+   */
+  const outro = toPublicUser(linhaDoOutro);
 
   // O email da sessao nao desce para componente de cliente.
   const selfUser: PublicUser = {
@@ -46,6 +57,7 @@ export default async function DmPage({
     avatarUrl: session.user.avatarUrl,
     status: session.user.status,
     plano: session.user.plano,
+    moldura: session.user.moldura,
   };
 
   const history = await listRecentDmMessages(dmId, session.user.id);
@@ -58,6 +70,7 @@ export default async function DmPage({
           userId={outro.id}
           name={outro.displayName}
           src={outro.avatarUrl}
+          moldura={outro.moldura}
           status={outro.status}
           size="sm"
           round

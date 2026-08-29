@@ -163,6 +163,7 @@ export function MessageItem({
               userId={message.author.id}
               name={message.author.displayName}
               src={message.author.avatarUrl}
+              moldura={message.author.moldura}
               size="sm"
             />
           )}

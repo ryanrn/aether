@@ -95,6 +95,7 @@ export function MemberRolesModal({
             userId={member.user.id}
             name={member.user.displayName}
             src={member.user.avatarUrl}
+            moldura={member.user.moldura}
             status={member.user.status}
             size="sm"
           />

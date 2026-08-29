@@ -367,6 +367,7 @@ export function UserActivityCard({
               userId={user.id}
               name={nickname ?? user.displayName}
               src={user.avatarUrl}
+              moldura={user.moldura}
               status={status}
               size="lg"
             />

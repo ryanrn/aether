@@ -396,6 +396,7 @@ function Linha({ item }: { item: PublicFriendship }) {
         userId={item.user.id}
         name={item.user.displayName}
         src={item.user.avatarUrl}
+        moldura={item.user.moldura}
         status={status}
         size="md"
         round

@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@aether/db";
 import {
   displayNameSchema,
+  molduraPorId,
+  planoAtende,
+  podeAvatarAnimado,
   setNicknameSchema,
   type ActionResult,
 } from "@aether/shared";
@@ -41,7 +44,16 @@ export async function uploadAvatarAction(
     const file = formData.get("avatar");
     if (!(file instanceof File)) return fail("Nenhum arquivo enviado");
 
-    const result = await uploadUserAvatar(session.user.id, file);
+    /*
+     * O PLANO VEM DA SESSAO, e nao do formulario. A sessao ja carrega o plano
+     * efetivo — vencimento aplicado na leitura —, entao uma assinatura que
+     * venceu ha um segundo ja nao autoriza movimento aqui.
+     */
+    const result = await uploadUserAvatar(
+      session.user.id,
+      file,
+      podeAvatarAnimado(session.user.plano),
+    );
     if (!result.ok) return fail(result.error);
 
     await prisma.user.update({
@@ -51,6 +63,45 @@ export async function uploadAvatarAction(
 
     revalidatePath("/app", "layout");
     return ok({ avatarUrl: result.url });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Escolhe a moldura do avatar. `null` remove.
+ *
+ * A AUTORIZACAO E AQUI, no servidor, e nao na tela que desenha o catalogo. A
+ * tela esconde o que a pessoa nao tem; esta funcao e que impede alguem de
+ * mandar o id de uma moldura paga direto para a action.
+ *
+ * Guarda a escolha mesmo que o plano caia depois: quem decide se ela APARECE e
+ * a leitura (`molduraEfetiva`). Assim reativar o plano devolve a moldura sem a
+ * pessoa precisar lembrar qual era.
+ */
+export async function setMolduraAction(
+  molduraId: string | null,
+): Promise<ActionResult<{ molduraId: string | null }>> {
+  try {
+    const session = await requireUser();
+
+    if (molduraId !== null) {
+      const moldura = molduraPorId(molduraId);
+      // 404 em vez de "essa moldura nao existe": nao confirmamos catalogo a
+      // quem esta chutando id.
+      if (!moldura) return fail("Moldura invalida");
+      if (!planoAtende(session.user.plano, moldura.tier)) {
+        return fail("Esta moldura pede um plano superior");
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { molduraId },
+    });
+
+    revalidatePath("/app", "layout");
+    return ok({ molduraId });
   } catch (error) {
     return toActionError(error);
   }

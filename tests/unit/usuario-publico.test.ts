@@ -20,6 +20,7 @@ const BASE: UserRow = {
   displayName: "Ryan",
   avatarUrl: null,
   status: "ONLINE",
+  molduraId: null,
   assinatura: null,
 };
 

@@ -1,9 +1,17 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { SERVER_ICON_MAX_BYTES, SERVER_ICON_MIME_TYPES } from "@aether/shared";
+import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  AVATAR_MIME_TYPES,
+  MOLDURAS,
+  limiteDoAvatar,
+  planoAtende,
+  podeAvatarAnimado,
+  type PublicUser,
+} from "@aether/shared";
 import {
   removeAvatarAction,
+  setMolduraAction,
   setAllowServerDmsAction,
   setAllowServerFriendRequestsAction,
   setNicknameAction,
@@ -11,6 +19,8 @@ import {
   uploadAvatarAction,
 } from "@/server/actions/profile";
 import { Avatar } from "@/components/ui/avatar";
+import { MOLDURA_ESTILO } from "@/components/ui/molduras";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
 
@@ -30,11 +40,13 @@ export function AccountTab({
   user,
   server,
 }: {
-  user: {
-    id: string;
-    displayName: string;
-    username: string;
-    avatarUrl: string | null;
+  /**
+   * O usuario publico mais as preferencias de contato. Como extensao de
+   * `PublicUser`, e nao campo a campo: a copia repetida obrigava a mexer aqui
+   * a cada campo novo do perfil, e foi assim que plano e moldura quase
+   * ficaram de fora desta tela.
+   */
+  user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };
@@ -42,6 +54,28 @@ export function AccountTab({
   server: { id: string; memberId: string; nickname: string | null };
 }) {
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
+  const [moldura, setMoldura] = useState(user.moldura);
+  /**
+   * O arquivo escolhido mas AINDA NAO enviado, com a URL local da previa.
+   *
+   * A previa existe porque trocar foto e uma acao que a pessoa quer conferir
+   * antes: sem ela, descobrir que escolheu o arquivo errado custa um upload
+   * inteiro e uma volta ao seletor.
+   */
+  const [previa, setPrevia] = useState<
+    { url: string; arquivo: File; animado: boolean } | null
+  >(null);
+
+  /*
+   * `createObjectURL` prende o arquivo na memoria ate ser revogado. Sem esta
+   * limpeza, escolher dez fotos numa sessao deixa dez arquivos presos.
+   */
+  useEffect(() => {
+    if (!previa) return;
+    return () => URL.revokeObjectURL(previa.url);
+  }, [previa]);
+
+  const podeAnimar = podeAvatarAnimado(user.plano);
   const [displayName, setDisplayName] = useState(user.displayName);
   const [nickname, setNickname] = useState(server.nickname ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -82,28 +116,74 @@ export function AccountTab({
     });
   }
 
+  /**
+   * Escolher arquivo agora so PREPARA a previa. O envio virou um segundo passo
+   * deliberado — trocar a propria cara nao deveria acontecer no mesmo clique
+   * em que se escolhe o arquivo.
+   *
+   * As checagens daqui sao conveniencia: o servidor revalida tudo, e o tipo
+   * ele confere pelos BYTES, nao pelo que o navegador declarou. Um `type`
+   * mentiroso passa aqui e morre la.
+   */
   function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = ""; // permite reescolher o mesmo arquivo depois
     if (!file) return;
 
     setError(null);
-    if (file.size > SERVER_ICON_MAX_BYTES) {
-      setError("Imagem maior que 2MB");
-      return;
-    }
-    if (!SERVER_ICON_MIME_TYPES.includes(file.type as never)) {
-      setError("Envie PNG, JPEG ou WEBP");
+    if (!AVATAR_MIME_TYPES.includes(file.type as never)) {
+      setError("Envie PNG, JPEG, WEBP ou GIF");
       return;
     }
 
+    const animado = file.type === "image/gif";
+    if (animado && !podeAnimar) {
+      setError("Avatar animado e exclusivo do Olimpo Pro");
+      return;
+    }
+    const teto = limiteDoAvatar(file.type);
+    if (file.size > teto) {
+      setError(`Imagem maior que ${Math.round(teto / 1024 / 1024)}MB`);
+      return;
+    }
+
+    setPrevia({ url: URL.createObjectURL(file), arquivo: file, animado });
+  }
+
+  function enviarPrevia() {
+    if (!previa) return;
     const formData = new FormData();
-    formData.set("avatar", file);
+    formData.set("avatar", previa.arquivo);
 
+    setError(null);
     startTransition(async () => {
       const result = await uploadAvatarAction(formData);
-      if (result.ok) setAvatarUrl(result.data.avatarUrl);
-      else setError(result.error);
+      if (result.ok) {
+        setAvatarUrl(result.data.avatarUrl);
+        setPrevia(null);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  /**
+   * Troca a moldura de forma otimista e volta atras se o servidor recusar.
+   *
+   * Mesmo raciocinio das chaves de privacidade logo acima: mostrar um valor
+   * que o servidor nao tem e pior do que demorar, porque a pessoa vai embora
+   * achando que aplicou.
+   */
+  function escolherMoldura(id: string | null) {
+    const anterior = moldura;
+    setMoldura(id);
+    setError(null);
+    startTransition(async () => {
+      const result = await setMolduraAction(id);
+      if (!result.ok) {
+        setMoldura(anterior);
+        setError(result.error);
+      }
     });
   }
 
@@ -142,12 +222,26 @@ export function AccountTab({
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-4">
-        <Avatar
-          userId={user.id}
-          name={displayName || user.username}
-          src={avatarUrl}
-          size="lg"
-        />
+        <div className="relative">
+          <Avatar
+            userId={user.id}
+            name={displayName || user.username}
+            /* A previa manda enquanto existe: e o ponto da previa. */
+            src={previa?.url ?? avatarUrl}
+            moldura={moldura}
+            size="lg"
+          />
+          {previa?.animado ? (
+            /*
+             * GIF parece imagem parada no primeiro quadro. Sem dizer que e
+             * animado, a pessoa nao sabe se o movimento sobreviveu ao envio —
+             * e essa duvida e exatamente o que ela veio conferir.
+             */
+            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[4px] border border-amber-400/40 bg-base-900 px-1 py-[1px] text-[9px] font-bold uppercase tracking-[0.06em] text-amber-300">
+              GIF
+            </span>
+          ) : null}
+        </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <Button
@@ -162,7 +256,27 @@ export function AccountTab({
             >
               {pending ? "Enviando..." : "Escolher foto"}
             </Button>
-            {avatarUrl ? (
+            {previa ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={enviarPrevia}
+                  disabled={pending}
+                >
+                  {pending ? "Enviando..." : "Salvar foto"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPrevia(null)}
+                  disabled={pending}
+                >
+                  Descartar
+                </Button>
+              </>
+            ) : avatarUrl ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -174,14 +288,84 @@ export function AccountTab({
               </Button>
             ) : null}
           </div>
-          <p className="text-xs text-ink-500">PNG, JPEG ou WEBP — ate 2MB.</p>
+          <p className="text-xs text-ink-500">
+            PNG, JPEG ou WEBP ate 2MB.{" "}
+            {podeAnimar ? (
+              <span className="text-amber-300">GIF animado ate 10MB.</span>
+            ) : (
+              "GIF animado e do Olimpo Pro."
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/*
+        MOLDURAS. A tela mostra o catalogo INTEIRO, e nao so o que a pessoa
+        pode usar: esconder o que existe atras do plano nao vende nada, porque
+        ninguem deseja o que nao sabe que existe. O que nao esta liberado vem
+        apagado e nao clica — e a autorizacao de verdade e a action, que
+        recusa id de moldura acima do plano mesmo que alguem a chame na mao.
+      */}
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-ink-400">
+          Moldura do avatar
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => escolherMoldura(null)}
+            disabled={pending}
+            aria-pressed={moldura === null}
+            title="Sem moldura"
+            className={cn(
+              "grid h-9 w-9 place-items-center rounded-full border text-[10px] text-ink-500 transition-colors",
+              moldura === null
+                ? "border-accent-400 bg-base-800"
+                : "border-base-800 hover:bg-base-850",
+            )}
+          >
+            —
+          </button>
+
+          {MOLDURAS.map((m) => {
+            const liberada = planoAtende(user.plano, m.tier);
+            const ativa = moldura === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => liberada && escolherMoldura(m.id)}
+                disabled={pending || !liberada}
+                aria-pressed={ativa}
+                title={
+                  liberada
+                    ? m.nome
+                    : `${m.nome} — pede ${m.tier === "PRO" ? "Olimpo Pro" : "Olimpo"}`
+                }
+                className={cn(
+                  "relative grid h-9 w-9 place-items-center rounded-full transition-transform",
+                  MOLDURA_ESTILO[m.id],
+                  ativa && "ring-2 ring-accent-400 ring-offset-2 ring-offset-base-900",
+                  liberada ? "hover:scale-105" : "cursor-not-allowed opacity-30",
+                )}
+              >
+                {/* o miolo escuro deixa a amostra parecer o que ela e: um anel */}
+                <span className="h-5 w-5 rounded-full bg-base-900" />
+                {!liberada ? (
+                  <span className="absolute inset-0 grid place-items-center text-[11px]">
+                    &#128274;
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <input
         ref={inputRef}
         type="file"
-        accept={SERVER_ICON_MIME_TYPES.join(",")}
+        accept={AVATAR_MIME_TYPES.join(",")}
         onChange={onFileChange}
         className="hidden"
       />

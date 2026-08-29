@@ -89,6 +89,44 @@ export const SERVER_ICON_MIME_TYPES = [
 ] as const;
 export type ServerIconMimeType = (typeof SERVER_ICON_MIME_TYPES)[number];
 
+/**
+ * Foto de perfil. SEPARADA do icone de servidor porque as duas regras
+ * divergiram: o avatar aceita GIF e chega a 10 MB, o icone nao.
+ *
+ * Antes as duas liam `SERVER_ICON_*`. Continuar assim significaria ou negar
+ * GIF ao avatar, ou passar a aceitar GIF de 10 MB como icone de servidor —
+ * que ninguem pediu e multiplica por cinco o peso da barra lateral.
+ */
+export const AVATAR_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+] as const;
+export type AvatarMimeType = (typeof AVATAR_MIME_TYPES)[number];
+
+/** Imagem parada: o mesmo teto de sempre. */
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * GIF animado: 10 MB.
+ *
+ * Mais alto porque um GIF carrega todos os quadros descomprimidos entre si —
+ * 2 MB reprovaria quase toda animacao de verdade e o recurso nasceria inutil.
+ * E limitado porque o arquivo e servido a CADA pessoa que abre uma lista de
+ * membros: um avatar de 50 MB seria pago em banda por quem apenas passa os
+ * olhos numa conversa.
+ */
+export const AVATAR_ANIMADO_MAX_BYTES = 10 * 1024 * 1024;
+
+/** O teto que vale para este tipo. Um lugar so, para os dois lados lerem. */
+export function limiteDoAvatar(mime: string): number {
+  return mime === "image/gif" ? AVATAR_ANIMADO_MAX_BYTES : AVATAR_MAX_BYTES;
+}
+
+/** O maior teto possivel — o que o bucket precisa aceitar na origem. */
+export const AVATAR_LIMITE_DO_BUCKET = AVATAR_ANIMADO_MAX_BYTES;
+
 export const inviteCodeSchema = z
   .string()
   .trim()

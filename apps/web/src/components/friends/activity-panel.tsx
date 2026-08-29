@@ -81,6 +81,7 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
           userId={amigo.user.id}
           name={amigo.user.displayName}
           src={amigo.user.avatarUrl}
+          moldura={amigo.user.moldura}
           status={status}
           size="sm"
           round

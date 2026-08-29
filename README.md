@@ -2084,8 +2084,52 @@ disso no dia de trocar de novo.
   icone solto, o que separa os dois papeis, mas lado a lado ainda compete.
 - **Sem cobranca e sem tela de assinatura.** Nao ha como comprar: so chave e
   concessao a mao.
-- **Cosmeticos (avatar animado, banner, moldura) nao existem.** A escada de cor
-  do selo ja foi pensada para eles, mas nenhum foi construido.
+### Cosmeticos: moldura de avatar e avatar animado
+
+O CATALOGO DE MOLDURAS MORA EM CODIGO (`packages/shared/src/cosmeticos.ts`), e
+o banco guarda so o id escolhido (`User.molduraId`). Mesmo desenho de `PLANS`:
+a escada e codigo, a assinatura e banco. Guardar CSS em linha de banco faria o
+visual do app virar dado editavel, com tudo que isso traz.
+
+O VISUAL fica separado, em `apps/web/src/components/ui/molduras.ts`, e a razao
+e concreta: o Tailwind so gera classe que encontra escrita nos arquivos que
+varre, e ele NAO varre `packages/shared`. Classe declarada la nao existiria no
+CSS final, e o defeito apareceria como "a moldura nao aparece", sem erro nenhum
+para seguir. Verificado depois: as cinco classes de gradiente estao no CSS
+servido.
+
+O anel fica ATRAS do avatar e um pouco maior. O miolo e coberto pela propria
+imagem, entao so a beirada aparece — assim a moldura nunca corta nem deforma a
+foto, e gradiente sai de graca. Acompanha os DOIS formatos, porque o app usa
+`rounded-md` na maioria das telas e `rounded-full` so em amigos.
+
+MOVIMENTO E DECIDIDO PELOS BYTES, nunca pela extensao. Travar apenas o GIF
+deixaria o buraco: WEBP anima pela flag ANIM do bloco VP8X e PNG anima como
+APNG (bloco `acTL`). Quem nao paga subiria um WEBP animado e a exclusividade
+viraria enfeite, sem erro nenhum. GIF conta como animado sempre, inclusive de
+um quadro so — contar quadros exigiria um parser que, errando, erra para o lado
+de liberar.
+
+- **Perder o plano trata as duas coisas de forma DIFERENTE, e e deliberado.** O
+  avatar animado continua no ar (e arquivo da pessoa; apagar seria perda de
+  dado), e so novos envios de animacao sao recusados. A moldura para de
+  desenhar, mas a ESCOLHA fica guardada e volta sozinha ao reativar. O motivo
+  da assimetria: moldura que nao expira abriria assinar um mes, escolher e
+  cancelar — cosmetico que nao expira nao e de assinatura, e compra unica com o
+  nome errado.
+- **O bucket precisa concordar com o codigo.** O Supabase recusa tipo e tamanho
+  NA ORIGEM: sem `scripts/configurar-buckets.mjs`, aceitar GIF de 10 MB no
+  servidor nao adianta nada e o sintoma nao aponta para o bucket. `avatars` vai
+  a 10 MB com GIF; `server-icons` fica em 2 MB sem GIF, porque ninguem pediu
+  icone animado e ele aparece na barra lateral o tempo todo.
+- **A troca so aparece para os outros no proximo carregamento deles.** Mesma
+  limitacao ja anotada da foto de perfil: `revalidatePath` vale por sessao e
+  nao ha evento de socket para isso. Vale para a moldura tambem.
+- **Nao ha faxina do avatar antigo.** Trocar de foto deixa a anterior no bucket
+  para sempre. Ja valia antes; com GIF de ate 10 MB, passa a custar mais.
+- **Banner e badge nao existem.** A estrutura esta pronta — catalogo, resolucao
+  por plano e o campo no `PublicUser` sao genericos —, mas nenhum foi
+  construido.
 
 ### Sobre trocar o Supabase por S3
 

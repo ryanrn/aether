@@ -181,8 +181,8 @@ describe("uploadUserAvatar — mesma porta, mesmas recusas", () => {
       "image/png",
       "virus.png",
     );
-    const result = await uploadUserAvatar("usuario-1", disfarcado);
-    expect(result).toEqual({ ok: false, error: "Envie PNG, JPEG ou WEBP" });
+    const result = await uploadUserAvatar("usuario-1", disfarcado, false);
+    expect(result).toEqual({ ok: false, error: "Envie PNG, JPEG, WEBP ou GIF" });
   });
 
   it("recusa SVG", async () => {
@@ -191,29 +191,110 @@ describe("uploadUserAvatar — mesma porta, mesmas recusas", () => {
       "foto.svg",
       { type: "image/svg+xml" },
     );
-    const result = await uploadUserAvatar("usuario-1", svg);
-    expect(result).toEqual({ ok: false, error: "Envie PNG, JPEG ou WEBP" });
+    const result = await uploadUserAvatar("usuario-1", svg, false);
+    expect(result).toEqual({ ok: false, error: "Envie PNG, JPEG, WEBP ou GIF" });
   });
 
-  it("recusa acima de 2MB", async () => {
-    const big = new File([new Uint8Array(SERVER_ICON_MAX_BYTES + 1)], "grande.png", {
-      type: "image/png",
-    });
-    const result = await uploadUserAvatar("usuario-1", big);
+  /**
+   * PNG DE VERDADE, e nao bytes zerados: com o teto passando a depender do
+   * TIPO, o sniff precisa acontecer antes da conta de tamanho. Um arquivo
+   * zerado agora e recusado por tipo, e o teste sobre tamanho nao provaria
+   * mais nada sobre tamanho.
+   */
+  it("recusa PNG acima de 2MB", async () => {
+    const bytes = new Uint8Array(SERVER_ICON_MAX_BYTES + 1);
+    bytes.set(PNG_HEADER, 0);
+    const big = new File([bytes], "grande.png", { type: "image/png" });
+    const result = await uploadUserAvatar("usuario-1", big, false);
     expect(result).toEqual({ ok: false, error: "Imagem maior que 2MB" });
   });
 
   it("recusa arquivo vazio", async () => {
-    const result = await uploadUserAvatar("usuario-1", fileOf([]));
+    const result = await uploadUserAvatar("usuario-1", fileOf([], false));
     expect(result).toEqual({ ok: false, error: "Arquivo vazio" });
   });
 
   it("falha fechada sem configuracao, com mensagem propria", async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const result = await uploadUserAvatar("usuario-1", fileOf(PNG_HEADER));
+    const result = await uploadUserAvatar("usuario-1", fileOf(PNG_HEADER, false));
     expect(result).toEqual({
       ok: false,
       error: "Upload de foto nao configurado neste ambiente",
     });
+  });
+});
+
+/**
+ * MOVIMENTO — a trava que separa o avatar animado do Olimpo Pro.
+ *
+ * Este bloco existe por causa de um buraco que quase passou: travar apenas o
+ * GIF deixaria WEBP e PNG livres, e os DOIS animam. Quem nao paga subiria um
+ * WEBP animado como avatar e a exclusividade viraria enfeite — sem erro
+ * nenhum, so o premium deixando de valer.
+ *
+ * A decisao e pelos BYTES, nunca pela extensao: e o mesmo principio do sniff
+ * de tipo, e pela mesma razao (o cliente escolhe o nome e o Content-Type).
+ */
+describe("avatar animado — a trava e por bytes, nao por extensao", () => {
+  /** "GIF89a" + o resto do cabecalho logico. */
+  const GIF = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00];
+
+  /** RIFF....WEBPVP8X + byte de flags. O bit 0x02 e o que liga a animacao. */
+  function webp(flags: number) {
+    const b = new Uint8Array(32);
+    b.set([0x52, 0x49, 0x46, 0x46], 0); // RIFF
+    b.set([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+    b.set([0x56, 0x50, 0x38, 0x58], 12); // VP8X
+    b[20] = flags;
+    return new File([b], "foto.webp", { type: "image/webp" });
+  }
+
+  /** PNG com o bloco `acTL` — que e exatamente o que torna um PNG um APNG. */
+  function apng() {
+    const cabeca = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    const marca = [..."acTL"].map((c) => c.charCodeAt(0));
+    return new File([new Uint8Array([...cabeca, 0, 0, 0, 8, ...marca])], "a.png", {
+      type: "image/png",
+    });
+  }
+
+  const RECUSA = { ok: false, error: "Avatar animado e exclusivo do Olimpo Pro" };
+
+  it("GIF e recusado sem o plano", async () => {
+    const r = await uploadUserAvatar("usuario-1", fileOf(GIF, "image/gif", "a.gif"), false);
+    expect(r).toEqual(RECUSA);
+  });
+
+  it("GIF passa COM o plano", async () => {
+    const r = await uploadUserAvatar("usuario-1", fileOf(GIF, "image/gif", "a.gif"), true);
+    expect(r).not.toEqual(RECUSA);
+  });
+
+  /** O buraco: um WEBP animado nao pode entrar por ser "so um webp". */
+  it("WEBP ANIMADO e recusado sem o plano", async () => {
+    expect(await uploadUserAvatar("usuario-1", webp(0x02), false)).toEqual(RECUSA);
+  });
+
+  /** E o contrario tambem importa: WEBP normal nao pode virar exclusividade. */
+  it("WEBP parado continua livre para todo mundo", async () => {
+    expect(await uploadUserAvatar("usuario-1", webp(0x00), false)).not.toEqual(RECUSA);
+  });
+
+  it("APNG e recusado sem o plano", async () => {
+    expect(await uploadUserAvatar("usuario-1", apng(), false)).toEqual(RECUSA);
+  });
+
+  it("PNG comum continua livre", async () => {
+    const r = await uploadUserAvatar("usuario-1", fileOf(PNG_HEADER), false);
+    expect(r).not.toEqual(RECUSA);
+  });
+
+  /**
+   * O icone de servidor NAO herdou nada disto: ninguem pediu icone animado, e
+   * ele aparece na barra lateral de todo mundo o tempo todo.
+   */
+  it("icone de servidor recusa GIF por TIPO, antes de falar em movimento", async () => {
+    const r = await uploadServerIcon("s1", fileOf(GIF, "image/gif", "a.gif"));
+    expect(r).toEqual({ ok: false, error: "Envie PNG, JPEG ou WEBP" });
   });
 });

@@ -60,6 +60,7 @@ export function BansTab({
               userId={ban.user.id}
               name={ban.user.displayName}
               src={ban.user.avatarUrl}
+              moldura={ban.user.moldura}
               size="sm"
             />
 

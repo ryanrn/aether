@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
+import type { PublicUser } from "@aether/shared";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
 import { PlanoTab } from "./plano-tab";
@@ -51,11 +52,13 @@ export function AppSettingsModal({
 }: {
   open: boolean;
   onClose: () => void;
-  user: {
-    id: string;
-    displayName: string;
-    username: string;
-    avatarUrl: string | null;
+  /**
+   * O usuario publico mais as preferencias de contato. Como extensao de
+   * `PublicUser`, e nao campo a campo: a copia repetida obrigava a mexer aqui
+   * a cada campo novo do perfil, e foi assim que plano e moldura quase
+   * ficaram de fora desta tela.
+   */
+  user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };

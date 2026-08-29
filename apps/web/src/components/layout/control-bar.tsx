@@ -314,6 +314,7 @@ export function ControlBar({
           userId={user.id}
           name={user.displayName}
           src={user.avatarUrl}
+          moldura={user.moldura}
           status={presence[user.id] ?? "OFFLINE"}
           size="sm"
         />

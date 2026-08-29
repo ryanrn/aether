@@ -4,6 +4,7 @@
  */
 
 import { planoEfetivo, type PlanTier } from "./plans";
+import { molduraEfetiva } from "./cosmeticos";
 
 export const USER_STATUSES = ["ONLINE", "IDLE", "DND", "OFFLINE"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -39,6 +40,15 @@ export interface PublicUser {
    * Quem nao assina e `FREE`, que o selo trata como ausencia de selo.
    */
   plano: PlanTier;
+  /**
+   * A moldura do avatar, JA RESOLVIDA contra o plano — so o id, e nulo quando
+   * nao ha nenhuma valendo.
+   *
+   * Vem resolvida pelo mesmo motivo do `plano`: se descesse crua, cada tela
+   * teria de comparar o tier de novo, e a que esquecesse desenharia moldura de
+   * assinante em conta que deixou de pagar.
+   */
+  moldura: string | null;
 }
 
 /**
@@ -60,6 +70,8 @@ export interface UserRow {
   displayName: string;
   avatarUrl: string | null;
   status: string;
+  /** A escolha guardada. Continua no banco mesmo sem plano que a cubra. */
+  molduraId: string | null;
   assinatura: {
     tier: PlanTier;
     expiraEm: Date | string | null;
@@ -83,6 +95,7 @@ export const SELECT_USUARIO_PUBLICO = {
   displayName: true,
   avatarUrl: true,
   status: true,
+  molduraId: true,
   /**
    * So `tier` e `expiraEm`: sao o que `planoEfetivo` precisa. Provedor, id
    * externo e quem concedeu ficam fora — nao servem a tela e nao tem por que
@@ -98,6 +111,7 @@ export const SELECT_USUARIO_PUBLICO = {
  * vida real ninguem passa.
  */
 export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser {
+  const plano = planoEfetivo(row.assinatura, agora);
   return {
     id: row.id,
     username: row.username,
@@ -109,7 +123,13 @@ export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser
      * tomava com o autor.
      */
     status: isUserStatus(row.status) ? row.status : "OFFLINE",
-    plano: planoEfetivo(row.assinatura, agora),
+    plano,
+    /**
+     * Resolvida contra o plano JA calculado acima — e nao contra o tier cru da
+     * assinatura. Usar o tier cru exibiria a moldura paga durante todo o
+     * periodo entre o vencimento e alguem mexer na linha.
+     */
+    moldura: molduraEfetiva(row.molduraId, plano)?.id ?? null,
   };
 }
 
