@@ -939,10 +939,13 @@ encontrada.
   servidor tem banner desde o primeiro dia, sem upload e sem bucket novo.
 - **Nao ha rate limit de pedidos.** Alguem determinado enche a fila; a
   aprovacao segura o que aparece, mas nao o que chega.
-- **Duas contas com o mesmo `displayName` sao indistinguiveis na barra
-  inferior**, que mostra o nome de exibicao e nao o `@usuario`. Custou uma
-  investigacao inteira: o botao de configuracoes "sumiu" porque a sessao era de
-  outra conta, com outras permissoes.
+- **Duas contas com o mesmo `displayName` confundem, mesmo com o `@usuario` na
+  tela.** A barra inferior JA mostra os dois (nome em cima, `@usuario`
+  embaixo), e ainda assim uma sessao na conta errada custou uma investigacao
+  inteira: o botao de configuracoes "sumiu" porque aquela conta nao era dona do
+  servidor. Nao ha o que corrigir no codigo — fica anotado como armadilha de
+  ambiente de teste, para a proxima vez que algo "sumir" a primeira pergunta
+  ser "em qual conta estou?".
 - **Os dois `catch` que viravam 404 agora registram o motivo.** Eram vazios, e
   por isso sessao expirada, erro do Prisma e coluna nova num cliente velho
   davam a MESMA tela de "nao existe" — impossivel de diagnosticar.
