@@ -31,6 +31,7 @@ import {
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
+import { SeloPlano } from "@/components/ui/selo-plano";
 import { cn } from "@/lib/utils";
 import { viewerCan } from "@/lib/permissions";
 import {
@@ -371,9 +372,17 @@ export function UserActivityCard({
             />
           </div>
 
-          <p className="truncate text-[15px] font-semibold text-ink-100">
-            {nickname ?? user.displayName}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 truncate text-[15px] font-semibold text-ink-100">
+              {nickname ?? user.displayName}
+            </p>
+            {/*
+              Aqui o selo vai no tamanho grande, com o nome do plano escrito.
+              E a tela em que alguem esta olhando QUEM e a outra pessoa — o
+              lugar em que o rotulo por extenso vale a largura que ocupa.
+            */}
+            <SeloPlano tier={user.plano} />
+          </div>
           <p className="select-text truncate font-mono text-[11px] text-ink-500">
             @{user.username}
             {/* Com apelido, o nome real deixa de aparecer em qualquer lugar. */}

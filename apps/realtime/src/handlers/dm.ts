@@ -1,6 +1,10 @@
 import { Prisma, prisma } from "@aether/db";
 import { loadDmList, ordenarPar, podeFalarCom } from "@aether/access";
-import { isUserStatus, type DmResumo, type PublicUser } from "@aether/shared";
+import {
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
+  type DmResumo,
+} from "@aether/shared";
 import type { AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 
@@ -21,30 +25,6 @@ import { createRateLimiter } from "../rate-limit";
  * regime e folgado — abrir conversa e coisa de clique, nao de laco.
  */
 const dmLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 1 });
-
-const USER_SELECT = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatarUrl: true,
-  status: true,
-} as const;
-
-function toPublicUser(row: {
-  id: string;
-  username: string;
-  displayName: string;
-  avatarUrl: string | null;
-  status: string;
-}): PublicUser {
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.displayName,
-    avatarUrl: row.avatarUrl,
-    status: isUserStatus(row.status) ? row.status : "OFFLINE",
-  };
-}
 
 /**
  * Encontra a conversa do par, criando se ainda nao houver.
@@ -110,7 +90,7 @@ export function registerDmHandlers(socket: AetherSocket): void {
 
       const outro = await prisma.user.findUnique({
         where: { id: outroId },
-        select: USER_SELECT,
+        select: SELECT_USUARIO_PUBLICO,
       });
 
       if (motivo === null) {
@@ -167,7 +147,7 @@ export function registerDmHandlers(socket: AetherSocket): void {
 
       const usuarios = await prisma.user.findMany({
         where: { id: { in: itens.map((item) => item.outroId) } },
-        select: USER_SELECT,
+        select: SELECT_USUARIO_PUBLICO,
       });
       const porId = new Map(usuarios.map((u) => [u.id, u]));
 

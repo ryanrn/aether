@@ -9,6 +9,7 @@ import type {
   ViewerContext,
 } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
+import { SeloPlano } from "@/components/ui/selo-plano";
 import { MemberRolesModal } from "@/components/members/member-roles-modal";
 import {
   UserActivityCard,
@@ -145,6 +146,16 @@ export function MemberPanel({
                           >
                             {member.nickname ?? member.user.displayName}
                           </span>
+                          {/*
+                            O selo vem ANTES da coroa de dono, e como pilula
+                            com borda: o simbolo do plano PRO tambem e uma
+                            coroa, e dois icones iguais lado a lado nao se
+                            distinguem. A pilula separa os dois papeis.
+                          */}
+                          <SeloPlano
+                            tier={member.user.plano}
+                            tamanho="sm"
+                          />
                         </button>
 
                         {isOwnerMember ? (

@@ -2013,6 +2013,29 @@ SOCIAL: sem o selo, o assinante paga e ninguem nota, e a proxima pessoa nao tem
 motivo para assinar. **Gratuito nao recebe selo** — marcar quem nao paga com um
 rotulo de ausencia e humilhacao de graca.
 
+### Como o plano chega ate a tela de OUTRA pessoa
+
+O plano viaja dentro do `PublicUser`, ja resolvido (vencimento aplicado). Quem
+monta esse objeto e `toPublicUser`, e quem pede os campos ao banco e
+`SELECT_USUARIO_PUBLICO` — os dois em `@aether/shared`, num lugar so.
+
+Antes disso, **nove consultas** repetiam a mesma lista de campos a mao.
+Enquanto era so o perfil basico, copiar custava pouco. Com o plano entrando,
+cada copia virava uma chance de um lugar mostrar assinatura vencida como ativa
+— e esse defeito nao aparece como erro, so como um selo a mais que ninguem
+questiona, porque favorece quem tem.
+
+`plano` e campo OBRIGATORIO de `PublicUser`, e nao opcional, de proposito: o
+compilador enumera quem esqueceu, em vez de o selo sumir de uma tela so.
+
+**A licao que custou caro:** o seletor e objeto literal (nao pode importar
+Prisma — `@aether/shared` tambem roda no navegador), e literal nenhum e
+conferido contra o schema. A primeira versao pediu `subscription`; a relacao em
+`User` se chama `assinatura`. Compilou limpo nos tres workspaces e so falhou ao
+rodar de verdade. Por isso existe, em `packages/db`, uma atribuicao
+`Prisma.UserSelect` que nao gera codigo e transforma essa divergencia em erro
+de `npm run typecheck`.
+
 O nome e **Olimpo** (`OLIMPO` / `OLIMPO PRO`), e mora em `rotulo`, separado do
 `tier`. A separacao ja provou o valor: o nome passou por "AETHER+", "VIP" e um
 terceiro antes de virar Olimpo, e nenhuma dessas trocas encostou no banco —
@@ -2052,10 +2075,13 @@ disso no dia de trocar de novo.
   silencioso.
 - **"Multiplas transmissoes" tambem nao existe.** Uma pessoa transmite uma tela
   de cada vez; o numero na tabela e o teto de quando o recurso existir.
-- **O selo so aparece na aba Plano, ainda nao ao lado do nome.** Para ele
-  cumprir o papel social precisa estar na lista de membros e no autor da
-  mensagem — isso exige o tier entrar no `PublicUser`, que passa por varias
-  consultas. E a proxima entrega natural.
+- **O selo nao aparece na VOZ nem na tela de amigos.** Esta na lista de
+  membros, no autor da mensagem e no cartao de perfil; o painel de voz e a
+  lista de amigos ja recebem o dado (vem no mesmo `PublicUser`), mas nao o
+  desenham. Faltou escopo, nao dado.
+- **Dono do servidor com plano PRO mostra duas coroas.** A do plano e a de
+  dono usam o mesmo icone. O selo e uma pilula com borda e a de dono e um
+  icone solto, o que separa os dois papeis, mas lado a lado ainda compete.
 - **Sem cobranca e sem tela de assinatura.** Nao ha como comprar: so chave e
   concessao a mao.
 - **Cosmeticos (avatar animado, banner, moldura) nao existem.** A escada de cor

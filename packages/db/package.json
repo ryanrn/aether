@@ -22,7 +22,8 @@
     "schema": "prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "6.19.2"
+    "@prisma/client": "6.19.2",
+    "@aether/shared": "*"
   },
   "devDependencies": {
     "prisma": "6.19.2",

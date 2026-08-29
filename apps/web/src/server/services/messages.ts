@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@aether/db";
 import {
   MESSAGE_PAGE_SIZE,
+  SELECT_USUARIO_PUBLICO,
   toPublicMessage,
   type PublicMessage,
 } from "@aether/shared";
@@ -64,13 +65,7 @@ async function historicoInicial(
       createdAt: true,
       editedAt: true,
       author: {
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-          avatarUrl: true,
-          status: true,
-        },
+        select: SELECT_USUARIO_PUBLICO,
       },
     },
     // As mais recentes primeiro para o banco usar o indice de (pai, createdAt)

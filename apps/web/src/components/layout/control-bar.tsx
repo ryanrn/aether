@@ -16,7 +16,12 @@ import {
   PhoneOff,
   Settings,
 } from "lucide-react";
-import type { PublicChannel, UserStatus, ViewerContext } from "@aether/shared";
+import type {
+  PublicChannel,
+  PublicUser,
+  UserStatus,
+  ViewerContext,
+} from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { AppSettingsModal } from "@/components/settings/app-settings-modal";
@@ -68,13 +73,14 @@ export function ControlBar({
   nickname,
   voiceChannels,
 }: {
-  user: {
-    id: string;
-    displayName: string;
-    username: string;
-    avatarUrl: string | null;
-    status: UserStatus;
-    /** preferencias de contato; a aba de conta desenha as chaves com isto */
+  /**
+   * O usuario publico mais as preferencias de contato.
+   *
+   * Escrito como extensao de `PublicUser`, e nao campo a campo: a copia
+   * anterior repetia a mesma lista e obrigava a mexer aqui a cada campo novo
+   * do perfil — foi assim que o plano quase ficou de fora desta tela.
+   */
+  user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };

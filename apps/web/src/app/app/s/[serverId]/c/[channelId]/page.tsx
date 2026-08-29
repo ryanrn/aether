@@ -66,6 +66,7 @@ export default async function ChannelPage({
     displayName: context.session.user.displayName,
     avatarUrl: context.session.user.avatarUrl,
     status: context.session.user.status,
+    plano: context.session.user.plano,
   };
 
   const history =

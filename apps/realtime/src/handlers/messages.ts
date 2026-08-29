@@ -10,6 +10,7 @@ import {
   room,
   toPublicMessage,
   MESSAGE_PAGE_SIZE,
+  SELECT_USUARIO_PUBLICO,
   type PermissionKey,
   type PublicMessage,
 } from "@aether/shared";
@@ -68,13 +69,7 @@ const MESSAGE_SELECT = {
   createdAt: true,
   editedAt: true,
   author: {
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-      status: true,
-    },
+    select: SELECT_USUARIO_PUBLICO,
   },
 } as const;
 

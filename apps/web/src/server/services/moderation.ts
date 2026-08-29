@@ -1,7 +1,11 @@
 import "server-only";
 
 import { prisma } from "@aether/db";
-import type { PublicUser, UserStatus } from "@aether/shared";
+import {
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
+  type PublicUser,
+} from "@aether/shared";
 
 /**
  * Camada de dados da moderacao.
@@ -26,13 +30,7 @@ const BAN_SELECT = {
   expiresAt: true,
   createdAt: true,
   user: {
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-      status: true,
-    },
+    select: SELECT_USUARIO_PUBLICO,
   },
   issuedBy: { select: { id: true, displayName: true } },
 } as const;
@@ -60,13 +58,7 @@ export async function listActiveBans(serverId: string): Promise<ServerBan[]> {
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     issuedBy: row.issuedBy,
-    user: {
-      id: row.user.id,
-      username: row.user.username,
-      displayName: row.user.displayName,
-      avatarUrl: row.user.avatarUrl,
-      status: row.user.status as UserStatus,
-    },
+    user: toPublicUser(row.user),
   }));
 }
 

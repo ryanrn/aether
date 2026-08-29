@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { AlertCircle, Copy, SmilePlus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { SeloPlano } from "@/components/ui/selo-plano";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
 import { AnexosDaMensagem } from "@/components/chat/anexos-pendentes";
 import { useSocket } from "@/components/realtime/realtime-provider";
@@ -173,6 +174,7 @@ export function MessageItem({
               <span className="text-[13px] font-medium text-ink-100">
                 {message.author.displayName}
               </span>
+              <SeloPlano tier={message.author.plano} tamanho="sm" />
               <time
                 dateTime={message.createdAt}
                 suppressHydrationWarning

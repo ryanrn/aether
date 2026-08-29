@@ -1,20 +1,16 @@
 import "server-only";
 import { prisma } from "@aether/db";
-import type { PublicFriendship } from "@aether/shared";
+import {
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
+  type PublicFriendship,
+} from "@aether/shared";
 
 /**
  * Consultas de amizade. So leitura — quem muda estado e
  * `server/actions/friends.ts`, e quem responde "os dois sao amigos?" e
  * `@aether/access`, porque o gateway precisa da mesma resposta.
  */
-
-const USUARIO_PUBLICO = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatarUrl: true,
-  status: true,
-} as const;
 
 /**
  * Todas as amizades de alguem — aceitas e pendentes, nas duas direcoes.
@@ -37,8 +33,8 @@ export async function listFriendships(
       status: true,
       createdAt: true,
       requesterId: true,
-      requester: { select: USUARIO_PUBLICO },
-      addressee: { select: USUARIO_PUBLICO },
+      requester: { select: SELECT_USUARIO_PUBLICO },
+      addressee: { select: SELECT_USUARIO_PUBLICO },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -55,14 +51,14 @@ export async function listFriendships(
     select: {
       id: true,
       createdAt: true,
-      blocked: { select: USUARIO_PUBLICO },
+      blocked: { select: SELECT_USUARIO_PUBLICO },
     },
     orderBy: { createdAt: "desc" },
   });
 
   const bloqueados: PublicFriendship[] = bloqueios.map((linha) => ({
     id: linha.id,
-    user: linha.blocked,
+    user: toPublicUser(linha.blocked),
     kind: "blocked" as const,
     createdAt: linha.createdAt.toISOString(),
   }));
@@ -72,7 +68,7 @@ export async function listFriendships(
     const outro = euPedi ? linha.addressee : linha.requester;
     return {
       id: linha.id,
-      user: outro,
+      user: toPublicUser(outro),
       kind:
         linha.status === "ACCEPTED"
           ? ("friend" as const)

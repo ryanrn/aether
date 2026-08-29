@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@aether/db";
 import { loadDmAccess } from "@aether/access";
-import type { PublicUser } from "@aether/shared";
+import { SELECT_USUARIO_PUBLICO, type PublicUser } from "@aether/shared";
 import { getSession } from "@/server/auth/session";
 import { listRecentDmMessages } from "@/server/services/messages";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -34,13 +34,7 @@ export default async function DmPage({
 
   const outro = await prisma.user.findUnique({
     where: { id: acesso.outroId },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-      status: true,
-    },
+    select: SELECT_USUARIO_PUBLICO,
   });
   if (!outro) notFound();
 
@@ -51,6 +45,7 @@ export default async function DmPage({
     displayName: session.user.displayName,
     avatarUrl: session.user.avatarUrl,
     status: session.user.status,
+    plano: session.user.plano,
   };
 
   const history = await listRecentDmMessages(dmId, session.user.id);

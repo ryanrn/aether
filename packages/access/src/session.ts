@@ -1,5 +1,9 @@
 import { prisma } from "@aether/db";
-import type { PublicUser, UserStatus } from "@aether/shared";
+import {
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
+  type PublicUser,
+} from "@aether/shared";
 import { verifySessionToken } from "./tokens";
 
 /**
@@ -58,12 +62,8 @@ export async function loadSession(
     include: {
       user: {
         select: {
-          id: true,
-          username: true,
-          displayName: true,
+          ...SELECT_USUARIO_PUBLICO,
           email: true,
-          avatarUrl: true,
-          status: true,
           // Preferencia de contato: quem pode abrir conversa comigo sem ser
           // amigo. Vem na sessao para a tela de configuracoes nao precisar de
           // uma ida ao banco so para desenhar uma chave.
@@ -88,12 +88,8 @@ export async function loadSession(
   return {
     sessionId: session.id,
     user: {
-      id: session.user.id,
-      username: session.user.username,
-      displayName: session.user.displayName,
+      ...toPublicUser(session.user),
       email: session.user.email,
-      avatarUrl: session.user.avatarUrl,
-      status: session.user.status as UserStatus,
       allowServerDms: session.user.allowServerDms,
       allowServerFriendRequests: session.user.allowServerFriendRequests,
     },

@@ -3,6 +3,8 @@
  * Nada aqui depende de Prisma ou de React de proposito: e o vocabulario comum do sistema.
  */
 
+import { planoEfetivo, type PlanTier } from "./plans";
+
 export const USER_STATUSES = ["ONLINE", "IDLE", "DND", "OFFLINE"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
@@ -22,6 +24,93 @@ export interface PublicUser {
   displayName: string;
   avatarUrl: string | null;
   status: UserStatus;
+  /**
+   * O plano JA RESOLVIDO — vencimento aplicado, pronto para desenhar.
+   *
+   * Publico de proposito: metade do valor de um plano e social, e sem o plano
+   * viajando junto com a pessoa o selo so apareceria para quem pagou, nas
+   * proprias configuracoes. Nao ha nada sensivel aqui — `expiraEm`, provedor e
+   * id externo ficam fora, porque a tela nao precisa deles e o navegador de
+   * outra pessoa nao tem o que fazer com eles.
+   *
+   * OBRIGATORIO, e nao opcional. Como sao muitos os lugares que montam um
+   * `PublicUser`, campo opcional deixaria cada um deles esquecer em silencio e
+   * o assinante ficaria sem selo em uma tela so. Assim o compilador cobra.
+   * Quem nao assina e `FREE`, que o selo trata como ausencia de selo.
+   */
+  plano: PlanTier;
+}
+
+/**
+ * Formato CRU de usuario vindo do banco.
+ *
+ * Declarado aqui — sem importar Prisma — pelo mesmo motivo de `MessageRow`:
+ * o app web e o gateway produzem `PublicUser` pela MESMA funcao, em vez de
+ * cada um montar o objeto do seu jeito e um deles esquecer um campo.
+ *
+ * `assinatura` e OBRIGATORIO, ainda que possa ser nulo. A diferenca importa:
+ * nulo significa "esta pessoa nao assina", enquanto ausente significaria "quem
+ * consultou esqueceu de pedir a assinatura" — e as duas coisas produziriam
+ * `FREE` calado, com o assinante perdendo o selo numa tela so. Sendo
+ * obrigatorio, esquecer no `select` nao compila.
+ */
+export interface UserRow {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: string;
+  assinatura: {
+    tier: PlanTier;
+    expiraEm: Date | string | null;
+  } | null;
+}
+
+/**
+ * O `select` do Prisma que preenche um `UserRow`, num lugar so.
+ *
+ * Antes disto, nove consultas repetiam a mesma lista de campos a mao. Enquanto
+ * era so o perfil basico, copiar custava pouco; com o plano entrando, cada
+ * copia vira uma chance de um lugar mostrar assinatura vencida como ativa.
+ *
+ * E objeto literal puro de proposito — nao importa Prisma — para que este
+ * arquivo continue sem dependencia de banco e possa ser lido tambem pelo
+ * navegador.
+ */
+export const SELECT_USUARIO_PUBLICO = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatarUrl: true,
+  status: true,
+  /**
+   * So `tier` e `expiraEm`: sao o que `planoEfetivo` precisa. Provedor, id
+   * externo e quem concedeu ficam fora — nao servem a tela e nao tem por que
+   * atravessar a rede ate o navegador de outra pessoa.
+   */
+  assinatura: { select: { tier: true, expiraEm: true } },
+} as const;
+
+/**
+ * Linha do banco -> usuario publico, com o vencimento do plano ja aplicado.
+ *
+ * `agora` entra por parametro para o teste conseguir posicionar o relogio; na
+ * vida real ninguem passa.
+ */
+export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
+    /**
+     * `status` chega como string do banco. Valor desconhecido vira OFFLINE em
+     * vez de vazar cru para a tela — o mesmo cuidado que `toPublicMessage` ja
+     * tomava com o autor.
+     */
+    status: isUserStatus(row.status) ? row.status : "OFFLINE",
+    plano: planoEfetivo(row.assinatura, agora),
+  };
 }
 
 export interface PublicRole {
@@ -221,13 +310,11 @@ export interface MessageRow {
     largura: number | null;
     altura: number | null;
   }>;
-  author: {
-    id: string;
-    username: string;
-    displayName: string;
-    avatarUrl: string | null;
-    status: string;
-  };
+  /**
+   * O autor no formato cru compartilhado — inclusive a assinatura, para a
+   * mensagem no chat carregar o selo do plano junto com o nome.
+   */
+  author: UserRow;
 }
 
 /**
@@ -303,13 +390,7 @@ export function toPublicMessage(
       largura: a.largura,
       altura: a.altura,
     })),
-    author: {
-      id: row.author.id,
-      username: row.author.username,
-      displayName: row.author.displayName,
-      avatarUrl: row.author.avatarUrl,
-      status: isUserStatus(row.author.status) ? row.author.status : "OFFLINE",
-    },
+    author: toPublicUser(row.author),
   };
 }
 

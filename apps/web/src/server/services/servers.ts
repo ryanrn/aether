@@ -5,12 +5,13 @@ import { prisma, ChannelType, type Prisma } from "@aether/db";
 import {
   DEFAULT_ROLE_TEMPLATES,
   has,
+  SELECT_USUARIO_PUBLICO,
+  toPublicUser,
   type PublicCategory,
   type PublicChannel,
   type PublicMember,
   type PublicRole,
   type PublicServer,
-  type UserStatus,
 } from "@aether/shared";
 import { getChannelPermissionMap } from "@aether/access";
 import type { MemberContext } from "../guards";
@@ -248,13 +249,7 @@ export async function getServerContext(
           nickname: true,
           joinedAt: true,
           user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatarUrl: true,
-              status: true,
-            },
+            select: SELECT_USUARIO_PUBLICO,
           },
           roles: {
             select: {
@@ -309,13 +304,7 @@ export async function getServerContext(
     id: member.id,
     nickname: member.nickname,
     joinedAt: member.joinedAt.toISOString(),
-    user: {
-      id: member.user.id,
-      username: member.user.username,
-      displayName: member.user.displayName,
-      avatarUrl: member.user.avatarUrl,
-      status: member.user.status as UserStatus,
-    },
+    user: toPublicUser(member.user),
     roles: member.roles
       .map(({ role }) => ({
         id: role.id,
