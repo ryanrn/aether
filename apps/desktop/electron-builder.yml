@@ -65,7 +65,16 @@ win:
   target:
     - target: nsis
       arch: [x64]
-  icon: build/icon.png
+  # O `.ico` PRONTO, e nao o PNG.
+  #
+  # Com PNG, o electron-builder chama um conversor proprio que sobe um Node so
+  # para isso — e esse processo precisa de memoria contigua para desserializar
+  # o V8. Numa maquina ocupada ele morre com "Fatal JavaScript out of memory",
+  # e o build inteiro falha por causa de um icone. Aconteceu.
+  #
+  # O arquivo e versionado e sai de `scripts/gerar-icones.mjs`, com todos os
+  # tamanhos que o Windows usa (16 a 256).
+  icon: build/icon.ico
   # Sem certificado de assinatura, o Windows mostra "editor desconhecido" na
   # primeira execucao. Isso e esperado e esta anotado nas limitacoes — assinar
   # exige um certificado pago.

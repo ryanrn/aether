@@ -43,17 +43,24 @@ import sharp from "sharp";
 const FONTE = process.argv[2] ?? "assets/marca/icone.png";
 
 /**
- * Os destinos.
+ * O `.ico` do Windows. Gerado logo abaixo, por ImageMagick, e versionado — e
+ * NAO deixado a cargo do electron-builder, que morre de falta de memoria numa
+ * maquina ocupada.
+ */
+const DESTINO_ICO = "apps/desktop/build/icon.ico";
+
+/**
+ * Os destinos em PNG.
  *
- * O do desktop vai a 512, e o electron-builder gera o `.ico` do Windows a
- * partir dele (ele pede pelo menos 256).
+ * O do desktop fica como FONTE do `.ico` e como fallback; o electron-builder
+ * aponta para o `.ico`.
  *
  * Os dois da web seguem a convencao de arquivo do App Router: `icon.png` vira
  * o favicon e `apple-icon.png` vira o atalho do iOS, sem precisar declarar
  * nada no `metadata`.
  */
 const DESTINOS = [
-  { caminho: "apps/desktop/build/icon.png", tamanho: 512, oque: "app desktop" },
+  { caminho: "apps/desktop/build/icon.png", tamanho: 512, oque: "app desktop (fonte)" },
   { caminho: "apps/web/src/app/icon.png", tamanho: 512, oque: "aba do navegador" },
   { caminho: "apps/web/src/app/apple-icon.png", tamanho: 180, oque: "atalho no iOS" },
 ];
@@ -99,6 +106,41 @@ async function main() {
       .toFile(caminho);
     const kb = Math.round(statSync(caminho).size / 1024);
     console.log(`  ok  ${caminho.padEnd(34)} ${tamanho}px  ${kb}KB  (${oque})`);
+  }
+
+  /**
+   * O `.ico` do Windows, gerado AQUI e versionado.
+   *
+   * O electron-builder sabe converter PNG para ICO sozinho, mas para isso sobe
+   * um Node dedicado que precisa de memoria contigua para desserializar o V8.
+   * Numa maquina ocupada ele morre com "Fatal JavaScript out of memory" e
+   * derruba o build inteiro por causa de um icone — aconteceu, com 3,9 GB
+   * livres de 16. Entregando o arquivo pronto, esse passo deixa de existir.
+   *
+   * Precisa do ImageMagick. Sem ele o script AVISA em vez de falhar calado: o
+   * `.ico` versionado continua valendo ate alguem trocar a arte.
+   */
+  try {
+    const { execFileSync } = await import("node:child_process");
+    execFileSync(
+      "magick",
+      [
+        FONTE,
+        "-define",
+        "icon:auto-resize=256,128,64,48,32,24,16",
+        DESTINO_ICO,
+      ],
+      { stdio: "pipe" },
+    );
+    const kb = Math.round(statSync(DESTINO_ICO).size / 1024);
+    console.log(`  ok  ${DESTINO_ICO.padEnd(34)} 7 tamanhos  ${kb}KB  (Windows)`);
+  } catch {
+    console.log(
+      `\n  --  ${DESTINO_ICO} NAO foi regerado (falta ImageMagick no PATH).\n` +
+        "      O arquivo versionado continua valendo. Se voce trocou a arte,\n" +
+        "      regere antes de publicar:\n" +
+        `      magick ${FONTE} -define icon:auto-resize=256,128,64,48,32,24,16 ${DESTINO_ICO}`,
+    );
   }
 
   console.log(
