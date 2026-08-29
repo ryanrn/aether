@@ -54,13 +54,29 @@ export async function redisEval(
   args: (string | number)[],
   timeoutMs = 3000,
 ): Promise<unknown> {
-  const response = await fetch(`${config.url}/eval`, {
+  /**
+   * O comando vai para a RAIZ, com o nome dele como primeiro elemento do
+   * array — e nao para um caminho `/eval` com o corpo sem o nome.
+   *
+   * A primeira versao fazia o segundo, e o Upstash responde a ela com
+   * `HTTP 400 ERR wrong number of arguments for 'eval' command`. Passou
+   * despercebido desde a fase 7c porque o teste dubla o `fetch`, e o duble
+   * confirmava com conviccao o formato que nos mandavamos, nao o que o
+   * servidor aceita. So apareceu ao existir um Redis de verdade.
+   */
+  const response = await fetch(config.url, {
     method: "POST",
     headers: {
       authorization: `Bearer ${config.token}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify([script, keys.length, ...keys, ...args.map(String)]),
+    body: JSON.stringify([
+      "EVAL",
+      script,
+      String(keys.length),
+      ...keys,
+      ...args.map(String),
+    ]),
     signal: AbortSignal.timeout(timeoutMs),
   });
 

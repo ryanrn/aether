@@ -104,7 +104,7 @@ describe("com Redis configurado", () => {
     await rateLimit("login:1.2.3.4", 10, 300_000);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe("https://exemplo.upstash.io/eval");
+    expect(calls[0]!.url).toBe("https://exemplo.upstash.io");
   });
 
   it("autentica com o token e isola a chave por prefixo", async () => {
@@ -114,10 +114,11 @@ describe("com Redis configurado", () => {
     const { headers, body } = calls[0]!;
     expect(headers.authorization).toBe("Bearer token-de-teste");
 
-    // [script, numKeys, ...keys, ...args]
+    // ["EVAL", script, numKeys, ...keys, ...args]
     const payload = body as unknown[];
-    expect(payload[1]).toBe(1);
-    expect(payload[2]).toBe("ratelimit:login:1.2.3.4");
+    expect(payload[0]).toBe("EVAL");
+    expect(payload[2]).toBe("1");
+    expect(payload[3]).toBe("ratelimit:login:1.2.3.4");
   });
 
   it("passa limite e janela como argumentos, nao embutidos no script", async () => {
@@ -129,7 +130,7 @@ describe("com Redis configurado", () => {
     await rateLimit("login:1.2.3.4", 7, 123_000);
 
     const payload = calls[0]!.body as unknown[];
-    const args = payload.slice(3).map(String);
+    const args = payload.slice(4).map(String);
     expect(args).toContain("123000"); // janela
     expect(args).toContain("7"); // limite
   });
@@ -138,7 +139,7 @@ describe("com Redis configurado", () => {
     process.env.UPSTASH_REDIS_REST_URL = "https://exemplo.upstash.io/";
     const calls = stubUpstash([1, 0]);
     await rateLimit("login:1.2.3.4", 10, 300_000);
-    expect(calls[0]!.url).toBe("https://exemplo.upstash.io/eval");
+    expect(calls[0]!.url).toBe("https://exemplo.upstash.io");
   });
 });
 

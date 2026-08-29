@@ -2674,16 +2674,28 @@ limite de tentativas e um consumo unico existem para impedir.
 - **Presenca, ocupacao de voz e o adapter do Socket.IO continuam em memoria.**
   E a 7c-2, e e a parte que de fato destrava a segunda maquina de gateway. O
   `fly.toml` segue com `min_machines_running = 1` por isso.
-- **Nada disso foi exercitado contra um Redis real ainda** — nao ha instancia
-  provisionada. O script de verificacao esta escrito e compila, mas nunca
-  rodou de ponta a ponta: ate existir um Upstash, ele so sabe dizer que o
-  Redis nao esta configurado. O caminho sem Redis (o de hoje) segue coberto
-  pelos testes e pela regressao de integracao.
+- **O `redisEval` estava QUEBRADO desde a 7c, e ninguem podia saber.** Ele
+  fazia `POST /eval` com o corpo `[script, numkeys, ...]`. O Upstash quer o
+  comando na RAIZ, com `"EVAL"` como primeiro elemento do array, e responde
+  aquela forma com `HTTP 400 ERR wrong number of arguments`. Ou seja: com o
+  Upstash provisionado e sem esta correcao, todo login cairia no fail-open
+  (nenhuma protecao, em silencio) e **nenhum handshake do gateway passaria**,
+  porque o ticket e fail-closed. Um apagao.
+
+  O teste dublado nao so deixou passar: ele FIXAVA a forma errada, afirmando
+  `url === ".../eval"` com conviccao. Passou doze vezes sobre codigo que nunca
+  funcionou. E o lembrete de que um duble confirma o que nos mandamos, nunca o
+  que o servidor aceita.
 - **`verificar-redis.mts` e `.mts`, e nao `.mjs` como os outros.** Foi
   deliberado: assim ele importa `limitarJanelaDeslizante` e
   `consumirTicketUnico` de `@aether/shared` e exercita o codigo que roda em
   producao, em vez de uma copia do Lua que divergiria na primeira mudanca.
   Roda por `tsx`, o mesmo que ja executa o gateway.
+- **Verificado contra um Upstash real (sa-east-1), 10/10.** O Lua roda, o
+  limite limita, a tentativa recusada nao entra no conjunto, a janela desliza,
+  e dez consumos simultaneos do mesmo ticket deixam exatamente um passar.
+  Confirmado tambem de ponta a ponta: o login grava `ratelimit:login:<ip>` e a
+  fase 3 (43/0) consome os tickets pelo Redis, nao pela memoria.
 
 ## Limitacoes conhecidas da FASE 7b (revalidacao de sessao e recalculo de salas)
 
