@@ -1,0 +1,7 @@
+# Cadastro dos jogos: carrega as chaves compartilhadas com cada place do
+# Roblox. Versionar isto entrega o controle do jogo para quem clonar o repo.
+games.json
+
+# O .gitignore da raiz termina com `.env*`, que engole tambem o exemplo. Aqui
+# o exemplo PRECISA ser versionado: e ele que documenta cada variavel.
+!.env.example

@@ -125,10 +125,14 @@ aether/
 │           ├── env.ts          configuracao validada no boot
 │           ├── auth.ts         handshake autenticado pelo cookie de sessao
 │           └── index.ts        servidor Socket.IO
-└── packages/
-    ├── db/                     schema Prisma + cliente singleton
-    ├── shared/                 tipos, permissoes, validacao Zod, marca
-    └── access/                 sessao + permissao efetiva (web E gateway)
+├── packages/
+│   ├── db/                     schema Prisma + cliente singleton
+│   ├── shared/                 tipos, permissoes, validacao Zod, marca
+│   └── access/                 sessao + permissao efetiva (web E gateway)
+└── tiktok-roblox/              ponte TikTok LIVE -> Roblox (projeto a parte)
+    ├── server/                 middleware Node: le a live, vira fila HTTP
+    ├── roblox/                 scripts Luau (Rojo) do lado do jogo
+    └── host/                   anti-inatividade no sistema operacional
 ```
 
 Regra de ouro da arquitetura: **nada de logica de negocio em componente**.
@@ -139,6 +143,28 @@ Segunda regra, que nasceu na fase 3: **regra de autorizacao mora em um lugar so*
 os dois precisam saber sobre sessao e permissao vive em `@aether/access`. Duas
 copias da regra de permissao divergem, e permissao divergente nao e bug de tela,
 e falha de autorizacao.
+
+---
+
+## Ponte TikTok LIVE -> Roblox (`tiktok-roblox/`)
+
+Subsistema separado, com README, dependencias e verificacao proprios:
+[`tiktok-roblox/README.md`](tiktok-roblox/README.md). Le os comentarios de uma
+live do TikTok e transforma cada um em acao dentro de uma experiencia do
+Roblox — o espectador comenta, o boneco dele aparece com o `@` na cabeca.
+
+**Fica FORA dos workspaces npm de proposito.** Roda na maquina de quem
+transmite, muitas vezes outra maquina, e nao compartilha `AUTH_SECRET`, banco
+nem build com o resto do monorepo. Como consequencia ele tem o proprio `.env`
+(a unica excecao a regra do `.env` na raiz) e o proprio `package.json`, e o
+`npm run typecheck` da raiz nao passa por ele.
+
+```bash
+cd tiktok-roblox
+npm install && cp games.example.json games.json   # edite as chaves
+npm run sim        # comentarios falsos, sem live e sem Roblox aberto
+node verify.mjs    # 57 verificacoes da ponte inteira
+```
 
 ---
 
