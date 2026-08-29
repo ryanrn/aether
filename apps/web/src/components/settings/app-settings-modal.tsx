@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Gamepad2, Library, Mic, Sparkles, User } from "lucide-react";
+import { Compass, Gamepad2, Library, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { ComunidadesTab } from "./comunidades-tab";
 import { JogosTab } from "./jogos-tab";
 import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
@@ -24,7 +25,7 @@ import { VoiceTab } from "./voice-tab";
  * propria etiqueta.
  */
 
-type Tab = "conta" | "voz" | "atividade" | "plano" | "jogos";
+type Tab = "conta" | "voz" | "atividade" | "plano" | "jogos" | "comunidades";
 
 const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "conta", label: "Minha conta", icon: User },
@@ -53,11 +54,10 @@ const TABS: { id: Tab; label: string; icon: typeof User }[] = [
  * Isso e cortesia de interface, e nao seguranca: as actions da aba recusam
  * sozinhas, respondendo como se nao existissem.
  */
-const ABA_DA_EQUIPE = {
-  id: "jogos" as const,
-  label: "Biblioteca",
-  icon: Library,
-};
+const ABAS_DA_EQUIPE = [
+  { id: "jogos" as const, label: "Biblioteca", icon: Library },
+  { id: "comunidades" as const, label: "Comunidades", icon: Compass },
+];
 
 export function AppSettingsModal({
   open,
@@ -86,7 +86,7 @@ export function AppSettingsModal({
 }) {
   const [active, setActive] = useState<Tab>("conta");
 
-  const abas = user.equipe ? [...TABS, ABA_DA_EQUIPE] : TABS;
+  const abas = user.equipe ? [...TABS, ...ABAS_DA_EQUIPE] : TABS;
 
   return (
     <Modal
@@ -146,6 +146,8 @@ export function AppSettingsModal({
             <PlanoTab />
           ) : active === "jogos" ? (
             <JogosTab />
+          ) : active === "comunidades" ? (
+            <ComunidadesTab />
           ) : (
             <ActivityTab />
           )}

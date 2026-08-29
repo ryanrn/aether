@@ -6,14 +6,20 @@ import {
   buscaDeComunidadeSchema,
   type ActionResult,
   type ComunidadeNaVitrine,
+  type PedidoDeVitrine,
+  type VitrineStatus,
 } from "@aether/shared";
 import { requirePermission, requireUser } from "../guards";
 import {
+  contarPedidosPendentes,
   entrarEmComunidade,
   lerAjustesDeVitrine,
+  listarPedidosDeVitrine,
   listarVitrine,
+  revisarPedidoDeVitrine,
   salvarAjustesDeVitrine,
 } from "../services/descoberta";
+import { ehEquipe } from "@aether/access";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -87,15 +93,15 @@ export async function entrarNaComunidadeAction(
  */
 export async function salvarVitrineAction(
   serverId: string,
-  publico: boolean,
+  querAparecer: boolean,
   descricao: string,
   categoria: string | null,
-): Promise<ActionResult<undefined>> {
+): Promise<ActionResult<{ status: VitrineStatus; voltouParaFila: boolean }>> {
   try {
     await requirePermission(serverId, "MANAGE_SERVER");
 
     const validado = ajustesDeVitrineSchema.safeParse({
-      publico,
+      querAparecer,
       descricao,
       categoria,
     });
@@ -103,9 +109,54 @@ export async function salvarVitrineAction(
       return fail(validado.error.issues[0]?.message ?? "Ajustes invalidos");
     }
 
-    await salvarAjustesDeVitrine(serverId, validado.data);
+    const resultado = await salvarAjustesDeVitrine(serverId, validado.data);
     revalidatePath("/app", "layout");
-    return ok(undefined);
+    return ok(resultado);
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * A fila de pedidos de vitrine, e a decisao. So a equipe.
+ *
+ * Barra respondendo como se nao existisse — a mesma regra da fila de jogos, e
+ * pelo mesmo motivo: nao confirmamos a existencia de um painel para quem
+ * chutou o nome da action.
+ */
+async function exigirEquipe() {
+  const sessao = await requireUser();
+  return ehEquipe(sessao) ? sessao : null;
+}
+
+export async function listarPedidosAction(
+  status: VitrineStatus = "PENDENTE",
+): Promise<ActionResult<{ pedidos: PedidoDeVitrine[]; pendentes: number }>> {
+  try {
+    const sessao = await exigirEquipe();
+    if (!sessao) return fail("Nao encontrado");
+
+    const [pedidos, pendentes] = await Promise.all([
+      listarPedidosDeVitrine(status),
+      contarPedidosPendentes(),
+    ]);
+    return ok({ pedidos, pendentes });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function revisarPedidoAction(
+  serverId: string,
+  decisao: "APROVADO" | "RECUSADO",
+): Promise<ActionResult<{ aplicado: boolean }>> {
+  try {
+    const sessao = await exigirEquipe();
+    if (!sessao) return fail("Nao encontrado");
+
+    const aplicado = await revisarPedidoDeVitrine(serverId, sessao.user.id, decisao);
+    revalidatePath("/app", "layout");
+    return ok({ aplicado });
   } catch (error) {
     return toActionError(error);
   }
@@ -121,7 +172,7 @@ export async function salvarVitrineAction(
  */
 export async function lerVitrineAction(serverId: string): Promise<
   ActionResult<{
-    publico: boolean;
+    vitrine: VitrineStatus;
     descricao: string;
     categoria: string | null;
     oficial: boolean;
@@ -132,7 +183,7 @@ export async function lerVitrineAction(serverId: string): Promise<
     const ajustes = await lerAjustesDeVitrine(serverId);
     if (!ajustes) return fail("Nao encontrado");
     return ok({
-      publico: ajustes.publico,
+      vitrine: ajustes.vitrine as VitrineStatus,
       descricao: ajustes.descricao ?? "",
       categoria: ajustes.categoria,
       oficial: ajustes.oficial,

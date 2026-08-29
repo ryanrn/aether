@@ -64,13 +64,36 @@ export const descricaoDeComunidadeSchema = z
   .max(160, "A descricao cabe em 160 caracteres");
 
 export const ajustesDeVitrineSchema = z.object({
-  publico: z.boolean(),
+  /**
+   * O dono PEDE para aparecer; nao se lista sozinho.
+   *
+   * A primeira versao era um booleano "publico" que o dono ligava e pronto.
+   * Como qualquer pessoa cria conta e servidor, isso abria a vitrine para
+   * spam — e para alguem criar um servidor chamado "AETHER OFICIAL" e ficar
+   * ao lado do nosso.
+   */
+  querAparecer: z.boolean(),
   descricao: descricaoDeComunidadeSchema,
   categoria: z
     .string()
     .nullable()
     .refine(ehCategoriaValida, "Categoria desconhecida"),
 });
+
+export type VitrineStatus = "PRIVADO" | "PENDENTE" | "APROVADO" | "RECUSADO";
+
+/** Um pedido esperando revisao, como o painel da equipe o desenha. */
+export interface PedidoDeVitrine {
+  id: string;
+  nome: string;
+  iconUrl: string | null;
+  descricao: string | null;
+  categoria: string | null;
+  membros: number;
+  status: VitrineStatus;
+  dono: string;
+  criadoEm: string;
+}
 
 /** O termo de busca. Vazio = sem busca, e nao "nenhum resultado". */
 export const buscaDeComunidadeSchema = z.string().trim().max(60);

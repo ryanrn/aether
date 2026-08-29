@@ -19,6 +19,7 @@ import {
   reorderServers,
 } from "../services/servers";
 import { joinServerByCode } from "../services/invites";
+import { reavaliarVitrinePorRenomear } from "../services/descoberta";
 import { uploadServerIcon } from "../storage";
 import { fail, ok, toActionError } from "./action-result";
 
@@ -159,10 +160,30 @@ export async function updateServerAction(
 
     const context = await requirePermission(parsed.data.serverId, "MANAGE_SERVER");
 
+    const antes = await prisma.server.findUnique({
+      where: { id: parsed.data.serverId },
+      select: { name: true },
+    });
+
     await prisma.server.update({
       where: { id: parsed.data.serverId },
       data: { name: parsed.data.name },
     });
+
+    /**
+     * RENOMEAR UM SERVIDOR LISTADO O DEVOLVE A FILA DA VITRINE.
+     *
+     * Sem isto a revisao seria facil de driblar, e este e o caso mais grave: o
+     * nome e o que identifica a comunidade na vitrine. Aprova-se "Comunidade
+     * de Xadrez" e renomeia-se para o que se quiser — inclusive para algo que
+     * imite um servidor oficial, que e justamente o risco que a aprovacao
+     * existe para conter.
+     *
+     * So mexe em quem esta APROVADO; privado e pendente editam a vontade.
+     */
+    if (antes && antes.name !== parsed.data.name) {
+      await reavaliarVitrinePorRenomear(parsed.data.serverId);
+    }
 
     await writeAudit({
       serverId: parsed.data.serverId,

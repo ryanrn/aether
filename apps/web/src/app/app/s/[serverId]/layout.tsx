@@ -32,7 +32,13 @@ export default async function ServerLayout({
   let context;
   try {
     context = await requireMember(serverId);
-  } catch {
+  } catch (erro) {
+    // Mesmo motivo do catch da pagina de configuracoes: o 404 continua para
+    // quem visita, mas o motivo para de sumir para quem mantem.
+    console.error(
+      `[servidor] requireMember falhou para o servidor ${serverId}:`,
+      erro,
+    );
     notFound();
   }
 

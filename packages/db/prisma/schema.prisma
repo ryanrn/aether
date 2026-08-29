@@ -140,13 +140,22 @@ model Server {
   ownerId   String
   owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
 
-  /// Aparece em "Explorar comunidades"?
+  /// Em que ponto este servidor esta na vitrine.
   ///
-  /// DESLIGADO POR PADRAO, e essa e a decisao inteira: a maioria dos servidores
-  /// e um grupo de amigos que nunca pediu vitrine. Listar por existir exporia
-  /// o nome, o icone e o tamanho de todos eles sem ninguem ter escolhido isso.
-  /// Quem quer ser encontrado liga.
-  publico   Boolean  @default(false)
+  /// NAO E UM BOOLEANO, e a diferenca e a licao: a primeira versao deixava o
+  /// dono se listar sozinho. Como qualquer pessoa cria conta e servidor, isso
+  /// abria a vitrine para spam — e, pior, para alguem criar um servidor
+  /// chamado "AETHER OFICIAL" e ficar ao lado do nosso. Selo protege o nome,
+  /// mas muita gente nao olha selo.
+  ///
+  /// O dono PEDE (PENDENTE); a equipe decide. Mesma regra da biblioteca de
+  /// jogos: o que aparece para todo mundo passa por revisao.
+  vitrine   VitrineStatus @default(PRIVADO)
+
+  /// Quem revisou o pedido, e quando. Decisao que vale para a base inteira
+  /// precisa ter dono.
+  vitrineRevisadaPor String?
+  vitrineRevisadaEm  DateTime?
 
   /// A frase que aparece no card da vitrine. Nula ate o dono escrever.
   descricao String?
@@ -179,7 +188,7 @@ model Server {
   @@index([ownerId])
   /// A vitrine filtra sempre por publico; sem indice ela varre a tabela.
   /// O campo oficial entra junto porque a ordenacao fixa os oficiais no topo.
-  @@index([publico, oficial])
+  @@index([vitrine, oficial])
 }
 
 model ServerMember {
@@ -803,5 +812,18 @@ enum StatusDeJogo {
   APROVADO
   /// Recusado fica na tabela em vez de sumir: apagar faria a mesma sugestao
   /// voltar para a fila na proxima vez que alguem abrisse o jogo.
+  RECUSADO
+}
+
+/// Onde um servidor esta na fila da vitrine.
+enum VitrineStatus {
+  /// Padrao. Nao aparece, e ninguem pediu nada.
+  PRIVADO
+  /// O dono pediu para aparecer. Esperando revisao.
+  PENDENTE
+  /// Aparece em "Explorar comunidades".
+  APROVADO
+  /// Recusado. Fica assim em vez de voltar a PRIVADO para o mesmo pedido nao
+  /// reaparecer na fila toda vez que o dono mexer no interruptor.
   RECUSADO
 }

@@ -26,7 +26,24 @@ export default async function ServerSettingsPage({
   let context;
   try {
     context = await requireMember(serverId);
-  } catch {
+  } catch (erro) {
+    /**
+     * O 404 continua, mas o motivo NAO se perde mais.
+     *
+     * Este catch era vazio, e por isso qualquer falha aqui — sessao expirada,
+     * erro do Prisma, coluna nova num cliente velho — virava a mesma tela de
+     * "nao existe". Diagnosticar isso a partir de um 404 e impossivel: a tela
+     * diz a mesma coisa nos cinco casos.
+     *
+     * Nao revelar ao VISITANTE continua certo (e a regra do projeto: acesso
+     * indevido responde 404, nao 403). Nao registrar para NOS e outra coisa —
+     * e foi o que fez perder tempo procurando um defeito de permissao quando o
+     * dado estava correto o tempo todo.
+     */
+    console.error(
+      `[settings] requireMember falhou para o servidor ${serverId}:`,
+      erro,
+    );
     notFound();
   }
 

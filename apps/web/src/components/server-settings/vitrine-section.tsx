@@ -2,29 +2,36 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { BadgeCheck } from "lucide-react";
-import { CATEGORIAS_DE_COMUNIDADE } from "@aether/shared";
+import { CATEGORIAS_DE_COMUNIDADE, type VitrineStatus } from "@aether/shared";
 import { lerVitrineAction, salvarVitrineAction } from "@/server/actions/descoberta";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Aparecer em "Explorar comunidades".
+ * Pedir para aparecer em "Explorar comunidades".
  *
- * DESLIGADO POR PADRAO. A maioria dos servidores e um grupo de amigos que
- * nunca pediu vitrine, e listar por existir exporia nome, icone e tamanho de
- * todos eles sem ninguem ter escolhido isso.
+ * PEDIDO, e nao publicacao. A primeira versao era um interruptor que publicava
+ * na hora — e como qualquer pessoa cria conta e servidor, isso abria a vitrine
+ * para spam e para alguem criar um servidor chamado "AETHER OFICIAL" e ficar
+ * ao lado do nosso.
+ *
+ * DESLIGAR, ao contrario, vale na hora e nao passa por ninguem: sair da
+ * vitrine e direito do dono.
  *
  * O selo OFICIAL aparece aqui como informacao, e nunca como chave: quem marca
  * e a equipe, por script. Selo que o proprio interessado se da nao vale nada.
  */
 export function VitrineSection({ serverId }: { serverId: string }) {
   const [carregando, setCarregando] = useState(true);
-  const [publico, setPublico] = useState(false);
+  const [vitrine, setVitrine] = useState<VitrineStatus>("PRIVADO");
   const [descricao, setDescricao] = useState("");
   const [categoria, setCategoria] = useState<string | null>(null);
   const [oficial, setOficial] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  /** O que o interruptor mostra: pedir ou nao aparecer. */
+  const quer = vitrine === "PENDENTE" || vitrine === "APROVADO";
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -34,7 +41,7 @@ export function VitrineSection({ serverId }: { serverId: string }) {
           setErro(r.error);
           return;
         }
-        setPublico(r.data.publico);
+        setVitrine(r.data.vitrine);
         setDescricao(r.data.descricao);
         setCategoria(r.data.categoria);
         setOficial(r.data.oficial);
@@ -46,9 +53,26 @@ export function VitrineSection({ serverId }: { serverId: string }) {
     setErro(null);
     setSalvo(false);
     startTransition(async () => {
-      const r = await salvarVitrineAction(serverId, publico, descricao, categoria);
-      if (r.ok) setSalvo(true);
-      else setErro(r.error);
+      const r = await salvarVitrineAction(
+        serverId,
+        quer,
+        descricao,
+        categoria,
+      );
+      if (!r.ok) {
+        setErro(r.error);
+        return;
+      }
+      setVitrine(r.data.status);
+      setSalvo(true);
+      if (r.data.voltouParaFila) {
+        setAviso(
+          "Como o servidor esta listado e a descricao mudou, ele voltou para " +
+            "analise. Ele sai da vitrine ate ser revisto.",
+        );
+      } else {
+        setAviso(null);
+      }
     });
   }
 
@@ -70,28 +94,38 @@ export function VitrineSection({ serverId }: { serverId: string }) {
         ) : null}
       </div>
 
+      <EstadoDaVitrine status={vitrine} />
+
       <label className="flex cursor-pointer items-start gap-2.5">
         <input
           type="checkbox"
-          checked={publico}
+          checked={quer}
           onChange={(e) => {
-            setPublico(e.target.checked);
+            /*
+             * Marcar aqui e um PEDIDO, e nao a publicacao. O servidor so entra
+             * na vitrine depois de a equipe olhar — sem isso, qualquer conta
+             * nova se listaria sozinha, e a vitrine viraria o lugar mais facil
+             * de se passar por um servidor oficial.
+             */
+            setVitrine(e.target.checked ? "PENDENTE" : "PRIVADO");
             setSalvo(false);
+            setAviso(null);
           }}
           className="mt-0.5 h-4 w-4 shrink-0 accent-accent-500"
         />
         <span className="min-w-0">
           <span className="block text-[13px] text-ink-100">
-            Mostrar este servidor na vitrine
+            Pedir para aparecer na vitrine
           </span>
           <span className="mt-1 block text-[12px] leading-relaxed text-ink-500">
-            Qualquer pessoa com conta vai poder encontrar e entrar sem convite.
-            Desligado, o servidor so e acessivel por convite, como antes.
+            Um pedido passa por analise antes de entrar. Aprovado, qualquer
+            pessoa com conta encontra e entra sem convite. Desligando, ele sai
+            da vitrine na hora — isso nao precisa de analise.
           </span>
         </span>
       </label>
 
-      {publico ? (
+      {quer ? (
         <>
           <div className="flex flex-col gap-1.5">
             <label
@@ -162,6 +196,12 @@ export function VitrineSection({ serverId }: { serverId: string }) {
         </>
       ) : null}
 
+      {aviso ? (
+        <p className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[12px] leading-relaxed text-amber-200">
+          {aviso}
+        </p>
+      ) : null}
+
       {erro ? <p className="text-xs text-signal-dnd">{erro}</p> : null}
 
       <div className="flex items-center gap-2">
@@ -173,5 +213,29 @@ export function VitrineSection({ serverId }: { serverId: string }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** O que esta acontecendo com o pedido, em uma linha. */
+function EstadoDaVitrine({ status }: { status: VitrineStatus }) {
+  if (status === "PRIVADO") return null;
+
+  const texto: Record<Exclude<VitrineStatus, "PRIVADO">, string> = {
+    PENDENTE: "Em analise. Ele ainda nao aparece na vitrine.",
+    APROVADO: "Aprovado. Ele esta na vitrine.",
+    RECUSADO:
+      "Recusado. Corrija o que puder e peca de novo — recusa nao e definitiva.",
+  };
+
+  const cor: Record<Exclude<VitrineStatus, "PRIVADO">, string> = {
+    PENDENTE: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+    APROVADO: "border-signal-online/30 bg-signal-online/10 text-signal-online",
+    RECUSADO: "border-signal-dnd/30 bg-signal-dnd/10 text-signal-dnd",
+  };
+
+  return (
+    <p className={`rounded-md border px-2.5 py-2 text-[12px] ${cor[status]}`}>
+      {texto[status]}
+    </p>
   );
 }

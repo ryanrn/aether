@@ -7,11 +7,12 @@
  * nao vale nada. Se a chave estivesse nas configuracoes do servidor, todo
  * servidor seria oficial no dia seguinte e o selo viraria enfeite.
  *
- * MARCAR OFICIAL NAO TORNA PUBLICO. Sao duas decisoes: `publico` e do dono
- * (aparecer na vitrine), `oficial` e nosso (aparecer em destaque). Um servidor
- * oficial que nao ligou a vitrine continua fora dela — e o script avisa disso
- * em vez de ligar por conta propria, porque ligar a vitrine de um servidor
- * sem o dono pedir seria decidir no lugar dele.
+ * MARCAR OFICIAL NAO COLOCA NA VITRINE. Sao eixos diferentes: entrar na
+ * vitrine e um PEDIDO do dono que a equipe aprova; `oficial` e so nosso, e
+ * decide destaque e selo. Um servidor oficial que ninguem aprovou continua
+ * fora da vitrine — e o script avisa disso em vez de aprovar por conta
+ * propria, porque publicar o servidor de alguem sem a pessoa pedir seria
+ * decidir no lugar dela.
  *
  * Uso:
  *   npx dotenv -e .env -- node scripts/definir-servidor-oficial.mjs --listar
@@ -27,7 +28,7 @@ async function listar() {
     select: {
       id: true,
       name: true,
-      publico: true,
+      vitrine: true,
       oficial: true,
       _count: { select: { members: true } },
     },
@@ -44,7 +45,7 @@ async function listar() {
   for (const s of servidores) {
     const marcas = [
       s.oficial ? "OFICIAL" : null,
-      s.publico ? "na vitrine" : "fora da vitrine",
+      s.vitrine === "APROVADO" ? "na vitrine" : `vitrine: ${s.vitrine.toLowerCase()}`,
     ]
       .filter(Boolean)
       .join(", ");
@@ -78,7 +79,7 @@ async function main() {
 
   const alvo = await prisma.server.findUnique({
     where: { id },
-    select: { id: true, name: true, publico: true, oficial: true },
+    select: { id: true, name: true, vitrine: true, oficial: true },
   });
 
   if (!alvo) {
@@ -99,13 +100,14 @@ async function main() {
     `"${alvo.name}" ${ligar ? "AGORA E" : "nao e mais"} servidor oficial.`,
   );
 
-  if (ligar && !alvo.publico) {
+  if (ligar && alvo.vitrine !== "APROVADO") {
     console.log(
-      "\nATENCAO: ele NAO esta na vitrine, entao o selo nao aparece para\n" +
-        "ninguem ainda. Quem liga a vitrine e o dono, em\n" +
-        "Configuracoes do servidor -> Vitrine. Nao ligo por aqui de proposito:\n" +
-        "publicar o servidor de alguem sem a pessoa pedir seria decidir no\n" +
-        "lugar dela.",
+      "\nATENCAO: ele NAO esta APROVADO na vitrine, entao o selo nao aparece\n" +
+        "para ninguem ainda. Sao dois passos, e nenhum acontece aqui:\n" +
+        "  1. o DONO pede, em Configuracoes do servidor -> Explorar comunidades\n" +
+        "  2. a EQUIPE aprova, em Configuracoes -> Comunidades\n\n" +
+        "Nao faco nenhum dos dois por este script de proposito: publicar o\n" +
+        "servidor de alguem sem a pessoa pedir seria decidir no lugar dela.",
     );
   }
 }

@@ -902,6 +902,51 @@ icone.
   lixo. O par unico impede inflar o contador, e a sugestao guarda quem a fez,
   mas nao ha rate limit nem bloqueio automatico ainda.
 
+### Explorar comunidades
+
+Uma bussola no trilho abre a vitrine: cards com banner, icone, nome, descricao,
+membros e quem esta online, filtros por categoria e busca.
+
+**ENTRAR NA VITRINE PASSA POR APROVACAO.** A primeira versao era um booleano
+`publico` que o dono ligava e pronto — e como qualquer pessoa cria conta e
+servidor, isso abria a vitrine para spam e, pior, para alguem criar um servidor
+chamado "AETHER OFICIAL" e ficar ao lado do nosso. O selo protege o nome, mas
+muita gente nao olha selo. Foi corrigido para a mesma regra da biblioteca de
+jogos: o que aparece para todo mundo passa por revisao.
+
+O estado e um enum, e nao um booleano: `PRIVADO` (padrao), `PENDENTE` (o dono
+pediu), `APROVADO` (aparece), `RECUSADO`. Ligar leva a PENDENTE; DESLIGAR vale
+na hora e nao passa por ninguem, porque sair da vitrine e direito do dono.
+
+**MUDAR NOME OU DESCRICAO DE UM SERVIDOR LISTADO O DEVOLVE A FILA.** Sem isso a
+revisao seria facil de driblar: aprova-se "Comunidade de Xadrez" e renomeia-se
+depois. Quem esta privado edita a vontade — so quem esta na vitrine paga por
+uma nova leitura. Trocar so a categoria nao devolve.
+
+`oficial` continua eixo separado, marcado por `definir-servidor-oficial.mjs`, e
+faz duas coisas: fixa no topo e mostra o selo. Aprovado e "pode aparecer";
+oficial e "e nosso".
+
+Entrar pela vitrine NAO usa convite: sao autorizacoes diferentes — o convite
+prova que alguem de dentro chamou, a vitrine prova que a comunidade quer ser
+encontrada.
+
+- **A contagem de online pode faltar.** Vem de uma rota interna do gateway (a
+  unica que existe para RESPONDER, e nao para avisar), porque a presenca vive
+  so na memoria dele. Sem resposta, o campo vem NULO e o card mostra so o
+  total. Zero seria afirmar que ninguem esta numa comunidade cheia.
+- **O banner e um gradiente derivado do id**, e nao imagem enviada. Todo
+  servidor tem banner desde o primeiro dia, sem upload e sem bucket novo.
+- **Nao ha rate limit de pedidos.** Alguem determinado enche a fila; a
+  aprovacao segura o que aparece, mas nao o que chega.
+- **Duas contas com o mesmo `displayName` sao indistinguiveis na barra
+  inferior**, que mostra o nome de exibicao e nao o `@usuario`. Custou uma
+  investigacao inteira: o botao de configuracoes "sumiu" porque a sessao era de
+  outra conta, com outras permissoes.
+- **Os dois `catch` que viravam 404 agora registram o motivo.** Eram vazios, e
+  por isso sessao expirada, erro do Prisma e coluna nova num cliente velho
+  davam a MESMA tela de "nao existe" — impossivel de diagnosticar.
+
 ### Limitacoes conhecidas da deteccao de jogo
 
 - **O icone do VALORANT vem da Riot, e nao do executavel.** Nao ha escolha:
