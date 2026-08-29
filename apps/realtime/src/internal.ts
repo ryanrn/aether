@@ -9,6 +9,7 @@ import type { AetherServer } from "./types";
 import {
   isConnected,
   leaveVoice,
+  presenceOf,
   presenceOfFriends,
   setFriends,
   socketIdsOf,
@@ -189,6 +190,42 @@ export async function handleInternalRequest(
       json(response, 200, { ok: true });
     } catch (error) {
       console.error("[gateway] /internal/resync-rooms falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /**
+   * Quantos estao online agora em cada servidor pedido.
+   *
+   * A UNICA rota interna que existe para RESPONDER algo, e nao para receber um
+   * aviso. A razao: a presenca vive so na memoria deste processo, e o app web
+   * nao tem como saber sozinho — o banco guarda a PREFERENCIA de status (a
+   * pessoa escolheu DND), nunca quem esta de fato conectado.
+   *
+   * Responde o mapa completo, inclusive os zerados: aqui zero e uma afirmacao
+   * verdadeira ("ninguem deste servidor esta conectado"). Quem distingue zero
+   * de "nao sei" e o lado do web, que devolve nulo quando esta chamada inteira
+   * falha.
+   *
+   * Nao valida se o servidor existe: quem pergunta ja leu a lista do banco, e
+   * um id inventado simplesmente devolve zero. O teto de ids evita que uma
+   * chamada gigante prenda o processo que atende as conversas.
+   */
+  if (request.url === "/internal/presenca-de-servidores") {
+    try {
+      const body = (await readJsonBody(request)) as { serverIds?: unknown };
+      const ids = Array.isArray(body.serverIds)
+        ? body.serverIds.filter((id): id is string => typeof id === "string")
+        : [];
+
+      const online: Record<string, number> = {};
+      for (const serverId of ids.slice(0, 200)) {
+        online[serverId] = presenceOf(serverId).length;
+      }
+      json(response, 200, { ok: true, online });
+    } catch (error) {
+      console.error("[gateway] /internal/presenca-de-servidores falhou:", error);
       json(response, 500, { ok: false });
     }
     return true;

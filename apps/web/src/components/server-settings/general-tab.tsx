@@ -5,6 +5,7 @@ import { updateServerAction } from "@/server/actions/servers";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
 import { ServerIconField } from "./server-icon-field";
+import { VitrineSection } from "./vitrine-section";
 
 export function GeneralTab({
   serverId,
@@ -72,6 +73,7 @@ export function GeneralTab({
           Transferencia de posse e exclusao do servidor ainda nao existem.
         </p>
       </div>
+      <VitrineSection serverId={serverId} />
     </section>
   );
 }

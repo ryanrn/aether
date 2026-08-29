@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Crown, Plus, Users } from "lucide-react";
+import { Compass, Crown, Plus, Users } from "lucide-react";
 import type { PublicServer } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
@@ -77,6 +77,7 @@ export function ServerRail({
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
   const emOlimpo = pathname === "/app/olimpo";
+  const emExplorar = pathname === "/app/explorar";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
 
@@ -207,6 +208,41 @@ export function ServerRail({
             )}
           >
             <Crown className="h-5 w-5" />
+          </span>
+        </Link>
+
+        {/*
+          Explorar comunidades.
+          
+          Depois do Olimpo e ANTES da linha que separa os servidores, porque e
+          o mesmo tipo de item que os dois acima: um lugar do app, e nao um
+          servidor do qual voce e membro. Abaixo da linha ficam so os seus.
+          
+          Cor neutra, ao contrario da coroa: a coroa e dourada por ser um
+          convite a assinar; explorar e navegacao, e navegacao dourada
+          competiria com ela por atencao sem ter o que vender.
+        */}
+        <Link
+          href="/app/explorar"
+          title="Explorar comunidades"
+          draggable={false}
+          className="group relative flex w-full justify-center"
+        >
+          <span
+            className={cn(
+              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+              emExplorar ? "h-7" : "group-hover:h-3.5",
+            )}
+          />
+          <span
+            className={cn(
+              "grid h-11 w-11 place-items-center transition-all duration-150",
+              emExplorar
+                ? ICONE_ATIVO + " bg-accent-500 text-white"
+                : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-accent-500 group-hover:text-white",
+            )}
+          >
+            <Compass className="h-5 w-5" />
           </span>
         </Link>
 

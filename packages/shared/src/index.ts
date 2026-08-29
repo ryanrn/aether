@@ -1,4 +1,5 @@
 export * from "./brand";
+export * from "./comunidades";
 export * from "./cosmeticos";
 export * from "./events";
 export * from "./jogos";

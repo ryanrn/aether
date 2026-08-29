@@ -139,6 +139,32 @@ model Server {
   iconUrl   String?
   ownerId   String
   owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
+
+  /// Aparece em "Explorar comunidades"?
+  ///
+  /// DESLIGADO POR PADRAO, e essa e a decisao inteira: a maioria dos servidores
+  /// e um grupo de amigos que nunca pediu vitrine. Listar por existir exporia
+  /// o nome, o icone e o tamanho de todos eles sem ninguem ter escolhido isso.
+  /// Quem quer ser encontrado liga.
+  publico   Boolean  @default(false)
+
+  /// A frase que aparece no card da vitrine. Nula ate o dono escrever.
+  descricao String?
+
+  /// O id de uma categoria do catalogo em codigo (`CATEGORIAS_DE_COMUNIDADE`).
+  ///
+  /// Id, e nao texto livre: texto livre fragmenta em "Games", "Gaming",
+  /// "gaming" e "JOGOS", e a vitrine vira uma lista de categorias com um
+  /// servidor cada.
+  categoria String?
+
+  /// Servidor OFICIAL do Aether — fixado no topo da vitrine, com selo.
+  ///
+  /// So a EQUIPE marca (`scripts/definir-servidor-oficial.mjs`), nunca o dono:
+  /// selo que o proprio interessado se da nao vale nada, e viraria enfeite no
+  /// primeiro dia em que alguem descobrisse a chave.
+  oficial   Boolean  @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -151,6 +177,9 @@ model Server {
   auditLogs  AuditLog[]
 
   @@index([ownerId])
+  /// A vitrine filtra sempre por publico; sem indice ela varre a tabela.
+  /// O campo oficial entra junto porque a ordenacao fixa os oficiais no topo.
+  @@index([publico, oficial])
 }
 
 model ServerMember {

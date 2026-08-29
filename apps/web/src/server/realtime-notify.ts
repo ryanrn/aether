@@ -93,3 +93,46 @@ export async function notifyFriendsChanged(params: {
 }): Promise<void> {
   await callInternal("/internal/friends-changed", params, "a mudanca de amizade");
 }
+
+/**
+ * Quantos estao online agora em cada servidor.
+ *
+ * A UNICA chamada interna que LE resposta — as outras avisam e esquecem. A
+ * diferenca de forma tem razao: as outras notificam algo que ja aconteceu no
+ * banco, e o banco e a fonte de verdade; esta pergunta algo que SO existe na
+ * memoria do gateway, e sem a resposta nao ha de onde tirar o numero.
+ *
+ * Devolve `null` — e nao um mapa de zeros — quando o gateway nao responde.
+ * "Ninguem online" e "nao sei" nao sao a mesma coisa: mostrar zero afirmaria
+ * algo falso sobre uma comunidade cheia, e a tela precisa poder omitir o
+ * numero em vez de mentir.
+ *
+ * Tempo limite curto: uma vitrine que demora nao vale mais do que uma vitrine
+ * sem o contador de online.
+ */
+export async function presencaDeServidores(
+  serverIds: string[],
+): Promise<Record<string, number> | null> {
+  if (serverIds.length === 0) return {};
+
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+
+  try {
+    const response = await fetch(`${GATEWAY_URL}/internal/presenca-de-servidores`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-aether-internal": secret,
+      },
+      body: JSON.stringify({ serverIds }),
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!response.ok) return null;
+    const corpo = (await response.json()) as { online?: Record<string, number> };
+    return corpo.online ?? null;
+  } catch {
+    // Gateway fora do ar ou lento: a vitrine sai sem o contador de online.
+    return null;
+  }
+}
