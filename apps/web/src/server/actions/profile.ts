@@ -58,7 +58,16 @@ export async function uploadAvatarAction(
 
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { avatarUrl: result.url },
+      data: {
+        avatarUrl: result.url,
+        /*
+         * Sempre gravado, inclusive como NULO quando a imagem nova e parada:
+         * sem isso, trocar um avatar animado por uma foto comum deixaria para
+         * tras o gemeo do avatar ANTERIOR, e perder o plano faria aparecer uma
+         * foto que a pessoa ja tinha substituido.
+         */
+        avatarEstaticoUrl: result.urlEstatica ?? null,
+      },
     });
 
     revalidatePath("/app", "layout");
@@ -114,7 +123,7 @@ export async function removeAvatarAction(): Promise<ActionResult<undefined>> {
 
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { avatarUrl: null },
+      data: { avatarUrl: null, avatarEstaticoUrl: null },
     });
 
     revalidatePath("/app", "layout");

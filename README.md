@@ -2153,13 +2153,30 @@ viraria enfeite, sem erro nenhum. GIF conta como animado sempre, inclusive de
 um quadro so — contar quadros exigiria um parser que, errando, erra para o lado
 de liberar.
 
-- **Perder o plano trata as duas coisas de forma DIFERENTE, e e deliberado.** O
-  avatar animado continua no ar (e arquivo da pessoa; apagar seria perda de
-  dado), e so novos envios de animacao sao recusados. A moldura para de
-  desenhar, mas a ESCOLHA fica guardada e volta sozinha ao reativar. O motivo
-  da assimetria: moldura que nao expira abriria assinar um mes, escolher e
-  cancelar — cosmetico que nao expira nao e de assinatura, e compra unica com o
-  nome errado.
+**PERDER O PLANO TRATA OS DOIS IGUAL: tira o que era do plano, sem destruir
+nada.** A moldura para de desenhar e a escolha fica guardada; o avatar para de
+animar e o arquivo animado fica. Reativar devolve os dois, sem novo envio.
+
+Para o avatar isso exigiu um GEMEO PARADO, gerado no envio (`sharp`, primeiro
+quadro, PNG) e guardado em `avatarEstaticoUrl`. A leitura escolhe entre os
+dois, no mesmo `toPublicUser` onde a moldura ja resolvia.
+
+Por que gerado no ENVIO e nao na leitura: converter a cada exibicao custaria
+CPU por pessoa que abre uma lista de membros, e a conversao nao muda nunca
+depois que o arquivo existe.
+
+A primeira versao era assimetrica — o avatar seguia animando. Foi corrigido
+porque cosmetico que nao expira nao e cosmetico de assinatura: seria assinar um
+mes, enviar o GIF e cancelar. E apagar o arquivo, a outra saida, destruiria
+dado da pessoa por causa de uma cobranca vencida.
+
+- **Gerar o gemeo pode falhar sem derrubar o envio.** Se o `sharp` falhar, o
+  avatar animado ja esta no ar e continua funcionando; o que se perde e a
+  regra, nao o upload. Quem cair nesse caso segue animando sem plano ate
+  reenviar.
+- **O `sharp` agora e dependencia DECLARADA de `apps/web`.** Ele ja estava
+  instalado, mas de carona — ninguem o declarava. Depender de hoisting faria o
+  recurso quebrar em silencio no dia em que a dependencia de origem mudasse.
 - **O bucket precisa concordar com o codigo.** O Supabase recusa tipo e tamanho
   NA ORIGEM: sem `scripts/configurar-buckets.mjs`, aceitar GIF de 10 MB no
   servidor nao adianta nada e o sintoma nao aponta para o bucket. `avatars` vai

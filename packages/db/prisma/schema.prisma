@@ -41,6 +41,16 @@ model User {
   email                     String     @unique
   passwordHash              String
   avatarUrl                 String?
+  /// O mesmo avatar, PARADO — gerado no envio quando o arquivo e animado.
+  ///
+  /// Existe para que perder o plano tire a ANIMACAO sem tirar a foto. Apagar
+  /// o arquivo animado seria destruir dado da pessoa; deixar animando seria
+  /// entregar de graca o que e do plano de cima. Guardando os dois, a leitura
+  /// escolhe, e reativar devolve o movimento sem novo envio.
+  ///
+  /// Nulo quando o avatar nunca foi animado — nesse caso `avatarUrl` ja e
+  /// parado, e nao ha o que escolher.
+  avatarEstaticoUrl         String?
   /// A moldura de avatar ESCOLHIDA, e nao a que esta valendo.
   ///
   /// Quem escolhe uma moldura paga e depois deixa de pagar continua com a

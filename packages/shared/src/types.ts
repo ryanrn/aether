@@ -4,7 +4,7 @@
  */
 
 import { planoEfetivo, type PlanTier } from "./plans";
-import { molduraEfetiva } from "./cosmeticos";
+import { molduraEfetiva, podeAvatarAnimado } from "./cosmeticos";
 
 export const USER_STATUSES = ["ONLINE", "IDLE", "DND", "OFFLINE"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -70,6 +70,11 @@ export interface UserRow {
   displayName: string;
   avatarUrl: string | null;
   status: string;
+  /**
+   * O mesmo avatar parado, quando o enviado e animado. Nulo se nunca houve
+   * animacao — ai `avatarUrl` ja e a versao parada.
+   */
+  avatarEstaticoUrl: string | null;
   /** A escolha guardada. Continua no banco mesmo sem plano que a cubra. */
   molduraId: string | null;
   assinatura: {
@@ -94,6 +99,7 @@ export const SELECT_USUARIO_PUBLICO = {
   username: true,
   displayName: true,
   avatarUrl: true,
+  avatarEstaticoUrl: true,
   status: true,
   molduraId: true,
   /**
@@ -116,7 +122,20 @@ export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser
     id: row.id,
     username: row.username,
     displayName: row.displayName,
-    avatarUrl: row.avatarUrl,
+    /**
+     * O AVATAR TAMBEM E RESOLVIDO CONTRA O PLANO, como a moldura.
+     *
+     * Sem plano que cubra animacao, vai a versao parada — que existe porque
+     * foi gerada no envio. A foto NAO some e o arquivo animado NAO e apagado:
+     * reativar o plano devolve o movimento sem novo envio.
+     *
+     * Quem nunca enviou animacao tem `avatarEstaticoUrl` nulo, e cai em
+     * `avatarUrl`, que ja e parado. Por isso a regra vale para todo mundo sem
+     * precisar saber se o avatar e animado.
+     */
+    avatarUrl: podeAvatarAnimado(plano)
+      ? row.avatarUrl
+      : (row.avatarEstaticoUrl ?? row.avatarUrl),
     /**
      * `status` chega como string do banco. Valor desconhecido vira OFFLINE em
      * vez de vazar cru para a tela — o mesmo cuidado que `toPublicMessage` ja

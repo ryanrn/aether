@@ -135,7 +135,18 @@ function sniffMimeType(
 }
 
 export type UploadImageResult =
-  | { ok: true; url: string }
+  | {
+      ok: true;
+      url: string;
+      /**
+       * A versao PARADA da mesma imagem, quando a enviada era animada.
+       *
+       * Existe para que perder o plano tire a animacao sem tirar a foto: a
+       * leitura escolhe entre as duas. Ausente quando a imagem ja era parada
+       * — nao ha o que escolher.
+       */
+      urlEstatica?: string;
+    }
   | { ok: false; error: string };
 
 /** Mantido para quem ja importava este nome. */
@@ -164,6 +175,13 @@ interface RegrasDeImagem {
   /** movimento e permitido neste envio? decidido por quem chama, com o plano */
   permiteAnimado?: boolean;
   erroDeAnimado?: string;
+  /**
+   * Guardar tambem uma versao parada quando a imagem for animada.
+   *
+   * So o avatar pede: e o unico cosmetico cuja animacao pertence a um plano, e
+   * portanto o unico que precisa de para onde cair quando o plano acaba.
+   */
+  gerarEstatico?: boolean;
 }
 
 const REGRAS_DE_ICONE: RegrasDeImagem = {
@@ -238,36 +256,109 @@ async function uploadImage(
   const path = `${pathPrefix}/${randomId()}.${EXTENSION[mime]}`;
 
   try {
-    const response = await fetch(
-      `${supabaseUrl}/storage/v1/object/${bucket}/${path}`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${serviceKey}`,
-          apikey: serviceKey,
-          "content-type": mime,
-        },
-        body: buffer,
-        signal: AbortSignal.timeout(10_000),
-      },
-    );
+    const url = await enviarObjeto(bucket, path, mime, buffer);
+    if (!url) return { ok: false, error: "Falha ao enviar a imagem" };
 
-    if (!response.ok) {
-      console.error(
-        "[storage] upload recusado:",
-        response.status,
-        await response.text().catch(() => ""),
-      );
-      return { ok: false, error: "Falha ao enviar a imagem" };
+    /**
+     * O GEMEO PARADO, so quando a imagem e animada E o destino pede.
+     *
+     * Gerado AQUI, no envio, e nao na leitura: converter a cada exibicao
+     * custaria CPU por pessoa que abre uma lista de membros, e a conversao
+     * nao muda nunca depois que o arquivo existe.
+     *
+     * Falhar em gerar NAO derruba o envio. O avatar animado ja esta no ar e
+     * funciona; sem o gemeo, a pessoa apenas continua vendo a animacao quando
+     * o plano cair — uma regra a menos, e nao um upload perdido.
+     */
+    if (regras.gerarEstatico && ehAnimado(cabecalho, mime)) {
+      const estatica = await versaoParada(buffer);
+      if (estatica) {
+        const caminhoParado = `${pathPrefix}/${randomId()}.png`;
+        const urlEstatica = await enviarObjeto(
+          bucket,
+          caminhoParado,
+          "image/png",
+          estatica,
+        );
+        if (urlEstatica) return { ok: true, url, urlEstatica };
+      }
     }
 
-    return {
-      ok: true,
-      url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`,
-    };
+    return { ok: true, url };
   } catch (error) {
     console.error("[storage] upload falhou:", error);
     return { ok: false, error: "Falha ao enviar a imagem" };
+  }
+}
+
+/**
+ * Grava um objeto no bucket e devolve a URL publica, ou `null`.
+ *
+ * Separado para o avatar animado poder gravar DOIS objetos pelo mesmo caminho
+ * de codigo — o arquivo original e o quadro parado — sem duplicar cabecalho,
+ * tempo limite e tratamento de recusa.
+ */
+async function enviarObjeto(
+  bucket: string,
+  caminho: string,
+  mime: string,
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<string | null> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/${bucket}/${caminho}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "content-type": mime,
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+
+  if (!response.ok) {
+    console.error(
+      "[storage] upload recusado:",
+      response.status,
+      await response.text().catch(() => ""),
+    );
+    return null;
+  }
+
+  return `${supabaseUrl}/storage/v1/object/public/${bucket}/${caminho}`;
+}
+
+/**
+ * O primeiro quadro de uma imagem animada, como PNG.
+ *
+ * `sharp` sem `{ animated: true }` le apenas o primeiro quadro, que e
+ * exatamente o que queremos: a mesma foto, parada.
+ *
+ * O import e DINAMICO porque `sharp` e binario nativo — carregar no topo
+ * faria todo caminho do servidor pagar por ele, inclusive os que nunca
+ * enviam imagem. Devolve `null` em qualquer falha: a versao parada e um
+ * extra, e nao pode derrubar um envio que ja funcionou.
+ */
+async function versaoParada(
+  bytes: Uint8Array,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const png = await sharp(bytes).png().toBuffer();
+    /*
+     * Copia para um ArrayBuffer proprio: o `Buffer` do Node compartilha um
+     * pool, e o tipo dele nao satisfaz o `BodyInit` que o fetch pede.
+     */
+    return new Uint8Array(png);
+  } catch (error) {
+    console.error("[storage] nao consegui gerar a versao parada:", error);
+    return null;
   }
 }
 
@@ -310,6 +401,7 @@ export async function uploadUserAvatar(
       erroDeTipo: "Envie PNG, JPEG, WEBP ou GIF",
       permiteAnimado,
       erroDeAnimado: "Avatar animado e exclusivo do Olimpo Pro",
+      gerarEstatico: true,
     },
   );
 }
