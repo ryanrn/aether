@@ -26,6 +26,8 @@ const user: PublicUser = {
   displayName: "Ryan",
   avatarUrl: null,
   status: "ONLINE",
+  plano: "FREE",
+  moldura: null,
 };
 
 /** Cada teste comeca sem ninguem em voz — o estado do modulo e global. */

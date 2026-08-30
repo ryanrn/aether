@@ -403,7 +403,7 @@ describe("leitura do registro", () => {
   it("le valor mesmo com fim de linha do Windows (CRLF)", () => {
     // Exatamente o que o `reg query` devolve, \r inclusive.
     const saida =
-      "\r\nHKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\635\r\n" +
+      "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\635\r\n" +
       "    Language    REG_SZ    pt-BR\r\n" +
       "    InstallDir    REG_SZ    D:/Tom Clancy's Rainbow Six Siege/\r\n";
     const blocos = blocosDoRegistro(saida);
@@ -417,10 +417,10 @@ describe("leitura do registro", () => {
     // No GOG, nome e caminho sao irmaos: trocar de bloco poria o nome de um
     // jogo na pasta de outro.
     const saida =
-      "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\GOG.com\Games\1\r\n" +
+      "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1\r\n" +
       "    gameName    REG_SZ    The Witcher 3\r\n" +
       "    path    REG_SZ    D:/GOG/Witcher3\r\n" +
-      "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\GOG.com\Games\2\r\n" +
+      "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\2\r\n" +
       "    gameName    REG_SZ    Cyberpunk 2077\r\n" +
       "    path    REG_SZ    D:/GOG/Cyberpunk\r\n";
     const blocos = blocosDoRegistro(saida);
