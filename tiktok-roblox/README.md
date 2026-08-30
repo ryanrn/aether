@@ -372,11 +372,152 @@ nao alimenta esse contador, e o `VirtualUser` pode ser barrado por nivel de
 seguranca dependendo do contexto — o script registra no console qual dos dois
 casos e o seu. Deixe o script do sistema rodando junto com o OBS.
 
-## OBS
+## Levar a imagem para o TikTok (o OBS e opcional)
 
-Janela do Roblox em **Window Capture**, resolucao vertical (1080x1920) com a
-camera do jogo enquadrada, e o TikTok LIVE Studio como saida. O jogo nao precisa
-saber que existe OBS: para ele, e uma sessao comum com um jogador.
+Alguma coisa precisa capturar a tela e mandar video — nao existe caminho com
+zero software. O que nao precisa e ser o OBS.
+
+**1. TikTok LIVE Studio sozinho** (Windows). E o app oficial da propria TikTok e
+ele ja captura janela ou jogo e transmite. Caminho mais curto: sem OBS, sem
+chave RTMP, sem passo intermediario. E o que eu recomendo para comecar.
+
+**2. Pelo celular.** Roblox no celular e a LIVE aberta pelo app da TikTok. Se a
+sua versao do app oferecer compartilhamento de tela na LIVE, da para transmitir
+sem PC nenhum na captura. Aqui a ponte **precisa** de tunel, porque o jogo esta
+publicado (veja a secao anterior).
+
+**3. Qualquer outro encoder com chave RTMP** — Streamlabs, XSplit, vMix, ffmpeg.
+A TikTok entrega a chave para contas elegiveis; e a mesma ideia do OBS, so que
+com outro programa.
+
+**Quando o OBS passa a valer a pena:** cena com a lista de comandos na tela,
+alerta de presente, contador de espectadores, varias fontes ao mesmo tempo — e
+macOS/Linux, ja que o LIVE Studio e so Windows.
+
+O jogo nao sabe da existencia de nenhum deles. Para o Roblox e uma sessao comum
+com um jogador.
+
+**Enquadramento.** A TikTok e 9:16. O jeito pratico e capturar a janela do
+Roblox em 16:9 e deixar o LIVE Studio (ou o OBS) cortar para vertical — perde as
+laterais. A alternativa e redimensionar a janela do Roblox para uma proporcao
+alta: nao corta nada, mas o campo de visao encolhe. Vale ajustar
+`Config.spawnRadius` junto, para os bonecos nascerem dentro do que aparece.
+
+---
+
+# Passo a passo da primeira live
+
+A ordem importa: cada etapa termina num ponto onde da para conferir que
+funcionou antes de seguir. Nao pule para a etapa 5 no primeiro dia.
+
+## Etapa 0 — o que precisa existir antes
+
+- **Node 22.18+** na maquina (`node -v`).
+- **Roblox Studio** e uma experiencia sua (pode ser um baseplate vazio).
+- **Conta do TikTok com permissao de LIVE.** Hoje a exigencia e da ordem de mil
+  seguidores e maioridade, e a TikTok mexe nisso de tempos em tempos — confira
+  no proprio app antes de contar com a data.
+- Windows, se voce for pelo caminho do LIVE Studio.
+
+## Etapa 1 — ponte no ar, sem live nenhuma
+
+```bash
+cd tiktok-roblox
+npm install
+cp .env.example .env
+cp games.example.json games.json
+
+# gere uma chave de verdade e cole no games.json
+node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
+```
+
+No `games.json`: troque `key` pela chave gerada e `tiktok` pelo seu @. O `id`
+pode ficar `obby`.
+
+```bash
+node verify.mjs    # 57 verificacoes; se falhar aqui, nao adianta seguir
+npm run sim        # comentarios falsos
+```
+
+**Confira:** abra `http://localhost:8080` no navegador. Tem que aparecer
+`@seu_usuario: connected`. Se o terminal reclamar da chave, e porque o
+`games.json` ainda esta com a do exemplo — e proposital.
+
+## Etapa 2 — o jogo respondendo, ainda com comentario falso
+
+1. Copie os scripts para o Studio (Rojo ou a mao — veja "Instalar os scripts").
+2. **Ligue o HttpService**: Game Settings -> Security -> Allow HTTP Requests.
+3. Em `Config.luau`: `gameId` igual ao do `games.json`, `key` igual a chave, e
+   `baseUrl` em `http://localhost:8080`.
+4. F5 no Studio.
+
+**Confira:** o Output mostra `[TikTok] ligando em http://localhost:8080` e em
+segundos comecam a cair bonecos com nomes falsos. Se aparecer erro de
+HttpService, volte ao passo 2. Se aparecer `HTTP 404`, a chave ou o `gameId`
+estao diferentes dos dois lados.
+
+Esta etapa e a que mais importa: ela valida o sistema inteiro **sem voce estar
+ao vivo**. Nao va para a proxima antes daqui funcionar.
+
+## Etapa 3 — a live de verdade, ainda pelo Studio
+
+Pare o `npm run sim` e suba a ponte no modo real:
+
+```bash
+npm start
+```
+
+**Pode subir antes de ficar ao vivo.** Enquanto a live nao existe, a ponte
+tenta de novo com espera crescente e escreve o motivo no terminal; no instante
+em que voce abrir a transmissao, ela conecta sozinha.
+
+Agora abra a LIVE no TikTok, deixe o Studio rodando (F5) e comente
+`entrar` voce mesmo — comentario do host tambem e evento de chat. Seu boneco
+tem que aparecer.
+
+**Confira:** `http://localhost:8080/health` mostra `estado: connected` e o
+contador de `aceitas` subindo.
+
+Para uma primeira live curta, isso ja basta e **nao precisa de tunel**: o Studio
+roda na sua maquina, entao `localhost` alcanca a ponte. O Studio nao foi feito
+para ficar horas de pe, entao para live longa siga para a etapa 4.
+
+## Etapa 4 — jogo publicado (para live longa)
+
+1. Publique a experiencia.
+2. Abra o tunel: `cloudflared tunnel --url http://localhost:8080`.
+3. Cole a URL `https://...` em `Config.baseUrl` e publique de novo.
+4. Tire a chave do `Config.luau` e ponha no Secrets Store, com o nome
+   `tiktok_bridge_key`.
+5. Entre por um **servidor privado**, para a live nao depender de qual servidor
+   o sorteio te dá e para a regiao ficar fixa.
+
+**Confira:** o Output do jogo publicado mostra as mesmas linhas da etapa 2. Se
+der erro de rede, o `baseUrl` provavelmente ficou em `localhost` — que no jogo
+publicado aponta para o datacenter da Roblox, nao para o seu PC.
+
+## Etapa 5 — anti-inatividade e captura
+
+1. Rode o script do sistema: `host/anti-afk-windows.ahk` (clique duplo, com o
+   AutoHotkey v2 instalado) ou `host/anti-afk-linux.sh`. **Sem ele, conte com a
+   desconexao em ~20 minutos.**
+2. Abra o TikTok LIVE Studio, escolha a janela do Roblox como fonte e ajuste o
+   corte para vertical. (Ou o OBS, se quiser sobreposicoes.)
+3. Comece a transmitir.
+
+## Etapa 6 — durante a live
+
+- **Fixe um comentario com a lista de comandos.** Sem isso, so quem ja conhece
+  participa — e com `spawnOnAnyComment: true` qualquer comentario ja invoca o
+  boneco, o que puxa o resto.
+- Deixe `http://localhost:8080/health` aberto numa aba: `aceitas`, `recusadas`,
+  `fila` e `ultimoSinalDeVidaMs`. Se o sinal de vida parar de atualizar, o jogo
+  caiu (e o anti-AFK falhou) mesmo que a imagem ainda pareca viva.
+- `recusadas` subindo muito e sinal de que os limites estao apertados demais
+  para o tamanho da sua live: mexa em `VIEWER_RATE_*` e `GLOBAL_RATE_PER_SEC`
+  no `.env`.
+- Precisou trocar alguma coisa no `games.json`? Salve e pronto — recarrega
+  sozinho, sem derrubar a conexao com o TikTok.
 
 ---
 
