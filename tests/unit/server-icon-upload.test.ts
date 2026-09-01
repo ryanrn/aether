@@ -210,13 +210,13 @@ describe("uploadUserAvatar — mesma porta, mesmas recusas", () => {
   });
 
   it("recusa arquivo vazio", async () => {
-    const result = await uploadUserAvatar("usuario-1", fileOf([], false));
+    const result = await uploadUserAvatar("usuario-1", fileOf([]), false);
     expect(result).toEqual({ ok: false, error: "Arquivo vazio" });
   });
 
   it("falha fechada sem configuracao, com mensagem propria", async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const result = await uploadUserAvatar("usuario-1", fileOf(PNG_HEADER, false));
+    const result = await uploadUserAvatar("usuario-1", fileOf(PNG_HEADER), false);
     expect(result).toEqual({
       ok: false,
       error: "Upload de foto nao configurado neste ambiente",

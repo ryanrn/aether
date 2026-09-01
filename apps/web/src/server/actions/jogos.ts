@@ -1,14 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { ehEquipe } from "@aether/access";
 import {
   sugerirJogoSchema,
   type ActionResult,
   type JogoNaFila,
   type StatusDeJogo,
 } from "@aether/shared";
-import { requireUser } from "../guards";
+import { requireUser, sessaoDaEquipe } from "../guards";
 import {
   contarJogosPendentes,
   listarFilaDeJogos,
@@ -28,18 +27,12 @@ import { fail, ok, toActionError } from "./action-result";
  * a sugestao guarda quem a fez justamente para haver a quem responsabilizar.
  */
 
-/**
- * Barra quem nao e da equipe.
- *
- * Responde como se a funcionalidade nao existisse, e nao "voce nao pode": e a
- * regra do projeto — nao revelamos existencia de recurso. Quem chutar o nome
- * da action recebe a mesma coisa que receberia de uma action inventada.
+/*
+ * Quem barra a revisao e `sessaoDaEquipe`, em `../guards`: ela devolve `null`
+ * para quem nao e da equipe, e a action responde "Nao encontrado" — como se a
+ * funcionalidade nao existisse, que e a regra do projeto. Antes essa checagem
+ * era uma copia local aqui; virou uma so quando a terceira porta apareceu.
  */
-async function exigirEquipe() {
-  const sessao = await requireUser();
-  if (!ehEquipe(sessao)) return null;
-  return sessao;
-}
 
 /** Qualquer pessoa logada pode ensinar um jogo ao app. */
 export async function sugerirJogoAction(
@@ -69,7 +62,7 @@ export async function listarFilaAction(
   status: StatusDeJogo = "PENDENTE",
 ): Promise<ActionResult<{ fila: JogoNaFila[]; pendentes: number }>> {
   try {
-    const sessao = await exigirEquipe();
+    const sessao = await sessaoDaEquipe();
     if (!sessao) return fail("Nao encontrado");
 
     const [fila, pendentes] = await Promise.all([
@@ -88,7 +81,7 @@ export async function revisarJogoAction(
   nome?: string,
 ): Promise<ActionResult<{ aplicado: boolean }>> {
   try {
-    const sessao = await exigirEquipe();
+    const sessao = await sessaoDaEquipe();
     if (!sessao) return fail("Nao encontrado");
 
     const aplicado = await revisarJogo(jogoId, sessao.user.id, status, nome);

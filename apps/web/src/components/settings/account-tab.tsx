@@ -19,6 +19,7 @@ import {
   uploadAvatarAction,
 } from "@/server/actions/profile";
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarCropper } from "./avatar-cropper";
 import { MOLDURA_ESTILO } from "@/components/ui/molduras";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,18 @@ export function AccountTab({
     if (!previa) return;
     return () => URL.revokeObjectURL(previa.url);
   }, [previa]);
+
+  /**
+   * A foto ORIGINAL escolhida, antes do recorte — guardada a parte para o
+   * botao "Ajustar" poder reabrir o zoom sobre a fonte de verdade, e nao
+   * sobre um recorte de um recorte (cada rodada perderia nitidez e cortaria
+   * cada vez mais para dentro).
+   *
+   * So existe para foto PARADA: avatar animado nunca passa pelo recorte, veja
+   * `AvatarCropper`.
+   */
+  const [arquivoOriginal, setArquivoOriginal] = useState<File | null>(null);
+  const [recortando, setRecortando] = useState(false);
 
   const podeAnimar = podeAvatarAnimado(user.plano);
   const [displayName, setDisplayName] = useState(user.displayName);
@@ -147,7 +160,27 @@ export function AccountTab({
       return;
     }
 
-    setPrevia({ url: URL.createObjectURL(file), arquivo: file, animado });
+    /*
+     * Imagem PARADA passa pelo recorte antes de virar previa — e onde se
+     * escolhe zoom e posicao. Animada vai direto, do jeito que sempre foi: um
+     * canvas so enxerga um quadro, e recortar destruiria a animacao.
+     */
+    if (animado) {
+      setPrevia({ url: URL.createObjectURL(file), arquivo: file, animado });
+    } else {
+      setArquivoOriginal(file);
+      setRecortando(true);
+    }
+  }
+
+  /** O recorte foi confirmado: a foto CORTADA e o que vira previa e upload. */
+  function aoConfirmarRecorte(recortado: File) {
+    setPrevia({
+      url: URL.createObjectURL(recortado),
+      arquivo: recortado,
+      animado: false,
+    });
+    setRecortando(false);
   }
 
   function enviarPrevia() {
@@ -266,11 +299,30 @@ export function AccountTab({
                 >
                   {pending ? "Enviando..." : "Salvar foto"}
                 </Button>
+                {/*
+                  So para foto PARADA: reabre o recorte sobre o arquivo
+                  ORIGINAL, e nao sobre a previa ja cortada — recortar um
+                  recorte perderia nitidez a cada rodada.
+                */}
+                {!previa.animado && arquivoOriginal ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRecortando(true)}
+                    disabled={pending}
+                  >
+                    Ajustar
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setPrevia(null)}
+                  onClick={() => {
+                    setPrevia(null);
+                    setArquivoOriginal(null);
+                  }}
                   disabled={pending}
                 >
                   Descartar
@@ -368,6 +420,13 @@ export function AccountTab({
         accept={AVATAR_MIME_TYPES.join(",")}
         onChange={onFileChange}
         className="hidden"
+      />
+
+      <AvatarCropper
+        open={recortando}
+        file={arquivoOriginal}
+        onCancel={() => setRecortando(false)}
+        onConfirm={aoConfirmarRecorte}
       />
 
       <Field

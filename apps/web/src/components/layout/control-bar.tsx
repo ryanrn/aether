@@ -83,11 +83,6 @@ export function ControlBar({
   user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
-    /**
-     * Administracao global. Governa apenas se a aba de revisao APARECE — quem
-     * barra de verdade sao as actions, que recheam a regra no servidor.
-     */
-    equipe: boolean;
   };
   viewer: ViewerContext;
   /** servidor aberto agora — o apelido vale so nele */

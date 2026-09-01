@@ -51,7 +51,11 @@ export default async function AppLayout({
           qualquer tela — canal, conversa ou amigos — e nao so uma delas.
         */}
         <NavBackdrop />
-        <ServerRail servers={servers} pendingRequests={pendingRequests} />
+        <ServerRail
+          servers={servers}
+          pendingRequests={pendingRequests}
+          equipe={session.user.equipe}
+        />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
     </RealtimeProvider>

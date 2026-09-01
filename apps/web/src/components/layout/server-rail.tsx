@@ -20,8 +20,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Compass, Crown, Plus, Users } from "lucide-react";
-import type { PublicServer } from "@aether/shared";
+import { Compass, Crown, Plus, Shield, Users } from "lucide-react";
+import { rotuloDeRevisoes, totalDeRevisoes, type PublicServer, type RevisoesPendentes } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 import { useShellStore } from "@/lib/stores/shell-store";
@@ -31,6 +31,7 @@ import {
   NAV_VISIVEL,
 } from "@/components/layout/nav-mobile";
 import { reorderServersAction } from "@/server/actions/servers";
+import { contarRevisoesAction } from "@/server/actions/revisao";
 import { useUnreadByServer } from "@/lib/stores/realtime-store";
 
 /**
@@ -67,10 +68,17 @@ const ICONE_ATIVO = "rounded-[16px]";
 export function ServerRail({
   servers,
   pendingRequests = 0,
+  equipe = false,
 }: {
   servers: PublicServer[];
   /** pedidos de amizade esperando VOCE decidir — o ponto no botao de amigos */
   pendingRequests?: number;
+  /**
+   * Administracao global. So decide se o icone do painel da equipe APARECE —
+   * quem barra de verdade e a propria pagina, que recheca no servidor e
+   * responde 404 para quem nao e.
+   */
+  equipe?: boolean;
 }) {
   const params = useParams<{ serverId?: string }>();
   const activeId = params?.serverId;
@@ -78,8 +86,51 @@ export function ServerRail({
   const emAmigos = pathname === "/app/amigos";
   const emOlimpo = pathname === "/app/olimpo";
   const emExplorar = pathname === "/app/explorar";
+  const emEquipe = pathname === "/app/equipe";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
+  const [revisoes, setRevisoes] = useState<RevisoesPendentes | null>(null);
+  const esperandoRevisao = totalDeRevisoes(revisoes);
+
+  /**
+   * Busca a contagem das filas de revisao — o numerinho no icone do painel.
+   *
+   * SO PARA A EQUIPE: para o resto, a chamada nem sai — a action responderia
+   * "Nao encontrado" de qualquer forma, e uma consulta por sessao de todo
+   * mundo para receber recusa seria carga sem contrapartida.
+   *
+   * AO MONTAR E AO VOLTAR PARA A ABA, com um minuto de intervalo minimo. Nao e
+   * tempo real de proposito: nada aqui e urgente, e um `setInterval` batendo
+   * no banco o dia inteiro para mostrar um numero quase sempre zero custaria
+   * caro por nada. Voltar para a janela e o momento em que a pessoa esta
+   * olhando — e alt-tab de jogo dispara `focus` varias vezes por minuto, dai
+   * a janela.
+   */
+  useEffect(() => {
+    if (!equipe) return;
+    let vivo = true;
+    let ultima = 0;
+
+    const buscar = () => {
+      const agora = Date.now();
+      if (agora - ultima < 60_000) return;
+      ultima = agora;
+      contarRevisoesAction()
+        .then((r) => {
+          if (vivo && r.ok) setRevisoes(r.data);
+        })
+        // Falha em silencio: o marcador e conveniencia, rede caida nao pode
+        // virar erro na trilha de servidores.
+        .catch(() => {});
+    };
+
+    buscar();
+    window.addEventListener("focus", buscar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("focus", buscar);
+    };
+  }, [equipe]);
 
   /**
    * A ordem local existe para o arrasto ser INSTANTANEO.
@@ -245,6 +296,50 @@ export function ServerRail({
             <Compass className="h-5 w-5" />
           </span>
         </Link>
+
+        {/*
+          Painel da equipe. So aparece para quem e equipe — para o resto,
+          esconder o icone e cortesia de interface; quem barra de verdade e a
+          propria pagina, respondendo 404 pra quem chutar a URL.
+
+          Vermelho, e nao neutro como o compass: e o UNICO item da trilha que
+          pode carregar um numero dizendo "tem coisa esperando voce", e a cor
+          de aviso e o que faz o marcador ser notado sem precisar ler o
+          numero.
+        */}
+        {equipe ? (
+          <Link
+            href="/app/equipe"
+            title="Painel da equipe"
+            draggable={false}
+            className="group relative flex w-full justify-center"
+          >
+            <span
+              className={cn(
+                "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+                emEquipe ? "h-7" : "group-hover:h-3.5",
+              )}
+            />
+            <span
+              className={cn(
+                "relative grid h-11 w-11 place-items-center transition-all duration-150",
+                emEquipe
+                  ? ICONE_ATIVO + " bg-signal-dnd/15 text-signal-dnd"
+                  : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-signal-dnd/10 group-hover:text-signal-dnd",
+              )}
+            >
+              <Shield className="h-5 w-5" />
+              {esperandoRevisao > 0 ? (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-0.5 -top-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-amber-400 px-1 text-[9px] font-bold leading-none text-base-950 ring-2 ring-base-900"
+                >
+                  {rotuloDeRevisoes(esperandoRevisao)}
+                </span>
+              ) : null}
+            </span>
+          </Link>
+        ) : null}
 
         <span className="h-px w-8 bg-base-700" />
 

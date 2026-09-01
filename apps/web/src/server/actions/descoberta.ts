@@ -9,7 +9,7 @@ import {
   type PedidoDeVitrine,
   type VitrineStatus,
 } from "@aether/shared";
-import { requirePermission, requireUser } from "../guards";
+import { requirePermission, requireUser, sessaoDaEquipe } from "../guards";
 import {
   contarPedidosPendentes,
   entrarEmComunidade,
@@ -19,7 +19,6 @@ import {
   revisarPedidoDeVitrine,
   salvarAjustesDeVitrine,
 } from "../services/descoberta";
-import { ehEquipe } from "@aether/access";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -117,23 +116,19 @@ export async function salvarVitrineAction(
   }
 }
 
-/**
+/*
  * A fila de pedidos de vitrine, e a decisao. So a equipe.
  *
- * Barra respondendo como se nao existisse — a mesma regra da fila de jogos, e
- * pelo mesmo motivo: nao confirmamos a existencia de um painel para quem
- * chutou o nome da action.
+ * `sessaoDaEquipe` barra respondendo como se nao existisse — a mesma regra da
+ * fila de jogos, e pelo mesmo motivo: nao confirmamos a existencia de um
+ * painel para quem chutou o nome da action.
  */
-async function exigirEquipe() {
-  const sessao = await requireUser();
-  return ehEquipe(sessao) ? sessao : null;
-}
 
 export async function listarPedidosAction(
   status: VitrineStatus = "PENDENTE",
 ): Promise<ActionResult<{ pedidos: PedidoDeVitrine[]; pendentes: number }>> {
   try {
-    const sessao = await exigirEquipe();
+    const sessao = await sessaoDaEquipe();
     if (!sessao) return fail("Nao encontrado");
 
     const [pedidos, pendentes] = await Promise.all([
@@ -151,7 +146,7 @@ export async function revisarPedidoAction(
   decisao: "APROVADO" | "RECUSADO",
 ): Promise<ActionResult<{ aplicado: boolean }>> {
   try {
-    const sessao = await exigirEquipe();
+    const sessao = await sessaoDaEquipe();
     if (!sessao) return fail("Nao encontrado");
 
     const aplicado = await revisarPedidoDeVitrine(serverId, sessao.user.id, decisao);

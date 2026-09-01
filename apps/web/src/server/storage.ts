@@ -4,6 +4,7 @@ import {
   AVATAR_MIME_TYPES,
   SERVER_ICON_MAX_BYTES,
   SERVER_ICON_MIME_TYPES,
+  ehImagemAnimada,
   limiteDoAvatar,
   type AvatarMimeType,
 } from "@aether/shared";
@@ -63,54 +64,6 @@ const EXTENSION: Record<AvatarMimeType, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
-
-/** Acha uma marca ASCII nos primeiros bytes. Limitado para nao varrer 10 MB. */
-function contem(bytes: Uint8Array, marca: string, ate = 4096): boolean {
-  const alvo = [...marca].map((c) => c.charCodeAt(0));
-  const fim = Math.min(bytes.length, ate) - alvo.length;
-  for (let i = 0; i <= fim; i += 1) {
-    let bate = true;
-    for (let j = 0; j < alvo.length; j += 1) {
-      if (bytes[i + j] !== alvo[j]) {
-        bate = false;
-        break;
-      }
-    }
-    if (bate) return true;
-  }
-  return false;
-}
-
-/**
- * A imagem TEM MOVIMENTO?
- *
- * Decidido pelos BYTES, e nunca pela extensao — e o mesmo principio do sniff
- * de tipo. Travar so o GIF deixaria o buraco obvio: WEBP e PNG tambem animam,
- * e quem nao paga subiria um WEBP animado como avatar contornando a regra
- * inteira. O sintoma seria "o premium nao vale nada", sem erro nenhum.
- *
- * - GIF conta como animado SEMPRE, inclusive de um quadro so. Contar quadros
- *   exigiria percorrer os blocos do arquivo, e um parser errado aqui erra para
- *   o lado de liberar. Quem quer imagem parada tem PNG, JPEG e WEBP.
- * - WEBP anima pela flag ANIM do bloco VP8X — o bit 0x02 do byte de flags.
- *   Sem VP8X nao ha animacao possivel.
- * - PNG anima no formato APNG, que se declara pelo bloco `acTL` antes do
- *   primeiro `IDAT`.
- */
-function ehAnimado(bytes: Uint8Array, mime: AvatarMimeType): boolean {
-  if (mime === "image/gif") return true;
-  if (mime === "image/webp") {
-    const temVP8X =
-      bytes.length >= 21 &&
-      bytes[12] === 0x56 &&
-      bytes[13] === 0x50 &&
-      bytes[14] === 0x38 &&
-      bytes[15] === 0x58;
-    return temVP8X && (bytes[20]! & 0x02) !== 0;
-  }
-  if (mime === "image/png") return contem(bytes, "acTL");
-  return false;
-}
 
 function randomId(): string {
   const bytes = new Uint8Array(16);
@@ -241,7 +194,7 @@ async function uploadImage(
     };
   }
 
-  if (regras.permiteAnimado === false && ehAnimado(cabecalho, mime)) {
+  if (regras.permiteAnimado === false && ehImagemAnimada(cabecalho, mime)) {
     return {
       ok: false,
       error: regras.erroDeAnimado ?? "Esta imagem nao pode ser animada",
@@ -270,7 +223,7 @@ async function uploadImage(
      * funciona; sem o gemeo, a pessoa apenas continua vendo a animacao quando
      * o plano cair — uma regra a menos, e nao um upload perdido.
      */
-    if (regras.gerarEstatico && ehAnimado(cabecalho, mime)) {
+    if (regras.gerarEstatico && ehImagemAnimada(cabecalho, mime)) {
       const estatica = await versaoParada(buffer);
       if (estatica) {
         const caminhoParado = `${pathPrefix}/${randomId()}.png`;

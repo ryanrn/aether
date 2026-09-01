@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Check, RefreshCw, X } from "lucide-react";
 import type { JogoNaFila, StatusDeJogo } from "@aether/shared";
 import { listarFilaAction, revisarJogoAction } from "@/server/actions/jogos";
@@ -28,7 +28,17 @@ const ABAS: { id: StatusDeJogo; rotulo: string }[] = [
   { id: "RECUSADO", rotulo: "Recusados" },
 ];
 
-export function JogosTab() {
+export function JogosTab({
+  /**
+   * Avisa o numerinho da engrenagem de quantos ainda esperam.
+   *
+   * Existe para o marcador NAO ficar mentindo enquanto esta tela esta aberta:
+   * quem aprova aqui ve a fila baixar, e o aviso la fora tem de baixar junto.
+   */
+  onPendentes,
+}: {
+  onPendentes?: (pendentes: number) => void;
+}) {
   const [status, setStatus] = useState<StatusDeJogo>("PENDENTE");
   const [fila, setFila] = useState<JogoNaFila[]>([]);
   const [pendentes, setPendentes] = useState(0);
@@ -39,6 +49,20 @@ export function JogosTab() {
   /** O nome editado por linha — a revisao corrige antes de aprovar. */
   const [nomes, setNomes] = useState<Record<string, string>>({});
 
+  /**
+   * O aviso guardado numa ref, e nao usado direto.
+   *
+   * `carregar` e memoizado com dependencias vazias, e um `useEffect` depende
+   * dele. Se a funcao do pai entrasse nas dependencias, cada render do pai
+   * criaria uma funcao nova, `carregar` mudaria de identidade e o efeito
+   * recarregaria a fila em loop. A ref deixa a chamada sempre atual sem
+   * participar da identidade.
+   */
+  const avisar = useRef(onPendentes);
+  useEffect(() => {
+    avisar.current = onPendentes;
+  });
+
   const carregar = useCallback((alvo: StatusDeJogo) => {
     setCarregando(true);
     setErro(null);
@@ -47,6 +71,7 @@ export function JogosTab() {
         if (r.ok) {
           setFila(r.data.fila);
           setPendentes(r.data.pendentes);
+          avisar.current?.(r.data.pendentes);
         } else {
           setErro(r.error);
         }
@@ -78,7 +103,9 @@ export function JogosTab() {
         return;
       }
       setFila((atual) => atual.filter((j) => j.id !== jogo.id));
-      setPendentes((n) => Math.max(0, n - 1));
+      const restam = Math.max(0, pendentes - 1);
+      setPendentes(restam);
+      avisar.current?.(restam);
     });
   }
 

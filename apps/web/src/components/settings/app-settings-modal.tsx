@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Compass, Gamepad2, Library, Mic, Sparkles, User } from "lucide-react";
+import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
-import { ComunidadesTab } from "./comunidades-tab";
-import { JogosTab } from "./jogos-tab";
 import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
 
@@ -23,9 +21,16 @@ import { VoiceTab } from "./voice-tab";
  * O que mora aqui vale para VOCE em qualquer servidor — foto, nome, microfone.
  * A unica excecao e o apelido, que e por servidor e por isso diz isso na
  * propria etiqueta.
+ *
+ * A REVISAO DA EQUIPE (biblioteca de jogos, comunidades) NAO MORA MAIS AQUI.
+ * Chegou a viver de emprestado numa aba escondida, e ninguem descobria sem
+ * saber que ela existia — a primeira vez que a fila foi medida de verdade
+ * havia quatro pedidos parados sem ninguem saber. Agora tem pagina propria,
+ * `/app/equipe`, com entrada visivel na trilha lateral. Ver
+ * `components/equipe/equipe-panel.tsx`.
  */
 
-type Tab = "conta" | "voz" | "atividade" | "plano" | "jogos" | "comunidades";
+type Tab = "conta" | "voz" | "atividade" | "plano";
 
 const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "conta", label: "Minha conta", icon: User },
@@ -46,19 +51,6 @@ const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "plano", label: "Plano", icon: Sparkles },
 ];
 
-/**
- * A aba de revisao da biblioteca de jogos, que so a equipe ve.
- *
- * Fora da lista fixa de proposito: nao e uma aba que existe para todo mundo e
- * fica desabilitada — ela simplesmente nao e desenhada para quem nao revisa.
- * Isso e cortesia de interface, e nao seguranca: as actions da aba recusam
- * sozinhas, respondendo como se nao existissem.
- */
-const ABAS_DA_EQUIPE = [
-  { id: "jogos" as const, label: "Biblioteca", icon: Library },
-  { id: "comunidades" as const, label: "Comunidades", icon: Compass },
-];
-
 export function AppSettingsModal({
   open,
   onClose,
@@ -76,17 +68,10 @@ export function AppSettingsModal({
   user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
-    /**
-     * Administracao global. Governa apenas se a aba de revisao APARECE — quem
-     * barra de verdade sao as actions, que recheam a regra no servidor.
-     */
-    equipe: boolean;
   };
   server: { id: string; memberId: string; nickname: string | null };
 }) {
   const [active, setActive] = useState<Tab>("conta");
-
-  const abas = user.equipe ? [...TABS, ...ABAS_DA_EQUIPE] : TABS;
 
   return (
     <Modal
@@ -110,7 +95,7 @@ export function AppSettingsModal({
           atalhos, notificacoes) sem virar uma fileira apertada.
         */}
         <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-base-800 pr-3">
-          {abas.map((tab) => {
+          {TABS.map((tab) => {
             const Icon = tab.icon;
             const selected = active === tab.id;
             return (
@@ -144,10 +129,6 @@ export function AppSettingsModal({
             <VoiceTab />
           ) : active === "plano" ? (
             <PlanoTab />
-          ) : active === "jogos" ? (
-            <JogosTab />
-          ) : active === "comunidades" ? (
-            <ComunidadesTab />
           ) : (
             <ActivityTab />
           )}

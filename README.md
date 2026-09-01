@@ -231,6 +231,41 @@ Detalhes que valem saber:
   desktop faria o loopback do Electron — o motivo de existir esta versao —
   nunca ser exercitado.
 
+### Reconexao depois do notebook dormir (tela preta/cinza)
+
+O SINTOMA RELATADO: com o Aether e o Discord abertos ao mesmo tempo, depois
+de o notebook dormir e acordar (ou a rede cair por um tempo), o Discord se
+reconectava sozinho; o Aether ficava com a tela preta ou cinza, sem se
+recuperar.
+
+O socket do tempo real JA tenta se reconectar sozinho
+(`reconnectionAttempts: Infinity`, em `realtime-provider.tsx`) — o problema
+nao e falta de dado chegando de volta. A explicacao mais provavel e um bug
+conhecido do Chromium/Electron: o compositor de GPU nao volta a desenhar
+sozinho depois que o sistema suspende o processo. A tela fica presa no
+ULTIMO QUADRO desenhado antes de dormir, e nada no app pedia um redesenho.
+
+O CONSERTO, em `apps/desktop/src/main.js`: o processo principal escuta
+`powerMonitor.on("resume", ...)` (o sistema acordou) e
+`webContents.on("render-process-gone", ...)` (o renderer morreu de verdade —
+falta de memoria, driver de GPU) e, nos dois casos, espera a ORIGEM
+(`aether-mocha-phi.vercel.app`) responder a um `HEAD` antes de recarregar a
+janela — nunca recarrega direto: acordar do standby nao significa que o
+Wi-Fi ja reconectou, e recarregar contra uma rede ainda fora do ar trocaria a
+tela preta por uma tela de erro do Chromium, que e pior porque nao sai
+sozinha quando a rede volta. Ate 10 tentativas, a cada 3s.
+
+- **NAO E UMA CAUSA CONFIRMADA linha a linha.** E o reparo padrao para esse
+  sintoma exato em apps Electron, registrado como tal em vez de apresentado
+  como certeza — o defeito nao foi reproduzido nesta maquina para confirmar
+  que a causa e mesmo o compositor de GPU e nao outra coisa.
+- **Sem log de campo ainda.** `registrar()` (`apps/desktop/src/log.js`) grava
+  cada tentativa e o desfecho em `aether.log`, na pasta de dados do app — a
+  proxima vez que o sintoma aparecer, esse arquivo diz se o reparo disparou e
+  o que aconteceu.
+- **Nao verificado em maquina real** dormindo e acordando com o app aberto —
+  so checado sintaticamente (`node --check`) e por leitura.
+
 ### Limitacoes conhecidas
 
 - **O executavel NAO e assinado.** Na primeira execucao o Windows mostra
@@ -857,10 +892,11 @@ sao eixos diferentes de proposito, para que ter um servidor nao de a ninguem
 poder de escrever no catalogo dos outros. Concede-se por
 `scripts/definir-equipe.mjs`, e a regra de leitura mora em `@aether/access`.
 
-- **A aba de revisao some para quem nao e equipe, mas isso e CORTESIA.** Quem
-  barra sao as actions, que rechecam no servidor e respondem como se a
-  funcionalidade nao existisse — 404, e nao 403, pela regra de nao revelar
-  existencia de recurso.
+- **O icone que abre a revisao some para quem nao e equipe, mas isso e
+  CORTESIA.** Quem barra sao as actions, que rechecam no servidor e respondem
+  como se a funcionalidade nao existisse — 404, e nao 403, pela regra de nao
+  revelar existencia de recurso. Ver "Painel da equipe" abaixo para onde essa
+  revisao mora hoje.
 **No desktop (parte 2):** a aba Atividade ganha "Nao esta vendo seu jogo?
 Adicione-o", e o catalogo aprovado desce da pagina para o processo principal.
 
@@ -949,6 +985,60 @@ encontrada.
 - **Os dois `catch` que viravam 404 agora registram o motivo.** Eram vazios, e
   por isso sessao expirada, erro do Prisma e coluna nova num cliente velho
   davam a MESMA tela de "nao existe" — impossivel de diagnosticar.
+
+### Painel da equipe: pagina propria, e nao mais aba de configuracoes
+
+As filas — jogos sugeridos e pedidos de vitrine — moravam numa aba escondida
+dentro de "Configuracoes", visivel so para quem e equipe. A primeira medida
+real mostrou o custo disso: **3 jogos e 1 pedido parados**, nenhum deles
+conhecido, porque ninguem tinha motivo para abrir aquela aba sem saber que
+ela existia.
+
+Dois problemas com a mesma causa — a revisao fica junto de ajuste pessoal de
+conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
+
+1. **Aviso.** Adicionado primeiro, ainda dentro das configuracoes: um
+   marcador com a SOMA das duas filas. A soma e o rotulo (`totalDeRevisoes`,
+   `rotuloDeRevisoes`, com o teto em `9+`) vivem em `@aether/shared`, com
+   teste cobrindo a fronteira e o caso de uma fila vazia com a outra cheia.
+2. **Lugar proprio.** O marcador provou que faltava aviso, mas nao resolvia
+   estar escondido — so avisava que havia algo escondido. A revisao ganhou
+   pagina dedicada, `/app/equipe` (`equipe-panel.tsx`), fora de qualquer
+   servidor especifico (mesmo raciocinio de "Explorar comunidades": e
+   trabalho que nao pertence a um servidor so). A entrada e um icone de
+   escudo na TRILHA lateral — visivel, e nao mais um item de menu dentro de
+   outro menu — que so aparece para quem e equipe, com o mesmo marcador
+   agora ali.
+
+- **So a equipe consulta a contagem.** Para quem nao e, a chamada nem sai do
+  navegador: a action responderia "Nao encontrado" de qualquer forma, e uma
+  consulta por sessao de todo mundo para receber recusa seria carga sem
+  contrapartida.
+- **NAO e tempo real, de proposito.** Busca ao montar a trilha e ao voltar
+  para a aba, com um minuto de intervalo minimo. Nada aqui e urgente, e um
+  `setInterval` batendo no banco o dia inteiro para mostrar um numero quase
+  sempre zero custaria caro por nada; alt-tab de jogo dispara `focus` varias
+  vezes por minuto, dai a janela.
+- **O numero baixa junto com a fila.** As duas abas do painel devolvem a
+  contagem fresca depois de cada decisao, em vez do marcador continuar
+  dizendo "1 esperando" para algo que voce acabou de aprovar.
+- **A checagem de equipe virou uma so** — `sessaoDaEquipe`, em
+  `apps/web/src/server/guards.ts`. Eram duas copias locais (jogos e
+  comunidades), e a pagina nova ia criar a terceira. NAO se chama
+  `requireEquipe` porque os outros `require*` lancam, e devolver `null` aqui
+  e o certo: a action responde "Nao encontrado", nao "voce nao pode". A
+  PAGINA usa `ehEquipe` direto (precisa do `notFound()` de pagina, nao do
+  `fail()` de action).
+
+- **Quem fica com a janela aberta sem trocar de aba nao ve o pedido chegar.**
+  O marcador so reavalia no proximo foco ou navegacao. E aviso passivo: nao
+  ha notificacao, som, e-mail nem badge no icone do desktop.
+- **Nao verificado com login de equipe.** Typecheck, testes (com mutacao na
+  soma e na fronteira do `9+`), build de producao (a rota `/app/equipe`
+  aparece na lista de rotas geradas) e a regressao da fase 2 passaram; ver o
+  painel de verdade — o icone na trilha, o recorte por aba, os dois
+  numerinhos — exigiria uma sessao logada como equipe, que esta rodada nao
+  fez.
 
 ### Limitacoes conhecidas da deteccao de jogo
 
@@ -1398,6 +1488,38 @@ recebe a mesma arvore de antes.
   sala velha — e sala velha e falha de acesso, nao tela desatualizada.
 - **A barra de SERVIDORES nao atualiza**, so a de canais. Entrar ou sair de um
   servidor continua exigindo recarregar.
+
+### Excluir o canal que voce esta vendo nao pode virar 404 de tela inteira
+
+O SINTOMA: excluir um canal de texto excluia de verdade, mas jogava quem
+estava vendo aquele canal num 404 de PAGINA INTEIRA — sidebar, barra de
+controles, tudo trocado pela tela generica de "este link nao existe".
+
+A CAUSA e o mecanismo logo acima: `deleteChannelAction` chama
+`revalidatePath`, e o gateway ainda avisa todo mundo por `server:changed` —
+as duas coisas fazem o Next re-executar a pagina do canal que acabou de
+sumir. Ela chama `notFound()` (o `if (!channel) notFound()` de
+`c/[channelId]/page.tsx`, que ja existia e esta certo: o canal de fato nao
+existe mais), e sem um limite PROPRIO deste segmento, o 404 subia ate o
+`app/not-found.tsx` global.
+
+O CONSERTO nao mexeu em nenhuma das duas causas — as duas continuam certas
+por conta propria. Foi dar um `not-found.tsx` PROPRIO ao segmento
+`c/[channelId]`: ele redireciona (`router.replace`, para o "voltar" do
+navegador nao devolver a URL morta) para a raiz do servidor, um componente
+estatico sem checagem nenhuma (`ServerHomePage`), mantendo o layout do
+servidor — sidebar e barra de controles — montado por cima. So o painel do
+canal troca.
+
+COBRE OS DOIS LADOS pelo mesmo caminho: tanto quem excluiu quanto qualquer
+outra pessoa que estivesse com aquele canal aberto quando ALGUEM MAIS o
+excluiu chegam a este boundary do mesmo jeito, porque os dois tem a mesma
+pagina re-executada sob os pes pelo `server:changed`.
+
+- **Cobre tambem perda de permissao de VER o canal**, nao so exclusao — e o
+  mesmo `notFound()` da pagina, causa generica.
+- **Nao verificado com dois clientes reais simultaneos** (um excluindo, outro
+  olhando) nesta rodada — so o caminho do proprio autor da exclusao.
 
 ### Apelido por servidor
 
@@ -2312,6 +2434,50 @@ dado da pessoa por causa de uma cobranca vencida.
 - **Banner e badge nao existem.** A estrutura esta pronta — catalogo, resolucao
   por plano e o campo no `PublicUser` sao genericos —, mas nenhum foi
   construido.
+
+### Recorte de avatar (zoom e posicao)
+
+Antes, a foto ia direto para o servidor e o corte era o que o CSS
+(`object-fit: cover`) decidisse — sempre o centro geometrico exato, sem
+escolha nenhuma. Numa foto de retrato tirada na vertical, o centro geometrico
+raramente e o rosto.
+
+`account-tab.tsx` agora abre um passo de ajuste (`avatar-cropper.tsx`) entre
+escolher o arquivo e enviar: arrasta para posicionar, um controle desliza o
+zoom, e "Usar esta foto" desenha o que ficou dentro do quadro num canvas
+512x512, virando o arquivo que de fato sobe. Sem biblioteca nova — Pointer
+Events (mouse, caneta e toque de um jeito so) mais um `input[type=range]`.
+
+A MATEMATICA DO RECORTE mora em `avatar-cropper-math.ts`, separada do
+componente e sem tocar DOM: e o unico ponto facil de errar por um sinal
+trocado — mover a foto para a direita na TELA precisa **subtrair** do centro
+em espaço da imagem, nao somar, porque o ponto que fica no centro do quadro
+recua para o lado oposto do centro da propria foto. Um sinal invertido nao
+quebraria nada visivelmente durante o arrasto (a foto se move do jeito
+esperado na tela); o arquivo salvo e que mostraria o lado errado da imagem.
+So um teste percebe — `tests/unit/avatar-cropper-math.test.ts`, mutado a mao
+trocando o sinal para confirmar que a suite de fato acusa.
+
+**SO PARA IMAGEM PARADA.** Um avatar animado (GIF, ou WEBP/APNG animado —
+`ehImagemAnimada`, movida para `@aether/shared` porque agora o CLIENTE
+precisa da mesma resposta que o servidor, e nao so o storage) pula o recorte e
+sobe do jeito que sempre subiu: um canvas so enxerga um quadro, e recortar
+destruiria a animacao. E uma limitacao aceita, nao esquecimento — recortar
+preservando animacao pediria decodificar e recodificar cada quadro, um
+recurso bem maior que "deixar posicionar a foto".
+
+A saida do recorte e sempre **JPEG a 92%**, nunca PNG: o peso de um PNG cresce
+com o detalhe da imagem, e uma foto de verdade em 512x512 podia flertar com o
+teto de 2MB. JPEG fica previsivelmente pequeno, e a perda e imperceptivel
+neste tamanho.
+
+- **Nao verificado com login de verdade.** Typecheck, build de producao e a
+  suite (com mutacao no sinal do recorte) passaram; o gesto de arrastar e o
+  resultado visual nao foram conferidos numa sessao logada nesta rodada.
+- **Reabrir "Ajustar" comeca do centro, e nao de onde a pessoa deixou.** O
+  botao reabre o recorte sobre a foto ORIGINAL (para nao recortar um recorte
+  e perder nitidez a cada rodada), mas zoom e posicao nao sao lembrados entre
+  aberturas.
 
 ### Sobre trocar o Supabase por S3
 

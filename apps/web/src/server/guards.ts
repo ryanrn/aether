@@ -5,6 +5,7 @@ import { prisma } from "@aether/db";
 import { has, type PermissionKey } from "@aether/shared";
 import {
   canActOnUser,
+  ehEquipe,
   getChannelPermissions,
   loadMemberAccess,
   type MemberAccess,
@@ -43,6 +44,24 @@ export async function requireUser(): Promise<AuthenticatedSession> {
   const session = await getSession();
   if (!session) throw new AuthError();
   return session;
+}
+
+/**
+ * A sessao, se ela for da equipe; `null` se nao for.
+ *
+ * NAO SE CHAMA `requireEquipe` de proposito: os outros `require*` LANCAM, e
+ * quem lesse o nome esperaria o mesmo. Aqui devolver `null` e o certo — a
+ * action responde "Nao encontrado", e nao "voce nao pode", porque nao
+ * confirmamos a existencia de um painel para quem chutou o nome da action.
+ *
+ * MORA AQUI porque as tres portas da equipe (fila de jogos, fila de vitrine e
+ * a contagem das duas) precisavam da mesma checagem, e a copia local em cada
+ * arquivo de action era a terceira ja. A regra em si continua em
+ * `@aether/access`; isto e so o modo de perguntar por ela.
+ */
+export async function sessaoDaEquipe(): Promise<AuthenticatedSession | null> {
+  const session = await requireUser();
+  return ehEquipe(session) ? session : null;
 }
 
 /**

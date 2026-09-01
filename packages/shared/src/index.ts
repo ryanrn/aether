@@ -6,5 +6,6 @@ export * from "./jogos";
 export * from "./permissions";
 export * from "./plans";
 export * from "./redis";
+export * from "./revisao";
 export * from "./types";
 export * from "./validation";

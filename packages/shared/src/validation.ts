@@ -127,6 +127,62 @@ export function limiteDoAvatar(mime: string): number {
 /** O maior teto possivel — o que o bucket precisa aceitar na origem. */
 export const AVATAR_LIMITE_DO_BUCKET = AVATAR_ANIMADO_MAX_BYTES;
 
+/** Acha uma marca ASCII nos primeiros bytes. Limitado para nao varrer 10 MB. */
+function contemMarca(bytes: Uint8Array, marca: string, ate = 4096): boolean {
+  const alvo = [...marca].map((c) => c.charCodeAt(0));
+  const fim = Math.min(bytes.length, ate) - alvo.length;
+  for (let i = 0; i <= fim; i += 1) {
+    let bate = true;
+    for (let j = 0; j < alvo.length; j += 1) {
+      if (bytes[i + j] !== alvo[j]) {
+        bate = false;
+        break;
+      }
+    }
+    if (bate) return true;
+  }
+  return false;
+}
+
+/**
+ * A imagem TEM MOVIMENTO?
+ *
+ * Decidido pelos BYTES, e nunca pela extensao ou pelo `Content-Type` que o
+ * navegador declarou — e o mesmo principio do sniff de tipo. Travar so o GIF
+ * deixaria o buraco obvio: WEBP e PNG tambem animam, e quem nao paga subiria
+ * um WEBP animado como avatar contornando a regra inteira. O sintoma seria
+ * "o premium nao vale nada", sem erro nenhum.
+ *
+ * - GIF conta como animado SEMPRE, inclusive de um quadro so. Contar quadros
+ *   exigiria percorrer os blocos do arquivo, e um parser errado aqui erra
+ *   para o lado de liberar. Quem quer imagem parada tem PNG, JPEG e WEBP.
+ * - WEBP anima pela flag ANIM do bloco VP8X — o bit 0x02 do byte de flags.
+ *   Sem VP8X nao ha animacao possivel.
+ * - PNG anima no formato APNG, que se declara pelo bloco `acTL` antes do
+ *   primeiro `IDAT`.
+ *
+ * MORA AQUI, e nao so em `apps/web/src/server/storage.ts`, porque o cliente
+ * PRECISA da mesma resposta: o recorte de zoom da foto (`avatar-cropper.tsx`)
+ * teria que pular avatar animado, ou a animacao morreria no primeiro quadro
+ * ao passar pelo canvas. Duas implementacoes divergiriam exatamente como as
+ * normalizacoes de nome de jogo do servidor e do desktop — o mesmo bug, outro
+ * lugar.
+ */
+export function ehImagemAnimada(bytes: Uint8Array, mime: string): boolean {
+  if (mime === "image/gif") return true;
+  if (mime === "image/webp") {
+    const temVP8X =
+      bytes.length >= 21 &&
+      bytes[12] === 0x56 &&
+      bytes[13] === 0x50 &&
+      bytes[14] === 0x38 &&
+      bytes[15] === 0x58;
+    return temVP8X && (bytes[20]! & 0x02) !== 0;
+  }
+  if (mime === "image/png") return contemMarca(bytes, "acTL");
+  return false;
+}
+
 export const inviteCodeSchema = z
   .string()
   .trim()

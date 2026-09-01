@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Check, RefreshCw, X } from "lucide-react";
 import {
   categoriaPorId,
@@ -31,13 +31,24 @@ const ABAS: { id: VitrineStatus; rotulo: string }[] = [
   { id: "RECUSADO", rotulo: "Recusados" },
 ];
 
-export function ComunidadesTab() {
+export function ComunidadesTab({
+  /** Mesma razao da fila de jogos: o numerinho da engrenagem baixa junto. */
+  onPendentes,
+}: {
+  onPendentes?: (pendentes: number) => void;
+}) {
   const [status, setStatus] = useState<VitrineStatus>("PENDENTE");
   const [pedidos, setPedidos] = useState<PedidoDeVitrine[]>([]);
   const [pendentes, setPendentes] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [pending, startTransition] = useTransition();
+
+  /** Ref, e nao dependencia: veja o comentario igual em `jogos-tab`. */
+  const avisar = useRef(onPendentes);
+  useEffect(() => {
+    avisar.current = onPendentes;
+  });
 
   const carregar = useCallback((alvo: VitrineStatus) => {
     setCarregando(true);
@@ -47,6 +58,7 @@ export function ComunidadesTab() {
         if (r.ok) {
           setPedidos(r.data.pedidos);
           setPendentes(r.data.pendentes);
+          avisar.current?.(r.data.pendentes);
         } else {
           setErro(r.error);
         }
@@ -72,7 +84,9 @@ export function ComunidadesTab() {
         return;
       }
       setPedidos((atual) => atual.filter((p) => p.id !== pedido.id));
-      setPendentes((n) => Math.max(0, n - 1));
+      const restam = Math.max(0, pendentes - 1);
+      setPendentes(restam);
+      avisar.current?.(restam);
     });
   }
 

@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, powerMonitor, session, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
@@ -11,6 +11,7 @@ const {
   listarCandidatos,
 } = require("./game-detect");
 const { instalarAtualizador } = require("./updater");
+const { registrar } = require("./log");
 
 /**
  * Casca desktop do Aether.
@@ -37,6 +38,83 @@ function isAllowedUrl(rawUrl) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Janelas com uma reconexao ja em andamento, para nao empilhar duas.
+ *
+ * `resume` (o sistema acordou) e `render-process-gone` (o renderer morreu)
+ * podem disparar quase juntos — dormir o notebook e frequentemente o que
+ * derruba o processo. Sem a guarda, os dois comecariam a checar a origem em
+ * paralelo e, se ambos vencessem a corrida, a janela recarregaria duas vezes
+ * seguidas.
+ */
+const reconectandoAgora = new Set();
+
+/**
+ * Recarrega a janela assim que a ORIGEM voltar a responder — nunca antes.
+ *
+ * O SINTOMA QUE ISTO CORRIGE: o app fica com a tela preta ou cinza depois de
+ * o notebook dormir (ou a rede cair por um tempo) e voltar, enquanto o
+ * Discord, aberto ao lado, se recupera sozinho. A causa mais provavel e um
+ * bug conhecido do Chromium/Electron: o compositor de GPU nao volta a
+ * desenhar sozinho depois que o sistema suspende o processo. O socket do
+ * tempo real ja tenta se reconectar por conta propria
+ * (`reconnectionAttempts: Infinity`, em `realtime-provider.tsx`) — o problema
+ * visivel nao e falta de dado chegando, e a PAGINA que parou de se redesenhar.
+ * `reload()` e o mesmo remedio de fechar e abrir o app de novo, so que
+ * automatico.
+ *
+ * NAO E VERIFICAVEL COM CERTEZA SEM REPRODUZIR O DEFEITO — este e o reparo
+ * padrao para esse sintoma em apps Electron, e nao uma causa confirmada linha
+ * a linha neste código. Fica registrado como tal.
+ *
+ * POR QUE ESPERA A ORIGEM RESPONDER, e nao recarrega na hora: acordar do
+ * standby nao significa que o adaptador de rede ja reconectou — pode levar
+ * alguns segundos. Recarregar contra uma rede ainda fora do ar trocaria a
+ * tela preta por uma tela de erro do Chromium, que e pior: aquela ao menos
+ * sai sozinha quando a rede volta.
+ */
+function recarregarQuandoAOrigemResponder(window, motivo) {
+  if (window.isDestroyed() || reconectandoAgora.has(window)) return;
+  reconectandoAgora.add(window);
+  registrar("reconexao:tentando", { motivo });
+
+  const MAX_TENTATIVAS = 10; // ~30s de tentativas antes de desistir
+  const INTERVALO_MS = 3000;
+  let tentativas = 0;
+
+  const tentar = async () => {
+    if (window.isDestroyed()) {
+      reconectandoAgora.delete(window);
+      return;
+    }
+    tentativas += 1;
+    try {
+      // Qualquer resposta HTTP — mesmo erro do servidor — prova que a rede
+      // ja chega la. So uma excecao (DNS, TCP, timeout) significa "ainda nao".
+      await fetch(APP_ORIGIN, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(4000),
+      });
+      registrar("reconexao:origem-respondeu", { motivo, tentativas });
+      if (!window.isDestroyed()) window.webContents.reload();
+      reconectandoAgora.delete(window);
+    } catch (erro) {
+      if (tentativas >= MAX_TENTATIVAS) {
+        registrar("reconexao:desistiu", {
+          motivo,
+          tentativas,
+          erro: String(erro),
+        });
+        reconectandoAgora.delete(window);
+        return;
+      }
+      setTimeout(tentar, INTERVALO_MS);
+    }
+  };
+
+  setTimeout(tentar, INTERVALO_MS);
 }
 
 /**
@@ -372,6 +450,17 @@ function createWindow() {
     void shell.openExternal(url);
   });
 
+  /**
+   * O renderer morreu (falta de memoria, driver de GPU, crash do Chromium).
+   * Sem isto a janela fica exatamente no ultimo quadro que desenhou — preta
+   * ou congelada — para sempre, porque nada aqui pede para redesenhar
+   * sozinho depois que o processo cai.
+   */
+  window.webContents.on("render-process-gone", (_evento, detalhes) => {
+    registrar("renderer-caiu", detalhes);
+    recarregarQuandoAOrigemResponder(window, "render-process-gone");
+  });
+
   return window;
 }
 
@@ -476,6 +565,20 @@ if (!app.requestSingleInstanceLock()) {
 
     // Depois da janela: a verificacao nao pode atrasar a abertura do app.
     instalarAtualizador(janelaPrincipal);
+
+    /**
+     * O sistema acordou do modo de espera ou hibernacao.
+     *
+     * E O GATILHO MAIS COMUM do sintoma "tela preta depois que o notebook
+     * dormiu com o app aberto": o mesmo minuto em que o adaptador de rede
+     * tambem estava caindo e reconectando. Ver `recarregarQuandoAOrigemResponder`
+     * para o porque do reload, e nao so um aviso.
+     */
+    powerMonitor.on("resume", () => {
+      if (janelaPrincipal && !janelaPrincipal.isDestroyed()) {
+        recarregarQuandoAOrigemResponder(janelaPrincipal, "resume");
+      }
+    });
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
