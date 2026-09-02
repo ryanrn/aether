@@ -39,12 +39,19 @@ export function SpotifySection() {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  const [erro, setErro] = useState<string | null>(null);
+
   async function carregar() {
     try {
       const r = await fetch("/api/spotify/state");
-      if (r.ok) setEstado(await r.json());
-    } catch {
-      /* aba fecha sem Spotify — nao e o fim do mundo */
+      if (!r.ok) {
+        setErro(`HTTP ${r.status}`);
+        return;
+      }
+      setErro(null);
+      setEstado(await r.json());
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "falha ao consultar");
     }
   }
 
@@ -52,10 +59,47 @@ export function SpotifySection() {
     void carregar();
   }, []);
 
-  // Integracao nao configurada no servidor: nada a mostrar.
-  if (!estado || !estado.disponivel) return null;
+  const conta = estado?.conta ?? null;
 
-  const conta = estado.conta;
+  const cabecalho = (
+    <>
+      <h3 className="text-[13px] font-medium text-ink-100">Spotify</h3>
+      <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
+        Mostra a musica que voce esta ouvindo no seu cartao de atividade. So a
+        faixa, o artista e a capa saem — nada de historico nem controle de
+        playback.
+      </p>
+    </>
+  );
+
+  if (erro) {
+    return (
+      <div className="border-t border-base-800 pt-5">
+        {cabecalho}
+        <p className="mt-2 text-[12px] text-signal-dnd">
+          Nao consegui consultar o estado do Spotify ({erro}).
+        </p>
+      </div>
+    );
+  }
+  if (!estado) {
+    return (
+      <div className="border-t border-base-800 pt-5">
+        {cabecalho}
+        <p className="mt-2 text-[12px] text-ink-500">Carregando…</p>
+      </div>
+    );
+  }
+  if (!estado.disponivel) {
+    return (
+      <div className="border-t border-base-800 pt-5">
+        {cabecalho}
+        <p className="mt-2 text-[12px] text-ink-500">
+          A integracao com o Spotify nao esta configurada neste servidor.
+        </p>
+      </div>
+    );
+  }
 
   async function alternar(patch: {
     showOnProfile?: boolean;
@@ -81,12 +125,7 @@ export function SpotifySection() {
 
   return (
     <div className="border-t border-base-800 pt-5">
-      <h3 className="text-[13px] font-medium text-ink-100">Spotify</h3>
-      <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
-        Mostra a musica que voce esta ouvindo no seu cartao de atividade. So a
-        faixa, o artista e a capa saem — nada de historico nem controle de
-        playback.
-      </p>
+      {cabecalho}
 
       {!conta ? (
         <a
