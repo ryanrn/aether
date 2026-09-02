@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2 prontos) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos) |
 
 ---
 
