@@ -266,6 +266,50 @@ sozinha quando a rede volta. Ate 10 tentativas, a cada 3s.
 - **Nao verificado em maquina real** dormindo e acordando com o app aberto —
   so checado sintaticamente (`node --check`) e por leitura.
 
+#### O log de campo chegou, e o sintoma era o REPARO disparando demais
+
+Uso real relatou: depois desta atualizacao, o app passou a "cair toda hora" —
+tanto apontando para producao quanto para localhost. Como as duas pontas
+mudam so o SERVIDOR, e o sintoma se repetia nas duas, a causa nao podia estar
+do lado do backend: so sobrava o processo principal do Electron, o mesmo em
+qualquer endereco.
+
+**Suspeito principal: `powerMonitor.on("resume")` disparando sem o notebook
+dormir de verdade.** E um comportamento conhecido do Windows com *Modern
+Standby* (energia baixa "conectada"): o sistema faz transicoes de suspensao e
+volta o tempo todo, inclusive com a tampa aberta e a tela acesa, e o
+`powerMonitor` do Electron acompanha essas transicoes — nao so o sono de
+verdade. Sem cooldown nenhum, CADA disparo desses virava um `reload()`
+completo: a conexao caia, quem estava numa call saia dela, e a experiencia
+era "o app cai toda hora" — em qualquer servidor, porque a causa vive no
+cliente.
+
+**O CONSERTO: um cooldown de 2 minutos entre recargas** (`COOLDOWN_MS` em
+`main.js`). Um disparo de `resume` ou `render-process-gone` que chega antes
+do cooldown acabar e IGNORADO (e registrado como
+`reconexao:ignorada-cooldown`, com o tempo desde a ultima recarga) em vez de
+recarregar de novo. Sono de verdade nao se repete a cada poucos minutos, entao
+a primeira tentativa continua cobrindo o caso original; a sequencia de
+disparos falsos do Modern Standby e que para de virar uma sequencia de
+recargas.
+
+- **TAMBEM NAO E CAUSA CONFIRMADA linha a linha** — mesma ressalva do reparo
+  original. E o ajuste padrao para esse tipo de disparo espurio relatado em
+  hardware Windows, nao uma causa provada neste caso especifico.
+- **Nao filtra por CORRELACAO com um `suspend` real.** O Electron tambem
+  emite `powerMonitor.on("suspend")`; dava para exigir que um `resume` so
+  contasse se um `suspend` tivesse acontecido pouco antes. Nao fizemos: o
+  proprio Modern Standby dispara os DOIS em pares espurios, entao essa
+  correlacao nao filtraria o problema — so o cooldown, que e independente da
+  causa exata do lado do Windows, resolve.
+- **2 minutos e um numero escolhido, nao medido.** Sem o `aether.log` de
+  quem relatou o sintoma (as linhas `reconexao:tentando` mostrariam o
+  intervalo real entre disparos), nao ha como saber se o valor certo e maior
+  ou menor — alto o bastante para cobrir a chatice do Modern Standby, baixo o
+  bastante para nao atrasar a recuperacao de um sono de verdade.
+- **Ainda nao verificado na maquina que relatou o sintoma.** So checado
+  sintaticamente (`node --check`) e por leitura, como o reparo original.
+
 ### Limitacoes conhecidas
 
 - **O executavel NAO e assinado.** Na primeira execucao o Windows mostra
