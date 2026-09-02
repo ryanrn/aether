@@ -127,7 +127,11 @@ const scriptEnv = {
 const children = [];
 
 function start(label, cmd, args, env) {
-  const child = spawn(cmd, args, { cwd: ROOT, env, stdio: "pipe" });
+  // `detached` da a cada servico o proprio grupo de processos: `npm run`
+  // lanca `sh -c` que lanca `tsx`/`next`, e matar so o `npm` deixa o neto
+  // vivo — segurando a porta e, pior, mantendo o event loop do orquestrador
+  // aberto no fim (o job pendurava aqui).
+  const child = spawn(cmd, args, { cwd: ROOT, env, stdio: "pipe", detached: true });
   children.push({ label, child });
   const tag = (line) => line && console.log(`  [${label}] ${line}`);
   child.stdout.on("data", (b) => b.toString().split("\n").forEach(tag));
@@ -157,11 +161,23 @@ async function waitForHttp(url, label, tries = 60) {
 }
 
 let shuttingDown = false;
+function killGroup(child, signal) {
+  try {
+    // `-pid` = o grupo inteiro (ver `detached` no start()).
+    if (child.pid) process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      /* ja morreu */
+    }
+  }
+}
 async function shutdown() {
   shuttingDown = true;
-  for (const { child } of children) child.kill("SIGTERM");
-  await sleep(500);
-  for (const { child } of children) child.kill("SIGKILL");
+  for (const { child } of children) killGroup(child, "SIGTERM");
+  await sleep(800);
+  for (const { child } of children) killGroup(child, "SIGKILL");
 }
 
 /** Roda um verify-* e devolve { label, code, ms }. */
@@ -269,6 +285,9 @@ async function main() {
     process.exit(1);
   }
   console.log("\nOs scripts de integracao passaram (fora as falhas conhecidas).");
+  // Explicito: mesmo depois do shutdown pode sobrar handle aberto (pipe de
+  // neto orfao, keep-alive de fetch) e o processo penduraria o job.
+  process.exit(0);
 }
 
 process.on("SIGINT", () => void shutdown().then(() => process.exit(1)));

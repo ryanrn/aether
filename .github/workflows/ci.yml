@@ -85,6 +85,7 @@ jobs:
   # ------------------------------------------------------------------------
   integracao:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -189,6 +190,7 @@ jobs:
             livekit/livekit-server:v1.8.4 --dev --bind 0.0.0.0
 
       - name: Bateria de integracao
+        timeout-minutes: 12
         run: node scripts/verify-all-ci.mjs
 
 # O QUE ESTE CI *NAO* COBRE, e vale saber antes de confiar demais nele:
