@@ -108,6 +108,25 @@ export function ControlBar({
   const [localDeafened, setLocalDeafened] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  /**
+   * Volta do OAuth do Spotify: no desktop o fluxo navega a janela e cai em
+   * `/app?spotify=...`. Abre as configuracoes ja na aba Atividade e limpa o
+   * parametro da URL.
+   */
+  const [voltouDoSpotify, setVoltouDoSpotify] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has("spotify")) return;
+    setVoltouDoSpotify(true);
+    setProfileOpen(true);
+    q.delete("spotify");
+    const nova = q.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (nova ? `?${nova}` : ""),
+    );
+  }, []);
   const [selfCard, setSelfCard] = useState<SelfCardAnchor | null>(null);
   const [shareAudio, setShareAudio] = useState(true);
   /** No desktop o seletor do Electron tem a chave de som; duas confundiriam. */
@@ -340,9 +359,13 @@ export function ControlBar({
 
       <AppSettingsModal
         open={profileOpen}
-        onClose={() => setProfileOpen(false)}
+        onClose={() => {
+          setProfileOpen(false);
+          setVoltouDoSpotify(false);
+        }}
         user={user}
         server={{ id: currentServerId, memberId, nickname }}
+        abaInicial={voltouDoSpotify ? "atividade" : undefined}
       />
 
       <div className="mx-0.5 h-6 w-px bg-base-700" />

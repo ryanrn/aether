@@ -39,9 +39,17 @@ function pagina(titulo: string, detalhe: string, sucesso: boolean): Response {
   <div class="dot"></div>
   <h1>${titulo}</h1>
   <p>${detalhe}</p>
-  <button onclick="window.close()">Fechar</button>
+  <button id="acao">${sucesso ? "Voltar ao Aether" : "Fechar"}</button>
 </div></div>
-<script>setTimeout(function(){try{window.close()}catch(e){}}, ${sucesso ? 800 : 4000});</script>
+<script>
+  var abertoPorPopup = !!window.opener && window.opener !== window;
+  function voltar(){
+    if (abertoPorPopup) { try{ window.close() }catch(e){} }
+    else { window.location.replace("/app${sucesso ? "?spotify=ok" : "?spotify=erro"}"); }
+  }
+  document.getElementById("acao").addEventListener("click", voltar);
+  setTimeout(voltar, ${sucesso ? 900 : 3500});
+</script>
 </body></html>`;
   return new Response(html, {
     status: 200,

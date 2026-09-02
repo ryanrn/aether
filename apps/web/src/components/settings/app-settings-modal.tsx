@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,7 @@ export function AppSettingsModal({
   onClose,
   user,
   server,
+  abaInicial,
 }: {
   open: boolean;
   onClose: () => void;
@@ -70,8 +71,15 @@ export function AppSettingsModal({
     allowServerFriendRequests: boolean;
   };
   server: { id: string; memberId: string; nickname: string | null };
+  /** aba a abrir quando o modal e mostrado (ex.: volta do OAuth do Spotify) */
+  abaInicial?: Tab;
 }) {
   const [active, setActive] = useState<Tab>("conta");
+
+  // Quando abre com uma aba pedida (ex.: `?spotify=ok`), pula para ela.
+  useEffect(() => {
+    if (open && abaInicial) setActive(abaInicial);
+  }, [open, abaInicial]);
 
   return (
     <Modal

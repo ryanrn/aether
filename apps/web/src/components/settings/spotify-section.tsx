@@ -67,10 +67,23 @@ export function SpotifySection() {
   const conta = estado?.conta ?? null;
 
   function conectar() {
-    // `window.open`: no navegador abre um popup; no desktop o Electron
-    // redireciona para o navegador do sistema (setWindowOpenHandler) e o app
-    // NUNCA navega para fora. O callback responde uma pagina que se fecha
-    // sozinha — nao volta para `/app`.
+    const noDesktop =
+      typeof (window as { aetherDesktop?: unknown }).aetherDesktop === "object" &&
+      (window as { aetherDesktop?: unknown }).aetherDesktop !== null;
+
+    if (noDesktop) {
+      /**
+       * No desktop o OAuth tem de acontecer NESTA janela: o navegador do
+       * sistema nao tem o cookie de sessao do Aether, e uma janela Electron
+       * filha e bloqueada pelo `setWindowOpenHandler`. Navega aqui; o callback
+       * cai em `/app?spotify=ok` e a barra de controle reabre as
+       * configuracoes ja na aba Atividade.
+       */
+      window.location.href = "/api/spotify/connect";
+      return;
+    }
+    // No navegador: popup. O callback (aberto por `window.open`) se fecha
+    // sozinho, e esta seccao re-checa o estado quando o app recupera o foco.
     window.open("/api/spotify/connect", "aether-spotify", "width=480,height=720");
   }
 
