@@ -26,10 +26,10 @@ const LARGURA = 300;
 const GAP = 8;
 
 export function ConnectionPanel({
-  anchorRect,
+  anchorEl,
   onClose,
 }: {
-  anchorRect: DOMRect;
+  anchorEl: HTMLElement;
   onClose: () => void;
 }) {
   const subscribe = useRealtimeStore(
@@ -46,19 +46,28 @@ export function ConnectionPanel({
   }, [subscribe]);
 
   useLayoutEffect(() => {
+    const anchor = anchorEl.getBoundingClientRect();
     const altura = painelRef.current?.offsetHeight ?? 220;
-    let left = anchorRect.right - LARGURA;
+    let left = anchor.right - LARGURA;
     left = Math.max(GAP, Math.min(left, window.innerWidth - LARGURA - GAP));
-    let top = anchorRect.bottom + GAP;
+    let top = anchor.bottom + GAP;
     if (top + altura > window.innerHeight - GAP) {
-      top = Math.max(GAP, anchorRect.top - altura - GAP);
+      top = Math.max(GAP, anchor.top - altura - GAP);
     }
     setPos({ left, top });
-  }, [anchorRect, stats]);
+  }, [anchorEl, stats]);
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (!painelRef.current?.contains(e.target as Node)) onClose();
+      const alvo = e.target as Node;
+      // O proprio botao de sinal ja alterna aberto/fechado no onClick dele —
+      // fechar aqui tambem faria o clique reabrir logo em seguida.
+      if (
+        !painelRef.current?.contains(alvo) &&
+        !anchorEl.contains(alvo)
+      ) {
+        onClose();
+      }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -71,7 +80,7 @@ export function ConnectionPanel({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, anchorEl]);
 
   function copiarDiagnostico() {
     const dump = {

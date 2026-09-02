@@ -65,7 +65,8 @@ export function VoiceStage({
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
 
   const isHere = selfVoice?.channelId === channel.id;
-  const [statsAnchor, setStatsAnchor] = useState<DOMRect | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const statsButtonRef = useRef<HTMLButtonElement>(null);
   const full =
     channel.userLimit !== null &&
     participants.length >= channel.userLimit &&
@@ -159,16 +160,13 @@ export function VoiceStage({
         <div className="flex items-center gap-2">
           {isHere ? (
             <button
+              ref={statsButtonRef}
               type="button"
               aria-label="Conexao"
-              onClick={(e) =>
-                setStatsAnchor((prev) =>
-                  prev ? null : e.currentTarget.getBoundingClientRect(),
-                )
-              }
+              onClick={() => setStatsOpen((v) => !v)}
               className={cn(
                 "rounded-md border border-base-700 p-2 text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-200",
-                statsAnchor && "bg-base-800 text-ink-200",
+                statsOpen && "bg-base-800 text-ink-200",
               )}
             >
               <SignalHigh className="h-3.5 w-3.5" />
@@ -178,10 +176,10 @@ export function VoiceStage({
         </div>
       </div>
 
-      {statsAnchor ? (
+      {statsOpen && statsButtonRef.current ? (
         <ConnectionPanel
-          anchorRect={statsAnchor}
-          onClose={() => setStatsAnchor(null)}
+          anchorEl={statsButtonRef.current}
+          onClose={() => setStatsOpen(false)}
         />
       ) : null}
 
