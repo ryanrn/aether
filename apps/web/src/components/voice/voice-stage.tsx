@@ -12,10 +12,17 @@ import {
   useRealtimeStore,
   useScreenShares,
   useSelfVoice,
+  useVoiceLevel,
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import { startMicLevel, type MicLevelHandle } from "@/lib/voice/mic-level";
+import {
+  listMicrophones,
+  readPreferredMicrophone,
+  savePreferredMicrophone,
+  type AudioDevice,
+} from "@/lib/voice/devices";
 import { ScreenShareView } from "@/components/voice/screen-share-view";
 import {
   VoiceMemberMenu,
@@ -284,22 +291,41 @@ function FaixaDeConexao({
 /**
  * Faixa de ISOLAMENTO — aparece quando o teste de microfone esta ativo.
  * O audio NAO vai para a call: `startMicLevel` abre um stream local proprio,
- * so para desenhar o medidor.
+ * so para desenhar o medidor. Um seletor compacto troca o aparelho na hora
+ * (guarda a mesma preferencia que a call e as Configuracoes usam).
  */
 function MonitorStrip() {
   const micTest = useMicTest();
   const setMicTest = useRealtimeStore((state) => state.setMicTest);
   const [level, setLevel] = useState(0);
+  const [dispositivos, setDispositivos] = useState<AudioDevice[]>([]);
+  const [micId, setMicId] = useState<string | null>(null);
   const handleRef = useRef<MicLevelHandle | null>(null);
+
+  useEffect(() => setMicId(readPreferredMicrophone()), []);
+
+  useEffect(() => {
+    if (!micTest) return;
+    void listMicrophones().then(setDispositivos);
+  }, [micTest]);
 
   useEffect(() => {
     if (!micTest) return;
     let cancelado = false;
+    handleRef.current?.stop();
+    handleRef.current = null;
     void (async () => {
       try {
-        const handle = await startMicLevel({ onLevel: (l) => !cancelado && setLevel(l) });
+        const handle = await startMicLevel({
+          deviceId: micId ?? undefined,
+          onLevel: (l) => !cancelado && setLevel(l),
+        });
         if (cancelado) handle.stop();
-        else handleRef.current = handle;
+        else {
+          handleRef.current = handle;
+          // Depois da permissao os rotulos aparecem — reconsulta.
+          void listMicrophones().then((d) => !cancelado && setDispositivos(d));
+        }
       } catch {
         if (!cancelado) setMicTest(false);
       }
@@ -310,17 +336,22 @@ function MonitorStrip() {
       handleRef.current = null;
       setLevel(0);
     };
-  }, [micTest, setMicTest]);
+  }, [micTest, micId, setMicTest]);
 
   if (!micTest) return null;
+
+  function trocarMic(deviceId: string) {
+    setMicId(deviceId);
+    savePreferredMicrophone(deviceId);
+  }
 
   return (
     <div
       data-od-id="monitor-strip"
-      className="mx-4 mt-3 flex items-center gap-3 rounded-md border border-signal-isolate/35 bg-signal-isolate/[0.12] px-3.5 py-2.5"
+      className="mx-4 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-signal-isolate/35 bg-signal-isolate/[0.12] px-3.5 py-2.5"
     >
       <AetherIcon name="headset-off" size="lg" className="text-signal-isolate" />
-      <span className="min-w-0 leading-tight">
+      <span className="min-w-0 flex-1 leading-tight">
         <b className="block text-[12.5px] font-semibold text-signal-isolate-ink">
           Ouvindo a propria voz — modo teste
         </b>
@@ -328,7 +359,25 @@ function MonitorStrip() {
           Seu microfone esta sendo monitorado so para voce. Ninguem na call recebe este audio.
         </span>
       </span>
-      <span className="ml-auto flex h-5 items-end gap-[3px]" aria-hidden>
+
+      {dispositivos.length > 1 ? (
+        <label className="flex items-center gap-1.5 text-[11px] text-ink-400">
+          <AetherIcon name="mic" size="sm" className="shrink-0 text-ink-500" />
+          <select
+            value={micId ?? ""}
+            onChange={(e) => trocarMic(e.target.value)}
+            className="max-w-[180px] truncate rounded-sm border border-base-700 bg-base-900 px-1.5 py-1 text-[11px] text-ink-200"
+          >
+            {dispositivos.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      <span className="flex h-5 items-end gap-[3px]" aria-hidden>
         {Array.from({ length: 16 }, (_, i) => (
           <i
             key={i}
@@ -368,6 +417,15 @@ function ParticipantCard({
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
 
   /**
+   * Nivel de audio real (0..1) para dar intensidade ao glow. `nivel * 3.2`
+   * porque voz normal fica na casa de 0,05–0,25 de RMS e `--vl` quer 0..1.
+   * `0` quando nao ha medida — ai o card cai na animacao (`.speak-glow-auto`).
+   */
+  const nivelBruto = useVoiceLevel(participant.userId);
+  const temNivel = speaking && nivelBruto > 0.012;
+  const vl = temNivel ? Math.min(1, Math.max(0.25, nivelBruto * 3.2)) : null;
+
+  /**
    * A camera de quem esta neste bloco: a propria vem do estado local, a dos
    * outros vem da sala. So desenhamos se o participante TAMBEM se anuncia com
    * a camera ligada.
@@ -396,15 +454,19 @@ function ParticipantCard({
     <div
       onContextMenu={openMenu}
       data-od-id={`peer-${participant.userId}`}
+      style={vl !== null ? ({ "--vl": vl } as React.CSSProperties) : undefined}
       className={cn(
-        "group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border bg-base-850 p-4 transition-[border-color,box-shadow,background-color,transform] duration-200",
+        "group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border bg-base-850 p-4 transition-[border-color,background-color,transform] duration-200",
         compact ? "aspect-square w-32 shrink-0 gap-1.5 p-2" : "aspect-[4/3]",
         !isSelf && "cursor-context-menu",
         !compact && "hover:-translate-y-px",
         isTesting
           ? "border-signal-isolate/50 bg-signal-isolate/[0.05] isolate-ring"
           : speaking
-            ? "border-accent-500/55 bg-accent-500/[0.06] speaking-ring"
+            ? cn(
+                "border-accent-500/55 bg-accent-500/[0.06] speak-glow",
+                !temNivel && "speak-glow-auto",
+              )
             : "border-base-700",
       )}
     >

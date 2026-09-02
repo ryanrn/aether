@@ -79,6 +79,16 @@ export interface RemoteCamera {
 export interface VoiceRoomCallbacks {
   /** o proprio usuario comecou/parou de falar — segue para o nosso gateway */
   onSpeakingChange: (speaking: boolean) => void;
+  /**
+   * Nivel de audio por participante (0..1), ~11x/s. So para MODULAR o glow de
+   * fala — quem decide "esta falando" continua sendo `onSpeakingChange` (proprio)
+   * e o gateway (dos outros). Chave = identidade LiveKit = userId.
+   *
+   * O proprio nivel vem do analisador local (RMS da faixa publicada); o dos
+   * outros vem de `RemoteParticipant.audioLevel` do SDK. Se algum vier 0, o
+   * card cai na animacao `aether-breathe` — o glow nunca some por causa disto.
+   */
+  onAudioLevels?: (levels: Record<string, number>) => void;
   onConnectionChange: (connected: boolean) => void;
   /** alguem comecou ou parou de compartilhar tela na sala */
   onScreenSharesChange: (shares: RemoteScreenShare[]) => void;
@@ -129,6 +139,13 @@ export interface VoiceRoomHandle {
    * O SDK reaplica o processador na reconexao sozinho.
    */
   definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
+  /**
+   * Reaplica as constraints NATIVAS do microfone (supressao nativa, eco, ganho)
+   * lendo a preferencia atual — `restartTrack` re-adquire a faixa com as novas
+   * constraints e a republica, sem derrubar ninguem. `false` se nao houver
+   * faixa. Em falha, tenta reabrir o microfone e devolve `false`.
+   */
+  reaplicarTratamentoNativo: () => Promise<boolean>;
   /** para ONDE tocamos o audio recebido — mic dos outros e som de tela */
   setOutputDevice: (deviceId: string) => Promise<void>;
   /**
@@ -515,6 +532,10 @@ export async function connectVoiceRoom({
     setMudo: (mudo: boolean) => void;
   }
   let detectorLocal: DetectorLocal | null = null;
+  /** ultimo RMS medido da propria faixa (0..1); alimenta o glow do proprio card */
+  let ultimoRmsLocal = 0;
+  /** poll que empurra os niveis de audio de todos para o glow */
+  let nivelTimer: ReturnType<typeof setInterval> | null = null;
 
   function faixaDoMicrofone(): MediaStreamTrack | null {
     return (
@@ -535,13 +556,19 @@ export async function connectVoiceRoom({
       let mudo = false;
       // ~40 leituras/s: o ataque parece instantaneo e o custo e desprezivel.
       const timer = setInterval(() => {
-        if (mudo) return;
-        gate.push(analyser.rms(), performance.now());
+        if (mudo) {
+          ultimoRmsLocal = 0;
+          return;
+        }
+        const rms = analyser.rms();
+        ultimoRmsLocal = rms;
+        gate.push(rms, performance.now());
       }, 25);
 
       detectorLocal = {
         stop: () => {
           clearInterval(timer);
+          ultimoRmsLocal = 0;
           analyser.close();
           gate.silence();
         },
@@ -633,6 +660,23 @@ export async function connectVoiceRoom({
     }
   }
 
+  /**
+   * Empurra os niveis de audio (~11x/s) so quando alguem escuta — se
+   * `onAudioLevels` nao foi passado, nao ha o que fazer. Barato: le campos que
+   * o SDK ja mantem.
+   */
+  if (callbacks.onAudioLevels) {
+    nivelTimer = setInterval(() => {
+      const levels: Record<string, number> = {
+        [room.localParticipant.identity]: ultimoRmsLocal,
+      };
+      for (const p of room.remoteParticipants.values()) {
+        levels[p.identity] = p.audioLevel ?? 0;
+      }
+      callbacks.onAudioLevels?.(levels);
+    }, 90);
+  }
+
   return {
     async setMicrophoneEnabled(enabled) {
       if (!canPublish) return;
@@ -660,6 +704,32 @@ export async function connectVoiceRoom({
 
     async definirSupressaoAvancada(ligado) {
       return alternarFiltroDeRuido(room, ligado);
+    },
+
+    async reaplicarTratamentoNativo() {
+      const faixa = room.localParticipant.getTrackPublication(
+        Track.Source.Microphone,
+      )?.audioTrack;
+      if (!faixa) return false;
+      const constraints = paraConstraints(lerTratamentoDeAudio());
+      try {
+        await faixa.restartTrack(constraints);
+        // A faixa e outra agora — o analisador reaponta.
+        detectorLocal?.retarget();
+        mediaLog("tratamento nativo reaplicado", constraints);
+        return true;
+      } catch (erro) {
+        mediaLog("falha ao reaplicar o tratamento nativo", erro);
+        // `restartTrack` pode ter parado a faixa antiga no meio do caminho.
+        await room.localParticipant
+          .setMicrophoneEnabled(true)
+          .catch(() => undefined);
+        detectorLocal?.retarget();
+        callbacks.onError(
+          "Nao consegui aplicar a mudanca de audio sem reconectar. O microfone continua ligado; se ficou mudo, saia e entre de novo.",
+        );
+        return false;
+      }
     },
 
     setDeafened(next) {
@@ -1112,6 +1182,8 @@ export async function connectVoiceRoom({
     async disconnect() {
       detectorLocal?.stop();
       detectorLocal = null;
+      if (nivelTimer) clearInterval(nivelTimer);
+      nivelTimer = null;
       // Antes de tudo: a thread de captura no processo principal nao pode
       // sobreviver a sala que a motivou.
       await pararSomNativo();

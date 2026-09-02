@@ -6,6 +6,7 @@ import type {
   PublicChannel,
   PublicMember,
   PublicRole,
+  UserStatus,
   ViewerContext,
 } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,9 +18,14 @@ import {
 } from "@/components/profile/user-activity-card";
 import { canManageRole, viewerCan } from "@/lib/permissions";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { cn } from "@/lib/utils";
 
 /**
- * Painel de membros agrupado por cargo (estilo TeamSpeak/Discord).
+ * Painel de membros.
+ *
+ * "Na chamada" no topo, depois os grupos por cargo (estilo TeamSpeak). Quem
+ * esta em voz aparece nos dois — a lista por cargo continua sendo a identidade
+ * do painel, "Na chamada" e um atalho para ver quem esta na conversa agora.
  *
  * A presenca vem do gateway, nao do banco: `user.status` gravado e apenas a
  * preferencia do usuario (ele escolheu DND). Quem esta de fato conectado agora
@@ -54,6 +60,11 @@ export function MemberPanel({
   // O registro inteiro em vez de um seletor por membro: hook dentro do map
   // quebraria as regras dos hooks, e a referencia so muda quando a presenca muda.
   const presence = useRealtimeStore((state) => state.presence);
+  /**
+   * Todos os participantes de voz do servidor ABERTO — o mapa `voice` ja e so
+   * deste servidor (troca de servidor troca o mapa). Chave = userId.
+   */
+  const voice = useRealtimeStore((state) => state.voice);
   const canManageMembers = viewerCan(viewer, "MANAGE_ROLES");
 
   const groups = new Map<string, { color: string; members: PublicMember[] }>();
@@ -66,22 +77,55 @@ export function MemberPanel({
     groups.set(key, group);
   }
 
+  /**
+   * Membros em voz, na ordem em que aparecem em `members` (ja vem ordenado).
+   * Quem fala primeiro nao "sobe" — a lista pular a cada palavra seria ruido.
+   */
+  const naChamada = members.filter((m) => voice[m.user.id]?.channelId != null);
+
+  function abrirCartao(member: PublicMember, event: React.MouseEvent) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setOpenCard((current) =>
+      current?.member.id === member.id
+        ? null
+        : { member, anchor: { x: rect.left - 280, y: rect.top } },
+    );
+  }
+
   return (
     <>
       <aside className="hidden w-[200px] shrink-0 flex-col border-l border-base-800 bg-base-900 lg:flex">
         <div className="flex-1 overflow-y-auto px-2 py-3">
+          {naChamada.length > 0 ? (
+            <section className="mb-4">
+              <h3 className="flex items-center gap-1.5 px-1.5 pb-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-accent-300">
+                <AetherIcon name="voice" size="sm" className="h-3 w-3" />
+                Na chamada — {naChamada.length}
+              </h3>
+              <ul className="flex flex-col gap-0.5">
+                {naChamada.map((member) => (
+                  <MemberRow
+                    key={`voz-${member.id}`}
+                    member={member}
+                    color={undefined}
+                    isOwner={member.user.id === ownerId}
+                    editable={false}
+                    presence={presence[member.user.id] ?? "OFFLINE"}
+                    voiceState={voice[member.user.id]}
+                    onOpenCard={abrirCartao}
+                    onEditRoles={() => setEditing(member)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           {[...groups.entries()].map(([name, group]) => (
             <section key={name} className="mb-4">
               <h3
                 /*
                   Mesma escala que os cabecalhos de categoria da arvore
-                  passaram a usar. Os dois paineis ficam lado a lado, e
-                  titulos de tamanhos diferentes nas duas colunas fazem a tela
-                  parecer montada por duas pessoas.
-
-                  A COR continua vindo do cargo (`style`), e nao de uma classe:
-                  e ela que diz de qual cargo e o grupo, e essa informacao nao
-                  pode ser trocada por uma decisao de estilo.
+                  passaram a usar. A COR continua vindo do cargo (`style`).
                 */
                 className="px-1.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em]"
                 style={{ color: group.color }}
@@ -89,99 +133,23 @@ export function MemberPanel({
                 {name} — {group.members.length}
               </h3>
               <ul className="flex flex-col gap-0.5">
-                {group.members.map((member) => {
-                  const isOwnerMember = member.user.id === ownerId;
-                  const editable =
-                    canManageMembers &&
-                    !isOwnerMember &&
-                    member.id !== viewer.memberId;
-
-                  return (
-                    <li key={member.id}>
-                      {/*
-                        `rounded-md` e mais respiro, como a linha de canal.
-                        Este painel e a mesma lista vertical de nomes que a
-                        arvore, do outro lado da tela — se um dos dois tem
-                        cantos redondos e o outro nao, a diferenca salta.
-                      */}
-                      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-base-850">
-                        {/*
-                          O nome inteiro abre o cartao de atividade. O cartao
-                          sai para a ESQUERDA: este painel encosta na borda
-                          direita da janela, e ancorar nela jogaria o cartao
-                          para fora da tela — o proprio cartao corrige, mas
-                          corrigido ele cobriria o nome que foi clicado.
-                        */}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            const rect =
-                              event.currentTarget.getBoundingClientRect();
-                            setOpenCard((current) =>
-                              current?.member.id === member.id
-                                ? null
-                                : {
-                                    member,
-                                    anchor: { x: rect.left - 280, y: rect.top },
-                                  },
-                            );
-                          }}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <Avatar
-                            userId={member.user.id}
-                            name={member.nickname ?? member.user.displayName}
-                            src={member.user.avatarUrl}
-                            moldura={member.user.moldura}
-                            status={presence[member.user.id] ?? "OFFLINE"}
-                            size="xs"
-                          />
-                          {/*
-                            A cor do cargo vai no NOME, nunca no fundo do
-                            avatar: fundo colorido inteiro compete com tudo na
-                            coluna e vira adesivo.
-                          */}
-                          <span
-                            className="min-w-0 flex-1 truncate text-[12px] font-medium"
-                            style={{ color: group.color }}
-                          >
-                            {member.nickname ?? member.user.displayName}
-                          </span>
-                          {/*
-                            O selo vem ANTES da coroa de dono, e como pilula
-                            com borda: o simbolo do plano PRO tambem e uma
-                            coroa, e dois icones iguais lado a lado nao se
-                            distinguem. A pilula separa os dois papeis.
-                          */}
-                          <SeloPlano
-                            tier={member.user.plano}
-                            tamanho="sm"
-                          />
-                        </button>
-
-                        {isOwnerMember ? (
-                          <AetherIcon
-                            name="crown"
-                            size="sm"
-                            className="h-3 w-3 shrink-0 text-signal-idle"
-                            aria-label="Dono do servidor"
-                          />
-                        ) : null}
-
-                        {editable ? (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(member)}
-                            title="Gerenciar cargos"
-                            className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/member:opacity-100"
-                          >
-                            <AetherIcon name="shield" size="sm" className="h-3 w-3" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </li>
-                  );
-                })}
+                {group.members.map((member) => (
+                  <MemberRow
+                    key={member.id}
+                    member={member}
+                    color={group.color}
+                    isOwner={member.user.id === ownerId}
+                    editable={
+                      canManageMembers &&
+                      member.user.id !== ownerId &&
+                      member.id !== viewer.memberId
+                    }
+                    presence={presence[member.user.id] ?? "OFFLINE"}
+                    voiceState={undefined}
+                    onOpenCard={abrirCartao}
+                    onEditRoles={() => setEditing(member)}
+                  />
+                ))}
               </ul>
             </section>
           ))}
@@ -211,5 +179,107 @@ export function MemberPanel({
         />
       ) : null}
     </>
+  );
+}
+
+/** Uma linha do painel. `voiceState` presente => mostra o icone de estado de voz. */
+function MemberRow({
+  member,
+  color,
+  isOwner,
+  editable,
+  presence,
+  voiceState,
+  onOpenCard,
+  onEditRoles,
+}: {
+  member: PublicMember;
+  /** cor do cargo; `undefined` no grupo "Na chamada" (sem cargo no titulo) */
+  color: string | undefined;
+  isOwner: boolean;
+  editable: boolean;
+  presence: UserStatus;
+  voiceState:
+    | { speaking: boolean; selfMuted: boolean; serverMuted: boolean }
+    | undefined;
+  onOpenCard: (member: PublicMember, event: React.MouseEvent) => void;
+  onEditRoles: () => void;
+}) {
+  const mudo = voiceState
+    ? voiceState.selfMuted || voiceState.serverMuted
+    : false;
+  const falando = voiceState ? voiceState.speaking && !mudo : false;
+
+  return (
+    <li>
+      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-base-850">
+        <button
+          type="button"
+          onClick={(event) => onOpenCard(member, event)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <Avatar
+            userId={member.user.id}
+            name={member.nickname ?? member.user.displayName}
+            src={member.user.avatarUrl}
+            moldura={member.user.moldura}
+            status={presence}
+            size="xs"
+            speaking={falando}
+          />
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-[12px] font-medium",
+              !color && (falando ? "text-accent-300" : "text-ink-200"),
+              mudo && "text-ink-500",
+            )}
+            style={color ? { color } : undefined}
+          >
+            {member.nickname ?? member.user.displayName}
+          </span>
+          <SeloPlano tier={member.user.plano} tamanho="sm" />
+        </button>
+
+        {voiceState ? (
+          <span className="shrink-0 text-ink-500">
+            {mudo ? (
+              <AetherIcon
+                name="mic-off"
+                size="sm"
+                className="h-3 w-3 text-signal-dnd"
+                aria-label="Microfone mudo"
+              />
+            ) : falando ? (
+              <AetherIcon
+                name="volume"
+                size="sm"
+                className="h-3 w-3 text-accent-400"
+                aria-label="Falando"
+              />
+            ) : null}
+          </span>
+        ) : null}
+
+        {isOwner ? (
+          <AetherIcon
+            name="crown"
+            size="sm"
+            className="h-3 w-3 shrink-0 text-signal-idle"
+            aria-label="Dono do servidor"
+          />
+        ) : null}
+
+        {editable ? (
+          <button
+            type="button"
+            onClick={onEditRoles}
+            title="Gerenciar cargos"
+            className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/member:opacity-100"
+          >
+            <AetherIcon name="shield" size="sm" className="h-3 w-3" />
+          </button>
+        ) : null}
+      </div>
+    </li>
   );
 }

@@ -279,6 +279,25 @@
   }
 
   /*
+   * O glow de fala em duas pecas, para o card de participante poder ser
+   * dirigido pelo nivel REAL do microfone:
+   *  - `.speak-glow`        so a sombra; `--vl` vem de `style` inline (RMS ao vivo).
+   *  - `.speak-glow-auto`   quando nao ha medida — `aether-breathe` varia `--vl` sozinho.
+   */
+  .speak-glow {
+    box-shadow: var(--glow-speak);
+  }
+  .speak-glow-auto {
+    animation: aether-breathe 2.6s var(--ease-aether) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .speak-glow-auto {
+      animation: none;
+      --vl: 0.7;
+    }
+  }
+
+  /*
    * Halo de ISOLAMENTO — mesmo lugar do glow de fala, cor de `signal-isolate`.
    * Usado no card de quem esta testando o microfone.
    */

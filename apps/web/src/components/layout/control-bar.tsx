@@ -31,6 +31,7 @@ import {
 import {
   lerTratamentoDeAudio,
   salvarTratamentoDeAudio,
+  type TratamentoDeAudio,
 } from "@/lib/voice/audio-prefs";
 import {
   canCaptureScreen,
@@ -103,12 +104,16 @@ export function ControlBar({
   const [presetOpen, setPresetOpen] = useState(false);
   const [noiseOpen, setNoiseOpen] = useState(false);
   /**
-   * Supressao avancada (RNNoise). A preferencia mora no `localStorage`
-   * (`audio-prefs`) e o `room.ts` a respeita ao entrar; o botao daqui liga/
-   * desliga o processador AO VIVO, sem reabrir o microfone.
+   * Tratamento do microfone. A preferencia mora no `localStorage`
+   * (`audio-prefs`) e o `room.ts` a respeita ao entrar; o popover do dock
+   * aplica AO VIVO: RNNoise via `setProcessor`, as tres nativas via
+   * `restartTrack`. Nascendo `null` ate ler — sem piscar um estado que pode
+   * nao ser o da pessoa.
    */
-  const [rnnoise, setRnnoise] = useState(false);
-  useEffect(() => setRnnoise(lerTratamentoDeAudio().rnnoise), []);
+  const [tratamento, setTratamento] = useState<TratamentoDeAudio | null>(null);
+  const [reaplicandoNativo, setReaplicandoNativo] = useState(false);
+  useEffect(() => setTratamento(lerTratamentoDeAudio()), []);
+  const rnnoise = tratamento?.rnnoise ?? false;
   const micTest = useMicTest();
   const setMicTest = useRealtimeStore((state) => state.setMicTest);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -241,14 +246,30 @@ export function ControlBar({
 
   /**
    * Liga/desliga o RNNoise. Grava a preferencia SEMPRE (vale na proxima
-   * conexao) e, se houver call, aplica na faixa ja publicada. Se o `room`
-   * recusar (sem faixa), a preferencia fica guardada mesmo assim.
+   * conexao) e, se houver call, aplica na faixa ja publicada.
    */
   async function alternarRuido(ligar: boolean) {
-    setRnnoise(ligar);
-    const t = lerTratamentoDeAudio();
-    salvarTratamentoDeAudio({ ...t, rnnoise: ligar });
+    const novo = { ...lerTratamentoDeAudio(), rnnoise: ligar };
+    setTratamento(novo);
+    salvarTratamentoDeAudio(novo);
     await roomControls?.definirSupressaoAvancada(ligar);
+  }
+
+  /**
+   * Alterna uma das TRES nativas (supressao nativa, eco, ganho). Grava e, se
+   * houver call, `restartTrack` re-adquire o mic com a constraint nova sem
+   * derrubar ninguem. Trava o popover durante a troca.
+   */
+  async function alternarNativo(campo: "supressaoDeRuido" | "cancelamentoDeEco" | "ganhoAutomatico") {
+    if (reaplicandoNativo) return;
+    const atual = lerTratamentoDeAudio();
+    const novo = { ...atual, [campo]: !atual[campo] };
+    setTratamento(novo);
+    salvarTratamentoDeAudio(novo);
+    if (!roomControls) return;
+    setReaplicandoNativo(true);
+    await roomControls.reaplicarTratamentoNativo();
+    setReaplicandoNativo(false);
   }
 
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
@@ -720,9 +741,9 @@ export function ControlBar({
                     onClick={() => setNoiseOpen(false)}
                     className="fixed inset-0 z-40 cursor-default"
                   />
-                  <div className="absolute bottom-11 left-1/2 z-50 w-[300px] -translate-x-1/2 animate-rise rounded-lg border border-base-700 bg-base-750 p-4 shadow-[var(--shadow-pop)]">
+                  <div className="absolute bottom-11 left-1/2 z-50 w-[320px] -translate-x-1/2 animate-rise rounded-lg border border-base-700 bg-base-750 p-4 shadow-[var(--shadow-pop)]">
                     <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
-                      Supressao de ruido
+                      Tratamento do microfone
                     </p>
 
                     <label className="flex cursor-pointer items-start gap-3 rounded-md border border-base-700 bg-base-850 p-3">
@@ -734,9 +755,9 @@ export function ControlBar({
                           Modelo de IA (RNNoise)
                         </span>
                         <span className="block text-[11px] leading-snug text-ink-500">
-                          Roda na sua maquina, alem da supressao nativa do
-                          navegador. Corta teclado, ventilador e ar-condicionado
-                          que a nativa deixa passar.
+                          Roda na sua maquina, alem da supressao nativa. Corta
+                          teclado, ventilador e ar-condicionado que a nativa
+                          deixa passar. Baixa ~1,9 MB na primeira vez.
                         </span>
                       </span>
                       <input
@@ -746,6 +767,45 @@ export function ControlBar({
                         className="mt-0.5 accent-accent-500"
                       />
                     </label>
+
+                    {/*
+                      As tres nativas. Vinham so em Configuracoes porque muda-las
+                      exige re-adquirir o microfone; agora o `restartTrack` faz
+                      isso no meio da call sem derrubar ninguem. `reaplicandoNativo`
+                      trava as tres durante a troca.
+                    */}
+                    <div className="mt-2 space-y-0.5 rounded-md border border-base-700 bg-base-850 p-1">
+                      {tratamento
+                        ? (
+                            [
+                              ["supressaoDeRuido", "Supressao de ruido (nativa)"],
+                              ["cancelamentoDeEco", "Cancelamento de eco"],
+                              ["ganhoAutomatico", "Ganho automatico"],
+                            ] as const
+                          ).map(([campo, rotulo]) => (
+                            <label
+                              key={campo}
+                              className={cn(
+                                "flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-1.5 text-[12px] text-ink-200 hover:bg-base-800",
+                                reaplicandoNativo && "cursor-wait opacity-60",
+                              )}
+                            >
+                              {rotulo}
+                              <input
+                                type="checkbox"
+                                checked={tratamento[campo]}
+                                disabled={reaplicandoNativo}
+                                onChange={() => void alternarNativo(campo)}
+                                className="accent-accent-500"
+                              />
+                            </label>
+                          ))
+                        : null}
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-snug text-ink-500">
+                      Desligue as tres se voce toca, canta ou passa uma mesa de
+                      som pelo microfone — elas foram feitas para favorecer fala.
+                    </p>
 
                     <div className="mt-3 flex items-center gap-2 border-t border-base-700 pt-3">
                       <button

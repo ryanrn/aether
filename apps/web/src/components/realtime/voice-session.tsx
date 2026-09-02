@@ -64,6 +64,8 @@ export function VoiceSession() {
           // em que nao entrou, e o SFU so conhece a propria sala.
           socket.emit("voice:speaking", speaking);
         },
+        onAudioLevels: (levels) =>
+          useRealtimeStore.getState().setVoiceLevels(levels),
         onConnectionChange: (connected) => setMediaConnected(connected),
         onScreenSharesChange: (shares) => setScreenShares(shares),
         onCamerasChange: (cameras) => setCameras(cameras),
@@ -98,6 +100,7 @@ export function VoiceSession() {
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
           definirSupressaoAvancada: (ligado) =>
             handle.definirSupressaoAvancada(ligado),
+          reaplicarTratamentoNativo: () => handle.reaplicarTratamentoNativo(),
           /**
            * A faixa local vai para a store DEPOIS de a camera ligar de fato.
            * Guardar antes deixaria o proprio bloco tentando desenhar uma faixa

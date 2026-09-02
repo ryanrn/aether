@@ -100,6 +100,15 @@ interface RealtimeState {
   listening: Record<string, MusicActivity>;
   voice: Record<string, VoiceParticipant>;
   /**
+   * Nivel de audio por usuario (0..1), atualizado ~11x/s enquanto voce esta na
+   * call. So MODULA o glow de fala — "quem esta falando" continua em
+   * `voice[id].speaking`. Mapa proprio, e nao campo em `voice`, para nao
+   * re-renderizar toda a arvore de participantes a cada leitura: os cards leem
+   * pelo seletor `useVoiceLevel(id)`, um numero, e so acordam se o SEU numero
+   * mudar.
+   */
+  voiceLevels: Record<string, number>;
+  /**
    * A MINHA ocupacao de voz — separada do mapa acima, e nao derivada dele.
    *
    * O mapa `voice` e do servidor que esta ABERTO na tela: trocar de servidor
@@ -178,6 +187,11 @@ interface RealtimeState {
      */
     definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
     /**
+     * Reaplica as constraints nativas do mic (supressao nativa, eco, ganho)
+     * lendo a preferencia atual. `false` se nao houver faixa ou se falhar.
+     */
+    reaplicarTratamentoNativo: () => Promise<boolean>;
+    /**
      * Assina as estatisticas de conexao (ping, perda, regiao). Nada e medido
      * enquanto ninguem assina — o painel so monta quando aberto. Devolve o
      * cancelador.
@@ -220,6 +234,7 @@ interface RealtimeState {
 
   syncVoice: (participants: VoiceParticipant[]) => void;
   updateVoice: (participant: VoiceParticipant) => void;
+  setVoiceLevels: (levels: Record<string, number>) => void;
   setMedia: (media: MediaGrant | null) => void;
   setMediaConnected: (connected: boolean) => void;
   setScreenShares: (shares: RemoteScreenShare[]) => void;
@@ -282,6 +297,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   activity: {},
   listening: {},
   voice: {},
+  voiceLevels: {},
   selfVoice: null,
   media: null,
   mediaConnected: false,
@@ -326,6 +342,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
              * o que fazia trocar de servidor derrubar a call.
              */
             voice: {},
+            voiceLevels: {},
             messages: {},
             history: {},
           },
@@ -344,6 +361,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       activity: {},
       listening: {},
       voice: {},
+      voiceLevels: {},
       // O socket caiu: a chamada caiu junto, e ai limpar a MINHA voz esta
       // certo — diferente de so ter trocado de servidor.
       selfVoice: null,
@@ -475,6 +493,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
 
   setMedia: (media) => set({ media }),
   setMediaConnected: (mediaConnected) => set({ mediaConnected }),
+  setVoiceLevels: (voiceLevels) => set({ voiceLevels }),
   setCameras: (cameras) => set({ cameras }),
   setLocalCamera: (localCameraTrack) => set({ localCameraTrack }),
 
@@ -767,4 +786,15 @@ export function useMediaConnected(): boolean {
  */
 export function useSelfVoice(): VoiceParticipant | null {
   return useRealtimeStore((state) => state.selfVoice);
+}
+
+/**
+ * Nivel de audio de um usuario (0..1), para modular o glow de fala.
+ *
+ * Devolve um numero: o card so re-renderiza quando O SEU nivel muda, e nao a
+ * cada tick do poll. `0` quando nao ha medida — o card cai na animacao
+ * `aether-breathe`.
+ */
+export function useVoiceLevel(userId: string): number {
+  return useRealtimeStore((state) => state.voiceLevels[userId] ?? 0);
 }
