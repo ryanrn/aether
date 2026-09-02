@@ -304,10 +304,17 @@ async function main() {
       denied?.ok === true,
       JSON.stringify(denied),
     );
+    /**
+     * A checagem e sobre o MICROFONE especificamente, nao sobre o `canPublish`
+     * generico: o cargo padrao ganhou CAMERA depois que este script nasceu, e
+     * `canPublish` do LiveKit e so "publica ALGUMA fonte" — fica `true` pela
+     * camera. O que SPEAK controla e a faixa de microfone, e e isso que tem de
+     * sumir de `canPublishSources`.
+     */
     check(
-      "sem SPEAK, o token NAO permite publicar",
-      deniedGrant !== null && deniedGrant.canPublish !== true,
-      JSON.stringify(deniedGrant?.canPublish),
+      "sem SPEAK, o token NAO permite publicar microfone",
+      deniedGrant !== null && !sources(deniedGrant).includes("microphone"),
+      JSON.stringify(deniedGrant?.canPublishSources),
     );
     check(
       "sem SCREEN_SHARE, a fonte de tela nao esta no token",

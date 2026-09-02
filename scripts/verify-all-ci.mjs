@@ -63,13 +63,19 @@ const LIVEKIT = {
   LIVEKIT_API_SECRET: "secret",
 };
 
+/**
+ * O gateway roda com o estado EM MEMORIA (sem `REDIS_URL`): e a config em que
+ * as phases 3-7b/6 sempre foram verificadas, e o estado no Redis (7c-2) tem
+ * cobertura propria e direta no `verify-gateway-redis.mts`. Misturar os dois
+ * aqui so acrescentaria latencia de rede a assercoes sensiveis a tempo.
+ */
 const gatewayEnv = {
   ...process.env,
   ...LIVEKIT,
   DATABASE_URL: process.env.DATABASE_URL,
   DIRECT_URL: process.env.DATABASE_URL,
   AUTH_SECRET: authSecret,
-  REDIS_URL: process.env.REDIS_URL,
+  REDIS_URL: "",
   REALTIME_PORT: "4000",
   NEXT_PUBLIC_APP_URL: WEB_URL,
   SESSION_GUARD_INTERVAL_MS: "3000",
