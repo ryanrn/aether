@@ -12,14 +12,15 @@ import { getSession } from "@/server/auth/session";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
+  // `disponivel` (a integracao esta configurada?) nao e sensivel e nao depende
+  // de sessao — ajuda a diagnosticar "a secao nao aparece".
+  const disponivel = spotifyConfigurado();
+
   const sessao = await getSession();
   if (!sessao) {
-    return NextResponse.json({ error: "Nao encontrado" }, { status: 404 });
+    return NextResponse.json({ disponivel, conta: null });
   }
 
   const conta = await estadoSpotify(sessao.user.id);
-  return NextResponse.json({
-    disponivel: spotifyConfigurado(),
-    conta, // null quando nao conectou
-  });
+  return NextResponse.json({ disponivel, conta });
 }
