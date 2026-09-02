@@ -3078,6 +3078,24 @@ SFU real nunca entra no caminho).
   container do proxy ficar instavel, esse script e o unico que cai junto — os
   outros nao dependem dele.
 
+### Falha conhecida: `verify-phase5` (2 assercoes)
+
+O job de integracao roda o `verify-phase5`, mostra a saida inteira, mas **nao
+derruba a build por causa dele** (lista `CONHECIDAS` em `verify-all-ci.mjs`).
+Duas assercoes falham, as duas sobre um canal de voz com overwrite de
+`deny: SCREEN_SHARE` no cargo padrao:
+
+- "sem SCREEN_SHARE, o indicador NAO acende nem mentindo pelo socket"
+- "trocar de canal encerra a transmissao"
+
+**O que se sabe:** o MESMO overwrite de `SCREEN_SHARE` e barrado corretamente
+no token do `verify-phase4` ("sem SCREEN_SHARE, a fonte de tela nao esta no
+token" passa) — entao `getChannelPermissions` calcula certo, e o defeito esta
+no caminho do handler `voice:streaming` (ou na leitura de `voiceLocation` logo
+antes dele), nao no calculo de permissao. O script nunca tinha rodado em
+ambiente automatizado (nao ha contagem dele no README nem no DEPLOY), entao
+nao da para dizer se e regressao ou se sempre foi assim. Em investigacao.
+
 ### Duas coisas que a primeira rodada revelou
 
 1. **O `engines` mentia.** Dizia `>=20.11`, e o job foi fixado nesse piso de
