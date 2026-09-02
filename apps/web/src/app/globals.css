@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 /*
+ * `--vl` (voice level 0..1) registrado como propriedade tipada: sem isto o
+ * navegador nao INTERPOLA o valor e a animacao `aether-breathe` saltaria de
+ * 0.5 para 0.9. Com o registro, o glow respira suave.
+ */
+@property --vl {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.6;
+}
+
+/*
  * Design system do produto.
  * Identidade propria: grafite frio azulado + acento turquesa, bordas discretas,
  * raios curtos.
@@ -15,22 +26,24 @@
  */
 @theme {
   /*
-   * Superficies — Discord / Fluxer Dark Mode High-Contrast.
+   * Superficies — grafite frio, profundidade por ELEVACAO (nao por borda).
+   * Releitura do redesign OpenDesign: contraste maior entre trilho / sidebar /
+   * palco / membros do que a versao anterior (Discord-like) dava.
    *
-   * 950: O fundo ultra-profundo (#111214) para trilho de servidores e bordas extremas.
-   * 900: Sidebar de canais, lista de DMs e painel de usuario (#1e1f22).
-   * 850: Hover states de canais, itens de navegacao e modais internos (#232428).
-   * 800: Painel principal de mensagens / chat / palco de audio (#2b2d31).
-   * 750: Caixas de texto, inputs de busca e cards elevados (#313338).
-   * 700: Bordas primarias, divisores e botoes secundarios (#383a40).
-   * 600: Bordas de destaque, selecao e barras de rolagem (#4e5058).
+   * 950: Fundo ultra-profundo — trilho de servidores, pocos de contraste (#0d0e11).
+   * 900: Sidebars, lista de DMs, painel de usuario (#15161a).
+   * 850: Hover de item, cabecalhos de painel, modais internos (#1b1d22).
+   * 800: Palco principal — chat / voz (#22242a).
+   * 750: Inputs, popovers, cards elevados (#2a2d34).
+   * 700: Bordas primarias, divisores, botoes secundarios (#383a40).
+   * 600: Bordas de destaque, selecao, barras de rolagem (#4e5058).
    * 500: Elementos de alto relevo e foco sutil (#6d6f78).
    */
-  --color-base-950: #111214;
-  --color-base-900: #1e1f22;
-  --color-base-850: #232428;
-  --color-base-800: #2b2d31;
-  --color-base-750: #313338;
+  --color-base-950: #0d0e11;
+  --color-base-900: #15161a;
+  --color-base-850: #1b1d22;
+  --color-base-800: #22242a;
+  --color-base-750: #2a2d34;
   --color-base-700: #383a40;
   --color-base-600: #4e5058;
   --color-base-500: #6d6f78;
@@ -53,37 +66,78 @@
   --color-ink-600: #45474f;
 
   /*
-   * Acento de Identidade: Discord Blurple & Electric Indigo (#5865f2).
+   * Acento de Identidade: AETHER Blue (#2f88ff) — um azul eletrico, distinto do
+   * blurple do Discord. E o UNICO accent do produto: voz ativa, glow de fala,
+   * estados selecionado/ativo, foco, indicadores, links. Hover/pressed derivam
+   * dele; nao ha hex de accent solto pelos componentes.
+   *
+   * 300: texto sobre azul-fantasma, estados leves.
+   * 400: hover (mais claro).
+   * 500: base — preenchimento de botao ativo.
+   * 600: bordas de destaque, badges, pressed.
+   * 700: pressed profundo / faixas.
    */
-  --color-accent-300: #949cf7;
-  --color-accent-400: #7983f5;
-  --color-accent-500: #5865f2;
-  --color-accent-600: #4752c4;
-  --color-accent-700: #3c45a5;
+  --color-accent-300: #8fb8ff;
+  --color-accent-400: #5ea0ff;
+  --color-accent-500: #2f88ff;
+  --color-accent-600: #1f6ae0;
+  --color-accent-700: #1a56b8;
 
   /* Estados e Sinais Gamer (Online, Ausente, Ocupado/DND, Ao Vivo) */
-  --color-signal-online: #23a55a;
-  --color-signal-idle: #f0b232;
-  --color-signal-dnd: #f23f43;
+  --color-signal-online: #3ba55d;
+  --color-signal-idle: #e0a53a;
+  --color-signal-dnd: #e5484d;
   --color-signal-offline: #80848e;
-  --color-signal-live: #f23f43;
+  --color-signal-live: #e5484d;
+
+  /*
+   * ISOLAMENTO — vermelho mais quente que o `dnd`, reservado ao teste de
+   * microfone: "ninguem na call recebe este audio". Separado de proposito para
+   * "mudo" e "monitorando" nao dividirem a mesma cor.
+   */
+  --color-signal-isolate: #ff4d51;
+  --color-signal-isolate-ink: #ff8a8d;
 
   --font-sans: var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-brand: var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
 
   /*
-   * Raios com proporcoes limpas e modernas.
+   * Raios — escala do redesign (5 / 8 / 11 / 15 / 999).
    */
   --altura-barra: env(titlebar-area-height, 36px);
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 15px;
+  --radius-pill: 999px;
 
   --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -4px rgb(0 0 0 / 0.45);
   --shadow-pop: 0 8px 32px -4px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+
+  /*
+   * Movimento — 90 / 170 / 260ms com a mesma curva. `prefers-reduced-motion`
+   * ja e neutralizado na @layer base mais abaixo.
+   */
+  --ease-aether: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 90ms;
+  --dur-2: 170ms;
+  --dur-3: 260ms;
+
+  /*
+   * Glow de fala — anel fino + halo externo + luz interna na superficie, tudo
+   * modulado por `--vl` (voice level 0..1). Em runtime o detector local ajusta
+   * `--vl` no card para a intensidade acompanhar o RMS do microfone; parado, a
+   * animacao `aether-breathe` varia sozinha.
+   */
+  --vl: 0.6;
+  --glow-speak:
+    0 0 0 calc(1px + var(--vl) * 1.6px)
+      color-mix(in oklch, var(--color-accent-500) calc(46% + var(--vl) * 32%), transparent),
+    0 0 calc(14px + var(--vl) * 26px) calc(-4px + var(--vl) * 2px)
+      color-mix(in oklch, var(--color-accent-500) calc(30% + var(--vl) * 30%), transparent),
+    inset 0 0 28px -10px color-mix(in oklch, var(--color-accent-500) 40%, transparent);
 }
 
 @layer base {
@@ -208,9 +262,20 @@
       0 0 24px -8px var(--color-accent-500);
   }
 
-  /* anel de "falando" — fase 4 usa a mesma classe */
+  /*
+   * Anel de "falando". Usa o token `--glow-speak`, entao acompanha `--vl`
+   * quando o card o ajusta em runtime. `aether-breathe` da a respiracao sutil
+   * quando nada mexe no `--vl` de fora.
+   */
   .speaking-ring {
-    box-shadow: 0 0 0 2px var(--color-accent-500), 0 0 16px -4px var(--color-accent-400);
+    box-shadow: var(--glow-speak);
+    animation: aether-breathe 2.6s var(--ease-aether) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .speaking-ring {
+      animation: none;
+      --vl: 0.7;
+    }
   }
 
   .animate-in-fast {
@@ -222,12 +287,42 @@
   }
 }
 
+@layer components {
+  /*
+   * Icone base do conjunto AETHER (sprite em `components/ui/aether-icon.tsx`).
+   * Os <symbol> so tem os <path>; forma, traco e terminacoes vem daqui, e a
+   * COR vem do pai via `currentColor` — um `<AetherIcon>` dentro de um
+   * `text-signal-dnd` fica vermelho sem mais nada.
+   */
+  .ic {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
 @keyframes aether-fade-in {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+/* respiracao do anel de fala — `--vl` oscila quando nada o ajusta de fora */
+@keyframes aether-breathe {
+  0%,
+  100% {
+    --vl: 0.5;
+  }
+  50% {
+    --vl: 0.9;
   }
 }
 

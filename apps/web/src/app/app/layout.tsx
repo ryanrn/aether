@@ -7,6 +7,7 @@ import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
+import { AetherIconSprite } from "@/components/ui/aether-icon";
 
 /**
  * Casca do aplicativo. Roda no servidor: a lista de servidores ja chega
@@ -38,6 +39,8 @@ export default async function AppLayout({
      * Aqui em cima os dois atravessam toda navegacao dentro de `/app`.
      */
     <RealtimeProvider>
+      {/* Sprite de icones do AETHER — inline uma vez, cobre toda a area logada. */}
+      <AetherIconSprite />
       <div className="flex h-full w-full overflow-hidden bg-base-950">
         <VoiceSession />
         {/*
