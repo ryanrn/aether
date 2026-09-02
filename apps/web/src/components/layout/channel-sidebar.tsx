@@ -18,19 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  ChevronDown,
-  ChevronUp,
-  FolderPlus,
-  Hash,
-  Link2,
-  Lock,
-  Pencil,
-  Plus,
-  Settings,
-  Trash2,
-  Volume2,
-} from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type {
   ChannelPermissionMap,
   PublicCategory,
@@ -222,7 +210,7 @@ export function ChannelSidebar({
               title="Configuracoes do servidor"
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-100"
             >
-              <Settings className="h-4 w-4" />
+              <AetherIcon name="settings" />
             </Link>
           ) : null}
         </div>
@@ -271,7 +259,9 @@ export function ChannelSidebar({
                     */
                     className="flex flex-1 items-center gap-1 py-1 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 transition-colors hover:text-ink-200"
                   >
-                    <ChevronDown
+                    <AetherIcon
+                      name="chevron"
+                      size="sm"
                       className={cn(
                         "h-3 w-3 transition-transform duration-200",
                         isCollapsed && "-rotate-90",
@@ -292,7 +282,7 @@ export function ChannelSidebar({
                           })
                         }
                       >
-                        <Pencil className="h-3 w-3" />
+                        <AetherIcon name="pencil" size="sm" className="h-3 w-3" />
                       </IconAction>
                       <DeleteCategoryButton
                         serverId={serverId}
@@ -305,7 +295,7 @@ export function ChannelSidebar({
                           setChannelModal({ mode: "create", categoryId: category.id })
                         }
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <AetherIcon name="plus" size="sm" />
                       </IconAction>
                     </div>
                   ) : null}
@@ -351,7 +341,7 @@ export function ChannelSidebar({
                 onClick={() => setChannelModal({ mode: "create", categoryId: null })}
                 className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] text-ink-500 transition-colors hover:bg-base-850 hover:text-ink-200"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <AetherIcon name="plus" size="sm" />
                 Novo canal
               </button>
               <button
@@ -359,7 +349,7 @@ export function ChannelSidebar({
                 onClick={() => setCategoryModal({ mode: "create" })}
                 className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] text-ink-500 transition-colors hover:bg-base-850 hover:text-ink-200"
               >
-                <FolderPlus className="h-3.5 w-3.5" />
+                <AetherIcon name="folder-plus" size="sm" />
                 Nova categoria
               </button>
             </div>
@@ -438,7 +428,7 @@ function DeleteCategoryButton({
           setConfirmando(true);
         }}
       >
-        <Trash2 className="h-3 w-3" />
+        <AetherIcon name="trash" size="sm" className="h-3 w-3" />
       </IconAction>
 
       <ConfirmDialog
@@ -486,7 +476,11 @@ function ChannelRow({
   // Quem esta na call vem do gateway: e ele que sabe, nao o banco.
   const connected = useVoiceParticipants(channel.id);
   const unread = useUnreadCounts()[channel.id] ?? 0;
-  const Icon = channel.isPrivate ? Lock : channel.type === "VOICE" ? Volume2 : Hash;
+  const nomeIcone: AetherIconName = channel.isPrivate
+    ? "lock"
+    : channel.type === "VOICE"
+      ? "voice"
+      : "hash";
 
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");
   const canDelete = channelAllows(channelPermissions, channel.id, "DELETE_CHANNEL");
@@ -618,9 +612,11 @@ function ChannelRow({
               : "text-ink-300 hover:text-ink-100",
           )}
         >
-          <Icon
+          <AetherIcon
+            name={nomeIcone}
+            size="sm"
             className={cn(
-              "h-3.5 w-3.5 shrink-0",
+              "shrink-0",
               channel.isPrivate ? "text-signal-idle" : "text-ink-500",
               active && !channel.isPrivate && "text-accent-500",
             )}
@@ -666,7 +662,7 @@ function ChannelRow({
                     })
                   }
                 >
-                  <ChevronUp className="h-3 w-3" />
+                  <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
                 </IconAction>
                 <IconAction
                   label="Mover para baixo"
@@ -677,10 +673,10 @@ function ChannelRow({
                     })
                   }
                 >
-                  <ChevronDown className="h-3 w-3" />
+                  <AetherIcon name="chevron" size="sm" className="h-3 w-3" />
                 </IconAction>
                 <IconAction label="Editar canal" onClick={onEdit}>
-                  <Pencil className="h-3 w-3" />
+                  <AetherIcon name="pencil" size="sm" className="h-3 w-3" />
                 </IconAction>
               </>
             ) : null}
@@ -693,7 +689,7 @@ function ChannelRow({
                   setConfirmandoExclusao(true);
                 }}
               >
-                <Trash2 className="h-3 w-3" />
+                <AetherIcon name="trash" size="sm" className="h-3 w-3" />
               </IconAction>
             ) : null}
           </div>
@@ -715,7 +711,7 @@ function ChannelRow({
           do menu que nao depende de cargo, e a mais pedida.
         */}
         <ItemDoMenu
-          icone={<Link2 className="h-3.5 w-3.5" />}
+          icone={<AetherIcon name="link" size="sm" />}
           onClick={() => {
             void navigator.clipboard.writeText(
               `${window.location.origin}/app/s/${serverId}/c/${channel.id}`,
@@ -730,7 +726,7 @@ function ChannelRow({
           <>
             <SeparadorDoMenu />
             <ItemDoMenu
-              icone={<Pencil className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="pencil" size="sm" />}
               onClick={() => {
                 menu.fechar();
                 onEdit();
@@ -739,7 +735,7 @@ function ChannelRow({
               Editar canal
             </ItemDoMenu>
             <ItemDoMenu
-              icone={<ChevronUp className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="chevron" size="sm" className="rotate-180" />}
               disabled={pending}
               onClick={() => {
                 menu.fechar();
@@ -751,7 +747,7 @@ function ChannelRow({
               Mover para cima
             </ItemDoMenu>
             <ItemDoMenu
-              icone={<ChevronDown className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="chevron" size="sm" />}
               disabled={pending}
               onClick={() => {
                 menu.fechar();
@@ -770,7 +766,7 @@ function ChannelRow({
             <SeparadorDoMenu />
             <ItemDoMenu
               danger
-              icone={<Trash2 className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="trash" size="sm" />}
               disabled={pending}
               onClick={() => {
                 menu.fechar();

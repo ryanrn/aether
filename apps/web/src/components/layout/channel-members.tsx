@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Headphones, Mic, MicOff, MonitorUp, VolumeX } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
 import {
   UserActivityCard,
@@ -111,20 +111,31 @@ export function ChannelMembers({
 
             <span className="flex items-center gap-1 text-ink-500">
               {state.streaming ? (
-                <MonitorUp
+                <AetherIcon
+                  name="screen-share"
                   className="h-3 w-3 text-signal-live"
                   aria-label="Compartilhando tela"
                 />
               ) : null}
               {deafened ? (
-                <VolumeX className="h-3 w-3 text-signal-dnd" aria-label="Surdo" />
-              ) : state.serverDeafened ? (
-                <Headphones className="h-3 w-3 text-signal-dnd" />
+                <AetherIcon
+                  name="volume-off"
+                  className="h-3 w-3 text-signal-dnd"
+                  aria-label="Surdo"
+                />
               ) : null}
               {muted ? (
-                <MicOff className="h-3 w-3 text-signal-dnd" aria-label="Mutado" />
+                <AetherIcon
+                  name="mic-off"
+                  className="h-3 w-3 text-signal-dnd"
+                  aria-label="Mutado"
+                />
               ) : state.speaking ? (
-                <Mic className="h-3 w-3 text-accent-400" aria-label="Falando" />
+                <AetherIcon
+                  name="volume"
+                  className="h-3 w-3 text-accent-400"
+                  aria-label="Falando"
+                />
               ) : null}
             </span>
           </li>

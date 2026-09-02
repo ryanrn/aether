@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, VolumeX, WifiOff } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   useConnectionStatus,
   useRealtimeStore,
@@ -59,11 +59,11 @@ export function ConnectionBanner() {
       )}
     >
       {voiceError && !offline && !error ? (
-        <VolumeX className="h-3.5 w-3.5 shrink-0" />
+        <AetherIcon name="volume-off" size="sm" className="shrink-0" />
       ) : offline || error ? (
-        <WifiOff className="h-3.5 w-3.5 shrink-0" />
+        <AetherIcon name="wifi-off" size="sm" className="shrink-0" />
       ) : (
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        <AetherIcon name="loader" size="sm" className="shrink-0 animate-spin" />
       )}
 
       <span className="min-w-0 flex-1 truncate">

@@ -2,14 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  MessageSquare,
-  Mic,
-  MicOff,
-  MoveRight,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/realtime/realtime-provider";
@@ -202,7 +195,7 @@ export function VoiceMemberMenu({
         {participant.userId !== selfUserId ? (
           <MenuItem
             onClick={mandarMensagem}
-            icon={MessageSquare}
+            icon="message"
             disabled={abrindoConversa}
           >
             Mandar mensagem
@@ -240,7 +233,7 @@ export function VoiceMemberMenu({
         {canMute ? (
           <MenuItem
             onClick={() => moderate({ serverMuted: !participant.serverMuted })}
-            icon={participant.serverMuted ? Mic : MicOff}
+            icon={participant.serverMuted ? "mic" : "mic-off"}
             danger={!participant.serverMuted}
           >
             {participant.serverMuted
@@ -254,7 +247,7 @@ export function VoiceMemberMenu({
             onClick={() =>
               moderate({ serverDeafened: !participant.serverDeafened })
             }
-            icon={participant.serverDeafened ? Volume2 : VolumeX}
+            icon={participant.serverDeafened ? "volume" : "volume-off"}
             danger={!participant.serverDeafened}
           >
             {participant.serverDeafened
@@ -270,7 +263,7 @@ export function VoiceMemberMenu({
               onClick={() => setMoving((open) => !open)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-ink-200 transition-colors hover:bg-base-800"
             >
-              <MoveRight className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+              <AetherIcon name="chevron" size="sm" className="shrink-0 -rotate-90 text-ink-500" />
               Mover para...
             </button>
 
@@ -304,13 +297,13 @@ export function VoiceMemberMenu({
 
 function MenuItem({
   children,
-  icon: Icon,
+  icon,
   danger,
   disabled,
   onClick,
 }: {
   children: React.ReactNode;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: AetherIconName;
   danger?: boolean;
   /** enquanto a acao esta em voo; evita disparar duas vezes no mesmo clique */
   disabled?: boolean;
@@ -327,7 +320,7 @@ function MenuItem({
         disabled && "cursor-not-allowed opacity-50",
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <AetherIcon name={icon} size="sm" className="shrink-0" />
       {children}
     </button>
   );

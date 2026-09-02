@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Play, Square, AlertCircle } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/field";
 import { startMicLevel, type MicLevelHandle } from "@/lib/voice/mic-level";
@@ -23,7 +23,7 @@ const MIN_BAR_HEIGHT_PX = 8;
 const MAX_BAR_HEIGHT_PX = 24;
 
 /**
- * Componente moderno e isolado de Teste de Microfone (Design v2).
+ * Componente moderno e isolado de Teste de Microfone (redesign).
  *
  * Características:
  * - Card unificado com bordas e superfície suaves nos tokens base-900 / base-800
@@ -205,9 +205,9 @@ export function MicrophoneTest({
           )}
         >
           {testing ? (
-            <Square className="h-3 w-3 fill-current" />
+            <AetherIcon name="stop" size="sm" className="h-3 w-3" />
           ) : (
-            <Play className="h-3.5 w-3.5 fill-current translate-x-[1px]" />
+            <AetherIcon name="play" size="sm" className="translate-x-px" />
           )}
         </button>
       </div>
@@ -215,7 +215,7 @@ export function MicrophoneTest({
       {/* Mensagem de Erro, se houver */}
       {error ? (
         <div className="flex items-center gap-1.5 text-[13px] text-signal-dnd animate-in-fast">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <AetherIcon name="alert" size="sm" className="shrink-0" />
           <span>{error}</span>
         </div>
       ) : null}

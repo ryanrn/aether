@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   CODECS_DE_TELA,
   codecDisponivel,
@@ -96,7 +96,7 @@ export function CodecDaTela() {
                 )}
               >
                 {ativo ? (
-                  <Check className="h-2.5 w-2.5 text-base-950" strokeWidth={3.5} />
+                  <AetherIcon name="check" size="sm" className="h-2.5 w-2.5 text-base-950 [stroke-width:3]" />
                 ) : null}
               </span>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Crown, Shield } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type {
   PublicChannel,
   PublicMember,
@@ -160,7 +160,9 @@ export function MemberPanel({
                         </button>
 
                         {isOwnerMember ? (
-                          <Crown
+                          <AetherIcon
+                            name="crown"
+                            size="sm"
                             className="h-3 w-3 shrink-0 text-signal-idle"
                             aria-label="Dono do servidor"
                           />
@@ -173,7 +175,7 @@ export function MemberPanel({
                             title="Gerenciar cargos"
                             className="shrink-0 rounded-sm p-0.5 text-ink-500 opacity-0 transition-opacity hover:text-ink-100 focus:opacity-100 group-hover/member:opacity-100"
                           >
-                            <Shield className="h-3 w-3" />
+                            <AetherIcon name="shield" size="sm" className="h-3 w-3" />
                           </button>
                         ) : null}
                       </div>

@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Compass, Crown, Plus, Shield, Users } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { rotuloDeRevisoes, totalDeRevisoes, type PublicServer, type RevisoesPendentes } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
@@ -216,7 +216,7 @@ export function ServerRail({
                 : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
             )}
           >
-            <Users className="h-5 w-5" />
+            <AetherIcon name="users" size="lg" className="h-5 w-5" />
           </span>
           {pendingRequests > 0 ? (
             <span
@@ -258,7 +258,7 @@ export function ServerRail({
                 : `${ICONE_REPOUSO} bg-base-800 text-amber-400/80 group-hover:bg-amber-400/10 group-hover:text-amber-300`,
             )}
           >
-            <Crown className="h-5 w-5" />
+            <AetherIcon name="crown" size="lg" className="h-5 w-5" />
           </span>
         </Link>
 
@@ -293,7 +293,7 @@ export function ServerRail({
                 : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-accent-500 group-hover:text-white",
             )}
           >
-            <Compass className="h-5 w-5" />
+            <AetherIcon name="compass" size="lg" className="h-5 w-5" />
           </span>
         </Link>
 
@@ -328,7 +328,7 @@ export function ServerRail({
                   : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-signal-dnd/10 group-hover:text-signal-dnd",
               )}
             >
-              <Shield className="h-5 w-5" />
+              <AetherIcon name="shield" size="lg" className="h-5 w-5" />
               {esperandoRevisao > 0 ? (
                 <span
                   aria-hidden
@@ -376,7 +376,7 @@ export function ServerRail({
             "transition-colors duration-150 hover:text-ink-100",
           )}
         >
-          <Plus className="h-5 w-5" />
+          <AetherIcon name="plus" size="lg" className="h-5 w-5" />
         </button>
       </nav>
 

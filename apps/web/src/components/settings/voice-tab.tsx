@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mic, MonitorUp, Volume2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   listMicrophones,
   listSpeakers,
@@ -18,7 +18,7 @@ import {
   CodecDaTela,
   TratamentoDoMicrofone,
 } from "@/components/settings/media-advanced";
-import { MicrophoneTest } from "@/components/aether-design-v2";
+import { MicrophoneTest } from "@/components/voice/microphone-test";
 
 /**
  * Voz e video.
@@ -84,7 +84,7 @@ export function VoiceTab() {
                     : "text-ink-200",
                 )}
               >
-                <Mic className="h-3.5 w-3.5 shrink-0" />
+                <AetherIcon name="mic" size="sm" className="shrink-0" />
                 <span className="truncate">{device.label}</span>
               </button>
             ))}
@@ -117,7 +117,7 @@ export function VoiceTab() {
                     : "text-ink-200",
                 )}
               >
-                <Volume2 className="h-3.5 w-3.5 shrink-0" />
+                <AetherIcon name="volume" size="sm" className="shrink-0" />
                 <span className="truncate">{device.label}</span>
               </button>
             ))}
@@ -160,7 +160,7 @@ export function VoiceTab() {
 
       <div className="border-t border-base-800 pt-5">
         <div className="flex items-center gap-2">
-          <MonitorUp className="h-3.5 w-3.5 text-ink-500" />
+          <AetherIcon name="screen-share" size="sm" className="text-ink-500" />
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
             Transmissao
           </h3>

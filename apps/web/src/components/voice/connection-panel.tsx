@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, Bug, ClipboardCheck, Copy, Lock } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import { cn } from "@/lib/utils";
@@ -120,7 +120,7 @@ export function ConnectionPanel({
       style={{ width: LARGURA, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
     >
       <div className="mb-2 flex items-center gap-2 text-ink-100">
-        <Activity className="h-3.5 w-3.5 text-accent-300" />
+        <AetherIcon name="activity" size="sm" className="text-accent-300" />
         <span className="font-medium">Conexao</span>
         <span
           className={cn(
@@ -164,7 +164,7 @@ export function ConnectionPanel({
           onClick={ligarDepuracao}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-base-700 px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
         >
-          <Bug className="h-3 w-3" />
+          <AetherIcon name="bug" size="sm" className="h-3 w-3" />
           Depuracao
         </button>
         <button
@@ -173,16 +173,16 @@ export function ConnectionPanel({
           className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-base-700 px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
         >
           {copiado ? (
-            <ClipboardCheck className="h-3 w-3 text-accent-300" />
+            <AetherIcon name="clipboard-check" size="sm" className="h-3 w-3 text-accent-300" />
           ) : (
-            <Copy className="h-3 w-3" />
+            <AetherIcon name="copy" size="sm" className="h-3 w-3" />
           )}
           {copiado ? "Copiado" : "Copiar diagnostico"}
         </button>
       </div>
 
       <p className="mt-2.5 flex items-center gap-1.5 text-[10px] text-ink-500">
-        <Lock className="h-3 w-3" />
+        <AetherIcon name="lock" size="sm" className="h-3 w-3" />
         Conexao criptografada (DTLS-SRTP) ate o servidor de midia.
       </p>
     </div>,
