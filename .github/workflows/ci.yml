@@ -166,9 +166,11 @@ jobs:
         run: npm run deploy --workspace=@aether/db
 
       - name: Semear
+        # seed-ci.mjs importa `@aether/shared` (que resolve para um .ts), entao
+        # roda por tsx como o db:seed — `node` nao resolve o import sem extensao.
         run: |
           npm run seed --workspace=@aether/db
-          node scripts/seed-ci.mjs
+          npx tsx scripts/seed-ci.mjs
 
       - name: Buildar o app web
         # NEXT_PUBLIC_* entra no bundle em tempo de BUILD; sem isto o
