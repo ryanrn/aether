@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1 prontos) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2 prontos) |
 
 ---
 
@@ -3152,6 +3152,131 @@ limitacao logo abaixo, porque tem custo real e nao dava para resolver junto.
 - **A auditoria nao cobriu o app de desktop a fundo.** O que foi verificado
   ali: o `.env` nao vai no pacote e o renderer nao recebe segredo. Ficaram sem
   varredura o auto-updater (assinatura do pacote) e o IPC do modulo nativo.
+
+## FASE 7c-2 — presenca e voz no Redis, e o adapter do Socket.IO
+
+A divida que a propria 7c-1 ja apontava: "presenca, ocupacao de voz e o
+adapter do Socket.IO continuam em memoria... e a parte que de fato destrava a
+segunda maquina de gateway". Esta fase entrega essa parte — o CODIGO fica
+pronto para mais de uma instancia; ligar de verdade (`fly scale count 2`)
+continua sendo um passo manual, feito quando o Redis estiver provisionado em
+producao.
+
+### O desenho: uma interface, dois backends
+
+`apps/realtime/src/state.ts` deixou de SER o estado e passou a ESCOLHER onde
+ele mora: `state-memory.ts` (os `Map` de sempre, so com `async` na
+assinatura) ou `state-redis.ts` (novo), conforme `REDIS_URL` estar
+configurada. As duas implementam `StateStore`
+(`apps/realtime/src/state-store.ts`), e o resto do gateway continua
+importando `from "./state"` exatamente como sempre importou — so que agora
+com `await`. **Sem `REDIS_URL`, o comportamento e IDENTICO ao de antes desta
+fase**, nao uma versao degradada dele.
+
+### Por que TCP (`ioredis`), e nao a API REST que o resto do projeto usa
+
+`packages/shared/src/redis.ts` fala com o Upstash por HTTP porque o app web
+roda em funcao SERVERLESS — conexao TCP persistente ali estoura o pool a
+cada cold start. O gateway NAO tem esse problema: e processo de vida longa na
+Fly. E ele PRECISA de TCP mesmo assim, porque REST nao da pub/sub, e o
+adapter do Socket.IO (`@socket.io/redis-adapter`) e a propria forma de
+`SADD`/`HSET` numa conexao persistente dependem disso. Por isso `REDIS_URL` e
+uma variavel SEPARADA de `UPSTASH_REDIS_REST_URL`/`_TOKEN` — vem da aba
+"Redis Connect" do Upstash, nao da aba "REST API", e so o gateway a usa.
+
+### Onde Lua entrou, e onde nao entrou
+
+So em DOIS lugares: entrar e sair de um servidor
+(`JOIN_SERVER_LUA`/`LEAVE_SERVER_LUA` em `state-redis.ts`), porque so ali a
+decisao "isto fez a pessoa FICAR PRESENTE agora" precisa ser atomica — duas
+pessoas entrando no MESMO servidor ao mesmo tempo, em instancias diferentes,
+e um caso real, e so um dos dois HINCRBY pode "ver" o contador virar 1. O
+resto (trocar status, falar, mutar, mover) e sempre uma pessoa agindo sobre
+si mesma ou um moderador agindo sobre UM alvo — a mesma serializacao que a
+versao em memoria ja tinha de graca, so que aqui vem de nao haver dois
+clientes mandando o mesmo evento no mesmo milissegundo, nao de o Redis
+garantir isso sozinho. Documentado como risco aceito, no comentario de cada
+funcao que faz GET+SET em vez de Lua.
+
+### Tres lugares que dependiam de socket LOCAL, e paravam de funcionar com uma segunda maquina
+
+`io.sockets.sockets.get(socketId)` e `io.sockets.adapter.rooms.get(sala)` so
+enxergam sockets desta instancia — nunca eram um bug enquanto so havia uma
+maquina, porque "local" e "todo mundo" eram a mesma coisa. Tres pontos
+dependiam disso e foram corrigidos para os metodos do PROPRIO Socket.IO que
+atravessam instancia (com o adapter de Redis, e sem ele tambem — degradam
+para o mesmo comportamento local de sempre):
+
+- **`evict()`** (`internal.ts`, kick/ban/exclusao de servidor) — trocou
+  `socketIdsOf` + `sockets.get` por `io.in(room.user(id)).fetchSockets()` +
+  `socketsLeave(...)`. Sem isso, expulsar alguem conectado na OUTRA maquina
+  nao tirava a pessoa de lugar nenhum.
+- **`resyncServerRooms()`** (`rooms.ts`, cargo editado/canal virou privado) —
+  trocou a leitura direta do adapter por `io.in(sala).fetchSockets()`. Sem
+  isso, so quem estivesse na MESMA maquina que processou a mudanca de
+  permissao seria recalculado.
+- **`voice:move`** (`handlers/voice.ts`, moderador move alguem de canal) —
+  trocou a busca do socket alvo (`io.sockets.sockets.get`) por
+  `io.to(room.user(alvo)).emit(...)`, usando o `PublicUser` que ja vinha
+  gravado na propria ocupacao de voz em vez de o ler do socket. Sem isso,
+  mover alguem conectado na outra maquina respondia "essa pessoa saiu da
+  call" — falso.
+
+### O que NAO tem: limpeza por TTL
+
+Uma queda GRACIOSA (o `shutdown()` que ja existia, o que `fly deploy` faz
+numa atualizacao normal) dispara o `disconnect` de cada socket e o Redis fica
+limpo — mesma garantia de sempre. Uma queda NAO graciosa (OOM, `fly machine
+kill`) deixava a memoria simplesmente sumir junto com o processo; no Redis,
+a entrada fica para tras ate alguem notar. Nao implementado nesta rodada —
+ficaria como TTL renovado a cada escrita, e exigiria decidir um numero sem
+dado de producao para calibrar. Registrado aqui, nao escondido.
+
+### Como testar
+
+```bash
+# unidade: state.ts sem Redis nenhum (o padrao, sem REDIS_URL no .env)
+npx vitest run tests/unit/voice-activity.test.ts
+
+# integracao: duas conexoes Redis + dois servidores Socket.IO de verdade,
+# simulando duas maquinas de gateway. Sobe um Redis local por conta propria
+# (`redis-server`) ou aponte REDIS_URL para um de teste — NUNCA para o de
+# producao com dados reais.
+npx tsx scripts/verify-gateway-redis.mts
+```
+
+O segundo prova, contra Redis real (nao dublado): presenca e voz escritas por
+uma conexao aparecem na outra; a corrida de duas entradas simultaneas do
+MESMO usuario no MESMO servidor resolve para exatamente uma "ficou presente";
+`io.to(sala).emit()`, `fetchSockets()` e `socketsLeave()` atravessam duas
+instancias de verdade. Rodado nesta sessao contra Redis local: 16/16.
+
+Tambem verificado nesta sessao: o gateway sobe e responde `/health` nos dois
+modos (com e sem `REDIS_URL`), typecheck limpo em todos os workspaces, e os
+348 testes unitarios existentes continuam passando.
+
+### Limitacoes conhecidas desta fase
+
+- **Nao verificado contra DUAS MAQUINAS DE FLY DE VERDADE**, so contra dois
+  processos locais falando com o mesmo Redis. O `fly.toml` continua com
+  `min_machines_running = 1` — subir para 2 e um passo manual futuro, so
+  depois de rodar assim em producao por um tempo com uma maquina so (para
+  confirmar que nada regrediu) e so entao escalar.
+- **Sem TTL/limpeza automatica**, como explicado acima — uma queda nao
+  graciosa deixa fantasma no Redis ate reiniciar o processo (que hoje nao
+  limpa o que sobrou de uma execucao anterior, so o que a PROPRIA execucao
+  cria).
+- **`presenceOf`/`voiceOfServer`/`presenceOfFriends` fazem uma consulta em
+  pipeline por servidor/lista**, nao uma so para tudo — aceitavel na escala
+  atual (grupo de amigos, nao milhares de pessoas por servidor), mas e o
+  primeiro lugar a otimizar se isso crescer.
+- **A revalidacao de sessao (`session-guard.ts`) continua olhando so os
+  sockets LOCAIS de cada instancia** — e o comportamento CERTO (cada
+  instancia so precisa revalidar quem esta conectado nela mesma), mas vale
+  registrar que nao foi tocada nesta fase por nao precisar ser.
+- **Nenhum numero de producao ainda.** Os testes provam a CORRETUDE do
+  mecanismo; nao ha medicao de latencia real de `HGETALL`/pipeline num Redis
+  do outro lado do Atlantico sob carga de uso de verdade.
 
 ## Limitacoes conhecidas da FASE 7c-1 (rate limit distribuido e ticket)
 

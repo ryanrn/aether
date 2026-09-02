@@ -14,6 +14,8 @@
     "@aether/access": "*",
     "@aether/db": "*",
     "@aether/shared": "*",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "ioredis": "^6.0.0",
     "livekit-server-sdk": "^2.18.0",
     "socket.io": "^4.8.1"
   },

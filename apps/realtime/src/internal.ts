@@ -12,7 +12,6 @@ import {
   presenceOf,
   presenceOfFriends,
   setFriends,
-  socketIdsOf,
   voiceDeparture,
 } from "./state";
 
@@ -87,6 +86,14 @@ function json(response: ServerResponse, status: number, body: unknown): void {
  *
  * Nao derruba a conexao inteira: a pessoa pode participar de outros servidores,
  * e desconectar tudo puniria o que nao tem relacao com a moderacao.
+ *
+ * NAO usa `io.sockets.sockets.get(socketId)` (a busca so enxerga sockets
+ * LOCAIS a esta instancia) — desde a fase 7c-2 o socket de quem esta sendo
+ * expulso pode estar em OUTRA maquina de gateway. `io.to(room.user(...))` e
+ * `io.in(room.user(...)).socketsLeave(...)` sao os metodos do proprio
+ * Socket.IO pensados para isso: funcionam entre instancias com o adapter de
+ * Redis, e continuam funcionando sem ele (uma instancia so) exatamente como
+ * antes.
  */
 async function evict(
   io: AetherServer,
@@ -94,8 +101,9 @@ async function evict(
   userId: string,
   reason = "Voce nao faz mais parte deste servidor.",
 ): Promise<number> {
-  const socketIds = socketIdsOf(userId);
-  if (socketIds.length === 0) return 0;
+  const userRoom = room.user(userId);
+  const socketsDoUsuario = await io.in(userRoom).fetchSockets();
+  if (socketsDoUsuario.length === 0) return 0;
 
   // Precisamos dos canais para sair das salas certas: o socket pode estar em
   // salas de canal de OUTROS servidores, que nao devem ser tocadas.
@@ -105,7 +113,7 @@ async function evict(
   });
   const channelRooms = channels.map((channel) => room.channel(channel.id));
 
-  const left = leaveVoice(userId);
+  const left = await leaveVoice(userId);
   if (left && left.serverId === serverId) {
     io.to(room.server(serverId)).emit("voice:update", {
       serverId,
@@ -113,19 +121,10 @@ async function evict(
     });
   }
 
-  let affected = 0;
-  for (const socketId of socketIds) {
-    const socket = io.sockets.sockets.get(socketId);
-    if (!socket) continue;
+  io.to(userRoom).emit("server:evicted", { serverId, reason });
+  await io.in(userRoom).socketsLeave([room.server(serverId), ...channelRooms]);
 
-    await socket.leave(room.server(serverId));
-    for (const channelRoom of channelRooms) await socket.leave(channelRoom);
-
-    socket.emit("server:evicted", { serverId, reason });
-    affected += 1;
-  }
-
-  return affected;
+  return socketsDoUsuario.length;
 }
 
 /** Devolve `true` quando a requisicao foi tratada aqui. */
@@ -255,7 +254,7 @@ export async function handleInternalRequest(
 
       const online: Record<string, number> = {};
       for (const serverId of ids.slice(0, 200)) {
-        online[serverId] = presenceOf(serverId).length;
+        online[serverId] = (await presenceOf(serverId)).length;
       }
       json(response, 200, { ok: true, online });
     } catch (error) {
@@ -282,8 +281,8 @@ export async function handleInternalRequest(
          * Quem nao esta conectado nao tem estado em memoria para corrigir — e
          * vai carregar a lista nova no proximo `connection` de qualquer jeito.
          */
-        if (!isConnected(userId)) continue;
-        setFriends(userId, await loadFriendIds(userId));
+        if (!(await isConnected(userId))) continue;
+        await setFriends(userId, await loadFriendIds(userId));
         /**
          * Os dois eventos, e nesta ordem. `friend:changed` faz a tela pedir a
          * lista nova ao Next (que e quem sabe montar "pendente"/"aceito");
@@ -293,7 +292,7 @@ export async function handleInternalRequest(
          */
         io.to(room.user(userId)).emit("friend:changed");
         io.to(room.user(userId)).emit("friend:sync", {
-          entries: presenceOfFriends(userId),
+          entries: await presenceOfFriends(userId),
         });
         atualizados += 1;
       }

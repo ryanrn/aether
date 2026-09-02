@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
 import { room } from "@aether/shared";
@@ -19,9 +20,10 @@ import {
   stats,
   statusOf,
 } from "./state";
+import { redisClients } from "./redis-client";
 import { handleInternalRequest } from "./internal";
 import { startSessionGuard } from "./session-guard";
-import type { AetherServer } from "./types";
+import type { AetherServer, AetherSocket } from "./types";
 
 /**
  * Gateway WebSocket do Aether.
@@ -48,10 +50,18 @@ const httpServer = createServer((request, response) => {
 
   // Endpoint de saude — usado por deploy/monitor para saber se o processo vive.
   if (request.url === "/health") {
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(
-      JSON.stringify({ ok: true, uptime: process.uptime(), ...stats() }),
-    );
+    void stats()
+      .then((numeros) => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({ ok: true, uptime: process.uptime(), ...numeros }),
+        );
+      })
+      .catch((erro) => {
+        console.error("[gateway] /health falhou:", erro);
+        response.writeHead(500);
+        response.end();
+      });
     return;
   }
   response.writeHead(404);
@@ -73,6 +83,16 @@ const io: AetherServer = new Server(httpServer, {
   pingInterval: 10_000,
   pingTimeout: 8_000,
 });
+
+/**
+ * Adapter de Redis (fase 7c-2) — SO troca como `io.to(sala).emit(...)`
+ * alcanca sockets de OUTRAS instancias; nao guarda presenca nem voz (isso e
+ * `state.ts`). Sem `REDIS_URL`, `io` continua com o adapter em memoria
+ * padrao do Socket.IO — uma instancia so, exatamente como sempre foi.
+ */
+if (redisClients) {
+  io.adapter(createAdapter(redisClients.pub, redisClients.sub));
+}
 
 /**
  * Porta de entrada unica: ninguem passa daqui sem sessao valida.
@@ -99,13 +119,57 @@ io.use(async (socket, next) => {
 
 io.on("connection", (socket) => {
   const { user } = socket.data;
+
+  /**
+   * Registrado ANTES de qualquer `await`, de proposito: com o estado
+   * assincrono (fase 7c-2, `state.ts`), ha uma janela real entre a conexao
+   * chegar e `iniciarConexao` terminar de anexar o socket. Se o "disconnect"
+   * chegasse nessa janela e os handlers so fossem registrados DEPOIS dela, a
+   * limpeza simplesmente nao rodaria — o socket ficaria "preso" no estado
+   * para sempre. `detachSocket`/`leaveVoice` sao seguros de chamar mesmo
+   * quando `attachSocket` nunca chegou a terminar: devolvem "nada a fazer".
+   */
+  registerPresenceHandlers(io, socket);
+  registerMessageHandlers(io, socket);
+  registerVoiceHandlers(io, socket);
+  registerDmHandlers(socket);
+  registerReactionHandlers(io, socket);
+
+  socket.on("ping", (ack) => {
+    if (typeof ack === "function") ack(Date.now());
+  });
+
+  socket.on("disconnect", (reason) => {
+    if (!env.isProduction) {
+      console.log(`[gateway] saiu ${user.username} (${reason})`);
+    }
+  });
+
+  if (!env.isProduction) {
+    console.log(`[gateway] entrou ${user.username} (${socket.id})`);
+  }
+
+  void iniciarConexao(socket).catch((erro) => {
+    console.error("[gateway] falha ao iniciar conexao:", erro);
+  });
+});
+
+/**
+ * A parte da conexao que depende do estado (presenca, amizades) — separada
+ * do bloco acima exatamente pela razao explicada ali: isto tem `await`, e os
+ * handlers de evento (inclusive o de desconexao) precisam existir antes de
+ * qualquer um deles rodar.
+ */
+async function iniciarConexao(socket: AetherSocket): Promise<void> {
+  const { user } = socket.data;
+
   /**
    * Lido ANTES de anexar: depois de `attachSocket` a resposta e sempre `true`.
    * O que interessa e se esta era a PRIMEIRA aba — abrir a segunda nao e
    * "ficou online" e nao deve avisar ninguem de novo.
    */
-  const primeiraConexao = !isConnected(user.id);
-  attachSocket(socket.id, user.id, user.status);
+  const primeiraConexao = !(await isConnected(user.id));
+  await attachSocket(socket.id, user.id, user.status);
 
   socket.emit("ready", { user, serverTime: Date.now() });
 
@@ -143,11 +207,11 @@ io.on("connection", (socket) => {
    * abaixo fecha essa janela do lado de quem conectou.
    */
   void loadFriendIds(user.id)
-    .then((amigos) => {
-      setFriends(user.id, amigos);
+    .then(async (amigos) => {
+      await setFriends(user.id, amigos);
 
       // Quem ja esta online, para a lista nascer preenchida.
-      socket.emit("friend:sync", { entries: presenceOfFriends(user.id) });
+      socket.emit("friend:sync", { entries: await presenceOfFriends(user.id) });
 
       if (!primeiraConexao) return;
       /**
@@ -158,7 +222,7 @@ io.on("connection", (socket) => {
        * OFFLINE ("nunca escolheu") para ONLINE, e mandar o valor cru faria a
        * pessoa aparecer offline para os amigos assim que conectasse.
        */
-      const meuStatus = statusOf(user.id);
+      const meuStatus = await statusOf(user.id);
       if (amigos.length > 0) {
         io.to(amigos.map(room.user)).emit("friend:presence", {
           entry: {
@@ -177,27 +241,7 @@ io.on("connection", (socket) => {
     .catch((error) =>
       console.error("[gateway] nao consegui carregar amizades:", error),
     );
-
-  socket.on("ping", (ack) => {
-    if (typeof ack === "function") ack(Date.now());
-  });
-
-  registerPresenceHandlers(io, socket);
-  registerMessageHandlers(io, socket);
-  registerVoiceHandlers(io, socket);
-  registerDmHandlers(socket);
-  registerReactionHandlers(io, socket);
-
-  socket.on("disconnect", (reason) => {
-    if (!env.isProduction) {
-      console.log(`[gateway] saiu ${user.username} (${reason})`);
-    }
-  });
-
-  if (!env.isProduction) {
-    console.log(`[gateway] entrou ${user.username} (${socket.id})`);
-  }
-});
+}
 
 const stopSessionGuard = startSessionGuard(io);
 
