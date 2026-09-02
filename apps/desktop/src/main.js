@@ -52,6 +52,38 @@ function isAllowedUrl(rawUrl) {
 const reconectandoAgora = new Set();
 
 /**
+ * Quando a ULTIMA recarga de verdade aconteceu (`webContents.reload()`),
+ * para o cooldown abaixo. `0` significa "nenhuma ainda".
+ */
+let ultimaRecargaEm = 0;
+
+/**
+ * Tempo minimo entre duas recargas desse mecanismo.
+ *
+ * NASCEU DE UM DEFEITO RELATADO: em notebook Windows com Modern Standby
+ * (energia baixa "conectada"), o sistema faz transicoes de suspensao e volta
+ * o tempo todo — inclusive com a tampa aberta e a tela acesa — e o
+ * `powerMonitor` do Electron dispara `resume` a cada uma delas, nao so
+ * quando o notebook dorme de verdade. Sem cooldown, cada disparo falso virava
+ * um `reload()` completo: a conexao caia, quem estava numa call saia dela, e
+ * o sintoma era "o app cai toda hora" — em producao e local igual, porque a
+ * causa e o processo principal do Electron, nao o servidor para onde ele
+ * aponta.
+ *
+ * 2 minutos: alto o bastante para nao reagir a uma sequencia de disparos
+ * falsos do Modern Standby (que se repetem em minutos, as vezes segundos), e
+ * baixo o bastante para o notebook dormindo de verdade — que nao se repete
+ * nesse intervalo — continuar sendo coberto na primeira tentativa.
+ *
+ * NAO E VERIFICAVEL COM CERTEZA SEM O HARDWARE QUE RELATOU O SINTOMA — mesma
+ * ressalva do reparo original: e o ajuste padrao para esse tipo de disparo
+ * espurio, registrado como tal em vez de apresentado como causa confirmada.
+ * `aether.log` (`reconexao:tentando` / `reconexao:ignorada-cooldown`) e o que
+ * prova se o disparo era mesmo frequente.
+ */
+const COOLDOWN_MS = 2 * 60_000;
+
+/**
  * Recarrega a janela assim que a ORIGEM voltar a responder — nunca antes.
  *
  * O SINTOMA QUE ISTO CORRIGE: o app fica com a tela preta ou cinza depois de
@@ -77,6 +109,16 @@ const reconectandoAgora = new Set();
  */
 function recarregarQuandoAOrigemResponder(window, motivo) {
   if (window.isDestroyed() || reconectandoAgora.has(window)) return;
+
+  const desdeAUltima = Date.now() - ultimaRecargaEm;
+  if (ultimaRecargaEm !== 0 && desdeAUltima < COOLDOWN_MS) {
+    registrar("reconexao:ignorada-cooldown", {
+      motivo,
+      desdeAUltimaMs: desdeAUltima,
+    });
+    return;
+  }
+
   reconectandoAgora.add(window);
   registrar("reconexao:tentando", { motivo });
 
@@ -98,7 +140,10 @@ function recarregarQuandoAOrigemResponder(window, motivo) {
         signal: AbortSignal.timeout(4000),
       });
       registrar("reconexao:origem-respondeu", { motivo, tentativas });
-      if (!window.isDestroyed()) window.webContents.reload();
+      if (!window.isDestroyed()) {
+        ultimaRecargaEm = Date.now();
+        window.webContents.reload();
+      }
       reconectandoAgora.delete(window);
     } catch (erro) {
       if (tentativas >= MAX_TENTATIVAS) {

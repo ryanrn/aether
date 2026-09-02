@@ -5,14 +5,17 @@ import { redirect } from "next/navigation";
 import { prisma } from "@aether/db";
 import {
   createServerSchema,
+  deleteServerSchema,
   joinServerSchema,
+  transferOwnershipSchema,
   updateServerSchema,
   type ActionResult,
 } from "@aether/shared";
+import { verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { writeAudit } from "../audit";
 import { requireMember, requirePermission, requireUser } from "../guards";
-import { evictFromGateway } from "../realtime-notify";
+import { evictFromGateway, notifyServerDeleted, resyncGatewayRooms } from "../realtime-notify";
 import {
   createServerForUser,
   generateInviteCode,
@@ -22,6 +25,25 @@ import { joinServerByCode } from "../services/invites";
 import { reavaliarVitrinePorRenomear } from "../services/descoberta";
 import { uploadServerIcon } from "../storage";
 import { fail, ok, toActionError } from "./action-result";
+
+/**
+ * Confere a senha da CONTA de quem esta agindo — nao a do servidor, que nao
+ * existe. Usado para reconfirmar identidade antes de transferir posse ou
+ * excluir o servidor: as duas acoes valem para sempre (a segunda de fato nao
+ * tem volta), e a sessao ja aberta sozinha nao prova que quem esta na frente
+ * da tela agora e o dono e nao alguem que achou o notebook destravado.
+ */
+async function confirmOwnerPassword(
+  userId: string,
+  password: string,
+): Promise<boolean> {
+  const actor = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+  if (!actor) return false;
+  return verifyPassword(password, actor.passwordHash);
+}
 
 export async function createServerAction(
   _prev: ActionResult<{ serverId: string }> | null,
@@ -336,4 +358,162 @@ export async function reorderServersAction(
   } catch (error) {
     return toActionError(error);
   }
+}
+
+/**
+ * Transfere a posse do servidor para outro membro. So o DONO pode chamar —
+ * nao quem tem MANAGE_SERVER por cargo (Administrador, por exemplo): a
+ * permissao de gerenciar nao e a mesma coisa que ser dono, e um Administrador
+ * transferindo o servidor para si mesmo seria uma escalada de privilegio.
+ *
+ * Exige a senha da CONTA de quem esta transferindo — ver `confirmOwnerPassword`.
+ *
+ * O cargo "Dono" (isOwner, com ALL_PERMISSIONS) MIGRA junto do antigo dono
+ * para o novo. `isOwner` no calculo de permissao (`loadMemberAccess`) olha so
+ * `Server.ownerId`, mas o CARGO em si continua valendo o que seus bits dizem
+ * — se ele ficasse com quem deixou de ser dono, essa pessoa manteria
+ * permissao total como "membro comum" depois da transferencia.
+ */
+export async function transferOwnershipAction(
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = transferOwnershipSchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Dados invalidos");
+    }
+    const { serverId, targetMemberId, password } = parsed.data;
+
+    const context = await requireMember(serverId);
+    if (!context.isOwner) {
+      return fail("So o dono do servidor pode transferir a posse.");
+    }
+
+    const limit = await rateLimit(
+      `transfer-ownership:${context.session.user.id}`,
+      5,
+      15 * 60_000,
+    );
+    if (!limit.ok) {
+      return fail(`Muitas tentativas. Aguarde ${limit.retryAfter}s.`, "password");
+    }
+
+    if (!(await confirmOwnerPassword(context.session.user.id, password))) {
+      return fail("Senha incorreta.", "password");
+    }
+
+    const target = await prisma.serverMember.findUnique({
+      where: { id: targetMemberId },
+      select: { id: true, serverId: true, userId: true },
+    });
+    if (!target || target.serverId !== serverId) {
+      return fail("Membro nao encontrado.");
+    }
+    if (target.userId === context.session.user.id) {
+      return fail("Voce ja e o dono deste servidor.");
+    }
+
+    const donoRole = await prisma.role.findFirst({
+      where: { serverId, isOwner: true },
+      select: { id: true },
+    });
+
+    await prisma.$transaction([
+      prisma.server.update({
+        where: { id: serverId },
+        data: { ownerId: target.userId },
+      }),
+      ...(donoRole
+        ? [
+            prisma.memberRole.deleteMany({
+              where: { roleId: donoRole.id, memberId: context.memberId },
+            }),
+            prisma.memberRole.upsert({
+              where: {
+                memberId_roleId: { memberId: target.id, roleId: donoRole.id },
+              },
+              create: { memberId: target.id, roleId: donoRole.id },
+              update: {},
+            }),
+          ]
+        : []),
+    ]);
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "server.transfer_ownership",
+      targetType: "user",
+      targetId: target.userId,
+    });
+
+    // O que os dois PODEM ver mudou (o cargo "Dono" trocou de mao); ninguem
+    // saiu do servidor, entao e resync de salas, nao evict.
+    await resyncGatewayRooms({ serverId });
+
+    revalidatePath(`/app/s/${serverId}`, "layout");
+    revalidatePath("/app");
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Exclui o servidor inteiro. So o DONO pode chamar, com a senha da conta
+ * reconfirmada — mesma trava da transferencia, e mais critica aqui: isto NAO
+ * TEM VOLTA. O cascade do schema (`onDelete: Cascade` a partir de `Server`)
+ * cuida de membros, cargos, categorias, canais, mensagens, convites,
+ * banimentos e o log de auditoria — nao ha limpeza manual para fazer aqui.
+ */
+export async function deleteServerAction(
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = deleteServerSchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Dados invalidos");
+    }
+    const { serverId, password } = parsed.data;
+
+    const context = await requireMember(serverId);
+    if (!context.isOwner) {
+      return fail("So o dono do servidor pode exclui-lo.");
+    }
+
+    const limit = await rateLimit(
+      `delete-server:${context.session.user.id}`,
+      5,
+      15 * 60_000,
+    );
+    if (!limit.ok) {
+      return fail(`Muitas tentativas. Aguarde ${limit.retryAfter}s.`, "password");
+    }
+
+    if (!(await confirmOwnerPassword(context.session.user.id, password))) {
+      return fail("Senha incorreta.", "password");
+    }
+
+    const members = await prisma.serverMember.findMany({
+      where: { serverId },
+      select: { userId: true },
+    });
+
+    /**
+     * ANTES de apagar: o gateway precisa consultar os canais deste servidor
+     * para saber de quais salas tirar cada socket, e o cascade levaria essas
+     * linhas embora antes de ele conseguir perguntar.
+     */
+    await notifyServerDeleted({
+      serverId,
+      userIds: members.map((member) => member.userId),
+    });
+
+    await prisma.server.delete({ where: { id: serverId } });
+  } catch (error) {
+    return toActionError(error);
+  }
+
+  revalidatePath("/app");
+  redirect("/app");
 }

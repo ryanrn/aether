@@ -126,17 +126,17 @@ export function registerVoiceHandlers(
 
       // O limite so vale para quem esta entrando de fora: trocar de aba dentro
       // do mesmo canal nao pode ser bloqueado pelo proprio ocupante.
-      const current = voiceParticipant(userId);
+      const current = await voiceParticipant(userId);
       if (
         channel.userLimit !== null &&
         current?.channelId !== channelId &&
-        countInChannel(channelId) >= channel.userLimit
+        (await countInChannel(channelId)) >= channel.userLimit
       ) {
         respond({ ok: false, error: "Canal cheio" });
         return;
       }
 
-      const { previousServerId } = joinVoice({
+      const { previousServerId } = await joinVoice({
         socketId: socket.id,
         userId,
         user,
@@ -149,7 +149,7 @@ export function registerVoiceHandlers(
         broadcast(previousServerId, voiceDeparture(userId, user));
       }
 
-      const participant = voiceParticipant(userId);
+      const participant = await voiceParticipant(userId);
       if (participant) broadcast(channel.serverId, participant);
 
       /**
@@ -166,7 +166,7 @@ export function registerVoiceHandlers(
 
       respond({
         ok: true,
-        participants: voiceOfServer(channel.serverId),
+        participants: await voiceOfServer(channel.serverId),
         media,
       });
     } catch (error) {
@@ -175,14 +175,14 @@ export function registerVoiceHandlers(
     }
   });
 
-  socket.on("voice:leave", () => {
-    const left = leaveVoice(userId);
+  socket.on("voice:leave", async () => {
+    const left = await leaveVoice(userId);
     if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
   });
 
-  socket.on("voice:state", (patch) => {
+  socket.on("voice:state", async (patch) => {
     if (!patch || typeof patch !== "object") return;
-    const updated = setVoiceFlags(userId, {
+    const updated = await setVoiceFlags(userId, {
       selfMuted:
         typeof patch.selfMuted === "boolean" ? patch.selfMuted : undefined,
       selfDeafened:
@@ -193,13 +193,13 @@ export function registerVoiceHandlers(
     if (updated) broadcast(updated.serverId, updated.participant);
   });
 
-  socket.on("voice:speaking", (speaking) => {
+  socket.on("voice:speaking", async (speaking) => {
     if (typeof speaking !== "boolean") return;
     if (!speakingLimiter.take(userId)) return;
 
     // Devolve null quando o estado ja era esse — nao republicamos valor
     // identico para a sala inteira.
-    const updated = setVoiceSpeaking(userId, speaking);
+    const updated = await setVoiceSpeaking(userId, speaking);
     if (updated) broadcast(updated.serverId, updated.participant);
   });
 
@@ -220,7 +220,7 @@ export function registerVoiceHandlers(
       await new Promise((r) => setTimeout(r, espera));
 
       // Parou de transmitir no meio da espera: nao ha o que conferir.
-      const aqui = voiceLocation(quem);
+      const aqui = await voiceLocation(quem);
       if (!aqui || aqui.channelId !== canal) return;
 
       const excedeu = await conferirQualidadeDaTela({
@@ -246,7 +246,7 @@ export function registerVoiceHandlers(
   socket.on("voice:streaming", async (streaming) => {
     if (typeof streaming !== "boolean") return;
 
-    const location = voiceLocation(userId);
+    const location = await voiceLocation(userId);
     if (!location) return;
 
     /**
@@ -274,7 +274,7 @@ export function registerVoiceHandlers(
       }
     }
 
-    const updated = setVoiceStreaming(userId, streaming);
+    const updated = await setVoiceStreaming(userId, streaming);
     if (updated) broadcast(updated.serverId, updated.participant);
 
     /**
@@ -309,7 +309,7 @@ export function registerVoiceHandlers(
   socket.on("voice:camera", async (camera) => {
     if (typeof camera !== "boolean") return;
 
-    const location = voiceLocation(userId);
+    const location = await voiceLocation(userId);
     if (!location) return;
 
     if (camera) {
@@ -325,7 +325,7 @@ export function registerVoiceHandlers(
       }
     }
 
-    const atualizado = setVoiceCamera(userId, camera);
+    const atualizado = await setVoiceCamera(userId, camera);
     if (atualizado) broadcast(atualizado.serverId, atualizado.participant);
   });
 
@@ -348,7 +348,7 @@ export function registerVoiceHandlers(
       return;
     }
 
-    const target = voiceLocation(targetId);
+    const target = await voiceLocation(targetId);
     if (!target) {
       respond({ ok: false, error: "Essa pessoa nao esta em um canal de voz" });
       return;
@@ -385,7 +385,7 @@ export function registerVoiceHandlers(
         return;
       }
 
-      const updated = setServerVoiceFlags(targetId, {
+      const updated = await setServerVoiceFlags(targetId, {
         serverMuted: payload.serverMuted,
         serverDeafened: payload.serverDeafened,
       });
@@ -422,7 +422,7 @@ export function registerVoiceHandlers(
       return;
     }
 
-    const target = voiceLocation(targetId);
+    const target = await voiceLocation(targetId);
     if (!target) {
       respond({ ok: false, error: "Essa pessoa nao esta em um canal de voz" });
       return;
@@ -476,19 +476,27 @@ export function registerVoiceHandlers(
         return;
       }
 
-      const targetSocketId = voiceSocketOf(targetId);
-      const targetSocket = targetSocketId
-        ? io.sockets.sockets.get(targetSocketId)
-        : undefined;
-      if (!targetSocket) {
+      /**
+       * NAO buscamos o socket local (`io.sockets.sockets.get`, como fazia
+       * antes da fase 7c-2): com mais de uma instancia de gateway, quem esta
+       * sendo movido pode estar conectado numa maquina DIFERENTE da que
+       * recebeu este evento, e essa busca so enxerga sockets LOCAIS. O
+       * `PublicUser` ja esta gravado na propria ocupacao de voz (guardado
+       * quando a pessoa entrou), e `io.to(room.user(...))` alcanca qualquer
+       * instancia — nenhum dos dois exige saber ONDE o socket dela vive.
+       */
+      const targetSocketId = await voiceSocketOf(targetId);
+      const currentParticipant = await voiceParticipant(targetId);
+      if (!targetSocketId || !currentParticipant) {
         respond({ ok: false, error: "Essa pessoa saiu da call" });
         return;
       }
+      const targetUser = currentParticipant.user;
 
-      joinVoice({
-        socketId: targetSocketId as string,
+      await joinVoice({
+        socketId: targetSocketId,
         userId: targetId,
-        user: targetSocket.data.user,
+        user: targetUser,
         serverId: target.serverId,
         channelId,
       });
@@ -501,12 +509,12 @@ export function registerVoiceHandlers(
       const media = await createMediaCredentials({
         channelId,
         userId: targetId,
-        displayName: targetSocket.data.user.displayName,
+        displayName: targetUser.displayName,
         permissions: targetBits,
       });
-      targetSocket.emit("voice:moved", { channelId, media });
+      io.to(room.user(targetId)).emit("voice:moved", { channelId, media });
 
-      const participant = voiceParticipant(targetId);
+      const participant = await voiceParticipant(targetId);
       if (participant) broadcast(target.serverId, participant);
       respond({ ok: true });
     } catch (error) {
@@ -516,9 +524,13 @@ export function registerVoiceHandlers(
   });
 
   socket.on("disconnect", () => {
-    // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
-    // mesma pessoa nao devem tirar ninguem da call.
-    const left = leaveVoice(userId, socket.id);
-    if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
+    void (async () => {
+      // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
+      // mesma pessoa nao devem tirar ninguem da call.
+      const left = await leaveVoice(userId, socket.id);
+      if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
+    })().catch((erro) => {
+      console.error("[gateway] disconnect (voice) falhou:", erro);
+    });
   });
 }

@@ -50,8 +50,8 @@ import {
  *    pela rede nao e invisibilidade — e invisibilidade so na tela de quem usa
  *    o cliente oficial. Quem escolheu sumir sumiu, e o dado nem sai daqui.
  */
-function entryVisivel(userId: string, status: UserStatus): PresenceEntry {
-  const atual = presenceEntryOf(userId);
+async function entryVisivel(userId: string, status: UserStatus): Promise<PresenceEntry> {
+  const atual = await presenceEntryOf(userId);
   const invisivel = status === "OFFLINE";
   return {
     userId,
@@ -63,15 +63,15 @@ function entryVisivel(userId: string, status: UserStatus): PresenceEntry {
   };
 }
 
-function announce(
+async function announce(
   io: AetherServer,
   serverId: string,
   userId: string,
   status: UserStatus,
-): void {
+): Promise<void> {
   io.to(room.server(serverId)).emit("presence:update", {
     serverId,
-    entry: entryVisivel(userId, status),
+    entry: await entryVisivel(userId, status),
   });
 }
 
@@ -87,15 +87,15 @@ function announce(
  * a entrada do usuario ja saiu do mapa — a lista precisa ter sido capturada
  * antes.
  */
-function announceToFriends(
+async function announceToFriends(
   io: AetherServer,
   userId: string,
   status: UserStatus,
   friendIds: string[],
-): void {
+): Promise<void> {
   if (friendIds.length === 0) return;
   io.to(friendIds.map(room.user)).emit("friend:presence", {
-    entry: entryVisivel(userId, status),
+    entry: await entryVisivel(userId, status),
   });
 }
 
@@ -120,17 +120,18 @@ async function enriquecer(
      * passa, nao na lembranca de quem escreveu o `urlDaCapa`.
      */
     const capa = safeGameCover(meta.coverUrl);
-    const mudou = setGameCover(userId, jogo, capa, meta.displayName);
+    const mudou = await setGameCover(userId, jogo, capa, meta.displayName);
     if (!mudou) return;
 
-    const visivel = entryVisivel(userId, statusOf(userId));
+    const meuStatus = await statusOf(userId);
+    const visivel = await entryVisivel(userId, meuStatus);
     for (const serverId of mudou.servers) {
       io.to(room.server(serverId)).emit("presence:update", {
         serverId,
         entry: visivel,
       });
     }
-    announceToFriends(io, userId, statusOf(userId), friendsOf(userId));
+    await announceToFriends(io, userId, meuStatus, await friendsOf(userId));
   } catch (erro) {
     console.error(
       "[presence] nao consegui enriquecer o jogo:",
@@ -200,16 +201,16 @@ export function registerPresenceHandlers(
       // de voz vazios ate alguem entrar ou sair.
       socket.emit("voice:sync", {
         serverId,
-        participants: voiceOfServer(serverId),
+        participants: await voiceOfServer(serverId),
       });
 
-      const becamePresent = joinServer(socket.id, serverId);
+      const becamePresent = await joinServer(socket.id, serverId);
       // A propria presenca entra na lista antes de responder, senao o cliente
       // se veria offline ate o proximo evento.
-      respond({ ok: true, presence: presenceOf(serverId) });
+      respond({ ok: true, presence: await presenceOf(serverId) });
 
       if (becamePresent) {
-        announce(io, serverId, userId, statusOf(userId));
+        await announce(io, serverId, userId, await statusOf(userId));
       }
     } catch (error) {
       console.error("[gateway] server:join falhou:", error);
@@ -219,20 +220,20 @@ export function registerPresenceHandlers(
 
   socket.on("server:leave", async (serverId) => {
     if (typeof serverId !== "string") return;
-    const left = leaveServer(socket.id, serverId);
+    const left = await leaveServer(socket.id, serverId);
     await socket.leave(room.server(serverId));
-    if (left) announce(io, serverId, userId, "OFFLINE");
+    if (left) await announce(io, serverId, userId, "OFFLINE");
   });
 
   socket.on("presence:set", async (status) => {
     if (!isUserStatus(status)) return;
     if (!presenceLimiter.take(userId)) return;
 
-    const affected = setStatus(userId, status);
-    for (const serverId of affected) announce(io, serverId, userId, status);
+    const affected = await setStatus(userId, status);
+    for (const serverId of affected) await announce(io, serverId, userId, status);
     // Amigo ve o status mesmo sem servidor em comum — e essa e a unica coisa
     // que ele ve por este caminho.
-    announceToFriends(io, userId, status, friendsOf(userId));
+    await announceToFriends(io, userId, status, await friendsOf(userId));
 
     /**
      * OFFLINE aqui e INVISIVEL: a pessoa segue conectada e recebendo tudo, mas
@@ -266,7 +267,7 @@ export function registerPresenceHandlers(
    * Nao persiste em lugar nenhum: jogo aberto e coisa do momento, como a
    * propria presenca. Reiniciar o gateway limpa, e esta anotado no README.
    */
-  socket.on("presence:game", (payload) => {
+  socket.on("presence:game", async (payload) => {
     if (!presenceLimiter.take(userId)) return;
 
     const bruto = payload?.name;
@@ -283,17 +284,18 @@ export function registerPresenceHandlers(
      */
     const icone = nome ? safeGameIcon(payload?.icon) : null;
 
-    const mudou = setGame(userId, nome, icone);
+    const mudou = await setGame(userId, nome, icone);
     if (!mudou) return;
 
-    const visivel = entryVisivel(userId, statusOf(userId));
+    const meuStatus = await statusOf(userId);
+    const visivel = await entryVisivel(userId, meuStatus);
     for (const serverId of mudou.servers) {
       io.to(room.server(serverId)).emit("presence:update", {
         serverId,
         entry: visivel,
       });
     }
-    announceToFriends(io, userId, statusOf(userId), friendsOf(userId));
+    await announceToFriends(io, userId, meuStatus, await friendsOf(userId));
 
     /**
      * A capa vem DEPOIS, e de proposito.
@@ -310,24 +312,28 @@ export function registerPresenceHandlers(
   });
 
   socket.on("disconnect", () => {
-    /**
-     * A lista de amigos e lida ANTES de desmontar: `detachSocket` apaga a
-     * entrada do usuario quando cai o ultimo socket dele, e ai nao haveria
-     * mais a quem avisar. Foi por isso que `announceToFriends` recebe os ids
-     * por parametro em vez de busca-los sozinha.
-     */
-    const amigos = friendsOf(userId);
-    const { vacatedServers } = detachSocket(socket.id);
-    for (const serverId of vacatedServers) {
-      announce(io, serverId, userId, "OFFLINE");
-    }
-    /**
-     * So avisa os amigos quando o ULTIMO socket caiu. Fechar uma das tres abas
-     * nao e ficar offline — e o mesmo criterio que `joinServer`/`leaveServer`
-     * ja aplicam por servidor.
-     */
-    if (!isConnected(userId)) {
-      announceToFriends(io, userId, "OFFLINE", amigos);
-    }
+    void (async () => {
+      /**
+       * A lista de amigos e lida ANTES de desmontar: `detachSocket` apaga a
+       * entrada do usuario quando cai o ultimo socket dele, e ai nao haveria
+       * mais a quem avisar. Foi por isso que `announceToFriends` recebe os ids
+       * por parametro em vez de busca-los sozinha.
+       */
+      const amigos = await friendsOf(userId);
+      const { vacatedServers } = await detachSocket(socket.id);
+      for (const serverId of vacatedServers) {
+        await announce(io, serverId, userId, "OFFLINE");
+      }
+      /**
+       * So avisa os amigos quando o ULTIMO socket caiu. Fechar uma das tres
+       * abas nao e ficar offline — e o mesmo criterio que
+       * `joinServer`/`leaveServer` ja aplicam por servidor.
+       */
+      if (!(await isConnected(userId))) {
+        await announceToFriends(io, userId, "OFFLINE", amigos);
+      }
+    })().catch((erro) => {
+      console.error("[gateway] disconnect (presence) falhou:", erro);
+    });
   });
 }

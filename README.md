@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1 prontos) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2 prontos) |
 
 ---
 
@@ -265,6 +265,50 @@ sozinha quando a rede volta. Ate 10 tentativas, a cada 3s.
   o que aconteceu.
 - **Nao verificado em maquina real** dormindo e acordando com o app aberto —
   so checado sintaticamente (`node --check`) e por leitura.
+
+#### O log de campo chegou, e o sintoma era o REPARO disparando demais
+
+Uso real relatou: depois desta atualizacao, o app passou a "cair toda hora" —
+tanto apontando para producao quanto para localhost. Como as duas pontas
+mudam so o SERVIDOR, e o sintoma se repetia nas duas, a causa nao podia estar
+do lado do backend: so sobrava o processo principal do Electron, o mesmo em
+qualquer endereco.
+
+**Suspeito principal: `powerMonitor.on("resume")` disparando sem o notebook
+dormir de verdade.** E um comportamento conhecido do Windows com *Modern
+Standby* (energia baixa "conectada"): o sistema faz transicoes de suspensao e
+volta o tempo todo, inclusive com a tampa aberta e a tela acesa, e o
+`powerMonitor` do Electron acompanha essas transicoes — nao so o sono de
+verdade. Sem cooldown nenhum, CADA disparo desses virava um `reload()`
+completo: a conexao caia, quem estava numa call saia dela, e a experiencia
+era "o app cai toda hora" — em qualquer servidor, porque a causa vive no
+cliente.
+
+**O CONSERTO: um cooldown de 2 minutos entre recargas** (`COOLDOWN_MS` em
+`main.js`). Um disparo de `resume` ou `render-process-gone` que chega antes
+do cooldown acabar e IGNORADO (e registrado como
+`reconexao:ignorada-cooldown`, com o tempo desde a ultima recarga) em vez de
+recarregar de novo. Sono de verdade nao se repete a cada poucos minutos, entao
+a primeira tentativa continua cobrindo o caso original; a sequencia de
+disparos falsos do Modern Standby e que para de virar uma sequencia de
+recargas.
+
+- **TAMBEM NAO E CAUSA CONFIRMADA linha a linha** — mesma ressalva do reparo
+  original. E o ajuste padrao para esse tipo de disparo espurio relatado em
+  hardware Windows, nao uma causa provada neste caso especifico.
+- **Nao filtra por CORRELACAO com um `suspend` real.** O Electron tambem
+  emite `powerMonitor.on("suspend")`; dava para exigir que um `resume` so
+  contasse se um `suspend` tivesse acontecido pouco antes. Nao fizemos: o
+  proprio Modern Standby dispara os DOIS em pares espurios, entao essa
+  correlacao nao filtraria o problema — so o cooldown, que e independente da
+  causa exata do lado do Windows, resolve.
+- **2 minutos e um numero escolhido, nao medido.** Sem o `aether.log` de
+  quem relatou o sintoma (as linhas `reconexao:tentando` mostrariam o
+  intervalo real entre disparos), nao ha como saber se o valor certo e maior
+  ou menor — alto o bastante para cobrir a chatice do Modern Standby, baixo o
+  bastante para nao atrasar a recuperacao de um sono de verdade.
+- **Ainda nao verificado na maquina que relatou o sintoma.** So checado
+  sintaticamente (`node --check`) e por leitura, como o reparo original.
 
 ### Limitacoes conhecidas
 
@@ -1609,6 +1653,96 @@ de alguem afetaria o que os outros escutam.
   testes de `tests/unit/volumes.test.ts` cobrem a logica pura (corte de faixa,
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
+
+## Transferencia de posse e exclusao de servidor
+
+A "zona de risco" que a aba Geral das configuracoes do servidor prometia e
+nunca tinha: transferir o servidor para outro membro, e apaga-lo para sempre.
+As duas so aparecem para quem e o DONO de verdade — nunca para quem tem
+MANAGE_SERVER por cargo (um Administrador, por exemplo). Confundir as duas
+coisas seria escalada de privilegio: gerenciar nao e a mesma coisa que ser
+dono, e um Administrador transferindo o servidor para si mesmo teria exatamente
+esse efeito.
+
+**As duas pedem a senha da CONTA de quem esta agindo**, reconfirmada no
+servidor contra o `passwordHash` de verdade — a sessao ja aberta sozinha nao
+prova que quem esta na frente da tela agora e o dono, e nao alguem que achou o
+notebook destravado. Pedido do proprio dono do produto para a transferencia;
+estendido para a exclusao porque e ainda mais dificil de desfazer — na
+verdade, impossivel.
+
+### O bug que a transferencia evita: o cargo "Dono" e separado do `ownerId`
+
+`isOwner`, no calculo de permissao (`loadMemberAccess`), olha SO
+`Server.ownerId` — nao o cargo. Mas o cargo "Dono" (criado com
+`ALL_PERMISSIONS`, marcado `isOwner: true` no schema) fica ATRIBUIDO a quem
+criou o servidor via `MemberRole`, como qualquer outro cargo.
+
+Se a transferencia so trocasse `ownerId`, o dono antigo deixaria de contar
+como dono no calculo — mas continuaria com o cargo "Dono" preso a ele, e esse
+cargo sozinho ja vale `ALL_PERMISSIONS`. Resultado: administracao total
+disfarçada de "membro comum", exatamente o tipo de permissao divergente que a
+regra de arquitetura deste projeto existe para evitar.
+
+O conserto e a transacao mover o `MemberRole` do cargo "Dono" junto com o
+`ownerId`: sai de quem estava, entra em quem recebeu. Verificado contra o
+Postgres de verdade (nao so a decisao dublada) em
+`scripts/verify-server-ownership.mjs` — cria um servidor descartavel, transfere,
+confere que o cargo saiu de um lado e entrou no outro, transfere de volta
+(prova que o `upsert` nao quebra quando o alvo ja teve o cargo antes) e so
+depois testa a exclusao.
+
+### Exclusao: a ordem importa por causa do cascade
+
+`Server` tem `onDelete: Cascade` para tudo que depende dele — membros, cargos,
+categorias, canais, mensagens, convites, banimentos e ate o proprio log de
+auditoria. Isso resolve a limpeza inteira sozinho, mas cria uma ordem
+obrigatoria do lado do gateway: ele precisa saber quais canais o servidor
+tinha para tirar cada socket das salas certas, e essa consulta so funciona
+ANTES do cascade acontecer. Por isso `deleteServerAction` chama
+`notifyServerDeleted` (nova rota `/internal/server-deleted`, que reaproveita o
+mesmo `evict()` do kick/ban — um por membro, so trocando o motivo mostrado)
+e SO DEPOIS apaga a linha do banco.
+
+### Como testar
+
+```bash
+npx dotenv -e .env -- node scripts/verify-server-ownership.mjs
+```
+
+Na interface: aba **Geral** das configuracoes do servidor, como dono. A
+secao "Zona de risco" so aparece ali.
+
+### Limitacoes conhecidas
+
+- **Nao ha log de auditoria da exclusao.** `AuditLog.serverId` faz cascade a
+  partir de `Server` — gravar "servidor excluido" e apagar o servidor na
+  sequencia apagaria o proprio registro junto. Nao ha como esse log
+  sobreviver ao que ele descreveria; documentado aqui em vez de fingir um
+  rastro que a propria exclusao sempre levaria embora. A transferencia de
+  posse tem log normal (`server.transfer_ownership`), porque o servidor
+  continua existindo depois dela.
+- **Nao pede para digitar o nome do servidor**, so a senha. Foi uma escolha
+  deliberada para nao inflar o pedido original (so a senha foi pedida) — se
+  a exclusao acidental vier a ser um problema real, esse e o proximo reforço
+  natural.
+- **A exclusao vira uma chamada HTTP por membro conectado** para o gateway
+  (`evict()` reaproveitado, nao uma rota bulk dedicada). Aceito porque um
+  servidor deste produto tem poucas dezenas de pessoas; a alternativa seria
+  uma segunda versao da mesma logica so para poupar uma consulta que ja e
+  rapida.
+- **Nao verificado com login de dono de verdade na interface.** Typecheck,
+  os 348 testes unitarios existentes e a verificacao contra o Postgres real
+  (`verify-server-ownership.mjs`, exercitada via SQL direto no projeto
+  Supabase nesta rodada, ja que o ambiente nao tinha `.env` com a senha do
+  banco) passaram; falta abrir a tela como dono, transferir para um membro de
+  verdade e confirmar que o modal, o redirecionamento e o aviso de socket
+  (`server:evicted`) aparecem como esperado.
+- **`server:evicted` nao mostra o motivo na tela.** O evento carrega
+  `reason` (mensagens diferentes para expulsao/banimento e para exclusao de
+  servidor), mas o cliente hoje so usa isso para decidir redirecionar — o
+  texto em si nao aparece em lugar nenhum. Continua correto (a pessoa sai da
+  tela do jeito certo), so nao é tao informativo quanto podia ser.
 
 ## Conversas diretas (DM)
 
@@ -3018,6 +3152,131 @@ limitacao logo abaixo, porque tem custo real e nao dava para resolver junto.
 - **A auditoria nao cobriu o app de desktop a fundo.** O que foi verificado
   ali: o `.env` nao vai no pacote e o renderer nao recebe segredo. Ficaram sem
   varredura o auto-updater (assinatura do pacote) e o IPC do modulo nativo.
+
+## FASE 7c-2 — presenca e voz no Redis, e o adapter do Socket.IO
+
+A divida que a propria 7c-1 ja apontava: "presenca, ocupacao de voz e o
+adapter do Socket.IO continuam em memoria... e a parte que de fato destrava a
+segunda maquina de gateway". Esta fase entrega essa parte — o CODIGO fica
+pronto para mais de uma instancia; ligar de verdade (`fly scale count 2`)
+continua sendo um passo manual, feito quando o Redis estiver provisionado em
+producao.
+
+### O desenho: uma interface, dois backends
+
+`apps/realtime/src/state.ts` deixou de SER o estado e passou a ESCOLHER onde
+ele mora: `state-memory.ts` (os `Map` de sempre, so com `async` na
+assinatura) ou `state-redis.ts` (novo), conforme `REDIS_URL` estar
+configurada. As duas implementam `StateStore`
+(`apps/realtime/src/state-store.ts`), e o resto do gateway continua
+importando `from "./state"` exatamente como sempre importou — so que agora
+com `await`. **Sem `REDIS_URL`, o comportamento e IDENTICO ao de antes desta
+fase**, nao uma versao degradada dele.
+
+### Por que TCP (`ioredis`), e nao a API REST que o resto do projeto usa
+
+`packages/shared/src/redis.ts` fala com o Upstash por HTTP porque o app web
+roda em funcao SERVERLESS — conexao TCP persistente ali estoura o pool a
+cada cold start. O gateway NAO tem esse problema: e processo de vida longa na
+Fly. E ele PRECISA de TCP mesmo assim, porque REST nao da pub/sub, e o
+adapter do Socket.IO (`@socket.io/redis-adapter`) e a propria forma de
+`SADD`/`HSET` numa conexao persistente dependem disso. Por isso `REDIS_URL` e
+uma variavel SEPARADA de `UPSTASH_REDIS_REST_URL`/`_TOKEN` — vem da aba
+"Redis Connect" do Upstash, nao da aba "REST API", e so o gateway a usa.
+
+### Onde Lua entrou, e onde nao entrou
+
+So em DOIS lugares: entrar e sair de um servidor
+(`JOIN_SERVER_LUA`/`LEAVE_SERVER_LUA` em `state-redis.ts`), porque so ali a
+decisao "isto fez a pessoa FICAR PRESENTE agora" precisa ser atomica — duas
+pessoas entrando no MESMO servidor ao mesmo tempo, em instancias diferentes,
+e um caso real, e so um dos dois HINCRBY pode "ver" o contador virar 1. O
+resto (trocar status, falar, mutar, mover) e sempre uma pessoa agindo sobre
+si mesma ou um moderador agindo sobre UM alvo — a mesma serializacao que a
+versao em memoria ja tinha de graca, so que aqui vem de nao haver dois
+clientes mandando o mesmo evento no mesmo milissegundo, nao de o Redis
+garantir isso sozinho. Documentado como risco aceito, no comentario de cada
+funcao que faz GET+SET em vez de Lua.
+
+### Tres lugares que dependiam de socket LOCAL, e paravam de funcionar com uma segunda maquina
+
+`io.sockets.sockets.get(socketId)` e `io.sockets.adapter.rooms.get(sala)` so
+enxergam sockets desta instancia — nunca eram um bug enquanto so havia uma
+maquina, porque "local" e "todo mundo" eram a mesma coisa. Tres pontos
+dependiam disso e foram corrigidos para os metodos do PROPRIO Socket.IO que
+atravessam instancia (com o adapter de Redis, e sem ele tambem — degradam
+para o mesmo comportamento local de sempre):
+
+- **`evict()`** (`internal.ts`, kick/ban/exclusao de servidor) — trocou
+  `socketIdsOf` + `sockets.get` por `io.in(room.user(id)).fetchSockets()` +
+  `socketsLeave(...)`. Sem isso, expulsar alguem conectado na OUTRA maquina
+  nao tirava a pessoa de lugar nenhum.
+- **`resyncServerRooms()`** (`rooms.ts`, cargo editado/canal virou privado) —
+  trocou a leitura direta do adapter por `io.in(sala).fetchSockets()`. Sem
+  isso, so quem estivesse na MESMA maquina que processou a mudanca de
+  permissao seria recalculado.
+- **`voice:move`** (`handlers/voice.ts`, moderador move alguem de canal) —
+  trocou a busca do socket alvo (`io.sockets.sockets.get`) por
+  `io.to(room.user(alvo)).emit(...)`, usando o `PublicUser` que ja vinha
+  gravado na propria ocupacao de voz em vez de o ler do socket. Sem isso,
+  mover alguem conectado na outra maquina respondia "essa pessoa saiu da
+  call" — falso.
+
+### O que NAO tem: limpeza por TTL
+
+Uma queda GRACIOSA (o `shutdown()` que ja existia, o que `fly deploy` faz
+numa atualizacao normal) dispara o `disconnect` de cada socket e o Redis fica
+limpo — mesma garantia de sempre. Uma queda NAO graciosa (OOM, `fly machine
+kill`) deixava a memoria simplesmente sumir junto com o processo; no Redis,
+a entrada fica para tras ate alguem notar. Nao implementado nesta rodada —
+ficaria como TTL renovado a cada escrita, e exigiria decidir um numero sem
+dado de producao para calibrar. Registrado aqui, nao escondido.
+
+### Como testar
+
+```bash
+# unidade: state.ts sem Redis nenhum (o padrao, sem REDIS_URL no .env)
+npx vitest run tests/unit/voice-activity.test.ts
+
+# integracao: duas conexoes Redis + dois servidores Socket.IO de verdade,
+# simulando duas maquinas de gateway. Sobe um Redis local por conta propria
+# (`redis-server`) ou aponte REDIS_URL para um de teste — NUNCA para o de
+# producao com dados reais.
+npx tsx scripts/verify-gateway-redis.mts
+```
+
+O segundo prova, contra Redis real (nao dublado): presenca e voz escritas por
+uma conexao aparecem na outra; a corrida de duas entradas simultaneas do
+MESMO usuario no MESMO servidor resolve para exatamente uma "ficou presente";
+`io.to(sala).emit()`, `fetchSockets()` e `socketsLeave()` atravessam duas
+instancias de verdade. Rodado nesta sessao contra Redis local: 16/16.
+
+Tambem verificado nesta sessao: o gateway sobe e responde `/health` nos dois
+modos (com e sem `REDIS_URL`), typecheck limpo em todos os workspaces, e os
+348 testes unitarios existentes continuam passando.
+
+### Limitacoes conhecidas desta fase
+
+- **Nao verificado contra DUAS MAQUINAS DE FLY DE VERDADE**, so contra dois
+  processos locais falando com o mesmo Redis. O `fly.toml` continua com
+  `min_machines_running = 1` — subir para 2 e um passo manual futuro, so
+  depois de rodar assim em producao por um tempo com uma maquina so (para
+  confirmar que nada regrediu) e so entao escalar.
+- **Sem TTL/limpeza automatica**, como explicado acima — uma queda nao
+  graciosa deixa fantasma no Redis ate reiniciar o processo (que hoje nao
+  limpa o que sobrou de uma execucao anterior, so o que a PROPRIA execucao
+  cria).
+- **`presenceOf`/`voiceOfServer`/`presenceOfFriends` fazem uma consulta em
+  pipeline por servidor/lista**, nao uma so para tudo — aceitavel na escala
+  atual (grupo de amigos, nao milhares de pessoas por servidor), mas e o
+  primeiro lugar a otimizar se isso crescer.
+- **A revalidacao de sessao (`session-guard.ts`) continua olhando so os
+  sockets LOCAIS de cada instancia** — e o comportamento CERTO (cada
+  instancia so precisa revalidar quem esta conectado nela mesma), mas vale
+  registrar que nao foi tocada nesta fase por nao precisar ser.
+- **Nenhum numero de producao ainda.** Os testes provam a CORRETUDE do
+  mecanismo; nao ha medicao de latencia real de `HGETALL`/pipeline num Redis
+  do outro lado do Atlantico sob carga de uso de verdade.
 
 ## Limitacoes conhecidas da FASE 7c-1 (rate limit distribuido e ticket)
 

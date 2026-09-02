@@ -79,6 +79,23 @@ export async function resyncGatewayRooms(params: {
 }
 
 /**
+ * Avisa o gateway que um servidor inteiro foi excluido, para tirar todo
+ * mundo das salas dele de uma vez.
+ *
+ * PRECISA SER CHAMADO ANTES de `prisma.server.delete`: o gateway consulta os
+ * canais do servidor para saber de quais salas tirar cada socket, e depois do
+ * cascade essa consulta voltaria vazia. `userIds` vem de quem chama porque,
+ * pelo mesmo motivo, ler os membros tambem precisa acontecer antes.
+ */
+export async function notifyServerDeleted(params: {
+  serverId: string;
+  userIds: string[];
+}): Promise<void> {
+  if (params.userIds.length === 0) return;
+  await callInternal("/internal/server-deleted", params, "a exclusao do servidor");
+}
+
+/**
  * Avisa o gateway que a lista de amizades destas pessoas mudou.
  *
  * Necessario porque o gateway guarda os amigos EM MEMORIA — sem isso, aceitar

@@ -5,12 +5,19 @@ import { prisma } from "@aether/db";
 /**
  * Registro de auditoria. Alimentado desde a fase 1 para que o painel
  * administrativo da fase 6 tenha historico real desde o inicio.
+ *
+ * NAO HA "server.delete" NESTA LISTA, DE PROPOSITO. `AuditLog.serverId` tem
+ * `onDelete: Cascade` a partir de `Server` — gravar aqui e apagar o servidor
+ * na sequencia apagaria o proprio registro junto. Nao ha como este log
+ * sobreviver ao que ele descreveria; documentado como limitacao no README em
+ * vez de fingir um rastro que a exclusao sempre levaria embora.
  */
 export type AuditAction =
   | "server.create"
   | "server.update"
   | "server.join"
   | "server.leave"
+  | "server.transfer_ownership"
   | "invite.create"
   | "invite.use"
   | "channel.create"

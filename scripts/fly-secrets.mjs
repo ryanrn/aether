@@ -124,6 +124,17 @@ if (redisMissing.length === 0) {
 }
 
 /**
+ * Redis, mas o OUTRO Redis (fase 7c-2). `REDIS_URL` e uma conexao TCP
+ * (`rediss://...`), da aba "Redis Connect" do Upstash — diferente do par
+ * REST acima, que vem da aba "REST API" e nao serve aqui: presenca, voz e o
+ * adapter do Socket.IO precisam de pub/sub e de HSET/SADD numa conexao
+ * persistente, que a API REST nao oferece. Sozinha, e sozinha de proposito:
+ * sem ela o gateway sobe com presenca e voz em memoria, exatamente como
+ * sempre foi — so uma segunda maquina passa a exigi-la.
+ */
+if (env.REDIS_URL) payload.REDIS_URL = env.REDIS_URL;
+
+/**
  * IGDB, via Twitch (capa de jogo na atividade). Opcional e em par.
  *
  * Vai para o GATEWAY, e so para ele: e o gateway que recebe o nome do jogo e

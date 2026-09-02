@@ -42,14 +42,22 @@ export async function visibleChannelRooms(
  * um que tenha aquele cargo, e resincronizar todo mundo do servidor e uma
  * consulta barata — bem mais simples do que rastrear, em cada ponto de
  * chamada, quais membros o cargo ou o overwrite alcança.
+ *
+ * `io.in(sala).fetchSockets()`, e NAO `io.sockets.adapter.rooms.get` +
+ * `io.sockets.sockets.get` (fase 7c-2): o adapter em memoria so guarda
+ * localmente quem esta NESTA instancia, e com mais de uma maquina de
+ * gateway metade das pessoas do servidor simplesmente nao seria recalculada.
+ * `fetchSockets()` e o metodo do proprio Socket.IO para isto — devolve
+ * sockets de QUALQUER instancia (com o adapter de Redis) e continua
+ * funcionando sem ele, exatamente como antes.
  */
 export async function resyncServerRooms(
   io: AetherServer,
   serverId: string,
 ): Promise<void> {
   const serverRoom = room.server(serverId);
-  const socketIds = io.sockets.adapter.rooms.get(serverRoom);
-  if (!socketIds || socketIds.size === 0) return;
+  const sockets = await io.in(serverRoom).fetchSockets();
+  if (sockets.length === 0) return;
 
   const channels = await prisma.channel.findMany({
     where: { serverId },
@@ -60,10 +68,7 @@ export async function resyncServerRooms(
   // Um usuario com varias abas so precisa ser recalculado uma vez.
   const seenUsers = new Map<string, string[] | null>();
 
-  for (const socketId of socketIds) {
-    const socket = io.sockets.sockets.get(socketId);
-    if (!socket) continue;
-
+  for (const socket of sockets) {
     const { userId } = socket.data;
     if (!seenUsers.has(userId)) {
       const access = await loadMemberAccess(serverId, userId);
