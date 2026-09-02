@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Compass, Library } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { rotuloDeRevisoes, type RevisoesPendentes } from "@aether/shared";
 import { contarRevisoesAction } from "@/server/actions/revisao";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,9 @@ import { ComunidadesTab } from "./comunidades-tab";
 
 type Aba = "jogos" | "comunidades";
 
-const ABAS: { id: Aba; rotulo: string; icone: typeof Library }[] = [
-  { id: "jogos", rotulo: "Biblioteca de jogos", icone: Library },
-  { id: "comunidades", rotulo: "Comunidades", icone: Compass },
+const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
+  { id: "jogos", rotulo: "Biblioteca de jogos", icone: "library" },
+  { id: "comunidades", rotulo: "Comunidades", icone: "compass" },
 ];
 
 /**
@@ -56,7 +56,7 @@ export function EquipePanel() {
 
       <div className="flex gap-1 border-b border-base-800 pb-px">
         {ABAS.map((item) => {
-          const Icon = item.icone;
+          const nomeIcone = item.icone;
           const selected = aba === item.id;
           const esperando =
             item.id === "jogos"
@@ -74,7 +74,7 @@ export function EquipePanel() {
                   : "text-ink-400 hover:text-ink-200",
               )}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <AetherIcon name={nomeIcone} className="h-3.5 w-3.5" />
               {item.rotulo}
               {esperando > 0 ? (
                 <span className="rounded-full bg-amber-400/15 px-1.5 text-[10px] font-semibold leading-[16px] text-amber-300">
@@ -88,9 +88,20 @@ export function EquipePanel() {
 
       <div className="min-h-0 flex-1">
         {aba === "jogos" ? (
-          <JogosTab onPendentes={(n) => setRevisoes((r) => ({ jogos: n, comunidades: r?.comunidades ?? 0 }))} />
+          <JogosTab
+            onPendentes={(n) =>
+              setRevisoes((r) => ({
+                jogos: n,
+                comunidades: r?.comunidades ?? 0,
+              }))
+            }
+          />
         ) : (
-          <ComunidadesTab onPendentes={(n) => setRevisoes((r) => ({ jogos: r?.jogos ?? 0, comunidades: n }))} />
+          <ComunidadesTab
+            onPendentes={(n) =>
+              setRevisoes((r) => ({ jogos: r?.jogos ?? 0, comunidades: n }))
+            }
+          />
         )}
       </div>
     </div>

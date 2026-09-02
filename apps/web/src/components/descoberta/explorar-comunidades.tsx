@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Compass, Search } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   CATEGORIAS_DE_COMUNIDADE,
   type ComunidadeNaVitrine,
@@ -63,7 +63,7 @@ export function ExplorarComunidades({
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-base-800 px-6 py-5">
         <div className="flex items-center gap-2.5">
-          <Compass className="h-5 w-5 text-accent-400" />
+          <AetherIcon name="compass" className="h-5 w-5 text-accent-400" />
           <h1 className="text-[17px] font-semibold text-ink-100">
             Explorar comunidades
           </h1>
@@ -92,7 +92,10 @@ export function ExplorarComunidades({
           </div>
 
           <div className="relative ml-auto min-w-[220px] flex-1 sm:flex-none">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-500" />
+            <AetherIcon
+              name="search"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-500"
+            />
             <input
               type="search"
               value={busca}

@@ -1,22 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Sparkles,
-  Gift,
-  Check,
-  Zap,
-  Radio,
-  Upload,
-  Smile,
-  Shield,
-  Palette,
-  Volume2,
-  Tv,
-  Crown,
-  Heart,
-  ChevronRight,
-} from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { PLANS, type PlanTier } from "@aether/shared";
 import { Button } from "@/components/ui/button";
 import { SeloPlano } from "@/components/ui/selo-plano";
@@ -47,7 +32,9 @@ export function PremiumShowcaseScreen({
   expiraEm?: string | null;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("inicio");
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">(
+    "monthly",
+  );
   const assinante = tierAtual !== "FREE";
   const rotulo = PLANS.PLUS.rotulo;
 
@@ -65,7 +52,7 @@ export function PremiumShowcaseScreen({
       <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-base-800 bg-base-900/90 px-6 backdrop-blur-md">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 font-bold tracking-wide text-ink-100">
-            <Crown className="h-5 w-5 text-accent-400" />
+            <AetherIcon name="crown" className="h-5 w-5 text-accent-400" />
             <span className="font-brand text-lg uppercase">{rotulo}</span>
           </div>
 
@@ -123,7 +110,10 @@ export function PremiumShowcaseScreen({
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
             <div className="flex flex-col items-center md:items-start text-center md:text-left gap-5 max-w-xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
-                <Sparkles className="h-3.5 w-3.5 text-accent-300" />
+                <AetherIcon
+                  name="sparkle"
+                  className="h-3.5 w-3.5 text-accent-300"
+                />
                 NOVA EXPERIÊNCIA PREMIUM
               </div>
 
@@ -144,9 +134,10 @@ export function PremiumShowcaseScreen({
                 o pior lugar do app para um numero velho.
               */}
               <p className="text-sm md:text-base text-ink-200 leading-relaxed max-w-lg">
-                Transmita em {PLANS.PLUS.alturaMax}p a {PLANS.PLUS.quadrosMax}fps,
-                envie arquivos de até {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB
-                e apoie o desenvolvimento contínuo da comunidade.
+                Transmita em {PLANS.PLUS.alturaMax}p a {PLANS.PLUS.quadrosMax}
+                fps, envie arquivos de até{" "}
+                {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB e apoie o
+                desenvolvimento contínuo da comunidade.
               </p>
 
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
@@ -186,31 +177,44 @@ export function PremiumShowcaseScreen({
             <div className="relative flex flex-col gap-3 w-full max-w-xs">
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-base-900/80 p-3.5 backdrop-blur-md shadow-pop transform hover:-translate-y-1 transition-transform">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-500/20 text-accent-300">
-                  <Upload className="h-5 w-5" />
+                  <AetherIcon name="upload" className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-ink-100">Uploads de {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB</h4>
-                  <p className="text-[11px] text-ink-400 truncate">Compartilhe vídeos e arquivos pesados</p>
+                  <h4 className="text-xs font-bold text-ink-100">
+                    Uploads de {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)}{" "}
+                    MB
+                  </h4>
+                  <p className="text-[11px] text-ink-400 truncate">
+                    Compartilhe vídeos e arquivos pesados
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-base-900/80 p-3.5 backdrop-blur-md shadow-pop transform hover:-translate-y-1 transition-transform ml-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-300">
-                  <Tv className="h-5 w-5" />
+                  <AetherIcon name="tv" className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-ink-100">Tela em {PLANS.PRO.alturaMax}p / {PLANS.PRO.quadrosMax} FPS</h4>
-                  <p className="text-[11px] text-ink-400 truncate">Compartilhamento de tela ultra-nítido</p>
+                  <h4 className="text-xs font-bold text-ink-100">
+                    Tela em {PLANS.PRO.alturaMax}p / {PLANS.PRO.quadrosMax} FPS
+                  </h4>
+                  <p className="text-[11px] text-ink-400 truncate">
+                    Compartilhamento de tela ultra-nítido
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-base-900/80 p-3.5 backdrop-blur-md shadow-pop transform hover:-translate-y-1 transition-transform">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-500/20 text-green-300">
-                  <Smile className="h-5 w-5" />
+                  <AetherIcon name="smile" className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-ink-100">Emojis e Efeitos Globais</h4>
-                  <p className="text-[11px] text-ink-400 truncate">Em construção</p>
+                  <h4 className="text-xs font-bold text-ink-100">
+                    Emojis e Efeitos Globais
+                  </h4>
+                  <p className="text-[11px] text-ink-400 truncate">
+                    Em construção
+                  </p>
                 </div>
               </div>
             </div>
@@ -232,14 +236,19 @@ export function PremiumShowcaseScreen({
             <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/15 text-accent-400">
-                  <Palette className="h-5 w-5" />
+                  <AetherIcon name="palette" className="h-5 w-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-accent-400">Personalização</span>
-                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">Temas e Banners Especiais</h3>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-accent-400">
+                    Personalização
+                  </span>
+                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">
+                    Temas e Banners Especiais
+                  </h3>
                 </div>
                 <p className="text-xs text-ink-400 leading-relaxed">
-                  Destaque seu perfil com banners animados, tags customizadas e temas visuais exclusivos.
+                  Destaque seu perfil com banners animados, tags customizadas e
+                  temas visuais exclusivos.
                 </p>
               </div>
             </div>
@@ -247,14 +256,19 @@ export function PremiumShowcaseScreen({
             <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/15 text-purple-400">
-                  <Zap className="h-5 w-5" />
+                  <AetherIcon name="zap" className="h-5 w-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-400">Performance</span>
-                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">Áudio e Voz Hi-Fi</h3>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-400">
+                    Performance
+                  </span>
+                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">
+                    Áudio e Voz Hi-Fi
+                  </h3>
                 </div>
                 <p className="text-xs text-ink-400 leading-relaxed">
-                  Taxa de bits de áudio estéreo em até 384 kbps para conversas e transmissões com qualidade de estúdio.
+                  Taxa de bits de áudio estéreo em até 384 kbps para conversas e
+                  transmissões com qualidade de estúdio.
                 </p>
               </div>
             </div>
@@ -262,14 +276,19 @@ export function PremiumShowcaseScreen({
             <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/15 text-green-400">
-                  <Shield className="h-5 w-5" />
+                  <AetherIcon name="shield" className="h-5 w-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-green-400">Comunidades</span>
-                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">2 Impulsos de Servidor</h3>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-green-400">
+                    Comunidades
+                  </span>
+                  <h3 className="text-sm font-bold text-ink-100 mt-0.5">
+                    2 Impulsos de Servidor
+                  </h3>
                 </div>
                 <p className="text-xs text-ink-400 leading-relaxed">
-                  Dê impulsos para o seu servidor favorito desbloquear mais slots de emojis, qualidade de streaming e customizações.
+                  Dê impulsos para o seu servidor favorito desbloquear mais
+                  slots de emojis, qualidade de streaming e customizações.
                 </p>
               </div>
             </div>
@@ -277,13 +296,17 @@ export function PremiumShowcaseScreen({
         </section>
 
         {/* SECTION: ESCOLHA SEU PLANO (Print 4) */}
-        <section id="planos" className="mx-4 flex flex-col items-center gap-8 pt-6">
+        <section
+          id="planos"
+          className="mx-4 flex flex-col items-center gap-8 pt-6"
+        >
           <div className="flex flex-col items-center text-center gap-2">
             <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight text-white">
               Escolha seu plano
             </h2>
             <p className="text-xs md:text-sm text-ink-300 max-w-md">
-              Escolha a opção ideal para seu estilo de uso. Mude ou cancele quando quiser.
+              Escolha a opção ideal para seu estilo de uso. Mude ou cancele
+              quando quiser.
             </p>
 
             {/* Alternador Mensal / Anual */}
@@ -339,26 +362,50 @@ export function PremiumShowcaseScreen({
 
                 <div className="flex flex-col gap-3 border-t border-base-800 pt-5">
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Uploads de até {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span>
+                      Uploads de até{" "}
+                      {Math.round(PLANS.PLUS.uploadMaxBytes / 1048576)} MB
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span className="text-ink-400">Emojis em qualquer lugar (em construção)</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span className="text-ink-400">
+                      Emojis em qualquer lugar (em construção)
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
                     <span>Super-reações ilimitadas</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span className="text-ink-400">Selo {rotulo} no perfil (em construção)</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span className="text-ink-400">
+                      Selo {rotulo} no perfil (em construção)
+                    </span>
                   </div>
                 </div>
               </div>
 
               <div className="mt-8">
-                <Button variant="secondary" size="md" disabled className="w-full font-bold">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  disabled
+                  className="w-full font-bold"
+                >
                   Em breve
                 </Button>
               </div>
@@ -373,7 +420,10 @@ export function PremiumShowcaseScreen({
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-accent-400" />
+                    <AetherIcon
+                      name="crown"
+                      className="h-5 w-5 text-accent-400"
+                    />
                     <h3 className="text-lg font-black uppercase tracking-wide text-white">
                       {PLANS.PRO.rotulo}
                     </h3>
@@ -393,24 +443,48 @@ export function PremiumShowcaseScreen({
                     Tudo do Básico, além de:
                   </p>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Uploads de até {Math.round(PLANS.PRO.uploadMaxBytes / 1048576 / 1024)} GB</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span>
+                      Uploads de até{" "}
+                      {Math.round(PLANS.PRO.uploadMaxBytes / 1048576 / 1024)} GB
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Tela em {PLANS.PRO.alturaMax}p a {PLANS.PRO.quadrosMax}fps</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span>
+                      Tela em {PLANS.PRO.alturaMax}p a {PLANS.PRO.quadrosMax}fps
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
                     <span>2 Impulsos de Servidor inclusos</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Perfis, avatares animados e banners por servidor</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span>
+                      Perfis, avatares animados e banners por servidor
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs text-ink-100 font-medium">
-                    <Check className="h-4 w-4 text-signal-online shrink-0" />
-                    <span>Limite estendido de 4.000 caracteres por mensagem</span>
+                    <AetherIcon
+                      name="check"
+                      className="h-4 w-4 text-signal-online shrink-0"
+                    />
+                    <span>
+                      Limite estendido de 4.000 caracteres por mensagem
+                    </span>
                   </div>
                 </div>
               </div>
@@ -430,7 +504,10 @@ export function PremiumShowcaseScreen({
         </section>
 
         {/* SECTION: COMPARE NOSSOS PLANOS (Print 4) */}
-        <section id="comparar" className="mx-4 flex flex-col items-center gap-6 pt-10">
+        <section
+          id="comparar"
+          className="mx-4 flex flex-col items-center gap-6 pt-10"
+        >
           <div className="flex flex-col items-center text-center gap-2">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white">
               Compare nossos planos

@@ -104,30 +104,39 @@ e feita em estagios, cada um com regressao verde:
 | 3 | Area de voz: cards de participante (`voice-stage.tsx`), dock (`control-bar.tsx`), faixa de conexao, **botao de supressao de ruido ao vivo**, faixa de teste de microfone | ✅ |
 | 4 | Shell (trilho, sidebar, membros, banner) migrado para `AetherIcon` | ✅ |
 | 5 | `components/aether-v2/` REMOVIDO (codigo morto); `microphone-test.tsx` movido para `voice/` | ✅ |
+| 6 | **Todas as limitacoes fechadas** — ver abaixo | ✅ |
 
-### Limitacoes conhecidas do redesign
+### O que fechou no estagio 6
 
-- **Icones lucide fora da area de voz.** Chat, premium, `server-settings`,
-  `friends`, `auth` e as abas do `app-settings-modal` seguem em `lucide-react`.
-  A migracao da cauda longa (~30 arquivos) e um PR proprio. O app roda com as
-  duas familias ao mesmo tempo sem conflito.
-- **Botao de ruido do dock so expoe o RNNoise (on/off).** As tres chaves
-  nativas do navegador (cancelamento de eco, ganho automatico, supressao
-  nativa) seguem so em Configuracoes: muda-las exige re-publicar a faixa de
-  microfone no meio da call, o que o botao rapido nao faz.
-- **Faixa de teste de microfone e v1.** Aciona/para e mostra o medidor; nao
-  tem selecao de dispositivo inline (isso fica em Configuracoes). O audio NAO
-  e transmitido — `mic-level.ts` abre um stream local proprio.
-- **Glow de fala nao acompanha o RMS por participante.** Respira pela animacao
-  `aether-breathe`; ligar `--vl` ao nivel real de cada remoto exigiria o
-  detector expor volume por participante (hoje so expoe `speaking` booleano).
-- **Painel de membros: grupo "Na chamada" nao implementado.** O redesign abre
-  a lista com "Na chamada — N"; o painel segue agrupando por cargo. Adicionar
-  o grupo derivado e trabalho de um proximo estagio.
-- **Sem verificacao E2E local nesta entrega.** `typecheck`, `vitest` (364) e
-  `next build` passam; os `verify-phase*.mjs` e o teste manual da call (mute,
-  camera, tela, teste de mic, ruido, 2+ participantes) precisam de banco +
-  gateway + LiveKit e ficam para o ambiente do time.
+- **Icones: app inteiro em `AetherIcon`.** O sprite cobre 81 icones (os 29 do
+  OpenDesign + 52 desenhados no mesmo padrao — grade 24, traco 1.75). `lucide-react`
+  nao e mais importado em `apps/web/src` (46 arquivos migrados). `<AetherIconSprite>`
+  saiu do layout de `/app` para o layout raiz — cobre login, registro e marketing.
+- **Botao de ruido: RNNoise + as 3 nativas, ao vivo.** `room.ts::reaplicarTratamentoNativo`
+  usa `restartTrack` para re-adquirir o microfone com as constraints novas sem
+  derrubar a call; em falha reabre o mic e avisa. O popover trava as 3 durante a troca.
+- **Faixa de teste de microfone: seletor de dispositivo inline.** `<MonitorStrip>`
+  lista os microfones e troca na hora (mesma preferencia da call e das Configuracoes).
+- **Glow de fala segue o RMS por participante.** `room.ts` empurra `onAudioLevels`
+  (~11x/s) com o RMS proprio (analisador local) + `RemoteParticipant.audioLevel`
+  dos outros. `useVoiceLevel(id)` devolve um numero — o card so re-renderiza se o
+  SEU nivel mudar. Sem medida, cai na animacao `aether-breathe`.
+- **Painel de membros: grupo "Na chamada — N" no topo**, derivado do mapa `voice`,
+  com icone de estado (mudo/falando). Os grupos por cargo seguem abaixo.
+
+### Limitacoes que ficaram
+
+- **Sem verificacao E2E local nesta entrega.** `typecheck` (todos os workspaces),
+  `vitest` (364) e `next build` passam, e os 81 icones foram conferidos num
+  grid de QA. Mas os `verify-phase*.mjs` e o teste manual da call (mute, camera,
+  tela, teste de mic, ruido on/off, 2+ participantes, glow por nivel) precisam
+  de banco + gateway + LiveKit e ficam para o ambiente do time.
+- **`RemoteParticipant.audioLevel` do LiveKit pode ser esparso.** Se vier 0 para
+  um remoto que esta falando, o card daquele participante usa a animacao
+  `aether-breathe` em vez do nivel real — o glow nunca some, so perde a
+  proporcionalidade. O proprio card sempre tem RMS real (analisador local).
+- **`lucide-react` ainda esta em `apps/web/package.json`.** Nenhum arquivo o
+  importa; remover a dependencia (e mexer no lockfile) fica para uma limpeza a parte.
 
 ---
 

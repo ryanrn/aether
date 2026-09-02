@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { useShellStore } from "@/lib/stores/shell-store";
 
 /**
@@ -89,7 +89,7 @@ export function NavToggle() {
       aria-label="Abrir menu de canais"
       className="-ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-300 transition-colors hover:bg-base-800 hover:text-ink-100 md:hidden"
     >
-      <Menu className="h-4.5 w-4.5" strokeWidth={2} />
+      <AetherIcon name="menu" className="h-4.5 w-4.5" strokeWidth={2} />
     </button>
   );
 }

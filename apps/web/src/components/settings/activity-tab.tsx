@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Gamepad2, RefreshCw } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { AdicionarJogo } from "./adicionar-jogo";
 import { SpotifySection } from "./spotify-section";
 import {
@@ -42,7 +42,9 @@ export function ActivityTab() {
   const [podeIniciar, setPodeIniciar] = useState(false);
   const [iniciaJunto, setIniciaJunto] = useState(false);
   const [salvandoInicio, setSalvandoInicio] = useState(false);
-  const [atualizacao, setAtualizacao] = useState<EstadoAtualizacao | null>(null);
+  const [atualizacao, setAtualizacao] = useState<EstadoAtualizacao | null>(
+    null,
+  );
   const [verificando, setVerificando] = useState(false);
 
   useEffect(() => {
@@ -135,7 +137,10 @@ export function ActivityTab() {
                   className="h-7 w-7 shrink-0 rounded-[4px]"
                 />
               ) : (
-                <Gamepad2 className="h-4 w-4 shrink-0 text-accent-400" />
+                <AetherIcon
+                  name="gamepad"
+                  className="h-4 w-4 shrink-0 text-accent-400"
+                />
               )}
               <p className="min-w-0 flex-1 truncate text-[13px] text-ink-200">
                 {jogoAgora ? (
@@ -232,7 +237,8 @@ export function ActivityTab() {
                   disabled={verificando || atualizacao.fase === "baixando"}
                   className="flex shrink-0 items-center gap-1.5 rounded-md border border-base-600 px-3 py-1.5 text-[12px] text-ink-200 transition-colors hover:bg-base-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <RefreshCw
+                  <AetherIcon
+                    name="refresh"
                     className={cn("h-3.5 w-3.5", verificando && "animate-spin")}
                     strokeWidth={1.75}
                   />
@@ -271,7 +277,11 @@ export function ActivityTab() {
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ backgroundColor: "#68af64" }}
                 >
-                  <Download className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  <AetherIcon
+                    name="download"
+                    className="h-3.5 w-3.5"
+                    strokeWidth={2.25}
+                  />
                   Reiniciar e instalar a {atualizacao.versao}
                 </button>
               ) : null}

@@ -2,17 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Check,
-  Loader2,
-  Ban,
-  MessageSquare,
-  Monitor,
-  Search,
-  UserPlus,
-  UserX,
-  X,
-} from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicFriendship, UserStatus } from "@aether/shared";
 import {
   blockUserAction,
@@ -83,19 +73,19 @@ export function FriendsList({
     secao === "bloqueados"
       ? [{ titulo: "Bloqueados", itens: filtrar(bloqueados) }]
       : secao === "solicitacoes"
-      ? [
-          { titulo: "Recebidos", itens: filtrar(recebidos) },
-          { titulo: "Enviados", itens: filtrar(enviados) },
-        ]
-      : (() => {
-          const base = filtrar(amigos);
-          const online = base.filter(estaOnline);
-          if (aba === "online") return [{ titulo: "Online", itens: online }];
-          return [
-            { titulo: "Online", itens: online },
-            { titulo: "Offline", itens: base.filter((i) => !estaOnline(i)) },
-          ];
-        })();
+        ? [
+            { titulo: "Recebidos", itens: filtrar(recebidos) },
+            { titulo: "Enviados", itens: filtrar(enviados) },
+          ]
+        : (() => {
+            const base = filtrar(amigos);
+            const online = base.filter(estaOnline);
+            if (aba === "online") return [{ titulo: "Online", itens: online }];
+            return [
+              { titulo: "Online", itens: online },
+              { titulo: "Offline", itens: base.filter((i) => !estaOnline(i)) },
+            ];
+          })();
 
   const total = grupos.reduce((soma, grupo) => soma + grupo.itens.length, 0);
 
@@ -144,7 +134,11 @@ export function FriendsList({
             pessoa" e o unico significado que este simbolo tem aqui.
           */}
           <span className="max-md:hidden">Adicionar amigo</span>
-          <UserPlus className="hidden h-4 w-4 max-md:block" strokeWidth={2.25} />
+          <AetherIcon
+            name="user-plus"
+            className="hidden h-4 w-4 max-md:block"
+            strokeWidth={2.25}
+          />
         </button>
       </header>
 
@@ -152,7 +146,11 @@ export function FriendsList({
 
       <div className="shrink-0 border-b border-base-800 px-5 pb-3">
         <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-base-800 bg-base-850/60 px-3.5 py-2.5">
-          <Search className="h-[18px] w-[18px] shrink-0 text-ink-600" strokeWidth={1.75} />
+          <AetherIcon
+            name="search"
+            className="h-[18px] w-[18px] shrink-0 text-ink-600"
+            strokeWidth={1.75}
+          />
           <input
             value={busca}
             onChange={(evento) => setBusca(evento.target.value)}
@@ -172,20 +170,20 @@ export function FriendsList({
       */}
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         <div className="mx-auto w-full max-w-[960px]">
-        {total === 0 ? (
-          <Vazio secao={secao} aba={aba} temBusca={busca.trim().length > 0} />
-        ) : (
-          grupos.map((grupo) =>
-            grupo.itens.length === 0 ? null : (
-              <div key={grupo.titulo}>
-                <Categoria>{`${grupo.titulo} — ${grupo.itens.length}`}</Categoria>
-                {grupo.itens.map((item) => (
-                  <Linha key={item.id} item={item} />
-                ))}
-              </div>
-            ),
-          )
-        )}
+          {total === 0 ? (
+            <Vazio secao={secao} aba={aba} temBusca={busca.trim().length > 0} />
+          ) : (
+            grupos.map((grupo) =>
+              grupo.itens.length === 0 ? null : (
+                <div key={grupo.titulo}>
+                  <Categoria>{`${grupo.titulo} — ${grupo.itens.length}`}</Categoria>
+                  {grupo.itens.map((item) => (
+                    <Linha key={item.id} item={item} />
+                  ))}
+                </div>
+              ),
+            )
+          )}
         </div>
       </div>
     </section>
@@ -309,7 +307,9 @@ function AddFriend({
           className={cn(
             "min-w-0 flex-1 rounded-[6px] border bg-base-950 px-3.5 py-2.5 text-[14px] text-ink-100",
             "outline-none transition-colors duration-150 placeholder:text-ink-600",
-            erro ? "border-signal-dnd" : "border-base-800 focus:border-accent-500",
+            erro
+              ? "border-signal-dnd"
+              : "border-base-800 focus:border-accent-500",
           )}
         />
         <button
@@ -318,9 +318,17 @@ function AddFriend({
           className="flex shrink-0 items-center gap-2 rounded-[6px] bg-accent-500 px-5 py-2.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400 disabled:opacity-40"
         >
           {pendente ? (
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+            <AetherIcon
+              name="loader"
+              className="h-4 w-4 animate-spin"
+              strokeWidth={1.75}
+            />
           ) : (
-            <UserPlus className="h-4 w-4" strokeWidth={1.75} />
+            <AetherIcon
+              name="user-plus"
+              className="h-4 w-4"
+              strokeWidth={1.75}
+            />
           )}
           Enviar
         </button>
@@ -410,11 +418,17 @@ function Linha({ item }: { item: PublicFriendship }) {
         </p>
         {jogo?.game ? (
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-ink-300">
-            <Monitor className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            <AetherIcon
+              name="monitor"
+              className="h-4 w-4 shrink-0"
+              strokeWidth={1.75}
+            />
             <span className="truncate">{jogo.game}</span>
           </p>
         ) : (
-          <p className="mt-0.5 truncate text-[13px] text-ink-300">{LEGENDA[status]}</p>
+          <p className="mt-0.5 truncate text-[13px] text-ink-300">
+            {LEGENDA[status]}
+          </p>
         )}
       </div>
 
@@ -446,24 +460,28 @@ function Linha({ item }: { item: PublicFriendship }) {
             pendente={pendente}
             onClick={() => agir(() => unblockUserAction(item.user.id))}
           >
-            <Ban className="h-4 w-4" strokeWidth={1.75} />
+            <AetherIcon name="ban" className="h-4 w-4" strokeWidth={1.75} />
           </BotaoAcao>
         ) : item.kind === "incoming" ? (
           <>
             <BotaoAcao
               titulo="Aceitar"
               pendente={pendente}
-              onClick={() => agir(() => respondFriendRequestAction(item.id, true))}
+              onClick={() =>
+                agir(() => respondFriendRequestAction(item.id, true))
+              }
             >
-              <Check className="h-4 w-4" strokeWidth={2} />
+              <AetherIcon name="check" className="h-4 w-4" strokeWidth={2} />
             </BotaoAcao>
             <BotaoAcao
               titulo="Recusar"
               perigo
               pendente={pendente}
-              onClick={() => agir(() => respondFriendRequestAction(item.id, false))}
+              onClick={() =>
+                agir(() => respondFriendRequestAction(item.id, false))
+              }
             >
-              <X className="h-4 w-4" strokeWidth={2} />
+              <AetherIcon name="x" className="h-4 w-4" strokeWidth={2} />
             </BotaoAcao>
           </>
         ) : item.kind === "outgoing" ? (
@@ -473,7 +491,7 @@ function Linha({ item }: { item: PublicFriendship }) {
             pendente={pendente}
             onClick={() => agir(() => removeFriendAction(item.user.id))}
           >
-            <X className="h-4 w-4" strokeWidth={2} />
+            <AetherIcon name="x" className="h-4 w-4" strokeWidth={2} />
           </BotaoAcao>
         ) : (
           <>
@@ -482,7 +500,11 @@ function Linha({ item }: { item: PublicFriendship }) {
               pendente={abrindoConversa}
               onClick={abrirConversa}
             >
-              <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+              <AetherIcon
+                name="message"
+                className="h-4 w-4"
+                strokeWidth={1.75}
+              />
             </BotaoAcao>
             <span className="flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
               <BotaoAcao
@@ -491,7 +513,11 @@ function Linha({ item }: { item: PublicFriendship }) {
                 pendente={pendente}
                 onClick={() => agir(() => removeFriendAction(item.user.id))}
               >
-                <UserX className="h-4 w-4" strokeWidth={1.75} />
+                <AetherIcon
+                  name="user-x"
+                  className="h-4 w-4"
+                  strokeWidth={1.75}
+                />
               </BotaoAcao>
               {/*
                 Bloquear tambem desfaz a amizade — os dois botoes ficam juntos
@@ -505,7 +531,7 @@ function Linha({ item }: { item: PublicFriendship }) {
                 pendente={pendente}
                 onClick={() => agir(() => blockUserAction(item.user.id))}
               >
-                <Ban className="h-4 w-4" strokeWidth={1.75} />
+                <AetherIcon name="ban" className="h-4 w-4" strokeWidth={1.75} />
               </BotaoAcao>
             </span>
           </>
@@ -544,7 +570,11 @@ function BotaoAcao({
       )}
     >
       {pendente ? (
-        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+        <AetherIcon
+          name="loader"
+          className="h-4 w-4 animate-spin"
+          strokeWidth={1.75}
+        />
       ) : (
         children
       )}

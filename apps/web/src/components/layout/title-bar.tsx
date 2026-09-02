@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
-import { Download, Users } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { useShellStore } from "@/lib/stores/shell-store";
 import { isDesktopApp } from "@/lib/voice/screen-share";
 import {
@@ -119,7 +119,8 @@ export function TitleBar() {
           </>
         ) : emAmigos ? (
           <>
-            <Users
+            <AetherIcon
+              name="users"
               className="h-[15px] w-[15px] shrink-0 text-ink-400"
               strokeWidth={1.75}
             />
@@ -160,7 +161,7 @@ export function TitleBar() {
           )}
           style={{ backgroundColor: "#68af64" }}
         >
-          <Download className="h-3 w-3" strokeWidth={2.25} />
+          <AetherIcon name="download" className="h-3 w-3" strokeWidth={2.25} />
           {instalando ? "Reiniciando..." : "Atualizar"}
         </button>
       ) : null}

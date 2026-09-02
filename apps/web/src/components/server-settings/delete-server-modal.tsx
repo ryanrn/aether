@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { deleteServerAction } from "@/server/actions/servers";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -43,9 +43,8 @@ export function DeleteServerModal({
     <Modal open onClose={onClose} title={`Excluir ${serverName}`}>
       <div className="flex flex-col gap-4">
         <p className="text-[13px] leading-relaxed text-signal-dnd">
-          Isto apaga o servidor para SEMPRE: todos os canais, mensagens,
-          cargos, membros, convites e banimentos somem junto. Nao ha como
-          desfazer.
+          Isto apaga o servidor para SEMPRE: todos os canais, mensagens, cargos,
+          membros, convites e banimentos somem junto. Nao ha como desfazer.
         </p>
 
         <Field label="Sua senha" required>
@@ -69,7 +68,7 @@ export function DeleteServerModal({
             onClick={submit}
             disabled={pending || !password}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <AetherIcon name="trash" className="h-3.5 w-3.5" />
             {pending ? "Excluindo..." : "Excluir servidor"}
           </Button>
         </div>

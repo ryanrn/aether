@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertCircle, Copy, SmilePlus } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
@@ -143,7 +143,7 @@ export function MessageItem({
             "group-hover/message:opacity-100 focus:opacity-100 hover:text-ink-100",
           )}
         >
-          <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <AetherIcon name="smile" className="h-3.5 w-3.5" strokeWidth={1.75} />
         </button>
       ) : null}
 
@@ -261,14 +261,14 @@ export function MessageItem({
 
           {message.failed ? (
             <p className="mt-1 flex items-center gap-1.5 text-[11px] text-signal-dnd">
-              <AlertCircle className="h-3 w-3 shrink-0" />
+              <AetherIcon name="alert" className="h-3 w-3 shrink-0" />
               {message.failed}
             </p>
           ) : null}
 
           <ContextMenu ponto={menu.ponto} onClose={menu.fechar}>
             <ItemDoMenu
-              icone={<Copy className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="copy" className="h-3.5 w-3.5" />}
               onClick={() => {
                 void navigator.clipboard.writeText(selecao ?? message.content);
                 menu.fechar();
@@ -283,7 +283,7 @@ export function MessageItem({
               divergiriam na primeira vez que um deles ganhasse uma aba.
             */}
             <ItemDoMenu
-              icone={<SmilePlus className="h-3.5 w-3.5" />}
+              icone={<AetherIcon name="smile" className="h-3.5 w-3.5" />}
               disabled={!podeReagir}
               onClick={() => {
                 const ponto = menu.ponto;
@@ -316,8 +316,10 @@ function formatDateTime(date: Date): string {
   const today = new Date();
   const sameDay = date.toDateString() === today.toDateString();
   if (sameDay) return `hoje ${formatTime(date)}`;
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  }) + ` ${formatTime(date)}`;
+  return (
+    date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    }) + ` ${formatTime(date)}`
+  );
 }

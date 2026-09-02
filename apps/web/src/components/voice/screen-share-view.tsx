@@ -1,22 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Maximize2,
-  MonitorUp,
-  PictureInPicture2,
-  Pin,
-  PinOff,
-  Volume1,
-  Play,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type { Track } from "livekit-client";
-import {
-  useRealtimeStore,
-  useScreenShares,
-} from "@/lib/stores/realtime-store";
+import { useRealtimeStore, useScreenShares } from "@/lib/stores/realtime-store";
 import {
   DEFAULT_VOLUME,
   readScreenVolume,
@@ -92,11 +79,16 @@ export function ScreenShareView() {
           track={focused.track}
           pinned={focusedId === focused.userId}
           onTogglePin={() =>
-            setFocusedShare(focusedId === focused.userId ? null : focused.userId)
+            setFocusedShare(
+              focusedId === focused.userId ? null : focused.userId,
+            )
           }
         />
       ) : (
-        <Convite label={focused.label} onAceitar={() => watchShare(focused.userId)} />
+        <Convite
+          label={focused.label}
+          onAceitar={() => watchShare(focused.userId)}
+        />
       )}
 
       {others.length > 0 ? (
@@ -110,11 +102,18 @@ export function ScreenShareView() {
               className="group relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-base-700 bg-base-950 transition-colors hover:border-accent-600/60"
             >
               {podeVer(item.userId) ? (
-                <TrackVideo track={item.track} className="h-full w-full object-contain" />
+                <TrackVideo
+                  track={item.track}
+                  className="h-full w-full object-contain"
+                />
               ) : (
                 /* Sem aceite, a miniatura tambem nao mostra a tela de ninguem. */
                 <span className="grid h-full w-full place-items-center">
-                  <MonitorUp className="h-5 w-5 text-ink-500" strokeWidth={1.75} />
+                  <AetherIcon
+                    name="screen-share"
+                    className="h-5 w-5 text-ink-500"
+                    strokeWidth={1.75}
+                  />
                 </span>
               )}
               <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-base-950/90 to-transparent px-2 py-1 text-left font-mono text-[10px] text-ink-300">
@@ -207,7 +206,7 @@ function FocusedStream({
       />
 
       <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-sm border border-signal-live/40 bg-base-950/80 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-signal-live backdrop-blur">
-        <MonitorUp className="h-3 w-3" />
+        <AetherIcon name="screen-share" className="h-3 w-3" />
         {label}
       </div>
 
@@ -217,19 +216,29 @@ function FocusedStream({
           onClick={onTogglePin}
           active={pinned}
         >
-          {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+          {pinned ? (
+            <AetherIcon name="pin-off" className="h-3.5 w-3.5" />
+          ) : (
+            <AetherIcon name="pin" className="h-3.5 w-3.5" />
+          )}
         </StreamAction>
 
         {pipAvailable ? (
-          <StreamAction label="Picture-in-picture" onClick={() => void togglePip()}>
-            <PictureInPicture2 className="h-3.5 w-3.5" />
+          <StreamAction
+            label="Picture-in-picture"
+            onClick={() => void togglePip()}
+          >
+            <AetherIcon name="pip" className="h-3.5 w-3.5" />
           </StreamAction>
         ) : null}
 
         <ScreenAudioVolume />
 
-        <StreamAction label="Tela cheia" onClick={() => void toggleFullscreen()}>
-          <Maximize2 className="h-3.5 w-3.5" />
+        <StreamAction
+          label="Tela cheia"
+          onClick={() => void toggleFullscreen()}
+        >
+          <AetherIcon name="maximize" className="h-3.5 w-3.5" />
         </StreamAction>
       </div>
     </div>
@@ -260,7 +269,7 @@ function ScreenAudioVolume() {
     roomControls?.setScreenAudioVolume(next);
   }
 
-  const Icon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const nomeVolume: AetherIconName = volume === 0 ? "volume-off" : "volume";
 
   return (
     <div className="relative">
@@ -269,7 +278,7 @@ function ScreenAudioVolume() {
         onClick={() => setOpen((value) => !value)}
         active={open}
       >
-        <Icon className="h-3.5 w-3.5" />
+        <AetherIcon name={nomeVolume} className="h-3.5 w-3.5" />
       </StreamAction>
 
       {open ? (
@@ -393,7 +402,11 @@ function Convite({
     <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-base-800 bg-base-950">
       <div className="flex max-w-sm flex-col items-center gap-4 p-8 text-center">
         <span className="grid h-14 w-14 place-items-center rounded-full bg-base-850">
-          <MonitorUp className="h-6 w-6 text-accent-400" strokeWidth={1.75} />
+          <AetherIcon
+            name="screen-share"
+            className="h-6 w-6 text-accent-400"
+            strokeWidth={1.75}
+          />
         </span>
 
         <div>
@@ -410,7 +423,7 @@ function Convite({
           onClick={onAceitar}
           className="flex items-center gap-2 rounded-md bg-accent-500 px-4 py-2 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400"
         >
-          <Play className="h-4 w-4" strokeWidth={2} />
+          <AetherIcon name="play" className="h-4 w-4" strokeWidth={2} />
           Assistir
         </button>
       </div>

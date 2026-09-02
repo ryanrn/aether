@@ -1,16 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Ban, UserMinus } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   BAN_DURATIONS,
   type BanDurationId,
   type PublicMember,
 } from "@aether/shared";
-import {
-  banMemberAction,
-  kickMemberAction,
-} from "@/server/actions/moderation";
+import { banMemberAction, kickMemberAction } from "@/server/actions/moderation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -119,9 +116,7 @@ export function MemberModerationModal({
           />
         </label>
 
-        {error ? (
-          <p className="text-[12px] text-signal-dnd">{error}</p>
-        ) : null}
+        {error ? <p className="text-[12px] text-signal-dnd">{error}</p> : null}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
@@ -129,9 +124,9 @@ export function MemberModerationModal({
           </Button>
           <Button variant="danger" onClick={submit} disabled={pending}>
             {isBan ? (
-              <Ban className="h-3.5 w-3.5" />
+              <AetherIcon name="ban" className="h-3.5 w-3.5" />
             ) : (
-              <UserMinus className="h-3.5 w-3.5" />
+              <AetherIcon name="user-minus" className="h-3.5 w-3.5" />
             )}
             {pending ? "Aplicando..." : isBan ? "Banir" : "Expulsar"}
           </Button>

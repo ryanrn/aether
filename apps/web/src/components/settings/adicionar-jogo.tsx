@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { listarCandidatosAJogo } from "@/lib/desktop/game-activity";
 import { sugerirJogoAction } from "@/server/actions/jogos";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,9 @@ export function AdicionarJogo() {
         return;
       }
       if (r.data.status === "APROVADO") {
-        setAviso("Esse ja esta na biblioteca — deve aparecer na proxima verificacao.");
+        setAviso(
+          "Esse ja esta na biblioteca — deve aparecer na proxima verificacao.",
+        );
       } else if (r.data.status === "RECUSADO") {
         setAviso("Esse ja foi analisado e recusado.");
       } else if (r.data.jaSugerido) {
@@ -120,7 +122,9 @@ export function AdicionarJogo() {
       ) : null}
 
       {carregando ? (
-        <p className="text-[12px] text-ink-500">Lendo os programas abertos...</p>
+        <p className="text-[12px] text-ink-500">
+          Lendo os programas abertos...
+        </p>
       ) : candidatos.length === 0 ? (
         <p className="text-[12px] text-ink-500">
           Nada para sugerir. Abra o jogo antes, e deixe a deteccao ligada.
@@ -155,7 +159,7 @@ export function AdicionarJogo() {
             className="h-8 text-[13px]"
           />
           <Button type="button" size="sm" onClick={enviar} disabled={pending}>
-            <Plus className="h-3.5 w-3.5" />
+            <AetherIcon name="plus" className="h-3.5 w-3.5" />
             {pending ? "Enviando..." : "Enviar"}
           </Button>
         </div>

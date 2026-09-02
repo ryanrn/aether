@@ -1,6 +1,6 @@
 "use client";
 
-import { Music2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { MusicActivity } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
@@ -45,12 +45,12 @@ export function MusicActivityRow({
             arte,
           )}
         >
-          <Music2 className="h-4 w-4" />
+          <AetherIcon name="music" className="h-4 w-4" />
         </span>
       )}
       <div className="min-w-0">
         <p className="flex items-center gap-1 text-[11px] font-medium text-[#1DB954]">
-          <Music2 className="h-3 w-3 shrink-0" />
+          <AetherIcon name="music" className="h-3 w-3 shrink-0" />
           Ouvindo no Spotify
         </p>
         <p className="truncate text-[13px] text-ink-100">{musica.title}</p>

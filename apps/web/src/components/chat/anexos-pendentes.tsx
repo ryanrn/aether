@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Loader2, X } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicAttachment } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export function AnexosPendentes({
             />
           ) : (
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded bg-base-850 text-ink-400">
-              <FileText className="h-4 w-4" />
+              <AetherIcon name="file-text" className="h-4 w-4" />
             </span>
           )}
 
@@ -87,7 +87,10 @@ export function AnexosPendentes({
           </span>
 
           {anexo.estado === "enviando" ? (
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ink-500" />
+            <AetherIcon
+              name="loader"
+              className="h-3.5 w-3.5 shrink-0 animate-spin text-ink-500"
+            />
           ) : null}
 
           <button
@@ -96,7 +99,7 @@ export function AnexosPendentes({
             aria-label={`Remover ${anexo.nome}`}
             className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-base-700 bg-base-800 text-ink-400 opacity-0 transition-opacity hover:text-ink-100 group-hover/anexo:opacity-100 focus:opacity-100"
           >
-            <X className="h-2.5 w-2.5" strokeWidth={3} />
+            <AetherIcon name="x" className="h-2.5 w-2.5" strokeWidth={3} />
           </button>
         </div>
       ))}
@@ -162,7 +165,7 @@ export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
             className="flex max-w-[320px] items-center gap-2.5 rounded-md border border-base-700 bg-base-900 px-3 py-2 transition-colors hover:border-base-600"
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-base-850 text-ink-400">
-              <FileText className="h-4 w-4" />
+              <AetherIcon name="file-text" className="h-4 w-4" />
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-[13px] text-accent-300">

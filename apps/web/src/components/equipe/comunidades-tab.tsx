@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Check, RefreshCw, X } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   categoriaPorId,
   type PedidoDeVitrine,
   type VitrineStatus,
 } from "@aether/shared";
-import { listarPedidosAction, revisarPedidoAction } from "@/server/actions/descoberta";
+import {
+  listarPedidosAction,
+  revisarPedidoAction,
+} from "@/server/actions/descoberta";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -113,7 +116,10 @@ export function ComunidadesTab({
           onClick={() => carregar(status)}
           disabled={carregando || pending}
         >
-          <RefreshCw className={cn("h-3.5 w-3.5", carregando && "animate-spin")} />
+          <AetherIcon
+            name="refresh"
+            className={cn("h-3.5 w-3.5", carregando && "animate-spin")}
+          />
         </Button>
       </div>
 
@@ -157,7 +163,12 @@ export function ComunidadesTab({
                 className="flex flex-col gap-2 rounded-md border border-base-800 bg-base-850/60 p-3"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <Avatar userId={p.id} name={p.nome} src={p.iconUrl} size="sm" />
+                  <Avatar
+                    userId={p.id}
+                    name={p.nome}
+                    src={p.iconUrl}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-medium text-ink-100">
                       {p.nome}
@@ -192,7 +203,7 @@ export function ComunidadesTab({
                       onClick={() => revisar(p, "APROVADO")}
                       disabled={pending}
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      <AetherIcon name="check" className="h-3.5 w-3.5" />
                       Aprovar
                     </Button>
                     <Button
@@ -202,7 +213,7 @@ export function ComunidadesTab({
                       onClick={() => revisar(p, "RECUSADO")}
                       disabled={pending}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <AetherIcon name="x" className="h-3.5 w-3.5" />
                       Recusar
                     </Button>
                   </div>

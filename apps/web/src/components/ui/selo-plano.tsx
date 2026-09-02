@@ -1,4 +1,4 @@
-import { Crown, Sparkles } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { limitesDoPlano, type PlanTier } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ export function SeloPlano({
   if (!tier || tier === "FREE") return null;
 
   const limites = limitesDoPlano(tier);
-  const Icone = tier === "PRO" ? Crown : Sparkles;
+  const nomeIcone: AetherIconName = tier === "PRO" ? "crown" : "sparkle";
 
   return (
     <span
@@ -49,7 +49,8 @@ export function SeloPlano({
         className,
       )}
     >
-      <Icone
+      <AetherIcon
+        name={nomeIcone}
         className={tamanho === "sm" ? "h-2.5 w-2.5" : "h-3 w-3"}
         strokeWidth={2.5}
       />

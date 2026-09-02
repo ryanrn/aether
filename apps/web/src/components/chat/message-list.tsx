@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicMessage } from "@aether/shared";
 import {
   useChannelHistory,
@@ -39,7 +39,9 @@ export function MessageList({
   const stored = useChannelMessages(channelId);
   const { hasMore, loading } = useChannelHistory(channelId);
   const prependHistory = useRealtimeStore((state) => state.prependHistory);
-  const setHistoryLoading = useRealtimeStore((state) => state.setHistoryLoading);
+  const setHistoryLoading = useRealtimeStore(
+    (state) => state.setHistoryLoading,
+  );
 
   /**
    * Enquanto a store nao foi semeada (primeiro render e hidratacao), usamos o
@@ -126,7 +128,10 @@ export function MessageList({
     >
       {loading ? (
         <div className="flex justify-center py-3">
-          <Loader2 className="h-4 w-4 animate-spin text-ink-600" />
+          <AetherIcon
+            name="loader"
+            className="h-4 w-4 animate-spin text-ink-600"
+          />
         </div>
       ) : null}
 
@@ -145,8 +150,7 @@ export function MessageList({
               {ehConversaDireta ? "" : "#"}
               {channelName}
             </span>{" "}
-            ainda.
-            Escreva a primeira.
+            ainda. Escreva a primeira.
           </p>
         </div>
       ) : (

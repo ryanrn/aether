@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Gamepad2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,7 +68,8 @@ export function GameArt({
         className,
       )}
     >
-      <Gamepad2
+      <AetherIcon
+        name="gamepad"
         className={cn("text-ink-500", iconClassName ?? "h-4 w-4")}
         strokeWidth={1.75}
       />

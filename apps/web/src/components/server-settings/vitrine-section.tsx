@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { BadgeCheck } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { CATEGORIAS_DE_COMUNIDADE, type VitrineStatus } from "@aether/shared";
-import { lerVitrineAction, salvarVitrineAction } from "@/server/actions/descoberta";
+import {
+  lerVitrineAction,
+  salvarVitrineAction,
+} from "@/server/actions/descoberta";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +56,7 @@ export function VitrineSection({ serverId }: { serverId: string }) {
     setErro(null);
     setSalvo(false);
     startTransition(async () => {
-      const r = await salvarVitrineAction(
-        serverId,
-        quer,
-        descricao,
-        categoria,
-      );
+      const r = await salvarVitrineAction(serverId, quer, descricao, categoria);
       if (!r.ok) {
         setErro(r.error);
         return;
@@ -88,7 +86,11 @@ export function VitrineSection({ serverId }: { serverId: string }) {
         </h4>
         {oficial ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-300">
-            <BadgeCheck className="h-3 w-3" strokeWidth={2.5} />
+            <AetherIcon
+              name="badge-check"
+              className="h-3 w-3"
+              strokeWidth={2.5}
+            />
             Oficial
           </span>
         ) : null}

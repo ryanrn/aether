@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { LogIn } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { ActionResult } from "@aether/shared";
 import { loginAction } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -19,16 +19,16 @@ function SubmitButton() {
       disabled={pending}
     >
       {pending ? "Entrando..." : "Entrar"}
-      {!pending && <LogIn className="h-4 w-4" />}
+      {!pending && <AetherIcon name="login" className="h-4 w-4" />}
     </Button>
   );
 }
 
 export function LoginForm() {
-  const [state, formAction] = useActionState<ActionResult<undefined> | null, FormData>(
-    loginAction,
-    null,
-  );
+  const [state, formAction] = useActionState<
+    ActionResult<undefined> | null,
+    FormData
+  >(loginAction, null);
   const error = state && !state.ok ? state : null;
 
   return (

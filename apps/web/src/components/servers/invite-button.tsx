@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Copy, UserPlus } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { getOrCreateInviteAction } from "@/server/actions/servers";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -55,11 +55,11 @@ export function InviteButton({
           aria-label="Convidar pessoas"
           className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-100"
         >
-          <UserPlus className="h-4 w-4" />
+          <AetherIcon name="user-plus" className="h-4 w-4" />
         </button>
       ) : (
         <Button size="sm" variant="outline" onClick={openModal}>
-          <UserPlus className="h-3.5 w-3.5" />
+          <AetherIcon name="user-plus" className="h-3.5 w-3.5" />
           Convidar
         </Button>
       )}
@@ -79,11 +79,19 @@ export function InviteButton({
             <code className="flex-1 rounded-md border border-base-600 bg-base-900 px-3 py-2.5 font-mono text-sm tracking-[0.2em] text-accent-400">
               {code}
             </code>
-            <Button size="icon" variant="secondary" onClick={copy} title="Copiar">
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={copy}
+              title="Copiar"
+            >
               {copied ? (
-                <Check className="h-4 w-4 text-signal-online" />
+                <AetherIcon
+                  name="check"
+                  className="h-4 w-4 text-signal-online"
+                />
               ) : (
-                <Copy className="h-4 w-4" />
+                <AetherIcon name="copy" className="h-4 w-4" />
               )}
             </Button>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Mail, Users } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
 
 export type SecaoAmigos = "amigos" | "solicitacoes" | "bloqueados";
@@ -47,20 +47,20 @@ export function FriendsNav({
 
       <div className="flex flex-col gap-0.5 px-2">
         <ItemNav
-          icone={Users}
+          icone="users"
           rotulo="Amigos"
           ativo={secao === "amigos"}
           onClick={() => onSecao("amigos")}
         />
         <ItemNav
-          icone={Mail}
+          icone="mail"
           rotulo="Solicitacoes"
           ativo={secao === "solicitacoes"}
           badge={pedidosRecebidos}
           onClick={() => onSecao("solicitacoes")}
         />
         <ItemNav
-          icone={Ban}
+          icone="ban"
           rotulo="Bloqueados"
           ativo={secao === "bloqueados"}
           onClick={() => onSecao("bloqueados")}
@@ -80,13 +80,13 @@ export function FriendsNav({
 }
 
 function ItemNav({
-  icone: Icone,
+  icone,
   rotulo,
   ativo,
   badge = 0,
   onClick,
 }: {
-  icone: typeof Users;
+  icone: AetherIconName;
   rotulo: string;
   ativo: boolean;
   badge?: number;
@@ -113,9 +113,9 @@ function ItemNav({
         O `title` cobre o que o rotulo escondido deixaria de dizer no trilho.
         Sem ele, dois icones sem texto viram adivinhacao.
       */}
-      <Icone
+      <AetherIcon
+        name={icone}
         className="h-[22px] w-[22px] shrink-0"
-        strokeWidth={1.75}
         aria-hidden
       />
       <span className="hidden min-w-0 flex-1 truncate font-medium lg:block">

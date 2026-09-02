@@ -2,13 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Settings, Volume2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import {
-  useRealtimeStore,
-  useSelfVoice,
-} from "@/lib/stores/realtime-store";
+import { useRealtimeStore, useSelfVoice } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +33,12 @@ const EDGE_GAP = 8;
  * Dizer "offline" para alguem que esta claramente online seria mentira de
  * rotulo — quem clica quer sumir da lista, nao se desconectar.
  */
-const OPCOES: { status: UserStatus; label: string; hint: string; cor: string }[] = [
+const OPCOES: {
+  status: UserStatus;
+  label: string;
+  hint: string;
+  cor: string;
+}[] = [
   { status: "ONLINE", label: "Disponivel", hint: "", cor: "bg-signal-online" },
   { status: "IDLE", label: "Ausente", hint: "", cor: "bg-signal-idle" },
   { status: "DND", label: "Nao perturbe", hint: "", cor: "bg-signal-dnd" },
@@ -90,7 +92,10 @@ export function SelfUserCard({
         EDGE_GAP,
         Math.min(anchor.x, window.innerWidth - width - EDGE_GAP),
       ),
-      y: Math.max(EDGE_GAP, Math.min(anchor.y, window.innerHeight - height - EDGE_GAP)),
+      y: Math.max(
+        EDGE_GAP,
+        Math.min(anchor.y, window.innerHeight - height - EDGE_GAP),
+      ),
     });
   }, [anchor.x, anchor.y]);
 
@@ -152,7 +157,10 @@ export function SelfUserCard({
                 em voz
               </p>
               <div className="mt-1.5 flex items-center gap-1.5">
-                <Volume2 className="h-3.5 w-3.5 shrink-0 text-accent-400" />
+                <AetherIcon
+                  name="volume"
+                  className="h-3.5 w-3.5 shrink-0 text-accent-400"
+                />
                 <span className="min-w-0 truncate text-[13px] font-medium text-ink-100">
                   {channel.name}
                 </span>
@@ -219,7 +227,10 @@ export function SelfUserCard({
                   />
                   <span className="flex-1">{opcao.label}</span>
                   {ativo ? (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-accent-400" />
+                    <AetherIcon
+                      name="check"
+                      className="h-3.5 w-3.5 shrink-0 text-accent-400"
+                    />
                   ) : null}
                 </button>
               );
@@ -234,7 +245,7 @@ export function SelfUserCard({
             }}
             className="mt-2 flex w-full items-center gap-2.5 rounded-md border-t border-base-700 px-2 pb-1 pt-2.5 text-left text-[13px] text-ink-300 transition-colors hover:text-ink-100"
           >
-            <Settings className="h-3.5 w-3.5 shrink-0" />
+            <AetherIcon name="settings" className="h-3.5 w-3.5 shrink-0" />
             Configuracoes
           </button>
         </div>

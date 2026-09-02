@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, Crown, Shield, UserMinus } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicMember, PublicRole, ViewerContext } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,9 @@ export function MembersTab({
             {members.map((member) => {
               const isOwnerMember = member.user.id === ownerId;
               const editable =
-                !isOwnerMember && member.id !== viewer.memberId && manageable.length > 0;
+                !isOwnerMember &&
+                member.id !== viewer.memberId &&
+                manageable.length > 0;
 
               return (
                 <tr key={member.id} className="bg-base-950/40">
@@ -69,7 +71,10 @@ export function MembersTab({
                         <p className="flex items-center gap-1.5 truncate text-[13px] text-ink-100">
                           {member.nickname ?? member.user.displayName}
                           {isOwnerMember ? (
-                            <Crown className="h-3 w-3 text-signal-idle" />
+                            <AetherIcon
+                              name="crown"
+                              className="h-3 w-3 text-signal-idle"
+                            />
                           ) : null}
                         </p>
                         <p className="truncate font-mono text-[11px] text-ink-500">
@@ -102,7 +107,7 @@ export function MembersTab({
                           variant="outline"
                           onClick={() => setEditing(member)}
                         >
-                          <Shield className="h-3.5 w-3.5" />
+                          <AetherIcon name="shield" className="h-3.5 w-3.5" />
                           Cargos
                         </Button>
                       ) : null}
@@ -114,9 +119,14 @@ export function MembersTab({
                           size="sm"
                           variant="ghost"
                           title="Expulsar do servidor"
-                          onClick={() => setModerating({ member, mode: "kick" })}
+                          onClick={() =>
+                            setModerating({ member, mode: "kick" })
+                          }
                         >
-                          <UserMinus className="h-3.5 w-3.5" />
+                          <AetherIcon
+                            name="user-minus"
+                            className="h-3.5 w-3.5"
+                          />
                         </Button>
                       ) : null}
 
@@ -127,7 +137,7 @@ export function MembersTab({
                           title="Banir do servidor"
                           onClick={() => setModerating({ member, mode: "ban" })}
                         >
-                          <Ban className="h-3.5 w-3.5" />
+                          <AetherIcon name="ban" className="h-3.5 w-3.5" />
                         </Button>
                       ) : null}
                     </div>

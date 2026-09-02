@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   PERMISSION_METADATA,
   Permission,
@@ -45,8 +45,11 @@ export function RolesTab({
   roles: PublicRole[];
   viewer: ViewerContext;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(roles[0]?.id ?? null);
-  const selected = roles.find((role) => role.id === selectedId) ?? roles[0] ?? null;
+  const [selectedId, setSelectedId] = useState<string | null>(
+    roles[0]?.id ?? null,
+  );
+  const selected =
+    roles.find((role) => role.id === selectedId) ?? roles[0] ?? null;
 
   return (
     <section className="grid gap-6 md:grid-cols-[220px_1fr]">
@@ -125,8 +128,12 @@ function CreateRoleButton({ serverId }: { serverId: string }) {
           if (event.key === "Enter") create();
         }}
       />
-      <Button size="sm" onClick={create} disabled={pending || name.trim() === ""}>
-        <Plus className="h-3.5 w-3.5" />
+      <Button
+        size="sm"
+        onClick={create}
+        disabled={pending || name.trim() === ""}
+      >
+        <AetherIcon name="plus" className="h-3.5 w-3.5" />
         Criar cargo
       </Button>
       <FieldError>{error}</FieldError>
@@ -232,7 +239,10 @@ function RoleEditor({
       <div className="flex flex-col gap-4">
         <Label>Permissoes</Label>
         {[...grouped.entries()].map(([group, keys]) => (
-          <div key={group} className="rounded-md border border-base-700 bg-base-900">
+          <div
+            key={group}
+            className="rounded-md border border-base-700 bg-base-900"
+          >
             <p className="border-b border-base-800 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
               {GROUP_LABEL[group] ?? group}
             </p>
@@ -247,7 +257,9 @@ function RoleEditor({
                     key={key}
                     className={cn(
                       "flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors",
-                      locked ? "cursor-not-allowed opacity-55" : "hover:bg-base-850",
+                      locked
+                        ? "cursor-not-allowed opacity-55"
+                        : "hover:bg-base-850",
                     )}
                   >
                     <input
@@ -317,7 +329,7 @@ function DeleteRoleButton({
         disabled={pending}
         onClick={() => setConfirmando(true)}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <AetherIcon name="trash" className="h-3.5 w-3.5" />
         Excluir cargo
       </Button>
 

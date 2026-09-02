@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import Link from "next/link";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { ResgatarChave } from "@/components/premium/resgatar-chave";
@@ -36,7 +36,7 @@ export function PlanoTab() {
   if (carregando) {
     return (
       <div className="flex items-center gap-2 py-8 text-[13px] text-ink-400">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <AetherIcon name="loader" className="h-4 w-4 animate-spin" />
         Carregando seu plano...
       </div>
     );
@@ -94,7 +94,9 @@ export function PlanoTab() {
             <Linha
               rotulo="Tela"
               atual={atual}
-              valores={(t) => `${PLANS[t].alturaMax}p ${PLANS[t].quadrosMax}fps`}
+              valores={(t) =>
+                `${PLANS[t].alturaMax}p ${PLANS[t].quadrosMax}fps`
+              }
             />
             <Linha
               rotulo="Bitrate"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, SendHorizontal, Smile } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicUser } from "@aether/shared";
 import {
   useConnectionStatus,
@@ -201,8 +201,8 @@ export function MessageComposer({
       "message:send",
       { conversationId: channelId, content, nonce, anexoIds },
       (result) => {
-      // O sucesso chega pelo evento message:new (que tambem atende as outras
-      // abas); aqui so tratamos a falha.
+        // O sucesso chega pelo evento message:new (que tambem atende as outras
+        // abas); aqui so tratamos a falha.
         if (!result.ok) failPending(channelId, nonce, result.error);
       },
     );
@@ -288,99 +288,99 @@ export function MessageComposer({
         <AnexosPendentes anexos={anexos} onRemover={removerAnexo} />
 
         <div className="flex items-end gap-2 px-3 py-2">
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={value}
-          disabled={disabled}
-          onChange={(event) => {
-            setValue(event.target.value);
-            grow();
-          }}
-          onKeyDown={(event) => {
-            // Enter envia; Shift+Enter quebra linha. IME em composicao nao
-            // pode enviar no meio de uma palavra sendo montada.
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              send();
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              setValue(event.target.value);
+              grow();
+            }}
+            onKeyDown={(event) => {
+              // Enter envia; Shift+Enter quebra linha. IME em composicao nao
+              // pode enviar no meio de uma palavra sendo montada.
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            placeholder={
+              !canSend
+                ? "Seu cargo nao permite enviar mensagens aqui"
+                : status === "offline"
+                  ? "Sem conexao com o tempo real"
+                  : `Mensagem em #${channelName}`
             }
-          }}
-          placeholder={
-            !canSend
-              ? "Seu cargo nao permite enviar mensagens aqui"
-              : status === "offline"
-                ? "Sem conexao com o tempo real"
-                : `Mensagem em #${channelName}`
-          }
-          aria-label={`Mensagem em ${channelName}`}
-          className="max-h-[180px] min-h-[22px] flex-1 resize-none bg-transparent text-[13px] leading-relaxed text-ink-200 outline-none placeholder:text-ink-600 disabled:cursor-not-allowed"
-        />
+            aria-label={`Mensagem em ${channelName}`}
+            className="max-h-[180px] min-h-[22px] flex-1 resize-none bg-transparent text-[13px] leading-relaxed text-ink-200 outline-none placeholder:text-ink-600 disabled:cursor-not-allowed"
+          />
 
-        {/*
+          {/*
           Emoji ANTES do enviar: e a ordem em que se usa — escolhe o emoji,
           depois manda. Invertido, o botao de enviar ficaria no meio do
           caminho da mao.
         */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={(evento) => {
-            const r = evento.currentTarget.getBoundingClientRect();
-            // Acima do botao: o campo fica no rodape, e abrir para baixo
-            // jogaria o seletor para fora da janela.
-            setSeletor({ x: r.right - 352, y: r.top - 440 });
-          }}
-          aria-label="Inserir emoji"
-          title="Emoji"
-          className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Smile className="h-4 w-4" />
-        </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={(evento) => {
+              const r = evento.currentTarget.getBoundingClientRect();
+              // Acima do botao: o campo fica no rodape, e abrir para baixo
+              // jogaria o seletor para fora da janela.
+              setSeletor({ x: r.right - 352, y: r.top - 440 });
+            }}
+            aria-label="Inserir emoji"
+            title="Emoji"
+            className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <AetherIcon name="smile" className="h-4 w-4" />
+          </button>
 
-        {/*
+          {/*
           O clipe fica ao lado do emoji, e nao no comeco da linha: sao os dois
           botoes de "acrescentar algo a mensagem", e separa-los faria procurar
           em dois lugares.
         */}
-        <button
-          type="button"
-          onClick={() => inputArquivoRef.current?.click()}
-          disabled={disabled || anexos.length >= MAX_ANEXOS}
-          title={
-            anexos.length >= MAX_ANEXOS
-              ? `Maximo de ${MAX_ANEXOS} arquivos por mensagem`
-              : "Anexar arquivo"
-          }
-          aria-label="Anexar arquivo"
-          className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-ink-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
+          <button
+            type="button"
+            onClick={() => inputArquivoRef.current?.click()}
+            disabled={disabled || anexos.length >= MAX_ANEXOS}
+            title={
+              anexos.length >= MAX_ANEXOS
+                ? `Maximo de ${MAX_ANEXOS} arquivos por mensagem`
+                : "Anexar arquivo"
+            }
+            aria-label="Anexar arquivo"
+            className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-ink-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
+          >
+            <AetherIcon name="paperclip" className="h-4 w-4" />
+          </button>
 
-        <button
-          type="button"
-          onClick={send}
-          /**
-           * Bloqueado enquanto algo SOBE: a mensagem so pode sair com anexo
-           * que ja chegou ao R2 e foi confirmado. Deixar enviar antes faria o
-           * gateway recusar a mensagem inteira, e a pessoa perderia o texto.
-           */
-          disabled={
-            disabled ||
-            tooLong ||
-            subindo ||
-            (value.trim().length === 0 && prontos.length === 0)
-          }
-          title={subindo ? "Aguarde o envio dos arquivos" : "Enviar"}
-          aria-label="Enviar mensagem"
-          className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
-        >
-          <SendHorizontal className="h-4 w-4" />
-        </button>
+          <button
+            type="button"
+            onClick={send}
+            /**
+             * Bloqueado enquanto algo SOBE: a mensagem so pode sair com anexo
+             * que ja chegou ao R2 e foi confirmado. Deixar enviar antes faria o
+             * gateway recusar a mensagem inteira, e a pessoa perderia o texto.
+             */
+            disabled={
+              disabled ||
+              tooLong ||
+              subindo ||
+              (value.trim().length === 0 && prontos.length === 0)
+            }
+            title={subindo ? "Aguarde o envio dos arquivos" : "Enviar"}
+            aria-label="Enviar mensagem"
+            className="mb-[1px] grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-500"
+          >
+            <AetherIcon name="send" className="h-4 w-4" />
+          </button>
         </div>
       </div>
 

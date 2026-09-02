@@ -2,20 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Clock,
-  Gamepad2,
-  Ban,
-  Headphones,
-  MessageSquare,
-  Mic,
-  MicOff,
-  MonitorUp,
-  UserPlus,
-  Users,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type {
   PublicChannel,
   PublicUser,
@@ -216,13 +203,17 @@ export function UserActivityCard({
 
   function moderar(patch: { serverMuted?: boolean; serverDeafened?: boolean }) {
     setErroModeracao(null);
-    socket?.emit("voice:moderate", { userId: user.id, ...patch }, (resultado) => {
-      if (!resultado.ok) {
-        setErroModeracao(resultado.error);
-        return;
-      }
-      onClose();
-    });
+    socket?.emit(
+      "voice:moderate",
+      { userId: user.id, ...patch },
+      (resultado) => {
+        if (!resultado.ok) {
+          setErroModeracao(resultado.error);
+          return;
+        }
+        onClose();
+      },
+    );
   }
 
   function mover(channelId: string) {
@@ -297,14 +288,30 @@ export function UserActivityCard({
    * ruido em vez de informacao.
    */
   const estado = participant?.streaming
-    ? { icon: MonitorUp, label: "Compartilhando a tela", tone: "text-signal-live" }
+    ? {
+        icon: "screen-share" as AetherIconName,
+        label: "Compartilhando a tela",
+        tone: "text-signal-live",
+      }
     : participant?.speaking && !muted
-      ? { icon: Mic, label: "Falando", tone: "text-accent-300" }
+      ? {
+          icon: "mic" as AetherIconName,
+          label: "Falando",
+          tone: "text-accent-300",
+        }
       : participant
-        ? { icon: Headphones, label: "Em chamada", tone: "text-ink-200" }
+        ? {
+            icon: "headset" as AetherIconName,
+            label: "Em chamada",
+            tone: "text-ink-200",
+          }
         : status === "OFFLINE"
           ? null
-          : { icon: null, label: "No AETHER", tone: "text-ink-400" };
+          : {
+              icon: null as AetherIconName | null,
+              label: "No AETHER",
+              tone: "text-ink-400",
+            };
 
   const isSelf = user.id === selfUserId;
   const selfVoice = selfUserId ? (voice[selfUserId] ?? null) : null;
@@ -345,7 +352,7 @@ export function UserActivityCard({
 
   if (typeof document === "undefined") return null;
 
-  const EstadoIcon = estado?.icon ?? null;
+  const nomeEstado = estado?.icon ?? null;
 
   return createPortal(
     <>
@@ -433,7 +440,11 @@ export function UserActivityCard({
                     </p>
                     {gameElapsed ? (
                       <p className="flex items-center gap-1 text-[11px] tabular-nums text-ink-500">
-                        <Clock className="h-3 w-3 shrink-0" />
+                        <AetherIcon
+                          name="clock"
+                          size="sm"
+                          className="h-3 w-3 shrink-0"
+                        />
                         {gameElapsed}
                       </p>
                     ) : null}
@@ -442,34 +453,41 @@ export function UserActivityCard({
               ) : null}
 
               {estado ? (
-              <div className="mt-1.5 flex items-center gap-1.5">
-                {EstadoIcon ? (
-                  <EstadoIcon
-                    className={cn("h-3.5 w-3.5 shrink-0", estado.tone)}
-                  />
-                ) : null}
-                <span className={cn("text-[13px]", estado.tone)}>
-                  {estado.label}
-                </span>
-                {muted ? (
-                  <MicOff
-                    className="h-3 w-3 shrink-0 text-signal-dnd"
-                    aria-label="Mutado"
-                  />
-                ) : null}
-                {deafened ? (
-                  <VolumeX
-                    className="h-3 w-3 shrink-0 text-signal-dnd"
-                    aria-label="Surdo"
-                  />
-                ) : null}
-              </div>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  {nomeEstado ? (
+                    <AetherIcon
+                      name={nomeEstado}
+                      className={cn("h-3.5 w-3.5 shrink-0", estado.tone)}
+                    />
+                  ) : null}
+                  <span className={cn("text-[13px]", estado.tone)}>
+                    {estado.label}
+                  </span>
+                  {muted ? (
+                    <AetherIcon
+                      name="mic-off"
+                      className="h-3 w-3 shrink-0 text-signal-dnd"
+                      aria-label="Mutado"
+                    />
+                  ) : null}
+                  {deafened ? (
+                    <AetherIcon
+                      name="volume-off"
+                      className="h-3 w-3 shrink-0 text-signal-dnd"
+                      aria-label="Surdo"
+                    />
+                  ) : null}
+                </div>
               ) : null}
 
               {channel ? (
                 <>
                   <div className="mt-2 flex items-start gap-1.5">
-                    <Volume2 className="mt-[3px] h-3.5 w-3.5 shrink-0 text-ink-500" />
+                    <AetherIcon
+                      name="volume"
+                      size="sm"
+                      className="mt-[3px] shrink-0 text-ink-500"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-[12px] text-ink-200">
                         {channel.name}
@@ -482,13 +500,21 @@ export function UserActivityCard({
 
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-ink-500">
                     <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3 shrink-0" />
+                      <AetherIcon
+                        name="users"
+                        size="sm"
+                        className="h-3 w-3 shrink-0"
+                      />
                       {inChannel}
                       {channel.userLimit ? ` / ${channel.userLimit}` : ""}
                     </span>
                     {elapsed ? (
                       <span className="flex items-center gap-1 tabular-nums">
-                        <Clock className="h-3 w-3 shrink-0" />
+                        <AetherIcon
+                          name="clock"
+                          size="sm"
+                          className="h-3 w-3 shrink-0"
+                        />
                         {elapsed}
                       </span>
                     ) : null}
@@ -510,7 +536,7 @@ export function UserActivityCard({
               disabled={abrindoConversa}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 bg-base-800 px-3 py-2 text-[12px] font-medium text-ink-200 transition-colors hover:bg-base-750 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <AetherIcon name="message" size="sm" />
               {abrindoConversa ? "Abrindo..." : "Mandar mensagem"}
             </button>
           ) : null}
@@ -566,9 +592,9 @@ export function UserActivityCard({
                   )}
                 >
                   {participant?.serverMuted ? (
-                    <Mic className="h-3 w-3" />
+                    <AetherIcon name="mic" size="sm" className="h-3 w-3" />
                   ) : (
-                    <MicOff className="h-3 w-3" />
+                    <AetherIcon name="mic-off" size="sm" className="h-3 w-3" />
                   )}
                   {participant?.serverMuted ? "Devolver mic" : "Silenciar"}
                 </button>
@@ -588,11 +614,17 @@ export function UserActivityCard({
                   )}
                 >
                   {participant?.serverDeafened ? (
-                    <Volume2 className="h-3 w-3" />
+                    <AetherIcon name="volume" size="sm" className="h-3 w-3" />
                   ) : (
-                    <VolumeX className="h-3 w-3" />
+                    <AetherIcon
+                      name="volume-off"
+                      size="sm"
+                      className="h-3 w-3"
+                    />
                   )}
-                  {participant?.serverDeafened ? "Devolver audio" : "Ensurdecer"}
+                  {participant?.serverDeafened
+                    ? "Devolver audio"
+                    : "Ensurdecer"}
                 </button>
               ) : null}
             </div>
@@ -633,7 +665,7 @@ export function UserActivityCard({
               disabled={pedindo}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-accent-600/50 bg-accent-600/10 px-3 py-2 text-[12px] font-medium text-accent-300 transition-colors hover:bg-accent-600/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <UserPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <AetherIcon name="user-plus" size="sm" />
               {pedindo ? "Enviando..." : "Adicionar amigo"}
             </button>
           ) : null}
@@ -677,7 +709,7 @@ export function UserActivityCard({
                 onClick={() => setConfirmandoBloqueio(true)}
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 px-3 py-1.5 text-[11px] text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
               >
-                <Ban className="h-3 w-3" strokeWidth={1.75} />
+                <AetherIcon name="ban" size="sm" className="h-3 w-3" />
                 Bloquear
               </button>
             )

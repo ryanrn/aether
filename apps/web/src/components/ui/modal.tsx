@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
 
 /**
@@ -64,7 +64,7 @@ export function Modal({
           className="-mr-1 -mt-1 rounded-sm p-1 text-ink-400 transition-colors hover:bg-base-700 hover:text-ink-100"
           aria-label="Fechar"
         >
-          <X className="h-4 w-4" />
+          <AetherIcon name="x" className="h-4 w-4" />
         </button>
       </div>
       <div className="px-5 py-4">{children}</div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, KeyRound } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { Button } from "@/components/ui/button";
 import { resgatarChaveAction, type PlanoNaTela } from "@/server/actions/planos";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,10 @@ export function ResgatarChave({
     <div className={cn("w-full", className)}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-700 bg-base-950 px-3 py-2 focus-within:border-amber-400/50">
-          <KeyRound className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+          <AetherIcon
+            name="key"
+            className="h-3.5 w-3.5 shrink-0 text-ink-500"
+          />
           <input
             value={codigo}
             onChange={(e) => {
@@ -76,7 +79,7 @@ export function ResgatarChave({
       {erro ? <p className="mt-2 text-[12px] text-signal-dnd">{erro}</p> : null}
       {pronto ? (
         <p className="mt-2 flex items-center gap-1.5 text-[12px] text-signal-online">
-          <Check className="h-3.5 w-3.5" />
+          <AetherIcon name="check" className="h-3.5 w-3.5" />
           Pronto — seu plano foi atualizado.
         </p>
       ) : null}

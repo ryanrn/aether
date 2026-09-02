@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   disconnectSpotifyAction,
   setSpotifyVisibilityAction,
@@ -68,7 +68,8 @@ export function SpotifySection() {
 
   function conectar() {
     const noDesktop =
-      typeof (window as { aetherDesktop?: unknown }).aetherDesktop === "object" &&
+      typeof (window as { aetherDesktop?: unknown }).aetherDesktop ===
+        "object" &&
       (window as { aetherDesktop?: unknown }).aetherDesktop !== null;
 
     if (noDesktop) {
@@ -84,7 +85,11 @@ export function SpotifySection() {
     }
     // No navegador: popup. O callback (aberto por `window.open`) se fecha
     // sozinho, e esta seccao re-checa o estado quando o app recupera o foco.
-    window.open("/api/spotify/connect", "aether-spotify", "width=480,height=720");
+    window.open(
+      "/api/spotify/connect",
+      "aether-spotify",
+      "width=480,height=720",
+    );
   }
 
   const cabecalho = (
@@ -185,7 +190,7 @@ export function SpotifySection() {
               onClick={() => void desconectar()}
               className="shrink-0 rounded-md p-1 text-ink-500 transition-colors hover:bg-base-800 hover:text-ink-200 disabled:opacity-50"
             >
-              <X className="h-4 w-4" />
+              <AetherIcon name="x" className="h-4 w-4" />
             </button>
           </div>
 

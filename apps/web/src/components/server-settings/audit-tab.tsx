@@ -1,19 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Ban,
-  FolderPlus,
-  Hash,
-  Pencil,
-  Plus,
-  Shield,
-  Ticket,
-  Trash2,
-  UserMinus,
-  UserPlus,
-  type LucideIcon,
-} from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type { AuditEntry } from "@/server/services/audit-log";
 import { loadAuditPageAction } from "@/server/actions/audit";
 import { Button } from "@/components/ui/button";
@@ -30,7 +18,7 @@ import { Button } from "@/components/ui/button";
  */
 
 interface Descriptor {
-  icon: LucideIcon;
+  icon: AetherIconName;
   /** monta a frase; `alvo` ja vem resolvido pelo servidor */
   text: (entry: AuditEntry) => string;
   tone?: "danger" | "neutral";
@@ -40,36 +28,36 @@ const UNKNOWN = "algo que nao existe mais";
 
 const DESCRIPTORS: Record<string, Descriptor> = {
   "server.create": {
-    icon: Plus,
+    icon: "plus",
     text: () => "criou o servidor",
   },
   "server.update": {
-    icon: Pencil,
+    icon: "pencil",
     text: () => "alterou as configuracoes do servidor",
   },
-  "server.join": { icon: UserPlus, text: () => "entrou no servidor" },
-  "server.leave": { icon: UserMinus, text: () => "saiu do servidor" },
-  "invite.create": { icon: Ticket, text: () => "gerou um convite" },
-  "invite.use": { icon: UserPlus, text: () => "entrou por convite" },
+  "server.join": { icon: "user-plus", text: () => "entrou no servidor" },
+  "server.leave": { icon: "user-minus", text: () => "saiu do servidor" },
+  "invite.create": { icon: "ticket", text: () => "gerou um convite" },
+  "invite.use": { icon: "user-plus", text: () => "entrou por convite" },
   "channel.create": {
-    icon: Hash,
+    icon: "hash",
     text: (e) => `criou o canal ${e.targetLabel ?? UNKNOWN}`,
   },
   "channel.update": {
-    icon: Pencil,
+    icon: "pencil",
     text: (e) => `editou o canal ${e.targetLabel ?? UNKNOWN}`,
   },
   "channel.delete": {
-    icon: Trash2,
+    icon: "trash",
     text: (e) => `excluiu o canal ${e.targetLabel ?? UNKNOWN}`,
     tone: "danger",
   },
   "role.create": {
-    icon: FolderPlus,
+    icon: "folder-plus",
     text: (e) => `criou o cargo ${e.targetLabel ?? UNKNOWN}`,
   },
   "role.update": {
-    icon: Shield,
+    icon: "shield",
     text: (e) =>
       e.targetType === "member"
         ? `alterou os cargos de ${e.targetLabel ?? UNKNOWN}` +
@@ -77,17 +65,17 @@ const DESCRIPTORS: Record<string, Descriptor> = {
         : `editou o cargo ${e.targetLabel ?? UNKNOWN}`,
   },
   "role.delete": {
-    icon: Trash2,
+    icon: "trash",
     text: (e) => `excluiu o cargo ${e.targetLabel ?? UNKNOWN}`,
     tone: "danger",
   },
   "member.kick": {
-    icon: UserMinus,
+    icon: "user-minus",
     text: (e) => `expulsou ${e.targetLabel ?? UNKNOWN}`,
     tone: "danger",
   },
   "member.ban": {
-    icon: Ban,
+    icon: "ban",
     text: (e) => {
       const duracao = e.metadata?.duration;
       const prazo =
@@ -99,7 +87,7 @@ const DESCRIPTORS: Record<string, Descriptor> = {
     tone: "danger",
   },
   "member.unban": {
-    icon: UserPlus,
+    icon: "user-plus",
     text: (e) => `revogou o banimento de ${e.targetLabel ?? UNKNOWN}`,
   },
 };
@@ -107,7 +95,7 @@ const DESCRIPTORS: Record<string, Descriptor> = {
 function describe(entry: AuditEntry): Descriptor {
   return (
     DESCRIPTORS[entry.action] ?? {
-      icon: Pencil,
+      icon: "pencil",
       // Acao nova sem descritor ainda: melhor mostrar o nome cru do que sumir
       // com a linha e dar a impressao de que nada aconteceu.
       text: () => entry.action,
@@ -157,13 +145,13 @@ export function AuditTab({
       <ul className="flex flex-col">
         {entries.map((entry) => {
           const descriptor = describe(entry);
-          const Icon = descriptor.icon;
           return (
             <li
               key={entry.id}
               className="flex items-start gap-3 border-b border-base-800 py-2.5 last:border-b-0"
             >
-              <Icon
+              <AetherIcon
+                name={descriptor.icon}
                 className={
                   descriptor.tone === "danger"
                     ? "mt-0.5 h-3.5 w-3.5 shrink-0 text-signal-dnd"
@@ -207,7 +195,12 @@ export function AuditTab({
 
       {hasMore ? (
         <div className="flex justify-center pt-2">
-          <Button variant="outline" size="sm" onClick={loadMore} disabled={pending}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMore}
+            disabled={pending}
+          >
             {pending ? "Carregando..." : "Carregar mais"}
           </Button>
         </div>

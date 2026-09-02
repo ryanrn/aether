@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { PLANS, type PlanTier } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
@@ -105,7 +105,10 @@ export function ComparisonTable({
           </thead>
           <tbody className="divide-y divide-base-800">
             {linhas.map((linha) => (
-              <tr key={linha.nome} className="transition-colors hover:bg-base-800/50">
+              <tr
+                key={linha.nome}
+                className="transition-colors hover:bg-base-800/50"
+              >
                 <td className="px-4 py-3 font-medium text-ink-100">
                   {linha.nome}
                 </td>
@@ -147,7 +150,10 @@ export function ComparisonTable({
                   <td key={t} className="px-4 py-3 text-center">
                     {PLANS[t].tier !== "FREE" &&
                     (recurso.a_partir_de === "PLUS" || t === "PRO") ? (
-                      <Check className="mx-auto h-4 w-4 text-ink-500" />
+                      <AetherIcon
+                        name="check"
+                        className="mx-auto h-4 w-4 text-ink-500"
+                      />
                     ) : (
                       <span className="text-ink-600">—</span>
                     )}

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { ViewerContext } from "@aether/shared";
 import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
@@ -91,11 +91,13 @@ export default async function ServerSettingsPage({
           href={`/app/s/${serverId}`}
           className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-400 transition-colors hover:text-ink-100"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
+          <AetherIcon name="arrow-left" className="h-3.5 w-3.5" />
           Voltar para o servidor
         </Link>
 
-        <h1 className="text-lg font-semibold text-ink-100">{data.server.name}</h1>
+        <h1 className="text-lg font-semibold text-ink-100">
+          {data.server.name}
+        </h1>
         <p className="mt-1 text-[13px] text-ink-400">
           Configuracoes, cargos e membros deste servidor.
         </p>

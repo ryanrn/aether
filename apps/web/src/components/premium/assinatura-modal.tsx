@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Sparkles, Gift, Check, ShieldCheck, ChevronDown } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { Button } from "@/components/ui/button";
 import { ComparisonTable } from "./comparison-table";
 import { cn } from "@/lib/utils";
@@ -9,17 +9,27 @@ import { cn } from "@/lib/utils";
 export interface ModalDeAssinaturaProps {
   open: boolean;
   onClose: () => void;
-  onSelectPlan?: (plan: "monthly" | "yearly", currency: "BRL" | "USD", recipient: "self" | "gift") => void;
+  onSelectPlan?: (
+    plan: "monthly" | "yearly",
+    currency: "BRL" | "USD",
+    recipient: "self" | "gift",
+  ) => void;
 }
 
 /**
  * Modal completo de Assinatura Premium (Olimpo / Aether Pro).
  * Baseado com fidelidade milimétrica nos prints 1 e 2.
  */
-export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssinaturaProps) {
+export function ModalDeAssinatura({
+  open,
+  onClose,
+  onSelectPlan,
+}: ModalDeAssinaturaProps) {
   const [recipient, setRecipient] = useState<"self" | "gift">("self");
   const [currency, setCurrency] = useState<"BRL" | "USD">("BRL");
-  const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">("yearly");
+  const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">(
+    "yearly",
+  );
 
   if (!open) return null;
 
@@ -67,7 +77,7 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
           className="absolute top-4 right-4 z-10 p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-base-800 transition-colors"
           aria-label="Fechar"
         >
-          <X className="w-5 h-5" />
+          <AetherIcon name="x" className="w-5 h-5" />
         </button>
 
         {/* Conteúdo Rolável */}
@@ -75,13 +85,17 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
           {/* Cabeçalho */}
           <div className="flex flex-col items-center text-center gap-2 pt-2">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent-400" />
-              <h2 id="premium-title" className="text-xl font-bold tracking-tight text-ink-100">
+              <AetherIcon name="sparkle" className="w-5 h-5 text-accent-400" />
+              <h2
+                id="premium-title"
+                className="text-xl font-bold tracking-tight text-ink-100"
+              >
                 Aether Olimpo
               </h2>
             </div>
             <p className="text-[13px] text-ink-300 max-w-[440px] leading-relaxed">
-              Desbloqueie limites maiores e recursos exclusivos enquanto apoia uma plataforma de comunicação independente.
+              Desbloqueie limites maiores e recursos exclusivos enquanto apoia
+              uma plataforma de comunicação independente.
             </p>
           </div>
 
@@ -111,7 +125,7 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
                     : "text-ink-400 hover:text-ink-200",
                 )}
               >
-                <Gift className="w-3.5 h-3.5" />
+                <AetherIcon name="gift" className="w-3.5 h-3.5" />
                 Como presente
               </button>
             </div>
@@ -149,17 +163,24 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
           {currency === "BRL" && (
             <div className="rounded-lg border border-base-750 bg-base-950/60 p-4 text-[12px] text-ink-300 flex flex-col gap-2">
               <div className="flex items-center gap-2 font-semibold text-ink-100">
-                <ShieldCheck className="w-4 h-4 text-accent-400" />
+                <AetherIcon
+                  name="shield-check"
+                  className="w-4 h-4 text-accent-400"
+                />
                 <span>Finalizar compra da assinatura em BRL</span>
               </div>
               <p className="leading-relaxed">
-                Os cartões podem manter o preço em BRL após uma rápida verificação do Stripe, mas o cartão deve ter sido emitido no Brasil.
+                Os cartões podem manter o preço em BRL após uma rápida
+                verificação do Stripe, mas o cartão deve ter sido emitido no
+                Brasil.
               </p>
               <p className="leading-relaxed">
-                O Pix pode pular a etapa de verificação do cartão quando o Stripe oferecer Pix recorrente para sua compra.
+                O Pix pode pular a etapa de verificação do cartão quando o
+                Stripe oferecer Pix recorrente para sua compra.
               </p>
               <p className="leading-relaxed">
-                Se Pix não estiver disponível ou você preferir o preço padrão, você pode mudar para USD a qualquer momento.
+                Se Pix não estiver disponível ou você preferir o preço padrão,
+                você pode mudar para USD a qualquer momento.
               </p>
             </div>
           )}
@@ -174,13 +195,17 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
               )}
             >
               <div className="flex flex-col items-center text-center gap-1.5 mb-5">
-                <span className="text-sm font-semibold text-ink-200">Mensal</span>
+                <span className="text-sm font-semibold text-ink-200">
+                  Mensal
+                </span>
                 <div className="flex items-baseline gap-1 mt-1">
                   <span className="text-2xl font-black tracking-tight text-ink-100">
                     {currentPrice.monthly}
                   </span>
                 </div>
-                <span className="text-xs text-ink-400">{currentPrice.monthlyPeriod}</span>
+                <span className="text-xs text-ink-400">
+                  {currentPrice.monthlyPeriod}
+                </span>
               </div>
 
               <Button
@@ -206,13 +231,17 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
               </div>
 
               <div className="flex flex-col items-center text-center gap-1.5 mb-5 pt-1">
-                <span className="text-sm font-semibold text-white/90">Anual</span>
+                <span className="text-sm font-semibold text-white/90">
+                  Anual
+                </span>
                 <div className="flex items-baseline gap-1 mt-1">
                   <span className="text-2xl font-black tracking-tight text-white">
                     {currentPrice.yearly}
                   </span>
                 </div>
-                <span className="text-xs text-white/75">{currentPrice.yearlyPeriod}</span>
+                <span className="text-xs text-white/75">
+                  {currentPrice.yearlyPeriod}
+                </span>
 
                 {/* Tag de Economia */}
                 <div className="mt-1 inline-flex items-center rounded-md bg-black/25 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white">
@@ -242,11 +271,15 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
               <a href="#" className="text-accent-400 hover:underline">
                 Política de privacidade
               </a>
-              . Reembolsos self-service disponíveis em até 5 dias após o pagamento, uma vez a cada 90 dias.
+              . Reembolsos self-service disponíveis em até 5 dias após o
+              pagamento, uma vez a cada 90 dias.
             </p>
             <p className="text-[11px] font-medium text-ink-400 flex items-center justify-center gap-1 mt-1">
               Role para baixo para ver todos os benefícios incluídos no Olimpo
-              <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
+              <AetherIcon
+                name="chevron"
+                className="w-3.5 h-3.5 animate-bounce"
+              />
             </p>
           </div>
 
@@ -260,7 +293,9 @@ export function ModalDeAssinatura({ open, onClose, onSelectPlan }: ModalDeAssina
 
           {/* Footer de Chamada para Ação Final */}
           <div className="flex flex-col items-center gap-3 pt-4 border-t border-base-800 text-center">
-            <h4 className="text-sm font-bold text-ink-100">Pronto para fazer um upgrade?</h4>
+            <h4 className="text-sm font-bold text-ink-100">
+              Pronto para fazer um upgrade?
+            </h4>
             <div className="flex gap-2.5 w-full max-w-[360px]">
               <Button
                 variant="secondary"

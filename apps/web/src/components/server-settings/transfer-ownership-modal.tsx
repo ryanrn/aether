@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Crown } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicMember } from "@aether/shared";
 import { transferOwnershipAction } from "@/server/actions/servers";
 import { Modal } from "@/components/ui/modal";
@@ -56,8 +56,8 @@ export function TransferOwnershipModal({
       <div className="flex flex-col gap-4">
         <p className="text-[13px] leading-relaxed text-ink-400">
           A pessoa escolhida passa a ser a dona de verdade: pode gerenciar
-          cargos, excluir o servidor e voce deixa de ter esse poder. Nao ha
-          como desfazer sozinho — so a nova dona pode devolver.
+          cargos, excluir o servidor e voce deixa de ter esse poder. Nao ha como
+          desfazer sozinho — so a nova dona pode devolver.
         </p>
 
         <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-base-700 p-1.5">
@@ -118,7 +118,7 @@ export function TransferOwnershipModal({
             onClick={submit}
             disabled={pending || !selected || !password}
           >
-            <Crown className="h-3.5 w-3.5" />
+            <AetherIcon name="crown" className="h-3.5 w-3.5" />
             {pending
               ? "Transferindo..."
               : alvo

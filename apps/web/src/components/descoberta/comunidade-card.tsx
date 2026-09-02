@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BadgeCheck } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { categoriaPorId, type ComunidadeNaVitrine } from "@aether/shared";
 import { entrarNaComunidadeAction } from "@/server/actions/descoberta";
 import { Avatar } from "@/components/ui/avatar";
@@ -22,7 +22,11 @@ import { cn, colorFromId } from "@/lib/utils";
  * sem a vitrine ficar cheia de retangulos cinzas esperando alguem mandar arte.
  * Determinístico: o mesmo servidor tem sempre o mesmo banner.
  */
-export function ComunidadeCard({ comunidade }: { comunidade: ComunidadeNaVitrine }) {
+export function ComunidadeCard({
+  comunidade,
+}: {
+  comunidade: ComunidadeNaVitrine;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
@@ -54,7 +58,11 @@ export function ComunidadeCard({ comunidade }: { comunidade: ComunidadeNaVitrine
       >
         {comunidade.oficial ? (
           <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-base-950/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-300 backdrop-blur">
-            <BadgeCheck className="h-3 w-3" strokeWidth={2.5} />
+            <AetherIcon
+              name="badge-check"
+              className="h-3 w-3"
+              strokeWidth={2.5}
+            />
             Oficial
           </span>
         ) : null}
@@ -114,9 +122,7 @@ export function ComunidadeCard({ comunidade }: { comunidade: ComunidadeNaVitrine
           ) : null}
         </div>
 
-        {erro ? (
-          <p className="text-[11px] text-signal-dnd">{erro}</p>
-        ) : null}
+        {erro ? <p className="text-[11px] text-signal-dnd">{erro}</p> : null}
 
         <Button
           type="button"

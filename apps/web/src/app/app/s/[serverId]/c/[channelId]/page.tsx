@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Hash, Lock, Volume2 } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { prisma } from "@aether/db";
 import { getChannelPermissions } from "@aether/access";
 import { has, type PublicChannel, type PublicUser } from "@aether/shared";
@@ -55,7 +55,11 @@ export default async function ChannelPage({
   if (!channel) notFound();
 
   const publicChannel: PublicChannel = channel;
-  const Icon = channel.isPrivate ? Lock : channel.type === "VOICE" ? Volume2 : Hash;
+  const iconeCanal: AetherIconName = channel.isPrivate
+    ? "lock"
+    : channel.type === "VOICE"
+      ? "voice"
+      : "hash";
   const canConnect = has(permissions, "CONNECT");
   const canSend = has(permissions, "SEND_MESSAGES");
 
@@ -79,12 +83,16 @@ export default async function ChannelPage({
     <>
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-base-800 px-5">
         <NavToggle />
-        <Icon className="h-4 w-4 text-ink-500" />
-        <span className="text-[13px] font-medium text-ink-100">{channel.name}</span>
+        <AetherIcon name={iconeCanal} className="h-4 w-4 text-ink-500" />
+        <span className="text-[13px] font-medium text-ink-100">
+          {channel.name}
+        </span>
         {channel.topic ? (
           <>
             <span className="h-4 w-px bg-base-700" />
-            <span className="truncate text-[12px] text-ink-400">{channel.topic}</span>
+            <span className="truncate text-[12px] text-ink-400">
+              {channel.topic}
+            </span>
           </>
         ) : null}
         {channel.isPrivate ? (

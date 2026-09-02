@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Ticket } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 
 /**
@@ -44,7 +44,10 @@ export function WelcomeCard({ displayName }: { displayName: string }) {
               onClick={() => setModal("create")}
               className="flex items-center gap-3 rounded-lg border border-accent-600/50 bg-accent-600/10 px-4 py-3 text-left transition-colors hover:bg-accent-600/20"
             >
-              <Plus className="h-4 w-4 shrink-0 text-accent-300" />
+              <AetherIcon
+                name="plus"
+                className="h-4 w-4 shrink-0 text-accent-300"
+              />
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-accent-200">
                   Criar um servidor
@@ -60,7 +63,10 @@ export function WelcomeCard({ displayName }: { displayName: string }) {
               onClick={() => setModal("join")}
               className="flex items-center gap-3 rounded-lg border border-base-700 px-4 py-3 text-left transition-colors hover:bg-base-850"
             >
-              <Ticket className="h-4 w-4 shrink-0 text-ink-400" />
+              <AetherIcon
+                name="ticket"
+                className="h-4 w-4 shrink-0 text-ink-400"
+              />
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-ink-100">
                   Entrar com um convite

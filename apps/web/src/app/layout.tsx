@@ -3,6 +3,7 @@ import { Chakra_Petch, JetBrains_Mono, Rubik } from "next/font/google";
 import { BRAND } from "@aether/shared";
 import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
+import { AetherIconSprite } from "@/components/ui/aether-icon";
 
 /**
  * Tipografia.
@@ -75,6 +76,8 @@ export default function RootLayout({
         pai medido, elas colapsariam.
       */}
       <body className="flex h-dvh flex-col overflow-hidden bg-base-950 text-ink-200 antialiased">
+        {/* Sprite de icones do AETHER — inline uma vez, cobre o app inteiro. */}
+        <AetherIconSprite />
         <TitleBar />
         {/*
           `overflow-auto` aqui serve as telas curtas (entrar, criar conta) em

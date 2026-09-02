@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Gamepad2, Mic, Sparkles, User } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
@@ -32,15 +32,15 @@ import { VoiceTab } from "./voice-tab";
 
 type Tab = "conta" | "voz" | "atividade" | "plano";
 
-const TABS: { id: Tab; label: string; icon: typeof User }[] = [
-  { id: "conta", label: "Minha conta", icon: User },
-  { id: "voz", label: "Voz e video", icon: Mic },
+const TABS: { id: Tab; label: string; icon: AetherIconName }[] = [
+  { id: "conta", label: "Minha conta", icon: "user" },
+  { id: "voz", label: "Voz e video", icon: "mic" },
   /**
    * Atividade e aba propria porque deteccao de jogo nao tem relacao nenhuma
    * com microfone. Nasceu dentro de "Voz e video" so por ter sido onde coube
    * na hora — e "onde coube" nao e criterio de organizacao.
    */
-  { id: "atividade", label: "Atividade", icon: Gamepad2 },
+  { id: "atividade", label: "Atividade", icon: "gamepad" },
   /**
    * O plano fica por ULTIMO, e nao no topo.
    *
@@ -48,7 +48,7 @@ const TABS: { id: Tab; label: string; icon: typeof User }[] = [
    * vai trocar o microfone ou a foto, e a assinatura no primeiro item faria a
    * tela inteira parecer uma loja.
    */
-  { id: "plano", label: "Plano", icon: Sparkles },
+  { id: "plano", label: "Plano", icon: "sparkle" },
 ];
 
 export function AppSettingsModal({
@@ -104,7 +104,7 @@ export function AppSettingsModal({
         */}
         <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-base-800 pr-3">
           {TABS.map((tab) => {
-            const Icon = tab.icon;
+            const nomeIcone = tab.icon;
             const selected = active === tab.id;
             return (
               <button
@@ -118,7 +118,8 @@ export function AppSettingsModal({
                     : "text-ink-400 hover:bg-base-850 hover:text-ink-200",
                 )}
               >
-                <Icon
+                <AetherIcon
+                  name={nomeIcone}
                   className={cn(
                     "h-3.5 w-3.5 shrink-0",
                     selected ? "text-accent-400" : "text-ink-500",

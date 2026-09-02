@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Check, RefreshCw, X } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { JogoNaFila, StatusDeJogo } from "@aether/shared";
 import { listarFilaAction, revisarJogoAction } from "@/server/actions/jogos";
 import { Button } from "@/components/ui/button";
@@ -134,7 +134,10 @@ export function JogosTab({
           onClick={() => carregar(status)}
           disabled={carregando || pending}
         >
-          <RefreshCw className={cn("h-3.5 w-3.5", carregando && "animate-spin")} />
+          <AetherIcon
+            name="refresh"
+            className={cn("h-3.5 w-3.5", carregando && "animate-spin")}
+          />
         </Button>
       </div>
 
@@ -205,7 +208,7 @@ export function JogosTab({
                     disabled={pending}
                     title="Aprovar"
                   >
-                    <Check className="h-3.5 w-3.5" />
+                    <AetherIcon name="check" className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     type="button"
@@ -215,7 +218,7 @@ export function JogosTab({
                     disabled={pending}
                     title="Recusar"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <AetherIcon name="x" className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               ) : (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Hash, Loader2, MessageSquare, Search, Volume2 } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import {
   carregarIndiceDeNavegacao,
   type ItemDeNavegacao,
@@ -64,7 +64,8 @@ export function QuickSwitcher() {
   /** O atalho global. */
   useEffect(() => {
     function naTecla(evento: KeyboardEvent) {
-      const combo = (evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "k";
+      const combo =
+        (evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "k";
       if (!combo) return;
       /**
        * `preventDefault` porque Ctrl+K e a busca do navegador em algumas
@@ -140,9 +141,15 @@ export function QuickSwitcher() {
       <div className="w-full max-w-[540px] overflow-hidden rounded-lg border border-base-700 bg-base-900 shadow-pop">
         <div className="flex items-center gap-2.5 border-b border-base-800 px-4 py-3">
           {carregando && !itens ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-500" />
+            <AetherIcon
+              name="loader"
+              className="h-4 w-4 shrink-0 animate-spin text-ink-500"
+            />
           ) : (
-            <Search className="h-4 w-4 shrink-0 text-ink-500" />
+            <AetherIcon
+              name="search"
+              className="h-4 w-4 shrink-0 text-ink-500"
+            />
           )}
           <input
             ref={focarCampo}
@@ -205,8 +212,8 @@ export function QuickSwitcher() {
 /** O simbolo a esquerda: diz o TIPO do destino antes de ler o nome. */
 function Marca({ item }: { item: ItemDeNavegacao }) {
   if (item.tipo === "canal") {
-    const Icone = item.variante === "VOICE" ? Volume2 : Hash;
-    return <Icone className="h-4 w-4 shrink-0 text-ink-500" />;
+    const nome: AetherIconName = item.variante === "VOICE" ? "voice" : "hash";
+    return <AetherIcon name={nome} className="h-4 w-4 shrink-0 text-ink-500" />;
   }
 
   if (item.tipo === "conversa") {
@@ -218,7 +225,7 @@ function Marca({ item }: { item: ItemDeNavegacao }) {
         className="h-5 w-5 shrink-0 rounded-full object-cover"
       />
     ) : (
-      <MessageSquare className="h-4 w-4 shrink-0 text-ink-500" />
+      <AetherIcon name="message" className="h-4 w-4 shrink-0 text-ink-500" />
     );
   }
 

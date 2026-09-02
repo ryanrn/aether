@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RotateCcw } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type { ServerBan } from "@/server/services/moderation";
 import { unbanAction } from "@/server/actions/moderation";
 import { Avatar } from "@/components/ui/avatar";
@@ -91,7 +91,7 @@ export function BansTab({
               disabled={pendingUser === ban.userId}
               onClick={() => revoke(ban.userId)}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <AetherIcon name="rotate-ccw" className="h-3.5 w-3.5" />
               {pendingUser === ban.userId ? "Revogando..." : "Revogar"}
             </Button>
           </li>

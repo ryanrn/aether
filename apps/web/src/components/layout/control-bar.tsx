@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-// `LogOut` (sair da conta) segue no lucide: o conjunto AETHER, focado na area
-// de voz, nao tem um icone de "porta". Todo o resto do dock ja e AetherIcon.
-import { LogOut } from "lucide-react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import type {
   PublicChannel,
@@ -260,7 +257,9 @@ export function ControlBar({
    * houver call, `restartTrack` re-adquire o mic com a constraint nova sem
    * derrubar ninguem. Trava o popover durante a troca.
    */
-  async function alternarNativo(campo: "supressaoDeRuido" | "cancelamentoDeEco" | "ganhoAutomatico") {
+  async function alternarNativo(
+    campo: "supressaoDeRuido" | "cancelamentoDeEco" | "ganhoAutomatico",
+  ) {
     if (reaplicandoNativo) return;
     const atual = lerTratamentoDeAudio();
     const novo = { ...atual, [campo]: !atual[campo] };
@@ -289,7 +288,8 @@ export function ControlBar({
    */
   const podeCamera = viewerCan(viewer, "CAMERA");
   const cameraBloqueada = !podeCamera || !roomControls;
-  const cameraLigada = useRealtimeStore((estado) => estado.localCameraTrack) !== null;
+  const cameraLigada =
+    useRealtimeStore((estado) => estado.localCameraTrack) !== null;
 
   async function alternarCamera() {
     if (!roomControls) return;
@@ -434,7 +434,11 @@ export function ControlBar({
             aria-label="Escolher microfone"
             className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
           >
-            <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
+            <AetherIcon
+              name="chevron"
+              size="sm"
+              className="h-3 w-3 rotate-180"
+            />
           </button>
 
           {micMenuOpen ? (
@@ -498,21 +502,21 @@ export function ControlBar({
 
         <div className="relative flex items-center">
           <ControlToggle
-          active={cameraLigada}
-          danger={cameraLigada}
-          disabled={cameraBloqueada}
-          onClick={() => void alternarCamera()}
-          label={
-            cameraLigada
-              ? "Desligar a camera"
-              : !podeCamera
-                ? "Seu cargo nao permite ligar a camera"
-                : !roomControls
-                  ? "Entre em um canal de voz para ligar a camera"
-                  : "Ligar a camera"
-          }
-        >
-          <AetherIcon name={cameraLigada ? "camera-off" : "camera"} />
+            active={cameraLigada}
+            danger={cameraLigada}
+            disabled={cameraBloqueada}
+            onClick={() => void alternarCamera()}
+            label={
+              cameraLigada
+                ? "Desligar a camera"
+                : !podeCamera
+                  ? "Seu cargo nao permite ligar a camera"
+                  : !roomControls
+                    ? "Entre em um canal de voz para ligar a camera"
+                    : "Ligar a camera"
+            }
+          >
+            <AetherIcon name={cameraLigada ? "camera-off" : "camera"} />
           </ControlToggle>
 
           <button
@@ -523,7 +527,11 @@ export function ControlBar({
             aria-label="Escolher camera"
             className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100 disabled:opacity-40"
           >
-            <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
+            <AetherIcon
+              name="chevron"
+              size="sm"
+              className="h-3 w-3 rotate-180"
+            />
           </button>
 
           {camMenuOpen ? (
@@ -555,7 +563,11 @@ export function ControlBar({
                           : "text-ink-200",
                       )}
                     >
-                      <AetherIcon name="camera" size="sm" className="shrink-0" />
+                      <AetherIcon
+                        name="camera"
+                        size="sm"
+                        className="shrink-0"
+                      />
                       <span className="truncate">{aparelho.label}</span>
                     </button>
                   ))
@@ -609,7 +621,11 @@ export function ControlBar({
               aria-label="Trocar a qualidade da transmissao"
               className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
             >
-              <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
+              <AetherIcon
+                name="chevron"
+                size="sm"
+                className="h-3 w-3 rotate-180"
+              />
             </button>
           ) : null}
 
@@ -698,7 +714,11 @@ export function ControlBar({
                             className="h-3 w-3 shrink-0 text-amber-400/80"
                           />
                         ) : active ? (
-                          <AetherIcon name="check" size="sm" className="h-3 w-3 shrink-0" />
+                          <AetherIcon
+                            name="check"
+                            size="sm"
+                            className="h-3 w-3 shrink-0"
+                          />
                         ) : null}
                       </span>
                       <span className="text-[11px] leading-snug text-ink-500">
@@ -778,7 +798,10 @@ export function ControlBar({
                       {tratamento
                         ? (
                             [
-                              ["supressaoDeRuido", "Supressao de ruido (nativa)"],
+                              [
+                                "supressaoDeRuido",
+                                "Supressao de ruido (nativa)",
+                              ],
                               ["cancelamentoDeEco", "Cancelamento de eco"],
                               ["ganhoAutomatico", "Ganho automatico"],
                             ] as const
@@ -804,7 +827,8 @@ export function ControlBar({
                     </div>
                     <p className="mt-1.5 text-[11px] leading-snug text-ink-500">
                       Desligue as tres se voce toca, canta ou passa uma mesa de
-                      som pelo microfone — elas foram feitas para favorecer fala.
+                      som pelo microfone — elas foram feitas para favorecer
+                      fala.
                     </p>
 
                     <div className="mt-3 flex items-center gap-2 border-t border-base-700 pt-3">
@@ -889,7 +913,7 @@ export function ControlBar({
           onClick={() => startTransition(() => logoutAction())}
           disabled={pending}
         >
-          <LogOut className="h-4 w-4" />
+          <AetherIcon name="logout" className="h-4 w-4" />
         </ControlToggle>
       </div>
     </footer>

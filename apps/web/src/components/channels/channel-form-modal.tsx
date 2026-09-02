@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Hash, Volume2 } from "lucide-react";
+import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type { PublicCategory, PublicRole } from "@aether/shared";
 import {
   createChannelAction,
@@ -62,7 +62,9 @@ export function ChannelFormModal({
 }) {
   const isEdit = state.mode === "edit";
   const [values, setValues] = useState<FormValues>(
-    state.mode === "create" ? { ...EMPTY, categoryId: state.categoryId } : EMPTY,
+    state.mode === "create"
+      ? { ...EMPTY, categoryId: state.categoryId }
+      : EMPTY,
   );
   const [loading, setLoading] = useState(isEdit);
   const [error, setError] = useState<string | null>(null);
@@ -179,10 +181,14 @@ export function ChannelFormModal({
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
-                    ["VOICE", "Voz", Volume2],
-                    ["TEXT", "Texto", Hash],
-                  ] as const
-                ).map(([value, label, Icon]) => (
+                    ["VOICE", "Voz", "voice"],
+                    ["TEXT", "Texto", "hash"],
+                  ] as const satisfies readonly (readonly [
+                    string,
+                    string,
+                    AetherIconName,
+                  ])[]
+                ).map(([value, label, icone]) => (
                   <button
                     key={value}
                     type="button"
@@ -194,7 +200,7 @@ export function ChannelFormModal({
                         : "border-base-600 text-ink-400 hover:border-base-500 hover:text-ink-200",
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <AetherIcon name={icone} className="h-4 w-4" />
                     {label}
                   </button>
                 ))}
@@ -228,7 +234,10 @@ export function ChannelFormModal({
             <select
               value={values.categoryId ?? ""}
               onChange={(event) =>
-                set("categoryId", event.target.value === "" ? null : event.target.value)
+                set(
+                  "categoryId",
+                  event.target.value === "" ? null : event.target.value,
+                )
               }
               className="h-10 w-full rounded-md border border-base-600 bg-base-900 px-3 text-sm text-ink-100 transition-colors hover:border-base-500 focus:border-accent-600 focus:outline-none"
             >
@@ -290,7 +299,9 @@ export function ChannelFormModal({
                               "allowedRoleIds",
                               event.target.checked
                                 ? [...values.allowedRoleIds, role.id]
-                                : values.allowedRoleIds.filter((id) => id !== role.id),
+                                : values.allowedRoleIds.filter(
+                                    (id) => id !== role.id,
+                                  ),
                             )
                           }
                           className="h-3.5 w-3.5 accent-[var(--color-accent-500)]"
