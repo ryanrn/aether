@@ -1610,6 +1610,96 @@ de alguem afetaria o que os outros escutam.
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
 
+## Transferencia de posse e exclusao de servidor
+
+A "zona de risco" que a aba Geral das configuracoes do servidor prometia e
+nunca tinha: transferir o servidor para outro membro, e apaga-lo para sempre.
+As duas so aparecem para quem e o DONO de verdade — nunca para quem tem
+MANAGE_SERVER por cargo (um Administrador, por exemplo). Confundir as duas
+coisas seria escalada de privilegio: gerenciar nao e a mesma coisa que ser
+dono, e um Administrador transferindo o servidor para si mesmo teria exatamente
+esse efeito.
+
+**As duas pedem a senha da CONTA de quem esta agindo**, reconfirmada no
+servidor contra o `passwordHash` de verdade — a sessao ja aberta sozinha nao
+prova que quem esta na frente da tela agora e o dono, e nao alguem que achou o
+notebook destravado. Pedido do proprio dono do produto para a transferencia;
+estendido para a exclusao porque e ainda mais dificil de desfazer — na
+verdade, impossivel.
+
+### O bug que a transferencia evita: o cargo "Dono" e separado do `ownerId`
+
+`isOwner`, no calculo de permissao (`loadMemberAccess`), olha SO
+`Server.ownerId` — nao o cargo. Mas o cargo "Dono" (criado com
+`ALL_PERMISSIONS`, marcado `isOwner: true` no schema) fica ATRIBUIDO a quem
+criou o servidor via `MemberRole`, como qualquer outro cargo.
+
+Se a transferencia so trocasse `ownerId`, o dono antigo deixaria de contar
+como dono no calculo — mas continuaria com o cargo "Dono" preso a ele, e esse
+cargo sozinho ja vale `ALL_PERMISSIONS`. Resultado: administracao total
+disfarçada de "membro comum", exatamente o tipo de permissao divergente que a
+regra de arquitetura deste projeto existe para evitar.
+
+O conserto e a transacao mover o `MemberRole` do cargo "Dono" junto com o
+`ownerId`: sai de quem estava, entra em quem recebeu. Verificado contra o
+Postgres de verdade (nao so a decisao dublada) em
+`scripts/verify-server-ownership.mjs` — cria um servidor descartavel, transfere,
+confere que o cargo saiu de um lado e entrou no outro, transfere de volta
+(prova que o `upsert` nao quebra quando o alvo ja teve o cargo antes) e so
+depois testa a exclusao.
+
+### Exclusao: a ordem importa por causa do cascade
+
+`Server` tem `onDelete: Cascade` para tudo que depende dele — membros, cargos,
+categorias, canais, mensagens, convites, banimentos e ate o proprio log de
+auditoria. Isso resolve a limpeza inteira sozinho, mas cria uma ordem
+obrigatoria do lado do gateway: ele precisa saber quais canais o servidor
+tinha para tirar cada socket das salas certas, e essa consulta so funciona
+ANTES do cascade acontecer. Por isso `deleteServerAction` chama
+`notifyServerDeleted` (nova rota `/internal/server-deleted`, que reaproveita o
+mesmo `evict()` do kick/ban — um por membro, so trocando o motivo mostrado)
+e SO DEPOIS apaga a linha do banco.
+
+### Como testar
+
+```bash
+npx dotenv -e .env -- node scripts/verify-server-ownership.mjs
+```
+
+Na interface: aba **Geral** das configuracoes do servidor, como dono. A
+secao "Zona de risco" so aparece ali.
+
+### Limitacoes conhecidas
+
+- **Nao ha log de auditoria da exclusao.** `AuditLog.serverId` faz cascade a
+  partir de `Server` — gravar "servidor excluido" e apagar o servidor na
+  sequencia apagaria o proprio registro junto. Nao ha como esse log
+  sobreviver ao que ele descreveria; documentado aqui em vez de fingir um
+  rastro que a propria exclusao sempre levaria embora. A transferencia de
+  posse tem log normal (`server.transfer_ownership`), porque o servidor
+  continua existindo depois dela.
+- **Nao pede para digitar o nome do servidor**, so a senha. Foi uma escolha
+  deliberada para nao inflar o pedido original (so a senha foi pedida) — se
+  a exclusao acidental vier a ser um problema real, esse e o proximo reforço
+  natural.
+- **A exclusao vira uma chamada HTTP por membro conectado** para o gateway
+  (`evict()` reaproveitado, nao uma rota bulk dedicada). Aceito porque um
+  servidor deste produto tem poucas dezenas de pessoas; a alternativa seria
+  uma segunda versao da mesma logica so para poupar uma consulta que ja e
+  rapida.
+- **Nao verificado com login de dono de verdade na interface.** Typecheck,
+  os 348 testes unitarios existentes e a verificacao contra o Postgres real
+  (`verify-server-ownership.mjs`, exercitada via SQL direto no projeto
+  Supabase nesta rodada, ja que o ambiente nao tinha `.env` com a senha do
+  banco) passaram; falta abrir a tela como dono, transferir para um membro de
+  verdade e confirmar que o modal, o redirecionamento e o aviso de socket
+  (`server:evicted`) aparecem como esperado.
+- **`server:evicted` nao mostra o motivo na tela.** O evento carrega
+  `reason` (mensagens diferentes para expulsao/banimento e para exclusao de
+  servidor), mas o cliente hoje so usa isso para decidir redirecionar — o
+  texto em si nao aparece em lugar nenhum. Continua correto (a pessoa sai da
+  tela do jeito certo), so nao é tao informativo quanto podia ser.
+
 ## Conversas diretas (DM)
 
 Mensagem entre dois amigos, fora de qualquer servidor.

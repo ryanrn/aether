@@ -24,6 +24,9 @@ import {
  *
  *  - `/internal/evict` — a pessoa deixou de ser membro (kick, ban, saiu).
  *    Tira o socket de TODAS as salas do servidor e avisa a interface dele.
+ *  - `/internal/server-deleted` — o servidor inteiro deixou de existir.
+ *    Mesmo efeito do evict, so que para cada membro de uma vez — reaproveita
+ *    a mesma funcao, so trocando o motivo mostrado.
  *  - `/internal/resync-rooms` — a pessoa continua membro, mas o que ela pode
  *    VER mudou (cargo editado, cargo atribuido, canal virou privado, acesso
  *    de canal privado mudou). Recalcula so as salas de canal, sem tirar
@@ -89,6 +92,7 @@ async function evict(
   io: AetherServer,
   serverId: string,
   userId: string,
+  reason = "Voce nao faz mais parte deste servidor.",
 ): Promise<number> {
   const socketIds = socketIdsOf(userId);
   if (socketIds.length === 0) return 0;
@@ -117,10 +121,7 @@ async function evict(
     await socket.leave(room.server(serverId));
     for (const channelRoom of channelRooms) await socket.leave(channelRoom);
 
-    socket.emit("server:evicted", {
-      serverId,
-      reason: "Voce nao faz mais parte deste servidor.",
-    });
+    socket.emit("server:evicted", { serverId, reason });
     affected += 1;
   }
 
@@ -161,6 +162,39 @@ export async function handleInternalRequest(
       json(response, 200, { ok: true, sockets: affected });
     } catch (error) {
       console.error("[gateway] /internal/evict falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  if (request.url === "/internal/server-deleted") {
+    try {
+      const body = (await readJsonBody(request)) as {
+        serverId?: unknown;
+        userIds?: unknown;
+      };
+      if (typeof body.serverId !== "string" || !Array.isArray(body.userIds)) {
+        json(response, 400, { ok: false, error: "serverId e userIds sao obrigatorios" });
+        return true;
+      }
+      const userIds = body.userIds.filter((id): id is string => typeof id === "string");
+
+      /**
+       * Um `evict` por membro, e nao uma rota bulk dedicada: reaproveita a
+       * mesma logica ja testada do kick/ban (salas de canal, saida de voz,
+       * o evento) em vez de duplica-la. Custo aceito: a consulta dos canais
+       * do servidor se repete a cada membro — servidor tem poucas dezenas de
+       * pessoas, e a alternativa seria uma segunda versao da mesma funcao so
+       * para poupar uma query que ja e rapida.
+       */
+      let affected = 0;
+      for (const userId of userIds) {
+        affected += await evict(io, body.serverId, userId, "Este servidor foi excluido.");
+      }
+
+      json(response, 200, { ok: true, sockets: affected });
+    } catch (error) {
+      console.error("[gateway] /internal/server-deleted falhou:", error);
       json(response, 500, { ok: false });
     }
     return true;

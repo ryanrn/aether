@@ -81,6 +81,8 @@ export function SettingsTabs({
           serverId={serverId}
           serverName={serverName}
           serverIconUrl={serverIconUrl}
+          members={members}
+          viewer={viewer}
         />
       ) : null}
 

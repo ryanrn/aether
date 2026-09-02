@@ -361,6 +361,28 @@ export const unbanSchema = z.object({
   userId: z.string().min(1),
 });
 
+/**
+ * Senha para CONFIRMAR uma acao ja autenticada (transferir posse, excluir
+ * servidor) — nao para CRIAR uma senha nova. Por isso so exige "preenchida",
+ * sem o minimo de 8 caracteres do `passwordSchema`: uma conta antiga com
+ * senha curta, criada antes da regra existir, nao pode ficar trancada fora
+ * da propria confirmacao.
+ */
+export const confirmPasswordSchema = z
+  .string()
+  .min(1, "Informe sua senha para confirmar");
+
+export const transferOwnershipSchema = z.object({
+  serverId: z.string().min(1),
+  targetMemberId: z.string().min(1),
+  password: confirmPasswordSchema,
+});
+
+export const deleteServerSchema = z.object({
+  serverId: z.string().min(1),
+  password: confirmPasswordSchema,
+});
+
 /** Converte a duracao escolhida na data de vencimento. `null` = permanente. */
 export function banExpiryFrom(duration: BanDurationId): Date | null {
   const found = BAN_DURATIONS.find((option) => option.id === duration);
