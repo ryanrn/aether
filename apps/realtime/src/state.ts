@@ -27,6 +27,8 @@ export const statusOf: StateStore["statusOf"] = (...args) => store.statusOf(...a
 export const setGame: StateStore["setGame"] = (...args) => store.setGame(...args);
 export const setGameCover: StateStore["setGameCover"] = (...args) =>
   store.setGameCover(...args);
+export const setListening: StateStore["setListening"] = (...args) =>
+  store.setListening(...args);
 export const presenceEntryOf: StateStore["presenceEntryOf"] = (...args) =>
   store.presenceEntryOf(...args);
 export const joinServer: StateStore["joinServer"] = (...args) => store.joinServer(...args);

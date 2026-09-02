@@ -199,10 +199,17 @@ const csp = [
 
   /**
    * `data:` para os icones de jogo, que chegam como data URL do detector.
-   * `blob:` para preview de imagem antes do upload. Os dois hosts remotos sao
-   * capa de jogo (IGDB) e icone de servidor (Supabase Storage).
+   * `blob:` para preview de imagem antes do upload. Hosts remotos: capa de
+   * jogo (IGDB), icone de servidor (Supabase Storage), capa de album do
+   * Spotify (`i.scdn.co`).
    */
-  ["img-src 'self' data: blob:", supabase, r2Leitura, "https://images.igdb.com"]
+  [
+    "img-src 'self' data: blob:",
+    supabase,
+    r2Leitura,
+    "https://images.igdb.com",
+    "https://i.scdn.co",
+  ]
     .filter(Boolean)
     .join(" "),
 

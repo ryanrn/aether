@@ -654,9 +654,8 @@ Onde fica:
   original, mas ninguem rastreia quem esta OLHANDO qual tela: o SFU sabe quem
   publica, nao quem assiste. Mostrar isso exigiria um evento novo de
   sinalizacao, e ficou de fora desta versao em vez de ser simulado.
-- **Nada de jogo, musica ou status personalizado.** E a "2.0" do rascunho:
-  depende de integracao externa (um jogo dizendo ao AETHER o que esta
-  rodando), que e trabalho de outra natureza.
+- **Musica do Spotify: fase A pronta** (ver secao propria abaixo). Status
+  personalizado e jogo por SDK continuam de fora.
 - **Trocar de canal REINICIA o relogio; reconectar no mesmo canal preserva.**
   A segunda regra existe porque uma queda de rede chama `joinVoice` de novo — e
   zerar ali faria o tempo voltar do zero por um soluco que a pessoa nem viu.
@@ -673,6 +672,73 @@ Onde fica:
 - **A contagem de pessoas no canal e derivada no cliente**, contando quem a
   store conhece naquele canal. Bate com a arvore de canais porque as duas leem
   a mesma fonte.
+
+## Spotify — o que a pessoa esta ouvindo (fase A)
+
+"Ouvindo no Spotify" no cartao de atividade e no painel "Ativo agora", como o
+Discord faz. **Funciona no navegador E no desktop** — diferente da deteccao de
+jogo, que so roda no desktop: quem descobre a musica e o Spotify, pelo token
+que a pessoa autorizou, nao a maquina dela.
+
+### O caminho
+
+```
+1. a pessoa clica "Conectar Spotify" nas config -> OAuth (scope minimo:
+   user-read-currently-playing) -> callback troca o code por tokens
+2. tokens guardados CIFRADOS (AES-256-GCM, chave derivada do AUTH_SECRET)
+3. o GATEWAY tem um poller: para cada pessoa online com conta ligada, consulta
+   `currently-playing` a cada 15s e anuncia pela presenca quando a faixa muda
+```
+
+- **O `client_secret` vai so para web e gateway** (troca do code / refresh do
+  token), nunca para bundle nenhum — mesma regra do `TWITCH_CLIENT_SECRET` do
+  IGDB. Sem `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET`, o poller e no-op e a
+  seccao das config nem aparece.
+- **Poll, e nao push.** O Spotify nao tem webhook de playback. 15s de
+  defasagem na TROCA de faixa; a barra de progresso animada (que extrapola o
+  `progress_ms` no cliente) e a fase B.
+- **Uma instancia de gateway observa so os usuarios conectados A ELA.** Com
+  duas maquinas, cada uma cuida dos seus, e o anuncio ja atravessa instancia
+  pelo adapter de Redis (fase 7c-2).
+- **"Invisivel" zera a musica no que sai**, igual ao jogo (`entryVisivel` em
+  `handlers/presence.ts`). E a chave "Exibir no perfil" (`showOnProfile`)
+  desligada faz o poller anunciar `null` — o dado nao sai do gateway.
+- **A capa vem como URL** (`i.scdn.co`, liberado no `img-src` do CSP), nao
+  embutida — mesma escolha da capa do IGDB.
+- **O que passa pela presenca e sanitizado** (`safeMusicActivity` /
+  `safeSpotifyArt` em `packages/shared/src/events.ts`): sem titulo nao ha
+  atividade; a capa so passa do CDN do Spotify; o link so passa se for uma
+  faixa do `open.spotify.com`; titulo e artistas gigantes sao cortados.
+
+### Onde fica
+
+- `packages/db/prisma/schema.prisma` — modelo `SpotifyAccount` (PK `userId`)
+- `packages/db/src/secret-box.ts` — cifra dos tokens
+- `packages/access/src/spotify.ts` — OAuth + chamadas a API (web e gateway)
+- `packages/access/src/spotify-account.ts` — guardar, `tokenDeAcesso` (renova +
+  persiste), desconectar
+- `apps/web/src/app/api/spotify/{connect,callback,state}/route.ts`
+- `apps/web/src/components/settings/spotify-section.tsx` — a seccao das config
+- `apps/realtime/src/spotify/poller.ts` — o poller
+- `packages/shared/src/events.ts` — `MusicActivity` + `listening` em
+  `PresenceEntry`
+
+### Limitacoes conhecidas (fase A)
+
+- **`showAsStatus` ("Exibir o Spotify como seu status") ainda nao faz nada.**
+  A chave existe e e guardada; substituir o texto de status por "Ouvindo
+  Spotify" e a fase B.
+- **Sem barra de progresso.** So titulo, artistas e capa. A barra (com pausa e
+  extrapolacao) e a fase B.
+- **Nao testado em call/OAuth real nesta maquina** — precisa das credenciais
+  do app Spotify nas variaveis da Vercel e do Fly. O que esta provado: o
+  parser e a cifra por teste unitario (8 casos), o typecheck, o build.
+- **Podcast e anuncio sao ignorados** (`currently_playing_type !== "track"`).
+- **Cota do Spotify:** o app nasce em "development mode", limitado a 25
+  usuarios autorizados. Passar disso exige pedido de extensao a Spotify.
+- **O poller e por instancia e em memoria.** Uma queda nao-graciosa do gateway
+  (OOM) deixa a pessoa "ouvindo" na tela dos outros ate o proximo ciclo de
+  presenca. Mesma classe da limitacao ja documentada da fase 7c-2.
 
 ## Capa de jogo pelo IGDB (fase 1 — camada de metadados)
 

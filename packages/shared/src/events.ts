@@ -53,6 +53,83 @@ export interface PresenceEntry {
    * embutir obrigaria o servidor a baixar e reencodar a imagem de todo jogo.
    */
   gameCover: string | null;
+  /**
+   * O que a pessoa esta ouvindo no Spotify agora, ou `null`.
+   *
+   * Fica na PRESENCA pelo mesmo motivo do jogo: da para estar ouvindo sem
+   * estar em canal nenhum. E, tambem como o jogo, "Invisivel" zera isto no que
+   * SAI do gateway — nao adianta so nao desenhar.
+   *
+   * Quem descobre e o GATEWAY, consultando a API do Spotify com o token que a
+   * pessoa autorizou. O navegador nao entra nesse caminho; o `client_secret`
+   * fica so no gateway.
+   */
+  listening: MusicActivity | null;
+}
+
+/**
+ * Uma faixa tocando agora. Montada pelo gateway a partir da resposta do
+ * Spotify — nunca vem do cliente.
+ *
+ * A FASE A leva o essencial (titulo, artistas, capa, link). A barra de
+ * progresso animada (`durationMs`/`progressMs`/`progressAt`/`playing`) e a
+ * fase B.
+ */
+export interface MusicActivity {
+  /** nome da faixa */
+  title: string;
+  /** artistas ja juntados: "Ryu, The Runner, Veigh" */
+  artists: string;
+  /** capa do album (URL do CDN do Spotify) ou `null` */
+  art: string | null;
+  /** link para abrir a faixa no Spotify, ou `null` */
+  url: string | null;
+  /** desde quando ESTA faixa esta tocando (ISO) — para o "ha quanto tempo" */
+  since: string;
+}
+
+/** Tetos dos campos de musica — o evento vai para a sala inteira. */
+export const MUSIC_TITLE_MAX = 200;
+export const MUSIC_ARTISTS_MAX = 300;
+
+/**
+ * A capa e uma URL do CDN de imagem do Spotify?
+ *
+ * Mesma ideia do `safeGameCover`: nao vem do cliente, mas passa pelo `src` de
+ * uma imagem na tela de outras pessoas, entao a garantia mora no caminho do
+ * dado. Host fixo: `i.scdn.co`.
+ */
+export function safeSpotifyArt(art: unknown): string | null {
+  if (typeof art !== "string") return null;
+  if (art.length === 0 || art.length > 300) return null;
+  if (!/^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(art)) return null;
+  return art;
+}
+
+/**
+ * Normaliza o que veio do Spotify no formato que viaja pela presenca.
+ * Devolve `null` se nao houver titulo — sem titulo nao ha o que mostrar.
+ */
+export function safeMusicActivity(raw: {
+  title?: unknown;
+  artists?: unknown;
+  art?: unknown;
+  url?: unknown;
+  since?: unknown;
+}): MusicActivity | null {
+  const title = typeof raw.title === "string" ? raw.title.slice(0, MUSIC_TITLE_MAX).trim() : "";
+  if (!title) return null;
+  const artists =
+    typeof raw.artists === "string" ? raw.artists.slice(0, MUSIC_ARTISTS_MAX).trim() : "";
+  const url =
+    typeof raw.url === "string" && /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+$/.test(raw.url)
+      ? raw.url
+      : null;
+  const since =
+    typeof raw.since === "string" && !Number.isNaN(Date.parse(raw.since))
+      ? raw.since
+      : new Date().toISOString();
+  return { title, artists, art: safeSpotifyArt(raw.art), url, since };
 }
 
 /** Tamanho maximo do nome de jogo aceito — nome de pasta nao passa disso. */

@@ -29,7 +29,7 @@ import {
   sendFriendRequestFromServerAction,
 } from "@/server/actions/friends";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useListening, useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,7 @@ import {
 } from "@/lib/voice/volumes";
 import { useElapsed } from "@/lib/use-elapsed";
 import { GameArt } from "@/components/profile/game-art";
+import { MusicActivityRow } from "@/components/profile/music-activity";
 
 /**
  * AETHER Activity — o cartao de perfil com o que a pessoa esta fazendo agora.
@@ -252,6 +253,7 @@ export function UserActivityCard({
 
   const game = activity[user.id] ?? null;
   const gameElapsed = useElapsed(game?.since ?? null);
+  const musica = useListening(user.id);
 
   /**
    * Reposiciona depois de medir: perto da borda o cartao sairia da tela.
@@ -400,11 +402,17 @@ export function UserActivityCard({
             </span>
           </div>
 
-          {estado || game ? (
+          {estado || game || musica ? (
             <div className="mt-3 border-t border-base-800 pt-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                 atividade
               </p>
+
+              {musica ? (
+                <div className="mb-2">
+                  <MusicActivityRow musica={musica} />
+                </div>
+              ) : null}
 
               {/*
                 O jogo vem PRIMEIRO, e nao junto do estado de voz: e o dado

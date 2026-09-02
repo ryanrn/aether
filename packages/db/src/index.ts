@@ -27,6 +27,7 @@ if (process.env.NODE_ENV !== "production") {
 
 export * from "@prisma/client";
 export { Prisma } from "@prisma/client";
+export { cifrar, decifrar } from "./secret-box";
 
 /**
  * PROVA, EM TEMPO DE COMPILACAO, que o seletor compartilhado de usuario e um

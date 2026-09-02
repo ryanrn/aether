@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { PublicFriendship } from "@aether/shared";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useListening, useRealtimeStore } from "@/lib/stores/realtime-store";
 import { GameArt } from "@/components/profile/game-art";
+import { MusicActivityRow } from "@/components/profile/music-activity";
 import { Avatar } from "@/components/ui/avatar";
 import { duracaoGrossa, useElapsed } from "@/lib/use-elapsed";
 
@@ -19,8 +20,11 @@ import { duracaoGrossa, useElapsed } from "@/lib/use-elapsed";
  */
 export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
   const activity = useRealtimeStore((estado) => estado.activity);
+  const listening = useRealtimeStore((estado) => estado.listening);
 
-  const jogando = amigos.filter((amigo) => activity[amigo.user.id]?.game);
+  const jogando = amigos.filter(
+    (amigo) => activity[amigo.user.id]?.game || listening[amigo.user.id],
+  );
 
   return (
     <aside
@@ -43,7 +47,7 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {jogando.length === 0 ? (
           <p className="rounded-[10px] border border-dashed border-base-800 px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
-            Quando alguem da sua lista abrir um jogo, ele aparece aqui.
+            Quando alguem da sua lista abrir um jogo ou puser uma musica, aparece aqui.
           </p>
         ) : (
           jogando.map((amigo) => (
@@ -57,6 +61,7 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
 
 function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   const jogo = useRealtimeStore((estado) => estado.activity[amigo.user.id]);
+  const musica = useListening(amigo.user.id);
   const status = useRealtimeStore((estado) => estado.presence[amigo.user.id]);
   const decorrido = useElapsed(jogo?.since ?? null);
 
@@ -72,7 +77,7 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   }, []);
   const grosso = duracaoGrossa(jogo?.since ?? null, agora);
 
-  if (!jogo?.game) return null;
+  if (!jogo?.game && !musica) return null;
 
   return (
     <article className="mb-3 rounded-[10px] border border-base-800 bg-base-850 p-3.5">
@@ -93,30 +98,39 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
             {amigo.user.displayName}
           </p>
           <p className="truncate text-[12px] text-ink-300">
-            Jogando {jogo.game}
-            {grosso ? ` — ${grosso}` : ""}
+            {jogo?.game
+              ? `Jogando ${jogo.game}${grosso ? ` — ${grosso}` : ""}`
+              : "Ouvindo no Spotify"}
           </p>
         </div>
       </header>
 
-      <div className="mt-3 flex items-center gap-3 rounded-lg border border-base-800 bg-base-950 p-2.5">
-        <GameArt
-          cover={jogo.cover}
-          icon={jogo.icon}
-          className="h-11 w-11 rounded-[6px]"
-          iconClassName="h-5 w-5"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-bold text-ink-100">
-            {jogo.game}
-          </p>
-          {decorrido ? (
-            <p className="mt-0.5 truncate text-[12px] tabular-nums text-ink-500">
-              {decorrido} jogado
-            </p>
-          ) : null}
+      {musica ? (
+        <div className="mt-3 rounded-lg border border-base-800 bg-base-950 p-2.5">
+          <MusicActivityRow musica={musica} size="lg" />
         </div>
-      </div>
+      ) : null}
+
+      {jogo?.game ? (
+        <div className="mt-3 flex items-center gap-3 rounded-lg border border-base-800 bg-base-950 p-2.5">
+          <GameArt
+            cover={jogo.cover}
+            icon={jogo.icon}
+            className="h-11 w-11 rounded-[6px]"
+            iconClassName="h-5 w-5"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-bold text-ink-100">
+              {jogo.game}
+            </p>
+            {decorrido ? (
+              <p className="mt-0.5 truncate text-[12px] tabular-nums text-ink-500">
+                {decorrido} jogado
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }

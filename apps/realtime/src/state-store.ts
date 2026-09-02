@@ -1,4 +1,5 @@
 import type {
+  MusicActivity,
   PresenceEntry,
   PublicUser,
   UserStatus,
@@ -37,6 +38,14 @@ export interface StateStore {
     jogoEsperado: string,
     cover: string | null,
     displayName?: string,
+  ): Promise<{ servers: string[]; entry: PresenceEntry } | null>;
+  /**
+   * O que a pessoa esta ouvindo no Spotify agora (ou `null` — parou/pausou).
+   * `null` de retorno = nada mudou; nao anuncia.
+   */
+  setListening(
+    userId: string,
+    listening: MusicActivity | null,
   ): Promise<{ servers: string[]; entry: PresenceEntry } | null>;
   presenceEntryOf(userId: string): Promise<PresenceEntry | null>;
   joinServer(socketId: string, serverId: string): Promise<boolean>;
