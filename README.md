@@ -91,6 +91,46 @@ suite de testes automatizados de verdade.
 
 ---
 
+## Redesign visual (OpenDesign) — em andamento
+
+O OpenDesign gerou uma releitura visual do AETHER como HTML/CSS/SVG isolados
+(pasta `design-redesign/`, fora do repo). A migracao para a arquitetura real
+e feita em estagios, cada um com regressao verde:
+
+| Estagio | O que muda | Estado |
+| --- | --- | --- |
+| 1 | Tokens em `globals.css`: accent **AETHER Blue `#2f88ff`** (era blurple), `--color-signal-isolate`, rampa de superficies, raios `5/8/11/15`, motion, `--glow-speak` | ✅ |
+| 2 | `components/ui/aether-icon.tsx` — sprite de icones do OpenDesign (`<AetherIcon>` + `<AetherIconSprite>`), montado em `app/app/layout.tsx` | ✅ |
+| 3 | Area de voz: cards de participante (`voice-stage.tsx`), dock (`control-bar.tsx`), faixa de conexao, **botao de supressao de ruido ao vivo**, faixa de teste de microfone | ✅ |
+| 4 | Shell (trilho, sidebar, membros, banner) migrado para `AetherIcon` | ✅ |
+| 5 | `components/aether-v2/` REMOVIDO (codigo morto); `microphone-test.tsx` movido para `voice/` | ✅ |
+
+### Limitacoes conhecidas do redesign
+
+- **Icones lucide fora da area de voz.** Chat, premium, `server-settings`,
+  `friends`, `auth` e as abas do `app-settings-modal` seguem em `lucide-react`.
+  A migracao da cauda longa (~30 arquivos) e um PR proprio. O app roda com as
+  duas familias ao mesmo tempo sem conflito.
+- **Botao de ruido do dock so expoe o RNNoise (on/off).** As tres chaves
+  nativas do navegador (cancelamento de eco, ganho automatico, supressao
+  nativa) seguem so em Configuracoes: muda-las exige re-publicar a faixa de
+  microfone no meio da call, o que o botao rapido nao faz.
+- **Faixa de teste de microfone e v1.** Aciona/para e mostra o medidor; nao
+  tem selecao de dispositivo inline (isso fica em Configuracoes). O audio NAO
+  e transmitido — `mic-level.ts` abre um stream local proprio.
+- **Glow de fala nao acompanha o RMS por participante.** Respira pela animacao
+  `aether-breathe`; ligar `--vl` ao nivel real de cada remoto exigiria o
+  detector expor volume por participante (hoje so expoe `speaking` booleano).
+- **Painel de membros: grupo "Na chamada" nao implementado.** O redesign abre
+  a lista com "Na chamada — N"; o painel segue agrupando por cargo. Adicionar
+  o grupo derivado e trabalho de um proximo estagio.
+- **Sem verificacao E2E local nesta entrega.** `typecheck`, `vitest` (364) e
+  `next build` passam; os `verify-phase*.mjs` e o teste manual da call (mute,
+  camera, tela, teste de mic, ruido, 2+ participantes) precisam de banco +
+  gateway + LiveKit e ficam para o ambiente do time.
+
+---
+
 ## Stack
 
 - **Next.js 15** (App Router, Server Actions) + **React 19** + **TypeScript** estrito
