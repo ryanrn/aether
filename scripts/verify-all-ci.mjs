@@ -51,13 +51,21 @@ if (authSecret.length < 32) {
 need("REDIS_URL");
 
 /**
- * LiveKit FALSO: chaves quaisquer. O gateway assina o JWT de midia com elas e
- * o `verify-phase4` confere a assinatura com a MESMA chave — o caminho inteiro
- * de emissao roda sem um SFU real (o token nunca chega a ser apresentado a
- * lugar nenhum no teste).
+ * LiveKit: um `livekit-server --dev` de verdade sobe no job (porta 7880,
+ * chave `devkey` / segredo `secret` — fixos do modo dev). Com ele o gateway
+ * emite o token E consegue chamar a API administrativa (`listParticipants`, a
+ * checagem de qualidade da tela) — o `verify-phase4` confere a assinatura com
+ * o MESMO segredo, e o `verify-phase5` nao esbarra num SFU ausente.
  */
+const LIVEKIT = {
+  LIVEKIT_URL: "ws://127.0.0.1:7880",
+  LIVEKIT_API_KEY: "devkey",
+  LIVEKIT_API_SECRET: "secret",
+};
+
 const gatewayEnv = {
   ...process.env,
+  ...LIVEKIT,
   DATABASE_URL: process.env.DATABASE_URL,
   DIRECT_URL: process.env.DATABASE_URL,
   AUTH_SECRET: authSecret,
@@ -65,9 +73,6 @@ const gatewayEnv = {
   REALTIME_PORT: "4000",
   NEXT_PUBLIC_APP_URL: WEB_URL,
   SESSION_GUARD_INTERVAL_MS: "3000",
-  LIVEKIT_URL: "ws://127.0.0.1:7880",
-  LIVEKIT_API_KEY: "ci-devkey",
-  LIVEKIT_API_SECRET: "ci-livekit-secret-para-assinar-o-token-1234567890",
   NODE_ENV: "test",
 };
 
@@ -81,9 +86,15 @@ const webEnv = {
   NODE_ENV: "production",
 };
 
-/** Ambiente que cada verify-* recebe. */
+/**
+ * Ambiente que cada verify-* recebe. As chaves do LiveKit entram aqui tambem:
+ * o `verify-phase4` decide se testa o caminho completo ou so a degradacao
+ * olhando o PROPRIO `process.env`, e confere a assinatura do token com
+ * `LIVEKIT_API_SECRET`.
+ */
 const scriptEnv = {
   ...process.env,
+  ...LIVEKIT,
   DIRECT_URL: process.env.DATABASE_URL,
   VERIFY_REALTIME_URL: GATEWAY_URL,
   VERIFY_BASE_URL: WEB_URL,
@@ -160,6 +171,13 @@ function restoreFixture() {
 
 async function main() {
   // --- servicos -----------------------------------------------------------
+  // O `livekit-server --dev` e subido pelo workflow (docker run). Confere que
+  // ele respondeu antes de subir o gateway, senao as chamadas de RoomService
+  // falhariam com ECONNREFUSED no meio do verify-phase5.
+  await waitForHttp("http://127.0.0.1:7880", "livekit", 30).catch((e) => {
+    console.warn(`  aviso: ${e.message} — seguindo sem LiveKit`);
+  });
+
   console.log("subindo o gateway...");
   start("gateway", "npm", ["run", "start", "--workspace=@aether/realtime"], gatewayEnv);
   await waitForHttp(`${GATEWAY_URL}/health`, "gateway");

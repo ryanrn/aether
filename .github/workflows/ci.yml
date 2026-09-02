@@ -179,6 +179,15 @@ jobs:
           NEXT_PUBLIC_REALTIME_URL: http://127.0.0.1:4000
         run: npm run build --workspace=@aether/web
 
+      # `--dev` usa chave `devkey` / segredo `secret` fixos. So a API HTTP
+      # (7880) importa aqui — o gateway nunca faz WebRTC nos testes.
+      # `services:` do Actions nao deixa trocar o comando da imagem; por isso
+      # `docker run` num passo em vez de um service.
+      - name: Subir LiveKit (dev)
+        run: |
+          docker run -d --name livekit --network host \
+            livekit/livekit-server:v1.8.4 --dev --bind 0.0.0.0
+
       - name: Bateria de integracao
         run: node scripts/verify-all-ci.mjs
 
