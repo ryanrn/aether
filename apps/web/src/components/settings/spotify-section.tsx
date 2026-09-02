@@ -57,9 +57,22 @@ export function SpotifySection() {
 
   useEffect(() => {
     void carregar();
+    // O OAuth acontece numa janela/aba separada (no desktop, no navegador do
+    // sistema). Quando a pessoa volta para o app, re-checa se conectou.
+    const aoFocar = () => void carregar();
+    window.addEventListener("focus", aoFocar);
+    return () => window.removeEventListener("focus", aoFocar);
   }, []);
 
   const conta = estado?.conta ?? null;
+
+  function conectar() {
+    // `window.open`: no navegador abre um popup; no desktop o Electron
+    // redireciona para o navegador do sistema (setWindowOpenHandler) e o app
+    // NUNCA navega para fora. O callback responde uma pagina que se fecha
+    // sozinha — nao volta para `/app`.
+    window.open("/api/spotify/connect", "aether-spotify", "width=480,height=720");
+  }
 
   const cabecalho = (
     <>
@@ -128,13 +141,20 @@ export function SpotifySection() {
       {cabecalho}
 
       {!conta ? (
-        <a
-          href="/api/spotify/connect"
-          className="mt-3 inline-flex items-center gap-2 rounded-md border border-base-600 px-3 py-1.5 text-[12px] text-ink-100 transition-colors hover:bg-base-800"
-        >
-          {ICONE_SPOTIFY}
-          Conectar Spotify
-        </a>
+        <div className="mt-3 space-y-2">
+          <button
+            type="button"
+            onClick={conectar}
+            className="inline-flex items-center gap-2 rounded-md border border-base-600 px-3 py-1.5 text-[12px] text-ink-100 transition-colors hover:bg-base-800"
+          >
+            {ICONE_SPOTIFY}
+            Conectar Spotify
+          </button>
+          <p className="text-[11px] text-ink-500">
+            Abre numa janela separada. Ao terminar, feche-a e volte aqui — o
+            estado atualiza sozinho.
+          </p>
+        </div>
       ) : (
         <div className="mt-3 rounded-lg border border-base-700 bg-base-900 p-3">
           <div className="flex items-center gap-2.5">

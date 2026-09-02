@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   buscarPerfil,
   guardarConta,
@@ -10,45 +9,102 @@ import { getSession } from "@/server/auth/session";
 /**
  * Volta da autorizacao do Spotify: troca o `code` pelos tokens, cifra e guarda.
  *
- * O `state` e conferido contra o usuario da SESSAO ATUAL: um code roubado nao
- * serve porque quem completa o fluxo precisa estar logado como a mesma pessoa
- * que comecou.
+ * NAO redireciona para o app. O fluxo abre numa janela/aba separada (no
+ * desktop, no navegador do sistema), entao redirecionar para `/app` abriria o
+ * site do Aether onde nao devia. Em vez disso responde uma pagina minima que
+ * tenta se fechar sozinha (`window.close()` funciona quando a janela foi
+ * aberta por `window.open`) e, se nao der, diz para a pessoa voltar ao app.
  *
- * Sempre termina com um redirect de volta para as configuracoes (aba
- * Atividade), com `?spotify=ok` ou `?spotify=erro` — a tela mostra o resultado.
+ * A seccao das configuracoes re-checa o estado quando o app recupera o foco.
  */
 export const dynamic = "force-dynamic";
 
-function voltar(origin: string, resultado: "ok" | "erro" | "negado"): Response {
-  return NextResponse.redirect(`${origin}/app?spotify=${resultado}`);
+function pagina(titulo: string, detalhe: string, sucesso: boolean): Response {
+  const cor = sucesso ? "#1DB954" : "#e5484d";
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${titulo} · Aether</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0f13;color:#e8eaed;
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .box{height:100%;display:grid;place-items:center;padding:24px;text-align:center}
+  .card{max-width:340px}
+  .dot{width:44px;height:44px;border-radius:50%;background:${cor};margin:0 auto 16px}
+  h1{font-size:17px;margin:0 0 6px}
+  p{color:#9aa0a6;margin:0}
+  button{margin-top:20px;padding:8px 16px;border-radius:8px;border:1px solid #2a2f3a;
+    background:transparent;color:#e8eaed;font:inherit;cursor:pointer}
+  button:hover{background:#1a1e26}
+</style></head><body><div class="box"><div class="card">
+  <div class="dot"></div>
+  <h1>${titulo}</h1>
+  <p>${detalhe}</p>
+  <button onclick="window.close()">Fechar</button>
+</div></div>
+<script>setTimeout(function(){try{window.close()}catch(e){}}, ${sucesso ? 800 : 4000});</script>
+</body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const origin = url.origin;
 
   const sessao = await getSession();
-  if (!sessao) return NextResponse.redirect(`${origin}/login`);
+  if (!sessao) {
+    return pagina(
+      "Sessao expirada",
+      "Entre no Aether de novo e tente conectar o Spotify.",
+      false,
+    );
+  }
 
-  // A pessoa clicou em "Cancelar" na tela da Spotify.
-  if (url.searchParams.get("error")) return voltar(origin, "negado");
+  if (url.searchParams.get("error")) {
+    return pagina(
+      "Autorizacao cancelada",
+      "Voce pode fechar esta janela e voltar ao Aether.",
+      false,
+    );
+  }
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  if (!code || !state) return voltar(origin, "erro");
+  if (!code || !state) {
+    return pagina("Algo deu errado", "Tente conectar o Spotify de novo.", false);
+  }
 
   const dono = await verificarState(state);
-  if (dono !== sessao.user.id) return voltar(origin, "erro");
+  if (dono !== sessao.user.id) {
+    return pagina(
+      "Nao consegui confirmar",
+      "Comece o fluxo de novo pela tela de configuracoes.",
+      false,
+    );
+  }
 
   try {
-    const redirectUri = `${origin}/api/spotify/callback`;
+    const redirectUri = `${url.origin}/api/spotify/callback`;
     const tokens = await trocarCodigo(code, redirectUri);
     const { displayName } = await buscarPerfil(tokens.accessToken).catch(() => ({
       displayName: null,
     }));
-    await guardarConta({ userId: sessao.user.id, tokens, spotifyName: displayName });
-    return voltar(origin, "ok");
+    await guardarConta({
+      userId: sessao.user.id,
+      tokens,
+      spotifyName: displayName,
+    });
+    return pagina(
+      "Spotify conectado",
+      "Pode fechar esta janela e voltar ao Aether.",
+      true,
+    );
   } catch {
-    return voltar(origin, "erro");
+    return pagina(
+      "Nao consegui conectar",
+      "Tente de novo pela tela de configuracoes.",
+      false,
+    );
   }
 }
