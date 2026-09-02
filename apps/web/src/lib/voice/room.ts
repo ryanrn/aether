@@ -120,6 +120,15 @@ export interface VoiceRoomHandle {
   setCameraEnabled: (enabled: boolean, deviceId?: string) => Promise<boolean>;
   /** a propria camera, para voce se ver */
   localCameraTrack: () => Track | null;
+  /**
+   * Liga/desliga o RNNoise na faixa de microfone JA publicada, sem reabrir o
+   * dispositivo. `false` quando nao ha faixa (fora de call, ou mic ainda nao
+   * publicado) — o botao no dock fica desabilitado nesse caso, em vez de fingir.
+   *
+   * Ligar: `setProcessor(criarFiltroDeRuido())`. Desligar: `stopProcessor()`.
+   * O SDK reaplica o processador na reconexao sozinho.
+   */
+  definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
   /** para ONDE tocamos o audio recebido — mic dos outros e som de tela */
   setOutputDevice: (deviceId: string) => Promise<void>;
   /**
@@ -197,20 +206,38 @@ function audioContainer(): HTMLElement {
  */
 async function aplicarFiltroDeRuido(room: Room): Promise<void> {
   if (!lerTratamentoDeAudio().rnnoise) return;
+  await alternarFiltroDeRuido(room, true);
+}
 
+/**
+ * Liga/desliga o RNNoise na faixa de mic publicada. Usada tanto na entrada
+ * (via `aplicarFiltroDeRuido`, que respeita a preferencia) quanto pelo botao
+ * do dock ao vivo. Devolve `false` quando nao ha faixa para processar.
+ */
+async function alternarFiltroDeRuido(
+  room: Room,
+  ligado: boolean,
+): Promise<boolean> {
   try {
     const publicacao = room.localParticipant.getTrackPublication(
       Track.Source.Microphone,
     );
     const faixa = publicacao?.audioTrack;
-    if (!faixa) return;
+    if (!faixa) return false;
 
-    await faixa.setProcessor(criarFiltroDeRuido());
-    mediaLog("filtro de ruido ligado");
+    if (ligado) {
+      await faixa.setProcessor(criarFiltroDeRuido());
+      mediaLog("filtro de ruido ligado");
+    } else {
+      await faixa.stopProcessor();
+      mediaLog("filtro de ruido desligado");
+    }
+    return true;
   } catch (erro) {
     // O som cru segue publicado: `setProcessor` so troca a faixa quando o
-    // processador devolve uma.
-    mediaLog("nao consegui ligar o filtro de ruido", erro);
+    // processador devolve uma, e `stopProcessor` volta pra faixa original.
+    mediaLog("nao consegui alternar o filtro de ruido", erro);
+    return false;
   }
 }
 
@@ -629,6 +656,10 @@ export async function connectVoiceRoom({
           "Nao foi possivel usar esse microfone. Ele pode estar em uso por outro programa.",
         );
       }
+    },
+
+    async definirSupressaoAvancada(ligado) {
+      return alternarFiltroDeRuido(room, ligado);
     },
 
     setDeafened(next) {

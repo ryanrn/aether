@@ -278,6 +278,17 @@
     }
   }
 
+  /*
+   * Halo de ISOLAMENTO — mesmo lugar do glow de fala, cor de `signal-isolate`.
+   * Usado no card de quem esta testando o microfone.
+   */
+  .isolate-ring {
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--color-signal-isolate) 55%, transparent),
+      0 0 22px -6px color-mix(in oklch, var(--color-signal-isolate) 45%, transparent),
+      inset 0 0 30px -12px color-mix(in oklch, var(--color-signal-isolate) 40%, transparent);
+  }
+
   .animate-in-fast {
     animation: aether-fade-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
   }

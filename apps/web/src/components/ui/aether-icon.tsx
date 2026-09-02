@@ -63,7 +63,13 @@ export type AetherIconName =
   | "loader"
   | "clipboard-check"
   | "copy"
-  | "bug";
+  | "bug"
+  | "alert"
+  | "pencil"
+  | "trash"
+  | "folder-plus"
+  | "link"
+  | "compass";
 
 const SIZE = {
   sm: "h-3.5 w-3.5",
@@ -289,6 +295,34 @@ export function AetherIconSprite() {
           <path d="M12 8.5v10" />
           <path d="M9.5 20a5 5 0 0 1-4-4.9v-2A4.5 4.5 0 0 1 10 8.5h4a4.5 4.5 0 0 1 4.5 4.6v2a5 5 0 0 1-4 4.9" />
           <path d="M4.5 9.5 7 11M19.5 9.5 17 11M4 16h2.5M17.5 16H20" />
+        </symbol>
+        <symbol id="ic-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7.75v5" />
+          <path d="M12 16.25h.01" />
+        </symbol>
+        <symbol id="ic-pencil" viewBox="0 0 24 24">
+          <path d="M13.5 6.5 17.5 10.5" />
+          <path d="M4 20l1-4L16 5a2 2 0 0 1 3 3L8 19l-4 1z" />
+        </symbol>
+        <symbol id="ic-trash" viewBox="0 0 24 24">
+          <path d="M4 7h16" />
+          <path d="M9.5 7V5.5a1.5 1.5 0 0 1 1.5-1.5h2a1.5 1.5 0 0 1 1.5 1.5V7" />
+          <path d="M6.5 7 7.4 19.6a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L17.5 7" />
+          <path d="M10 11v6M14 11v6" />
+        </symbol>
+        <symbol id="ic-folder-plus" viewBox="0 0 24 24">
+          <path d="M3.5 7a2 2 0 0 1 2-2h3l2 2.5h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+          <path d="M12 11v6M9 14h6" />
+        </symbol>
+        <symbol id="ic-link" viewBox="0 0 24 24">
+          <path d="M9.5 14.5 14.5 9.5" />
+          <path d="M8 12 6 14a3.5 3.5 0 0 0 5 5l2-2" />
+          <path d="M16 12l2-2a3.5 3.5 0 0 0-5-5l-2 2" />
+        </symbol>
+        <symbol id="ic-compass" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M15.6 8.4 13.4 13.4 8.4 15.6 10.6 10.6z" />
         </symbol>
       </defs>
     </svg>

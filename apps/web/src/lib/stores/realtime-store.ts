@@ -58,6 +58,17 @@ interface RealtimeState {
   error: string | null;
   /** problema de microfone — separado do erro de conexao, causa diferente */
   voiceError: string | null;
+  /**
+   * Teste de microfone ATIVO — "ouvindo a propria voz".
+   *
+   * E um estado global, e nao so da tela de Configuracoes, porque o redesign
+   * mostra uma faixa vermelha no palco enquanto ele roda ("ninguem na call
+   * recebe este audio"). O audio NAO e transmitido: o medidor abre um stream
+   * local proprio (`lib/voice/mic-level.ts`).
+   *
+   * Volatil: cai junto com o socket (`clearVolatile`).
+   */
+  micTest: boolean;
 
   presence: Record<string, UserStatus>;
   /**
@@ -162,6 +173,11 @@ interface RealtimeState {
     /** liga/desliga a camera; `false` quando o dispositivo recusou */
     setCameraEnabled: (enabled: boolean, deviceId?: string) => Promise<boolean>;
     /**
+     * Liga/desliga o RNNoise na faixa de mic ao vivo (botao do dock).
+     * `false` quando nao ha faixa publicada — o botao fica desabilitado.
+     */
+    definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
+    /**
      * Assina as estatisticas de conexao (ping, perda, regiao). Nada e medido
      * enquanto ninguem assina — o painel so monta quando aberto. Devolve o
      * cancelador.
@@ -192,6 +208,7 @@ interface RealtimeState {
   setSelfUserId: (userId: string) => void;
   setError: (error: string | null) => void;
   setVoiceError: (error: string | null) => void;
+  setMicTest: (ativo: boolean) => void;
   /** troca de servidor zera tudo que era daquele servidor */
   enterServer: (serverId: string) => void;
   clearVolatile: () => void;
@@ -260,6 +277,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   serverId: null,
   error: null,
   voiceError: null,
+  micTest: false,
   presence: {},
   activity: {},
   listening: {},
@@ -286,6 +304,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   setSelfUserId: (selfUserId) => set({ selfUserId }),
   setError: (error) => set({ error }),
   setVoiceError: (voiceError) => set({ voiceError }),
+  setMicTest: (micTest) => set({ micTest }),
 
   enterServer: (serverId) =>
     set((state) =>
@@ -337,6 +356,9 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       localCameraTrack: null,
       focusedShareUserId: null,
       watchedShares: [],
+      // O teste de microfone abre um stream local proprio; sem socket nao ha
+      // por que segurar o dispositivo aberto.
+      micTest: false,
     }),
 
   syncPresence: (entries) =>
@@ -663,6 +685,11 @@ export function useListening(userId: string): MusicActivity | null {
 
 export function useIsConnected(): boolean {
   return useRealtimeStore((state) => state.connectionStatus === "online");
+}
+
+/** Teste de microfone ativo ("ouvindo a propria voz"). */
+export function useMicTest(): boolean {
+  return useRealtimeStore((state) => state.micTest);
 }
 
 export function useConnectionStatus(): ConnectionStatus {

@@ -96,6 +96,8 @@ export function VoiceSession() {
           setUserVolume: (userId, volume) => handle.setUserVolume(userId, volume),
           setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
+          definirSupressaoAvancada: (ligado) =>
+            handle.definirSupressaoAvancada(ligado),
           /**
            * A faixa local vai para a store DEPOIS de a camera ligar de fato.
            * Guardar antes deixaria o proprio bloco tentando desenhar uma faixa

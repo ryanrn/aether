@@ -1,21 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import {
-  Check,
-  ChevronUp,
-  Headphones,
-  HeadphoneOff,
-  Lock,
-  LogOut,
-  Mic,
-  MicOff,
-  MonitorUp,
-  Video,
-  VideoOff,
-  PhoneOff,
-  Settings,
-} from "lucide-react";
+// `LogOut` (sair da conta) segue no lucide: o conjunto AETHER, focado na area
+// de voz, nao tem um icone de "porta". Todo o resto do dock ja e AetherIcon.
+import { LogOut } from "lucide-react";
+import { AetherIcon } from "@/components/ui/aether-icon";
 import type {
   PublicChannel,
   PublicUser,
@@ -35,9 +24,14 @@ import { PLANS, perfilCabeNoPlano } from "@aether/shared";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useConnectionStatus,
+  useMicTest,
   useRealtimeStore,
   useSelfVoice,
 } from "@/lib/stores/realtime-store";
+import {
+  lerTratamentoDeAudio,
+  salvarTratamentoDeAudio,
+} from "@/lib/voice/audio-prefs";
 import {
   canCaptureScreen,
   isDesktopApp,
@@ -107,6 +101,16 @@ export function ControlBar({
   const [localMuted, setLocalMuted] = useState(false);
   const [localDeafened, setLocalDeafened] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
+  const [noiseOpen, setNoiseOpen] = useState(false);
+  /**
+   * Supressao avancada (RNNoise). A preferencia mora no `localStorage`
+   * (`audio-prefs`) e o `room.ts` a respeita ao entrar; o botao daqui liga/
+   * desliga o processador AO VIVO, sem reabrir o microfone.
+   */
+  const [rnnoise, setRnnoise] = useState(false);
+  useEffect(() => setRnnoise(lerTratamentoDeAudio().rnnoise), []);
+  const micTest = useMicTest();
+  const setMicTest = useRealtimeStore((state) => state.setMicTest);
   const [profileOpen, setProfileOpen] = useState(false);
   /**
    * Volta do OAuth do Spotify: no desktop o fluxo navega a janela e cai em
@@ -235,6 +239,18 @@ export function ControlBar({
     socket?.emit("voice:state", { selfDeafened: next });
   }
 
+  /**
+   * Liga/desliga o RNNoise. Grava a preferencia SEMPRE (vale na proxima
+   * conexao) e, se houver call, aplica na faixa ja publicada. Se o `room`
+   * recusar (sem faixa), a preferencia fica guardada mesmo assim.
+   */
+  async function alternarRuido(ligar: boolean) {
+    setRnnoise(ligar);
+    const t = lerTratamentoDeAudio();
+    salvarTratamentoDeAudio({ ...t, rnnoise: ligar });
+    await roomControls?.definirSupressaoAvancada(ligar);
+  }
+
   const canShare = viewerCan(viewer, "SCREEN_SHARE");
   /**
    * Compartilhar exige tres coisas ao mesmo tempo: permissao do cargo, estar
@@ -310,7 +326,7 @@ export function ControlBar({
        * ele ja nasce com `min-w-0` e `truncate` — em vez de empurrar os
        * botoes para fora, que sao o que se vem clicar aqui.
        */
-      className="absolute bottom-5 left-1/2 z-30 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-800 bg-base-800/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm md:max-w-none"
+      className="absolute bottom-5 left-1/2 z-30 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-700 bg-base-750/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm md:max-w-none"
     >
       {/*
         O nome abre o CARTAO, nao as configuracoes.
@@ -373,19 +389,21 @@ export function ControlBar({
       <div className="flex items-center gap-1">
         <div className="relative flex items-center">
           <ControlToggle
-            active={!muted}
+            active={!muted && !micTest}
             onClick={toggleMute}
-            disabled={serverMuted}
+            disabled={serverMuted || micTest}
             label={
-              serverMuted
-                ? "Silenciado pela moderacao do servidor"
-                : muted
-                  ? "Microfone desligado"
-                  : "Microfone ligado"
+              micTest
+                ? "Microfone em teste — nao transmitindo"
+                : serverMuted
+                  ? "Silenciado pela moderacao do servidor"
+                  : muted
+                    ? "Microfone desligado"
+                    : "Microfone ligado"
             }
-            danger={muted}
+            danger={muted && !micTest}
           >
-            {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            <AetherIcon name={muted ? "mic-off" : "mic"} />
           </ControlToggle>
 
           <button
@@ -395,7 +413,7 @@ export function ControlBar({
             aria-label="Escolher microfone"
             className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
           >
-            <ChevronUp className="h-3 w-3" />
+            <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
           </button>
 
           {micMenuOpen ? (
@@ -427,7 +445,7 @@ export function ControlBar({
                           : "text-ink-200",
                       )}
                     >
-                      <Mic className="h-3.5 w-3.5 shrink-0" />
+                      <AetherIcon name="mic" size="sm" className="shrink-0" />
                       <span className="truncate">{device.label}</span>
                     </button>
                   ))
@@ -454,11 +472,7 @@ export function ControlBar({
           }
           danger={deafened}
         >
-          {deafened ? (
-            <HeadphoneOff className="h-4 w-4" />
-          ) : (
-            <Headphones className="h-4 w-4" />
-          )}
+          <AetherIcon name={deafened ? "volume-off" : "headset"} />
         </ControlToggle>
 
         <div className="relative flex items-center">
@@ -477,11 +491,7 @@ export function ControlBar({
                   : "Ligar a camera"
           }
         >
-          {cameraLigada ? (
-            <VideoOff className="h-4 w-4" />
-          ) : (
-            <Video className="h-4 w-4" />
-          )}
+          <AetherIcon name={cameraLigada ? "camera-off" : "camera"} />
           </ControlToggle>
 
           <button
@@ -492,7 +502,7 @@ export function ControlBar({
             aria-label="Escolher camera"
             className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100 disabled:opacity-40"
           >
-            <ChevronUp className="h-3 w-3" />
+            <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
           </button>
 
           {camMenuOpen ? (
@@ -524,7 +534,7 @@ export function ControlBar({
                           : "text-ink-200",
                       )}
                     >
-                      <Video className="h-3.5 w-3.5 shrink-0" />
+                      <AetherIcon name="camera" size="sm" className="shrink-0" />
                       <span className="truncate">{aparelho.label}</span>
                     </button>
                   ))
@@ -561,7 +571,7 @@ export function ControlBar({
                       : "Compartilhar tela"
             }
           >
-            <MonitorUp className="h-4 w-4" />
+            <AetherIcon name={localSharing ? "screen-stop" : "screen-share"} />
           </ControlToggle>
 
           {/*
@@ -578,7 +588,7 @@ export function ControlBar({
               aria-label="Trocar a qualidade da transmissao"
               className="grid h-9 w-4 place-items-center rounded-r-md text-ink-500 transition-colors hover:text-ink-100"
             >
-              <ChevronUp className="h-3 w-3" />
+              <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
             </button>
           ) : null}
 
@@ -661,9 +671,13 @@ export function ControlBar({
                       >
                         {preset.label}
                         {bloqueado ? (
-                          <Lock className="h-3 w-3 shrink-0 text-amber-400/80" />
+                          <AetherIcon
+                            name="lock"
+                            size="sm"
+                            className="h-3 w-3 shrink-0 text-amber-400/80"
+                          />
                         ) : active ? (
-                          <Check className="h-3 w-3 shrink-0" />
+                          <AetherIcon name="check" size="sm" className="h-3 w-3 shrink-0" />
                         ) : null}
                       </span>
                       <span className="text-[11px] leading-snug text-ink-500">
@@ -678,14 +692,98 @@ export function ControlBar({
         </div>
 
         {selfVoice ? (
-          <ControlToggle
-            active={false}
-            danger
-            onClick={() => socket?.emit("voice:leave")}
-            label="Desconectar da voz"
-          >
-            <PhoneOff className="h-4 w-4" />
-          </ControlToggle>
+          <>
+            <span className="mx-0.5 h-6 w-px bg-base-700" />
+
+            <div className="relative flex items-center">
+              <ControlToggle
+                active={rnnoise}
+                isolate={micTest}
+                disabled={!roomControls}
+                onClick={() => setNoiseOpen((open) => !open)}
+                label={
+                  micTest
+                    ? "Testando o microfone"
+                    : rnnoise
+                      ? "Supressao de ruido avancada ligada"
+                      : "Supressao de ruido"
+                }
+              >
+                <AetherIcon name="noise" />
+              </ControlToggle>
+
+              {noiseOpen ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Fechar"
+                    onClick={() => setNoiseOpen(false)}
+                    className="fixed inset-0 z-40 cursor-default"
+                  />
+                  <div className="absolute bottom-11 left-1/2 z-50 w-[300px] -translate-x-1/2 animate-rise rounded-lg border border-base-700 bg-base-750 p-4 shadow-[var(--shadow-pop)]">
+                    <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
+                      Supressao de ruido
+                    </p>
+
+                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-base-700 bg-base-850 p-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-base-950 text-ink-200">
+                        <AetherIcon name="sparkle" size="sm" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px] font-semibold text-ink-100">
+                          Modelo de IA (RNNoise)
+                        </span>
+                        <span className="block text-[11px] leading-snug text-ink-500">
+                          Roda na sua maquina, alem da supressao nativa do
+                          navegador. Corta teclado, ventilador e ar-condicionado
+                          que a nativa deixa passar.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={rnnoise}
+                        onChange={(e) => void alternarRuido(e.target.checked)}
+                        className="mt-0.5 accent-accent-500"
+                      />
+                    </label>
+
+                    <div className="mt-3 flex items-center gap-2 border-t border-base-700 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMicTest(!micTest);
+                          setNoiseOpen(false);
+                        }}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+                          micTest
+                            ? "border-signal-isolate/40 bg-signal-isolate/15 text-signal-isolate-ink"
+                            : "border-base-700 bg-base-850 text-ink-200 hover:bg-base-800",
+                        )}
+                      >
+                        <AetherIcon name="headset-monitor" size="sm" />
+                        {micTest ? "Parar teste" : "Ouvir a si mesmo"}
+                      </button>
+                      <span className="text-[11px] text-ink-500">
+                        Use fones para evitar eco.
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <span className="mx-0.5 h-6 w-px bg-base-700" />
+
+            <ControlToggle
+              active={false}
+              danger
+              onClick={() => socket?.emit("voice:leave")}
+              label="Desconectar da voz"
+            >
+              <AetherIcon name="disconnect" />
+            </ControlToggle>
+          </>
         ) : null}
       </div>
 
@@ -722,7 +820,7 @@ export function ControlBar({
           label="Configuracoes"
           onClick={() => setProfileOpen(true)}
         >
-          <Settings className="h-4 w-4" />
+          <AetherIcon name="settings" />
         </ControlToggle>
 
         <ControlToggle
@@ -738,10 +836,19 @@ export function ControlBar({
   );
 }
 
+/**
+ * Botao do dock — o `.ctl` do redesign: 36px, borda, cantos curtos. Quatro
+ * estados, cada um por FORMA e COR (nunca so cor):
+ *  - `active`   — recurso ligado, azul do AETHER + ponto no canto.
+ *  - `danger`   — mic mudo / audio off, `signal-dnd`.
+ *  - `isolate`  — teste de microfone, `signal-isolate` + ponto.
+ *  - `disabled` — unico estado que pode reduzir contraste.
+ */
 function ControlToggle({
   children,
   active,
   danger,
+  isolate,
   disabled,
   label,
   onClick,
@@ -749,6 +856,7 @@ function ControlToggle({
   children: React.ReactNode;
   active: boolean;
   danger?: boolean;
+  isolate?: boolean;
   disabled?: boolean;
   label: string;
   onClick?: () => void;
@@ -762,16 +870,22 @@ function ControlToggle({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "grid h-8 w-8 place-items-center rounded-full transition-colors duration-150",
-        danger
-          ? "bg-signal-dnd/12 text-signal-dnd hover:bg-signal-dnd/20"
-          : active
-            ? "bg-accent-500 text-white hover:bg-accent-400"
-            : "bg-white/[0.04] text-ink-300 hover:bg-white/[0.08] hover:text-ink-100",
-        disabled && "cursor-not-allowed opacity-40 hover:bg-white/[0.04]",
+        "relative grid h-9 w-9 place-items-center rounded-md border transition-colors duration-150",
+        "active:translate-y-px",
+        isolate
+          ? "border-signal-isolate/40 bg-signal-isolate/15 text-signal-isolate"
+          : danger
+            ? "border-signal-dnd/35 bg-signal-dnd/12 text-signal-dnd hover:bg-signal-dnd/20"
+            : active
+              ? "border-accent-600/60 bg-accent-500/15 text-accent-300 shadow-[inset_0_0_0_1px_var(--color-accent-600)]"
+              : "border-base-700 bg-base-850 text-ink-200 hover:bg-base-800 hover:text-ink-100",
+        disabled && "cursor-not-allowed opacity-40",
       )}
     >
       {children}
+      {(active || isolate) && !disabled ? (
+        <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-current" />
+      ) : null}
     </button>
   );
 }
