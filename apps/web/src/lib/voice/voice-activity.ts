@@ -4,26 +4,24 @@
  * Deteccao de fala a partir do proprio microfone — no navegador, sem enviar
  * audio a lugar nenhum.
  *
- * O que acontece: pegamos o stream do microfone, medimos a energia do sinal
- * (RMS) a cada 50ms e decidimos "esta falando" ou "esta em silencio". O que
- * sai desta maquina e um BOOLEANO pelo socket. O audio em si nunca e
- * transmitido, nem gravado, nem guardado — a fase 4 e que vai transportar som.
+ * CAMINHO SEM SFU. Quando o LiveKit esta configurado, quem mede a fala e o
+ * `room.ts`, sobre a faixa que ja esta publicada (ver `voice-session.tsx`).
+ * Este arquivo continua existindo porque o app tem de funcionar sem SFU: ai a
+ * bordinha de "falando" ainda acende, mesmo sem audio trafegando.
  *
- * Por isso o navegador pede permissao de microfone a partir de agora: para
- * saber se voce esta falando e preciso ouvir voce localmente. Sem essa
- * permissao, a bordinha simplesmente nao acende, e mais nada quebra.
+ * O que sai desta maquina e um BOOLEANO pelo socket. O audio nunca e
+ * transmitido, gravado nem guardado.
+ *
+ * A logica de decidir "falando/silencio" (piso adaptativo, ataque imediato,
+ * release curto) mora em `speech-gate.ts`, compartilhada com o caminho COM
+ * SFU — porque a bordinha tem de acender igual nos dois.
  */
 
-/** Acima disto consideramos fala. Calibrado para voz normal com ruido de fundo. */
-const OPEN_THRESHOLD = 0.02;
-/** Abaixo disto consideramos silencio. A folga entre os dois evita tremeliques. */
-const CLOSE_THRESHOLD = 0.012;
-/**
- * Silencio precisa persistir este tempo antes de apagar o indicador. Sem isso
- * a borda piscaria nas pausas naturais entre palavras.
- */
-const RELEASE_MS = 280;
-const SAMPLE_INTERVAL_MS = 50;
+import { createMicAnalyser } from "./mic-analyser";
+import { createSpeechGate } from "./speech-gate";
+
+/** ~33 leituras por segundo: fresco o bastante para o ataque parecer instantaneo. */
+const SAMPLE_INTERVAL_MS = 30;
 
 export interface VoiceActivityHandle {
   stop: () => void;
@@ -43,65 +41,27 @@ export async function startVoiceActivity({
     },
   });
 
-  const context = new AudioContext();
-  // Politica de autoplay pode entregar o contexto suspenso; sem retomar, o
-  // analisador le silencio para sempre.
-  if (context.state === "suspended") await context.resume();
+  const track = stream.getAudioTracks()[0];
+  if (!track) {
+    for (const t of stream.getTracks()) t.stop();
+    throw new Error("microfone abriu sem faixa de audio");
+  }
 
-  const source = context.createMediaStreamSource(stream);
-  const analyser = context.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.2;
-  source.connect(analyser);
-  // De proposito NAO conectamos ao destino: ligar no alto-falante devolveria
-  // o proprio microfone como eco.
-
-  const buffer = new Uint8Array(analyser.fftSize);
-  let speaking = false;
-  let quietSince: number | null = null;
+  const analyser = await createMicAnalyser(track);
+  const gate = createSpeechGate({ onChange });
 
   const timer = setInterval(() => {
-    analyser.getByteTimeDomainData(buffer);
-
-    // getByteTimeDomainData centra o silencio em 128; normalizamos para -1..1
-    let sum = 0;
-    for (let i = 0; i < buffer.length; i += 1) {
-      const sample = ((buffer[i] ?? 128) - 128) / 128;
-      sum += sample * sample;
-    }
-    const rms = Math.sqrt(sum / buffer.length);
-
-    if (!speaking) {
-      if (rms > OPEN_THRESHOLD) {
-        speaking = true;
-        quietSince = null;
-        onChange(true);
-      }
-      return;
-    }
-
-    if (rms > CLOSE_THRESHOLD) {
-      quietSince = null;
-      return;
-    }
-    const now = Date.now();
-    quietSince ??= now;
-    if (now - quietSince >= RELEASE_MS) {
-      speaking = false;
-      quietSince = null;
-      onChange(false);
-    }
+    gate.push(analyser.rms(), performance.now());
   }, SAMPLE_INTERVAL_MS);
 
   return {
     stop: () => {
       clearInterval(timer);
-      source.disconnect();
-      analyser.disconnect();
+      analyser.close();
       // Soltar as faixas apaga o indicador de microfone em uso do navegador.
-      for (const track of stream.getTracks()) track.stop();
-      void context.close().catch(() => undefined);
-      if (speaking) onChange(false);
+      for (const t of stream.getTracks()) t.stop();
+      // Se parou falando, os outros precisam ver a bordinha apagar.
+      gate.silence();
     },
   };
 }

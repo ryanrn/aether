@@ -3022,6 +3022,84 @@ casca, nao a captura. E os tokens sao os do `@theme`: `base-750`, `signal-*`,
   ser recusado, mostrar a mensagem sem derrubar a tela. A reacao a som real
   ficou para o teste de uso.
 
+## Bordinha de "falando" instantanea, e o painel de Conexao
+
+### A bordinha acende na hora agora
+
+Com SFU, o "estou falando" vinha do `RoomEvent.ActiveSpeakersChanged` do
+LiveKit — que o SFU calcula NO SERVIDOR, a cada ~400ms, com histerese, para
+responder "quem e o falante dominante". Otimo para destacar; ruim para a
+bordinha: atraso visivel, e falas curtas nem chegavam a contar.
+
+Agora a fonte local e um analisador NO NAVEGADOR sobre a propria faixa
+publicada (`apps/web/src/lib/voice/room.ts`, `iniciarDetectorLocal`) — o
+MESMO audio que os outros ouvem, sem ida ao servidor. Como o
+`socket.emit("voice:speaking")` que vai para o nosso gateway sai desse
+detector, a bordinha acerta tambem para quem esta olhando um canal em que
+nem entrou.
+
+A decisao "falando / silencio" mora em `speech-gate.ts`, pura e testada
+(`tests/unit/speech-gate.test.ts`):
+
+- **ataque imediato** — abre na amostra em que a energia cruza o limiar,
+  sem esperar N amostras de confirmacao (era isso que perdia as falas
+  curtas);
+- **piso de ruido adaptativo** em vez do limiar fixo `0,02` — que ficava bem
+  em cima da voz normal (0,02–0,15 de RMS). O piso e aprendido so em
+  silencio e nunca jogado fora;
+- **release de 220ms** para nao piscar nas pausas entre palavras;
+- **aquecimento** de ~6 amostras em que so aprende o ruido — na pratica ja
+  passou quando a primeira palavra sai, porque o analisador roda desde que a
+  pessoa entra na call.
+
+O `ActiveSpeakersChanged` continua ligado como RESERVA: se o Web Audio nao
+inicializar, ele volta a ser a fonte.
+
+`voice-activity.ts` (caminho SEM SFU) foi reescrito para compor os mesmos
+`mic-analyser.ts` + `speech-gate.ts` — a bordinha acende igual nos dois
+caminhos.
+
+### Painel de Conexao (ping)
+
+Botao de sinal no cabecalho do canal de voz (so aparece para quem esta na
+call). Abre um popover com regiao, ping medio, ultimo ping, perda de pacotes
+enviados e um grafico das ultimas ~2 min.
+
+- **Ping e perda vem de `LocalAudioTrack.getSenderStats()`** — que le o
+  `remote-inbound-rtp`, ou seja, o que o SFU RELATA ter recebido de nos. E o
+  RTT real da nossa midia ate o servidor.
+- **Regiao:** `room.serverInfo.region`.
+- **Qualidade** (excelente/boa/ruim): o julgamento do proprio LiveKit
+  (`ConnectionQualityChanged`), que pesa mais coisas que so o ping.
+- **"Depuracao"** liga o `?debug=media` que ja existia (recarrega com o log
+  verboso do SFU).
+- **"Copiar diagnostico"** poe um JSON (stats + user agent) no clipboard —
+  nao ha endpoint para "enviar registros" ainda.
+
+### Limitacoes
+
+- **Nao e ponta a ponta.** A midia e cifrada no transporte (DTLS-SRTP) ate o
+  SFU, que a decifra para reencaminhar. O painel diz "conexao criptografada",
+  e nao "de ponta a ponta" — copiar o texto do Discord aqui seria mentira.
+  E2EE de verdade exigiria `insertable streams` e troca de chave, que e obra
+  a parte.
+- **A bordinha nova nao foi verificada em call real nesta maquina** — nao ha
+  gateway nem LiveKit local aqui, e o `.env` aponta para o banco de
+  producao. O que esta provado: a porta de fala por teste unitario (8
+  casos), o typecheck, o build, e o caminho de voz no CI de integracao
+  (`verify-phase4/5`). A reacao a som real e a latencia percebida ficam para
+  o teste de uso.
+- **O detector local so mede a PROPRIA fala.** A bordinha dos outros
+  participantes continua vindo do `voice:speaking` que CADA cliente emite —
+  ou seja, todo mundo passa a ter o detector novo, mas um cliente antigo (ou
+  o caminho de reserva) ainda dependeria do `ActiveSpeakersChanged`.
+- **O ping e so da faixa de MICROFONE.** Sem microfone publicado (surdo, ou
+  sem permissao de fala), o painel mostra so a regiao e a qualidade — RTT e
+  perda ficam em branco.
+- **A perda de pacotes e da janela de 2s entre amostras**, nao acumulada:
+  uma rajada de perda entre duas amostras some do numero exibido, mas
+  aparece no grafico como um pico de ping.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR, com dois

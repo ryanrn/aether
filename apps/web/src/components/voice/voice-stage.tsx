@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MicOff, MonitorUp, PhoneOff, Volume2, VolumeX } from "lucide-react";
+import {
+  MicOff,
+  MonitorUp,
+  PhoneOff,
+  SignalHigh,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import type { Track } from "livekit-client";
 import type { PublicChannel, VoiceParticipant } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
@@ -19,6 +26,7 @@ import {
   type MenuAnchor,
 } from "@/components/voice/voice-member-menu";
 import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
+import { ConnectionPanel } from "@/components/voice/connection-panel";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,6 +65,7 @@ export function VoiceStage({
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
 
   const isHere = selfVoice?.channelId === channel.id;
+  const [statsAnchor, setStatsAnchor] = useState<DOMRect | null>(null);
   const full =
     channel.userLimit !== null &&
     participants.length >= channel.userLimit &&
@@ -147,8 +156,34 @@ export function VoiceStage({
           {participants.length} conectado{participants.length > 1 ? "s" : ""}
           {limitLabel}
         </span>
-        {action}
+        <div className="flex items-center gap-2">
+          {isHere ? (
+            <button
+              type="button"
+              aria-label="Conexao"
+              onClick={(e) =>
+                setStatsAnchor((prev) =>
+                  prev ? null : e.currentTarget.getBoundingClientRect(),
+                )
+              }
+              className={cn(
+                "rounded-md border border-base-700 p-2 text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-200",
+                statsAnchor && "bg-base-800 text-ink-200",
+              )}
+            >
+              <SignalHigh className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          {action}
+        </div>
       </div>
+
+      {statsAnchor ? (
+        <ConnectionPanel
+          anchorRect={statsAnchor}
+          onClose={() => setStatsAnchor(null)}
+        />
+      ) : null}
 
       {sharing ? <ScreenShareView /> : null}
 
