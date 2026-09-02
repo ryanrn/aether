@@ -325,9 +325,26 @@ recargas.
   diretorio do app, e num monorepo com workspaces isso PODA o node_modules da
   raiz — levando Next, Vitest e Prisma junto. Aconteceu uma vez durante a
   implementacao.
-- **A versao do Electron esta FIXA** (`33.4.11`, sem `^`) em
+- **A versao do Electron esta FIXA** (`44.0.0`, sem `^`) em
   `apps/desktop/package.json`. Com workspaces o binario fica na raiz, e o
-  electron-builder so descobre a versao se ela estiver fixa ali.
+  electron-builder so descobre a versao se ela estiver fixa ali. A entrada
+  correspondente no `allowScripts` da raiz (`electron@44.0.0`) precisa
+  acompanhar essa versao: com o par errado o npm bloqueia o postinstall do
+  Electron e o binario nunca baixa — os testes que carregam `apps/desktop`
+  falham com "Electron failed to install correctly".
+- **`electron-winstaller` esta NEGADO no `allowScripts` da raiz** (`false`, e
+  nao ausente). Ele chega como peer transitivo do
+  `electron-builder-squirrel-windows`; o build aqui e `nsis`, entao o Squirrel
+  nunca roda e o script de instalacao dele tambem nao precisa. `false` registra
+  a decisao e cala o aviso do `npm ci` — apagar a linha traz o aviso de volta.
+- **`overrides` na raiz forcam `postcss ^8.5.26` e `sharp ^0.35.4`.** O `next`
+  15.5 fixa `postcss@8.4.31` (quatro CVEs de path-traversal no source map) e
+  arrasta `sharp@0.34.5` (CVEs do libvips); o `@tailwindcss/postcss` e o `vite`
+  ja usavam a versao corrigida, entao o override so alinha o resto. Subir o
+  `next` de major para o mesmo efeito seria mudanca bem maior. Sobram 4 avisos
+  `high` no `npm audit`, todos em `deepmerge-ts`/`effect` sob o **CLI do
+  Prisma** — ferramenta de migracao, nao vai para producao; o unico "fix" e
+  regredir o `prisma` de major.
 - **A casca se atualiza sozinha a partir da 0.1.3** (`electron-updater`). Quem
   estiver em versao anterior precisa instalar a 0.1.3 na mao UMA vez — nao da
   para atualizar quem nao tem o atualizador.
