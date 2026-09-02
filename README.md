@@ -3024,25 +3024,59 @@ casca, nao a captura. E os tokens sao os do `@theme`: `base-750`, `signal-*`,
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml` roda a cada push no `master` e em todo PR: `npm ci`,
-`prisma generate`, os dois typechecks e os 215 testes. Cerca de 68s.
+`.github/workflows/ci.yml` roda a cada push no `master` e em todo PR, com dois
+jobs:
+
+- **`verificar`** — `npm ci`, `prisma generate`, os dois typechecks e os testes
+  unitarios. ~80s, sem servico nenhum. E o job rapido, o candidato a "required"
+  quando houver branch protection (fase 7e).
+- **`integracao`** (fase 7d) — sobe Postgres, Redis e um proxy REST-Upstash
+  como servicos, semeia, poe o gateway e o app web no ar e roda a bateria de
+  `scripts/verify-*` inteira via `scripts/verify-all-ci.mjs`. Alguns minutos.
 
 **Por que existe.** Os testes rodavam so quando alguem lembrava. Isso vale para
 qualquer teste, mas doi mais em um: `tests/unit/rate-limit-chave.test.ts` existe
 para quebrar se `take(socket.id)` voltar ao gateway. Um guard que depende de
 memoria humana nao e um guard.
 
-Nenhum segredo entra no job. Os testes unitarios nao tocam banco; o
-`prisma generate` so precisa da variavel DEFINIDA para ler o schema, e o valor
-usado e falso.
+O job `verificar` nao ve segredo: os testes unitarios nao tocam banco e o
+`prisma generate` so precisa da variavel DEFINIDA para ler o schema. O
+`integracao` tambem nao — Postgres e Redis sao efemeros, o `AUTH_SECRET` e um
+valor de teste, e o LiveKit e falso (o gateway assina o token de midia com uma
+chave qualquer e o `verify-phase4` confere a assinatura com a MESMA chave; o
+SFU real nunca entra no caminho).
 
-### O que o CI NAO cobre
+### Como o `integracao` monta o cenario
 
-- **Os `verify-*.mjs`.** Sao integracao de verdade: precisam do Postgres com
-  dados semeados, do gateway no ar, e no caso do `verify-seguranca.mjs` de duas
-  conexoes simultaneas. Continuam sendo rodados a mao antes de subir.
+- **`scripts/seed-ci.mjs`** roda depois do `db:seed` e acrescenta o que os
+  scripts precisam e o seed minimo nao da: um terceiro usuario (`maria`), uma
+  amizade `ryan`<->`joao` aceita, e um "Servidor Alheio" do qual `ryan` e
+  `joao` nao sao membros. Sem isso, varios `verify-*` se auto-pulam em
+  silencio — cobertura fantasma num CI.
+- **`scripts/verify-all-ci.mjs`** orquestra: sobe gateway + web, roda cada
+  script em ordem e, depois dos que MODERAM de verdade (`verify-phase6` e
+  `verify-phase7b` expulsam/banem/trocam cargo do `joao`), chama
+  `restore-fixture.mjs` antes de seguir.
+- **`SESSION_GUARD_INTERVAL_MS`** (so no CI) baixa o ciclo do guarda de sessao
+  de 30s para 3s — senao o `verify-phase7b` sozinho custaria 40s. Producao
+  nunca define a variavel; o default e o de sempre.
+- A migracao `20260823000000_rls_e_revoke` faz `REVOKE ... FROM anon,
+  authenticated` — papeis que so o Supabase cria. O job os cria VAZIOS antes de
+  migrar, e ai o REVOKE vira no-op.
+
+### O que o CI ainda NAO cobre
+
 - **O build do desktop.** O modulo nativo do som e C++ compilado contra os
-  headers do Electron para Windows, e o runner e Linux.
+  headers do Electron para Windows, e o runner e Linux. (fase 7e)
+- **`verify-igdb-live` e os `*-live` com credencial externa.** O `verify-igdb`
+  (sem `-live`) roda e cobre o fallback + o cache; a variante live precisa do
+  par da Twitch.
+- **Gateway em mais de uma instancia real.** O `verify-gateway-redis` prova o
+  estado 7c-2 entre dois processos, mas as phases 3-7b rodam contra um gateway
+  so. Dois gateways atras de um balanceador e a fase 7e.
+- **`verificar-redis` depende do proxy `hiett/serverless-redis-http`.** Se o
+  container do proxy ficar instavel, esse script e o unico que cai junto — os
+  outros nao dependem dele.
 
 ### Duas coisas que a primeira rodada revelou
 
