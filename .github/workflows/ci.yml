@@ -72,18 +72,140 @@ jobs:
       - name: Testes
         run: npx vitest run
 
+  # ------------------------------------------------------------------------
+  # FASE 7d — a suite de integracao (`scripts/verify-*`) no CI.
+  #
+  # O job `verificar` acima nao toca banco nem rede. Este sobe Postgres, Redis
+  # e um proxy REST-Upstash como servicos, semeia o banco, poe o gateway e o
+  # app web no ar e roda a bateria inteira via `scripts/verify-all-ci.mjs`.
+  #
+  # Separado do `verificar` de proposito: aquele fica em ~80s, sem servicos, e
+  # e o candidato a "required" quando houver branch protection (fase 7e). Uma
+  # flaky de infra aqui nao pode enterrar uma regressao de unidade la.
+  # ------------------------------------------------------------------------
+  integracao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aether
+          POSTGRES_PASSWORD: aether
+          POSTGRES_DB: aether
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # Fala o protocolo REST do Upstash por cima do Redis acima — e o que o
+      # `verificar-redis.mts` precisa (o rate limit do app web usa a API REST,
+      # nao TCP). Sem isto, aquele script pularia.
+      srh:
+        image: hiett/serverless-redis-http:latest
+        ports:
+          - 8079:80
+        env:
+          SRH_MODE: env
+          SRH_TOKEN: ci-upstash-token
+          SRH_CONNECTION_STRING: "redis://redis:6379"
+
+    env:
+      DATABASE_URL: postgresql://aether:aether@localhost:5432/aether
+      DIRECT_URL: postgresql://aether:aether@localhost:5432/aether
+      # 48 chars — o gateway exige >= 32. Valor de teste, nenhum segredo real.
+      AUTH_SECRET: ci-auth-secret-quarenta-e-oito-caracteres-aqui!!
+      REDIS_URL: redis://localhost:6379
+      UPSTASH_REDIS_REST_URL: http://localhost:8079
+      UPSTASH_REDIS_REST_TOKEN: ci-upstash-token
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Cache do binario do Electron
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar
+        run: npm ci
+
+      # A migracao `20260823000000_rls_e_revoke` faz REVOKE de `anon` e
+      # `authenticated` — papeis que o Supabase cria e um Postgres cru nao tem.
+      # Criados vazios, os REVOKE viram no-op e a migracao aplica limpa.
+      - name: Papeis do Supabase (vazios, so para a migracao de RLS)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN null; END $$;
+          DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN null; END $$;
+          SQL
+
+      - name: Gerar cliente Prisma
+        run: npm run generate --workspace=@aether/db
+
+      - name: Criar as tabelas
+        run: npm run deploy --workspace=@aether/db
+
+      - name: Semear
+        # seed-ci.mjs importa `@aether/shared` (que resolve para um .ts), entao
+        # roda por tsx como o db:seed — `node` nao resolve o import sem extensao.
+        run: |
+          npm run seed --workspace=@aether/db
+          npx tsx scripts/seed-ci.mjs
+
+      - name: Buildar o app web
+        # NEXT_PUBLIC_* entra no bundle em tempo de BUILD; sem isto o
+        # `verify-phase2` bateria num app apontando para localhost:4000 errado.
+        env:
+          NEXT_PUBLIC_REALTIME_URL: http://127.0.0.1:4000
+        run: npm run build --workspace=@aether/web
+
+      # `--dev` usa chave `devkey` / segredo `secret` fixos. So a API HTTP
+      # (7880) importa aqui — o gateway nunca faz WebRTC nos testes.
+      # `services:` do Actions nao deixa trocar o comando da imagem; por isso
+      # `docker run` num passo em vez de um service.
+      - name: Subir LiveKit (dev)
+        run: |
+          docker run -d --name livekit --network host \
+            livekit/livekit-server:v1.8.4 --dev --bind 0.0.0.0
+
+      - name: Bateria de integracao
+        timeout-minutes: 12
+        run: node scripts/verify-all-ci.mjs
+
 # O QUE ESTE CI *NAO* COBRE, e vale saber antes de confiar demais nele:
 #
-# Os `scripts/verify-*.mjs` ficam de fora. Eles sao testes de integracao de
-# verdade — precisam do Postgres com dados semeados, do gateway no ar e, no
-# caso do `verify-seguranca.mjs`, de duas conexoes simultaneas ao banco. Trazer
-# isso para ca pediria subir Postgres e Redis como servicos do job e semear o
-# banco a cada rodada. Da para fazer, e nao foi feito nesta rodada; ate la eles
-# continuam sendo rodados a mao antes de subir, como esta no README.
+# O BUILD do `apps/desktop`: o modulo nativo do som e C++ compilado contra os
+# headers do Electron para Windows, e nao ha runner Windows aqui. O que o CI
+# garante do desktop e so o que `game-detect.test.ts` cobre. (fase 7e)
 #
-# Tambem fica de fora o BUILD do `apps/desktop`: o modulo nativo do som e C++
-# compilado contra os headers do Electron para Windows, e nao ha runner Windows
-# aqui. O que o CI garante do desktop e so o que `game-detect.test.ts` cobre.
+# Os `verify-*-live` que dependem de credencial externa: `verify-igdb-live`
+# precisa do par da Twitch. O `verify-igdb` (sem "-live") roda e cobre o
+# caminho de fallback + o cache no banco.
+#
+# O gateway roda em UMA instancia. O `verify-gateway-redis` prova o estado
+# 7c-2 entre dois processos, mas a bateria de socket (phases 3-7b) roda contra
+# um gateway so. Dois gateways de verdade atras de um balanceador e a fase 7e.
 #
 # E POR QUE O ELECTRON PRECISA SER INSTALADO mesmo o CI nunca abrindo janela:
 # `game-detect.js` e `picker.js` fazem `require("electron")` no TOPO do modulo,
@@ -91,4 +213,4 @@ jobs:
 # o runtime junto, e o `index.js` do Electron lanca se o binario nao existir.
 # Tornar esse require preguicoso deixaria a logica testavel sem o runtime e
 # tiraria os 100 MB daqui — e mudanca em codigo de producao do desktop, que nao
-# da para verificar neste runner, entao ficou anotada em vez de feita.
+# da para verificar neste runner, entao ficou anotada em vez de feita. (fase 7e)

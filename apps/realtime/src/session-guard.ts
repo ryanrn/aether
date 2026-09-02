@@ -20,8 +20,15 @@ import type { AetherServer, AetherSocket } from "./types";
  * o bastante para nao martelar o Postgres — nesta escala (grupo de amigos,
  * nao milhares de sockets) uma consulta a cada 30s por sessao unica e
  * desprezivel.
+ *
+ * `SESSION_GUARD_INTERVAL_MS` existe SO para o CI (fase 7d): o
+ * `verify-phase7b` precisa esperar um ciclo inteiro do guarda, e 30s por
+ * script multiplica o tempo da suite de integracao. Sem a variavel o valor e
+ * exatamente o de sempre — producao nunca a define.
  */
-const REVALIDATE_INTERVAL_MS = 30_000;
+const REVALIDATE_INTERVAL_MS = Number(
+  process.env.SESSION_GUARD_INTERVAL_MS ?? 30_000,
+);
 
 export function startSessionGuard(io: AetherServer): () => void {
   const timer = setInterval(() => {
