@@ -13,6 +13,7 @@ import type {
 } from "@aether/shared";
 import type { Track } from "livekit-client";
 import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
+import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
 
 /**
@@ -152,6 +153,14 @@ interface RealtimeState {
     setSharePreset: (preset: SharePresetId) => Promise<boolean>;
     /** liga/desliga a camera; `false` quando o dispositivo recusou */
     setCameraEnabled: (enabled: boolean, deviceId?: string) => Promise<boolean>;
+    /**
+     * Assina as estatisticas de conexao (ping, perda, regiao). Nada e medido
+     * enquanto ninguem assina — o painel so monta quando aberto. Devolve o
+     * cancelador.
+     */
+    subscribeConnectionStats: (
+      cb: (stats: ConnectionStats) => void,
+    ) => () => void;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;

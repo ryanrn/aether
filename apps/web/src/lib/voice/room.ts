@@ -41,6 +41,12 @@ import {
   readScreenVolume,
   readUserVolumes,
 } from "./volumes";
+import { createMicAnalyser } from "./mic-analyser";
+import { createSpeechGate } from "./speech-gate";
+import {
+  startConnectionStats,
+  type ConnectionStats,
+} from "./connection-stats";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -116,6 +122,12 @@ export interface VoiceRoomHandle {
   localCameraTrack: () => Track | null;
   /** para ONDE tocamos o audio recebido — mic dos outros e som de tela */
   setOutputDevice: (deviceId: string) => Promise<void>;
+  /**
+   * Assina as estatisticas de conexao (ping, perda, regiao). Nada e medido
+   * enquanto ninguem assina — o painel so monta quando aberto. Devolve o
+   * cancelador.
+   */
+  subscribeConnectionStats: (cb: (stats: ConnectionStats) => void) => () => void;
   disconnect: () => Promise<void>;
 }
 
@@ -448,11 +460,86 @@ export async function connectVoiceRoom({
     if (cameras.delete(participant.identity)) publishCameras();
   });
 
+  /**
+   * Deteccao de fala LOCAL, instantanea.
+   *
+   * O "estou falando" vinha daqui, do `ActiveSpeakersChanged` — que o SFU
+   * calcula NO SERVIDOR a cada ~400ms, com histerese, para responder "quem e
+   * o falante dominante". Bom para destacar; ruim para acender a bordinha na
+   * hora, e falas curtas nem chegavam a contar. Agora a fonte local e o
+   * `detectorLocal` abaixo, que analisa a propria faixa publicada NO
+   * NAVEGADOR — o mesmo audio que os outros ouvem, sem ida ao servidor.
+   *
+   * Este evento continua ligado como RESERVA: se o analisador local nao
+   * inicializar (Web Audio indisponivel), ele volta a ser a fonte.
+   */
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+    if (detectorLocal) return;
     const speaking = speakers.some(
       (speaker) => speaker.identity === room.localParticipant.identity,
     );
     callbacks.onSpeakingChange(speaking);
+  });
+
+  interface DetectorLocal {
+    stop: () => void;
+    /** reaponta para a faixa de mic atual (troca de aparelho, republicacao) */
+    retarget: () => void;
+    setMudo: (mudo: boolean) => void;
+  }
+  let detectorLocal: DetectorLocal | null = null;
+
+  function faixaDoMicrofone(): MediaStreamTrack | null {
+    return (
+      room.localParticipant.getTrackPublication(Track.Source.Microphone)
+        ?.audioTrack?.mediaStreamTrack ?? null
+    );
+  }
+
+  async function iniciarDetectorLocal(): Promise<void> {
+    if (detectorLocal) return;
+    const faixa = faixaDoMicrofone();
+    if (!faixa) return;
+    try {
+      const analyser = await createMicAnalyser(faixa);
+      const gate = createSpeechGate({
+        onChange: (speaking) => callbacks.onSpeakingChange(speaking),
+      });
+      let mudo = false;
+      // ~40 leituras/s: o ataque parece instantaneo e o custo e desprezivel.
+      const timer = setInterval(() => {
+        if (mudo) return;
+        gate.push(analyser.rms(), performance.now());
+      }, 25);
+
+      detectorLocal = {
+        stop: () => {
+          clearInterval(timer);
+          analyser.close();
+          gate.silence();
+        },
+        retarget: () => {
+          const nova = faixaDoMicrofone();
+          if (nova) analyser.retarget(nova);
+        },
+        setMudo: (m) => {
+          mudo = m;
+          if (m) gate.silence();
+        },
+      };
+      mediaLog("detector de fala local ligado");
+    } catch (erro) {
+      // Sem analisador local, o ActiveSpeakersChanged acima volta a valer.
+      mediaLog("detector de fala local falhou; usando ActiveSpeakersChanged", erro);
+    }
+  }
+
+  /**
+   * Numa reconexao o LiveKit republica o microfone: a faixa e outra, e o
+   * analisador precisa reapontar ou fica medindo uma faixa morta.
+   */
+  room.on(RoomEvent.LocalTrackPublished, (publication) => {
+    if (publication.source === Track.Source.Microphone) detectorLocal?.retarget();
   });
 
   /**
@@ -511,6 +598,7 @@ export async function connectVoiceRoom({
     try {
       await room.localParticipant.setMicrophoneEnabled(true);
       await aplicarFiltroDeRuido(room);
+      await iniciarDetectorLocal();
     } catch {
       callbacks.onError(
         "Nao foi possivel abrir o microfone. Voce continua ouvindo os outros.",
@@ -521,6 +609,8 @@ export async function connectVoiceRoom({
   return {
     async setMicrophoneEnabled(enabled) {
       if (!canPublish) return;
+      // Mutar apaga a bordinha na hora, sem esperar o silencio decair.
+      detectorLocal?.setMudo(!enabled);
       await room.localParticipant
         .setMicrophoneEnabled(enabled)
         .catch(() => undefined);
@@ -530,6 +620,8 @@ export async function connectVoiceRoom({
       try {
         // Troca a fonte da faixa ja publicada: ninguem cai da call.
         await room.switchActiveDevice("audioinput", deviceId);
+        // A faixa e outra agora — o analisador tem de reapontar.
+        detectorLocal?.retarget();
         mediaLog("microfone trocado", deviceId);
       } catch (error) {
         mediaLog("falha ao trocar microfone", error);
@@ -600,6 +692,10 @@ export async function connectVoiceRoom({
           "Nao foi possivel usar esse alto-falante. Ele pode ter sido desconectado.",
         );
       }
+    },
+
+    subscribeConnectionStats(cb) {
+      return startConnectionStats(room, cb);
     },
 
     /**
@@ -983,6 +1079,8 @@ export async function connectVoiceRoom({
     },
 
     async disconnect() {
+      detectorLocal?.stop();
+      detectorLocal = null;
       // Antes de tudo: a thread de captura no processo principal nao pode
       // sobreviver a sala que a motivou.
       await pararSomNativo();
