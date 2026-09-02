@@ -23,6 +23,7 @@ import {
 import { redisClients } from "./redis-client";
 import { handleInternalRequest } from "./internal";
 import { startSessionGuard } from "./session-guard";
+import { iniciarSpotifyPoller } from "./spotify/poller";
 import type { AetherServer, AetherSocket } from "./types";
 
 /**
@@ -117,6 +118,13 @@ io.use(async (socket, next) => {
   }
 });
 
+/**
+ * Poller do Spotify. Fica fora do `io.on("connection")` porque e um so para o
+ * processo inteiro — os handlers de cada socket so o avisam de quem observar.
+ * Sem `SPOTIFY_CLIENT_ID/SECRET`, `observar` e no-op e nada disto roda.
+ */
+const spotifyPoller = iniciarSpotifyPoller(io);
+
 io.on("connection", (socket) => {
   const { user } = socket.data;
 
@@ -129,7 +137,7 @@ io.on("connection", (socket) => {
    * para sempre. `detachSocket`/`leaveVoice` sao seguros de chamar mesmo
    * quando `attachSocket` nunca chegou a terminar: devolvem "nada a fazer".
    */
-  registerPresenceHandlers(io, socket);
+  registerPresenceHandlers(io, socket, spotifyPoller);
   registerMessageHandlers(io, socket);
   registerVoiceHandlers(io, socket);
   registerDmHandlers(socket);
@@ -229,11 +237,13 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
             userId: user.id,
             status: meuStatus,
             // Acabou de conectar: ainda nao ha jogo detectado. O app de
-            // desktop manda `presence:game` logo em seguida, se houver.
+            // desktop manda `presence:game` logo em seguida, se houver, e o
+            // poller do Spotify anuncia a musica na primeira consulta.
             game: null,
             gameSince: null,
             gameIcon: null,
             gameCover: null,
+            listening: null,
           },
         });
       }
@@ -265,6 +275,7 @@ async function shutdown(signal: string) {
   console.log(`[gateway] ${signal} recebido, encerrando...`);
 
   stopSessionGuard();
+  spotifyPoller.parar();
 
   // Sem isso, uma conexao keep-alive ociosa segura a porta ate o timeout dela.
   httpServer.closeAllConnections();

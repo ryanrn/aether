@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, Gamepad2, RefreshCw } from "lucide-react";
 import { AdicionarJogo } from "./adicionar-jogo";
+import { SpotifySection } from "./spotify-section";
 import {
   canDetectGames,
   iniciaComWindows,
@@ -288,6 +289,9 @@ export function ActivityTab() {
           </div>
         </>
       ) : null}
+
+      {/* Spotify funciona nos dois: navegador e desktop. Fica fora do gate. */}
+      <SpotifySection />
     </section>
   );
 }

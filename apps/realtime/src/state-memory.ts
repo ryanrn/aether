@@ -1,4 +1,5 @@
 import type {
+  MusicActivity,
   PresenceEntry,
   PublicUser,
   UserStatus,
@@ -21,6 +22,7 @@ interface UserPresence {
   gameSince: number | null;
   gameIcon: string | null;
   gameCover: string | null;
+  listening: MusicActivity | null;
   sockets: Set<string>;
   friends: Set<string>;
   servers: Map<string, number>;
@@ -38,6 +40,7 @@ function toPresenceEntry(userId: string, user: UserPresence): PresenceEntry {
     gameSince: user.gameSince ? new Date(user.gameSince).toISOString() : null,
     gameIcon: user.gameIcon,
     gameCover: user.gameCover,
+    listening: user.listening,
   };
 }
 
@@ -97,6 +100,7 @@ export const memoryStore: StateStore = {
       gameSince: null,
       gameIcon: null,
       gameCover: null,
+      listening: null,
       sockets: new Set([socketId]),
       friends: new Set(),
       servers: new Map(),
@@ -127,6 +131,25 @@ export const memoryStore: StateStore = {
       servers: [...user.servers.keys()],
       entry: toPresenceEntry(userId, user),
       nomeMudou,
+    };
+  },
+
+  async setListening(userId, listening) {
+    const user = users.get(userId);
+    if (!user) return null;
+
+    // Mesma faixa (id do link) e mesma capa: nada a anunciar.
+    const antes = user.listening;
+    const igual =
+      antes?.title === listening?.title &&
+      antes?.artists === listening?.artists &&
+      antes?.url === listening?.url;
+    if (igual) return null;
+
+    user.listening = listening;
+    return {
+      servers: [...user.servers.keys()],
+      entry: toPresenceEntry(userId, user),
     };
   },
 

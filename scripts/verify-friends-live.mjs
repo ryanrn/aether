@@ -192,10 +192,14 @@ async function main() {
    *
    * `gameCover` entrou assim — e uma URL de capa em CDN publico. Revela QUAL
    * jogo, que o amigo ja ve pelo campo `game`, e nao revela lugar nenhum.
+   *
+   * `listening` entrou assim tambem: e a musica que a pessoa ESCOLHEU
+   * compartilhar (OAuth do Spotify + a chave "Exibir no perfil"). Nao revela
+   * servidor nem canal — e o proposito da funcionalidade e o amigo ver.
    */
   check(
     "leva exatamente os campos previstos",
-    campos === "game,gameCover,gameIcon,gameSince,status,userId",
+    campos === "game,gameCover,gameIcon,gameSince,listening,status,userId",
     campos,
   );
 
@@ -220,6 +224,11 @@ async function main() {
     "nem a capa — que denunciaria o jogo por imagem",
     invisivel?.entry?.gameCover === null && invisivel?.entry?.gameIcon === null,
     `capa ${JSON.stringify(invisivel?.entry?.gameCover)}, icone ${JSON.stringify(invisivel?.entry?.gameIcon)}`,
+  );
+  check(
+    "nem a musica do Spotify",
+    invisivel?.entry?.listening === null,
+    `veio ${JSON.stringify(invisivel?.entry?.listening)}`,
   );
 
   // Volta a aparecer, para o teste de desconexao comecar de um estado visivel.

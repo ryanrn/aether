@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type {
   MediaGrant,
+  MusicActivity,
   PresenceEntry,
   PublicMessage,
   PublicReaction,
@@ -79,6 +80,13 @@ interface RealtimeState {
       cover: string | null;
     }
   >;
+  /**
+   * O que cada pessoa esta ouvindo no Spotify agora. Mapa SEPARADO do `activity`
+   * porque musica e jogo sao independentes — da para as duas coisas ao mesmo
+   * tempo. Populado pelo mesmo `PresenceEntry` (`listening`), pelo poller do
+   * gateway.
+   */
+  listening: Record<string, MusicActivity>;
   voice: Record<string, VoiceParticipant>;
   /**
    * A MINHA ocupacao de voz — separada do mapa acima, e nao derivada dele.
@@ -254,6 +262,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   voiceError: null,
   presence: {},
   activity: {},
+  listening: {},
   voice: {},
   selfVoice: null,
   media: null,
@@ -289,6 +298,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             serverId,
             presence: {},
             activity: {},
+            listening: {},
             /**
              * `voice` zera porque os participantes sao daquele servidor.
              *
@@ -313,6 +323,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set({
       presence: {},
       activity: {},
+      listening: {},
       voice: {},
       // O socket caiu: a chamada caiu junto, e ai limpar a MINHA voz esta
       // certo — diferente de so ter trocado de servidor.
@@ -344,6 +355,13 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             },
           ]),
       ),
+      listening: Object.fromEntries(
+        entries
+          .filter((e): e is PresenceEntry & { listening: MusicActivity } =>
+            Boolean(e.listening),
+          )
+          .map((e) => [e.userId, e.listening]),
+      ),
     }),
 
   /**
@@ -361,6 +379,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set((state) => {
       const presence = { ...state.presence };
       const activity = { ...state.activity };
+      const listening = { ...state.listening };
       for (const entrada of entries) {
         presence[entrada.userId] = entrada.status;
         if (entrada.game) {
@@ -373,16 +392,19 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         } else {
           delete activity[entrada.userId];
         }
+        if (entrada.listening) listening[entrada.userId] = entrada.listening;
+        else delete listening[entrada.userId];
       }
-      return { presence, activity };
+      return { presence, activity, listening };
     }),
 
   updatePresence: (entry) =>
     set((state) => {
       const { [entry.userId]: _semJogo, ...atividadeSemEste } = state.activity;
+      const { [entry.userId]: _semMusica, ...ouvindoSemEste } = state.listening;
       /**
-       * Quem ficou offline sai dos DOIS mapas: senao continuaria "jogando"
-       * para sempre na tela dos outros depois de fechar o app.
+       * Quem ficou offline sai dos TRES mapas: senao continuaria "jogando" ou
+       * "ouvindo" para sempre na tela dos outros depois de fechar o app.
        *
        * MENOS voce mesmo. Para os outros, OFFLINE quer dizer "foi embora";
        * para voce, quer dizer INVISIVEL — segue conectado, so aparece apagado.
@@ -392,7 +414,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       const souEu = entry.userId === state.selfUserId;
       if (entry.status === "OFFLINE" && !souEu) {
         const { [entry.userId]: _gone, ...rest } = state.presence;
-        return { presence: rest, activity: atividadeSemEste };
+        return {
+          presence: rest,
+          activity: atividadeSemEste,
+          listening: ouvindoSemEste,
+        };
       }
       return {
         presence: { ...state.presence, [entry.userId]: entry.status },
@@ -407,6 +433,9 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
               },
             }
           : atividadeSemEste,
+        listening: entry.listening
+          ? { ...ouvindoSemEste, [entry.userId]: entry.listening }
+          : ouvindoSemEste,
       };
     }),
 
@@ -625,6 +654,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
 
 export function usePresenceStatus(userId: string): UserStatus {
   return useRealtimeStore((state) => state.presence[userId] ?? "OFFLINE");
+}
+
+/** O que a pessoa esta ouvindo no Spotify agora, ou `null`. */
+export function useListening(userId: string): MusicActivity | null {
+  return useRealtimeStore((state) => state.listening[userId] ?? null);
 }
 
 export function useIsConnected(): boolean {

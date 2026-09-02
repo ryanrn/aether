@@ -6,5 +6,7 @@ export * from "./friends";
 export * from "./member";
 export * from "./plan";
 export * from "./session";
+export * from "./spotify";
+export * from "./spotify-account";
 export * from "./tickets";
 export * from "./tokens";

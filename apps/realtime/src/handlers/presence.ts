@@ -60,6 +60,7 @@ async function entryVisivel(userId: string, status: UserStatus): Promise<Presenc
     gameSince: invisivel ? null : atual?.gameSince ?? null,
     gameIcon: invisivel ? null : atual?.gameIcon ?? null,
     gameCover: invisivel ? null : atual?.gameCover ?? null,
+    listening: invisivel ? null : atual?.listening ?? null,
   };
 }
 
@@ -141,6 +142,27 @@ async function enriquecer(
 }
 
 /**
+ * Reanuncia a presenca de alguem depois de uma mudanca que veio de FORA de um
+ * evento de socket — hoje: o poller do Spotify. Mesmo caminho do `enriquecer`
+ * do jogo (servidores + amigos), so que a mudanca ja aconteceu no estado.
+ */
+export async function anunciarMudancaDePresenca(
+  io: AetherServer,
+  userId: string,
+  servers: string[],
+): Promise<void> {
+  const meuStatus = await statusOf(userId);
+  const visivel = await entryVisivel(userId, meuStatus);
+  for (const serverId of servers) {
+    io.to(room.server(serverId)).emit("presence:update", {
+      serverId,
+      entry: visivel,
+    });
+  }
+  await announceToFriends(io, userId, meuStatus, await friendsOf(userId));
+}
+
+/**
  * Limite dos eventos de presenca.
  *
  * O que torna estes eventos caros nao e o custo de UM, e a AMPLIFICACAO: cada
@@ -166,8 +188,12 @@ const joinRoomLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 2 });
 export function registerPresenceHandlers(
   io: AetherServer,
   socket: AetherSocket,
+  spotify?: { observar(userId: string): void; esquecer(userId: string): void },
 ): void {
   const { userId } = socket.data;
+
+  // Passa a acompanhar o Spotify desta pessoa (idempotente).
+  spotify?.observar(userId);
 
   socket.on("server:join", async (serverId, ack) => {
     const respond = typeof ack === "function" ? ack : () => undefined;
@@ -331,6 +357,8 @@ export function registerPresenceHandlers(
        */
       if (!(await isConnected(userId))) {
         await announceToFriends(io, userId, "OFFLINE", amigos);
+        // Ultimo socket caiu: para de consultar o Spotify desta pessoa.
+        spotify?.esquecer(userId);
       }
     })().catch((erro) => {
       console.error("[gateway] disconnect (presence) falhou:", erro);

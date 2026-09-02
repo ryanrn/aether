@@ -1,5 +1,6 @@
 import type { Redis } from "ioredis";
 import type {
+  MusicActivity,
   PresenceEntry,
   PublicUser,
   UserStatus,
@@ -68,6 +69,16 @@ function decBool(v: string | undefined): boolean {
   return v === "1";
 }
 
+/** `listening` mora no hash como JSON (ou string vazia). */
+function decListening(v: string | undefined): MusicActivity | null {
+  if (!v) return null;
+  try {
+    return JSON.parse(v) as MusicActivity;
+  } catch {
+    return null;
+  }
+}
+
 function hashToEntry(userId: string, h: Record<string, string>): PresenceEntry {
   return {
     userId,
@@ -76,6 +87,7 @@ function hashToEntry(userId: string, h: Record<string, string>): PresenceEntry {
     gameSince: h.gameSince ? new Date(Number(h.gameSince)).toISOString() : null,
     gameIcon: decField(h.gameIcon),
     gameCover: decField(h.gameCover),
+    listening: decListening(h.listening),
   };
 }
 
@@ -170,6 +182,7 @@ export function createRedisStore(redis: Redis): StateStore {
           gameSince: "",
           gameIcon: "",
           gameCover: "",
+          listening: "",
         });
         await redis.sadd(P_ALL_USERS, userId);
       }
@@ -202,6 +215,26 @@ export function createRedisStore(redis: Redis): StateStore {
       const servers = await redis.hkeys(P_USER_SERVERS(userId));
       const h = await redis.hgetall(P_USER(userId));
       return { servers, entry: hashToEntry(userId, h), nomeMudou };
+    },
+
+    async setListening(userId, listening) {
+      const h = await redis.hgetall(P_USER(userId));
+      if (!h.status) return null;
+
+      const antes = decListening(h.listening);
+      const igual =
+        antes?.title === listening?.title &&
+        antes?.artists === listening?.artists &&
+        antes?.url === listening?.url;
+      if (igual) return null;
+
+      await redis.hset(P_USER(userId), {
+        listening: listening ? JSON.stringify(listening) : "",
+      });
+
+      const servers = await redis.hkeys(P_USER_SERVERS(userId));
+      const atualizado = await redis.hgetall(P_USER(userId));
+      return { servers, entry: hashToEntry(userId, atualizado) };
     },
 
     async setGameCover(userId, jogoEsperado, cover, displayName) {
