@@ -26,7 +26,10 @@ import {
   savePreferredSpeaker,
   type AudioDevice,
 } from "@/lib/voice/devices";
-import { ScreenShareView } from "@/components/voice/screen-share-view";
+import {
+  ScreenShareMini,
+  ScreenShareView,
+} from "@/components/voice/screen-share-view";
 import {
   VoiceMemberMenu,
   type MenuAnchor,
@@ -70,6 +73,12 @@ export function VoiceStage({
 
   const isHere = selfVoice?.channelId === channel.id;
   const [statsOpen, setStatsOpen] = useState(false);
+  /**
+   * Tela em destaque minimizada: a grade de participantes volta a ser o
+   * assunto (para ver as cameras dos amigos) e a tela vira um bloco flutuante
+   * no canto. Volta ao normal quando ninguem esta mais transmitindo.
+   */
+  const [telaMinimizada, setTelaMinimizada] = useState(false);
   const statsButtonRef = useRef<HTMLButtonElement>(null);
   const full =
     channel.userLimit !== null &&
@@ -142,12 +151,19 @@ export function VoiceStage({
 
   /**
    * Com alguem transmitindo, a tela vira o assunto principal e os
-   * participantes descem para uma faixa compacta.
+   * participantes descem para uma faixa compacta — a nao ser que a tela
+   * esteja minimizada, ai a grade volta ao normal e a tela flutua no canto.
    */
   const sharing = shares.length > 0 || localSharing;
+  const telaEmFoco = sharing && !telaMinimizada;
+
+  // Ninguem mais transmitindo: volta ao estado normal para a proxima vez.
+  useEffect(() => {
+    if (!sharing && telaMinimizada) setTelaMinimizada(false);
+  }, [sharing, telaMinimizada]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* faixa de conexao persistente — so na call */}
       {isHere ? (
         <FaixaDeConexao
@@ -176,18 +192,24 @@ export function VoiceStage({
       {/* faixa vermelha de isolamento — teste de microfone ativo */}
       {isHere ? <MonitorStrip /> : null}
 
-      {sharing ? <ScreenShareView /> : null}
+      {telaEmFoco ? (
+        <ScreenShareView onMinimizar={() => setTelaMinimizada(true)} />
+      ) : null}
+
+      {sharing && telaMinimizada ? (
+        <ScreenShareMini onRestaurar={() => setTelaMinimizada(false)} />
+      ) : null}
 
       <div
         className={cn(
-          sharing
+          telaEmFoco
             ? "shrink-0 overflow-x-auto px-4 pb-4"
             : "flex-1 overflow-y-auto p-4",
         )}
       >
         <div
           className={cn(
-            sharing
+            telaEmFoco
               ? "flex gap-2"
               : /*
                  `auto-fill` + teto de 300px por coluna: com 1-2 participantes o
@@ -203,7 +225,7 @@ export function VoiceStage({
               key={participant.userId}
               participant={participant}
               isSelf={participant.userId === selfUserId}
-              compact={sharing}
+              compact={telaEmFoco}
             />
           ))}
         </div>
@@ -377,13 +399,18 @@ function MonitorStrip() {
       data-od-id="monitor-strip"
       className="mx-4 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-signal-isolate/35 bg-signal-isolate/[0.12] px-3.5 py-2.5"
     >
-      <AetherIcon name="headset-monitor" size="lg" className="text-signal-isolate" />
+      <AetherIcon
+        name="headset-monitor"
+        size="lg"
+        className="text-signal-isolate"
+      />
       <span className="min-w-0 flex-1 leading-tight">
         <b className="block text-[12.5px] font-semibold text-signal-isolate-ink">
           Ouvindo a propria voz — modo teste
         </b>
         <span className="block text-[11px] text-ink-400">
-          Voce se ouve so para ajustar o microfone. Ninguem na call recebe este audio. Use fones para evitar eco.
+          Voce se ouve so para ajustar o microfone. Ninguem na call recebe este
+          audio. Use fones para evitar eco.
         </span>
       </span>
 
@@ -412,7 +439,11 @@ function MonitorStrip() {
           className="flex items-center gap-1.5 text-[11px] text-ink-400"
           title="Fone / alto-falante"
         >
-          <AetherIcon name="headset" size="sm" className="shrink-0 text-ink-500" />
+          <AetherIcon
+            name="headset"
+            size="sm"
+            className="shrink-0 text-ink-500"
+          />
           <select
             value={saidaId ?? ""}
             onChange={(e) => trocarSaida(e.target.value)}
@@ -596,10 +627,18 @@ function ParticipantCard({
           </span>
           <span className="ml-auto flex items-center gap-1.5">
             {deafened ? (
-              <AetherIcon name="volume-off" size="sm" className="text-signal-dnd" />
+              <AetherIcon
+                name="volume-off"
+                size="sm"
+                className="text-signal-dnd"
+              />
             ) : null}
             {muted ? (
-              <AetherIcon name="mic-off" size="sm" className="text-signal-dnd" />
+              <AetherIcon
+                name="mic-off"
+                size="sm"
+                className="text-signal-dnd"
+              />
             ) : null}
           </span>
         </div>
@@ -613,7 +652,9 @@ function ParticipantCard({
           >
             {participant.user.displayName}
             {isSelf ? (
-              <span className="text-[11px] font-normal text-ink-500">(voce)</span>
+              <span className="text-[11px] font-normal text-ink-500">
+                (voce)
+              </span>
             ) : null}
           </div>
           <div
@@ -666,13 +707,7 @@ function ParticipantCard({
  *
  * A PROPRIA camera aparece espelhada; a dos OUTROS nunca.
  */
-function CameraVideo({
-  track,
-  espelhar,
-}: {
-  track: Track;
-  espelhar: boolean;
-}) {
+function CameraVideo({ track, espelhar }: { track: Track; espelhar: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
