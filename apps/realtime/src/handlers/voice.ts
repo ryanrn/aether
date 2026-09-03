@@ -72,7 +72,10 @@ export function registerVoiceHandlers(
   const { userId, user } = socket.data;
 
   /** Publica a mudanca para o servidor inteiro — a arvore de canais e comum a todos. */
-  function broadcast(serverId: string, participant: ReturnType<typeof voiceDeparture>) {
+  function broadcast(
+    serverId: string,
+    participant: ReturnType<typeof voiceDeparture>,
+  ) {
     io.to(room.server(serverId)).emit("voice:update", {
       serverId,
       participant,
@@ -144,9 +147,20 @@ export function registerVoiceHandlers(
         channelId,
       });
 
-      // Trocou de servidor: quem ficou para tras precisa ver a saida.
+      /**
+       * Trocou de servidor: quem ficou para tras precisa ver a saida — mas
+       * quem MOVEU a call, nao. `socket.to(...)` exclui o proprio remetente;
+       * `io.to(...)` o incluiria, e se o socket dele ainda estivesse na sala
+       * do servidor antigo (corrida com o `server:leave` do cliente) ele
+       * receberia um `voice:update` de "voce saiu" com `channelId: null` logo
+       * depois de ter entrado no canal novo — e a interface derrubava a call
+       * que acabara de comecar.
+       */
       if (previousServerId) {
-        broadcast(previousServerId, voiceDeparture(userId, user));
+        socket.to(room.server(previousServerId)).emit("voice:update", {
+          serverId: previousServerId,
+          participant: voiceDeparture(userId, user),
+        });
       }
 
       const participant = await voiceParticipant(userId);
@@ -344,7 +358,10 @@ export function registerVoiceHandlers(
       return;
     }
     if (targetId === userId) {
-      respond({ ok: false, error: "Use os proprios controles para se silenciar." });
+      respond({
+        ok: false,
+        error: "Use os proprios controles para se silenciar.",
+      });
       return;
     }
 

@@ -140,6 +140,52 @@ e feita em estagios, cada um com regressao verde:
 
 ---
 
+## Estabilidade da call (correcoes v2)
+
+Lote de correcao dos relatos de "a call cai sozinha". A causa-raiz comum: a
+chamada sobrevivia a NAVEGACAO, mas nao a uma queda de socket — no `disconnect`
+o cliente zerava `selfVoice`/`media` e o gateway tirava a ocupacao, e no
+`connect` de volta nada reemitia `voice:join`. Qualquer piscada de rede,
+restart de instancia ou reload da aba (o OAuth do Spotify no desktop navega a
+janela inteira) matava a call de vez.
+
+| Estagio | O que muda | Estado |
+| --- | --- | --- |
+| 1 | `voiceIntent` na store (persiste em `sessionStorage`), `RealtimeProvider` reemite `voice:join` no `connect`, gateway usa `socket.to(...)` para nao mandar a propria saida de servidor de volta a quem moveu a call | ✅ |
+| 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, pedido no `RoomEvent.Disconnected`) | ⏳ |
+| 3 | Spotify no desktop sem perder a call | ⏳ |
+| 4 | Foto de perfil / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ⏳ |
+| 5 | Logs de erro de voz (motivo do `Disconnected`, falha de token) | ⏳ |
+
+### O que fechou no estagio 1
+
+- **A call religa sozinha apos um reconnect.** `voiceIntent` guarda so o
+  `channelId` — a *intencao* de estar na call, distinta do estado volatil. O
+  `clearVolatile` nao a toca; o `connect` do socket a le e reemite `voice:join`,
+  recebendo um token novo e o proprio `selfVoice` pelo ack (o broadcast de
+  `voice:update` so alcanca quem esta na sala do servidor, e a pessoa pode ter
+  recarregado na tela de amigos).
+- **Reload da aba tambem religa.** `voiceIntent` vai para o `sessionStorage`:
+  sobrevive ao reload (inclusive o `window.location` do connect do Spotify no
+  desktop), morre ao fechar a aba.
+- **Trocar a call de servidor nao se derruba mais.** O gateway mandava a
+  "saida do servidor antigo" com `io.to(...)`, que incluia quem estava movendo
+  — chegava um `voice:update` com `channelId: null` logo depois do join novo.
+  Agora e `socket.to(...)`, que exclui o remetente.
+
+### Limitacoes que ficaram (estagio 1)
+
+- **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; o teste
+  de queda de rede real, 2 abas e troca de servidor com a call ativa fica para
+  o ambiente do time.
+- **`sessionStorage` e por aba.** Um crash que fecha a janela (nao so recarrega)
+  perde a intencao — nao ha como religar sozinho numa aba nova.
+- **A janela do token do LiveKit continua de 1h** ate o estagio 2: uma call que
+  passa de 1h e sofre uma oscilacao de rede ainda perde a midia (o `selfVoice`
+  do gateway sobrevive, entao a UI diz "conectado" sem audio).
+
+---
+
 ## Stack
 
 - **Next.js 15** (App Router, Server Actions) + **React 19** + **TypeScript** estrito

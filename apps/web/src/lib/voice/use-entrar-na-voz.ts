@@ -19,6 +19,7 @@ export function useEntrarNaVoz() {
   const selfVoice = useSelfVoice();
   const setMedia = useRealtimeStore((estado) => estado.setMedia);
   const setVoiceError = useRealtimeStore((estado) => estado.setVoiceError);
+  const setVoiceIntent = useRealtimeStore((estado) => estado.setVoiceIntent);
 
   const canalAtual = selfVoice?.channelId ?? null;
 
@@ -35,6 +36,13 @@ export function useEntrarNaVoz() {
       if (!socket) return false;
       if (canalAtual === channelId) return false;
 
+      /**
+       * A intencao e gravada JA, antes do ack: se a rede cair no meio do
+       * aperto de mao, o `RealtimeProvider` ainda tem o que reemitir quando o
+       * socket voltar. Um ack de recusa desfaz logo abaixo.
+       */
+      setVoiceIntent(channelId);
+
       socket.emit("voice:join", { channelId }, (resultado) => {
         if (!resultado.ok) {
           /**
@@ -42,6 +50,7 @@ export function useEntrarNaVoz() {
            * na tela vem do `voice:update`; o ack existe para poder recusar e
            * para entregar as credenciais.
            */
+          setVoiceIntent(null);
           setVoiceError(resultado.error);
           return;
         }
@@ -50,14 +59,18 @@ export function useEntrarNaVoz() {
       });
       return true;
     },
-    [socket, canalAtual, setMedia, setVoiceError],
+    [socket, canalAtual, setMedia, setVoiceError, setVoiceIntent],
   );
 
   const sair = useCallback(() => {
     if (!socket) return;
+    // A intencao acaba ANTES do round-trip: quando o `voice:update` de saida
+    // voltar, `updateVoice` ja acha `voiceIntent` nulo e derruba a call de
+    // verdade, em vez de tratar como eco.
+    setVoiceIntent(null);
     socket.emit("voice:leave");
     setMedia(null);
-  }, [socket, setMedia]);
+  }, [socket, setMedia, setVoiceIntent]);
 
   return { entrar, sair, canalAtual };
 }

@@ -98,6 +98,39 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (ticket) target.auth = { ticket };
     }
 
+    /**
+     * Reemite `voice:join` quando ha intencao de estar na call mas nao ha mais
+     * credencial de midia — depois de um reconnect ou de um reload da aba. O
+     * gateway revalida a permissao e devolve um token NOVO; o `selfVoice` vem
+     * do proprio ack porque o broadcast de `voice:update` so alcanca quem esta
+     * na sala do servidor, e a pessoa pode ter recarregado na tela de amigos.
+     */
+    function rejoinVoice(target: TypedSocket) {
+      const state = useRealtimeStore.getState();
+      const intent = state.voiceIntent;
+      if (!intent || state.media) return;
+
+      target.emit(
+        "voice:join",
+        { channelId: intent.channelId },
+        (resultado) => {
+          const store = useRealtimeStore.getState();
+          if (!resultado.ok) {
+            // Canal apagado, ou perdi o acesso enquanto estava fora.
+            store.setVoiceIntent(null);
+            store.setVoiceError(resultado.error);
+            return;
+          }
+          store.setVoiceError(null);
+          store.setMedia(resultado.media);
+          const eu = resultado.participants.find(
+            (p) => p.userId === store.selfUserId,
+          );
+          if (eu) store.setSelfVoice(eu);
+        },
+      );
+    }
+
     void (async () => {
       const ticket = await createSocketTicketAction();
       if (cancelled) return;
@@ -128,6 +161,11 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         state.setError(null);
         // O ticket usado agora ja foi consumido; prepara o proximo.
         void stageNextTicket(socketInstance);
+        // Religa a call. O socket volta sozinho apos uma queda (e apos um
+        // reload da aba a intencao vem do `sessionStorage`), mas a OCUPACAO de
+        // voz nao: o gateway tirou a pessoa no disconnect e nada aqui a
+        // recolocava. Mesmo padrao do `server:join` reemitido abaixo.
+        rejoinVoice(socketInstance);
       });
 
       socketInstance.on("disconnect", () => {
@@ -187,25 +225,35 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         refreshRef.current();
       });
 
-      socketInstance.on("voice:sync", ({ serverId: incoming, participants }) => {
-        const state = useRealtimeStore.getState();
-        if (incoming !== state.serverId) return;
-        state.syncVoice(participants);
-      });
+      socketInstance.on(
+        "voice:sync",
+        ({ serverId: incoming, participants }) => {
+          const state = useRealtimeStore.getState();
+          if (incoming !== state.serverId) return;
+          state.syncVoice(participants);
+        },
+      );
 
-      socketInstance.on("voice:update", ({ serverId: incoming, participant }) => {
-        const state = useRealtimeStore.getState();
-        if (incoming !== state.serverId) return;
-        state.updateVoice(participant);
-      });
+      socketInstance.on(
+        "voice:update",
+        ({ serverId: incoming, participant }) => {
+          const state = useRealtimeStore.getState();
+          if (incoming !== state.serverId) return;
+          state.updateVoice(participant);
+        },
+      );
 
       /**
        * Fui movido de canal por um moderador. As credenciais novas vem junto
        * porque cada canal e uma sala propria no SFU — sem elas eu ficaria mudo
        * ate pedir acesso. O canal em si chega pelo voice:update.
        */
-      socketInstance.on("voice:moved", ({ media }) => {
-        useRealtimeStore.getState().setMedia(media);
+      socketInstance.on("voice:moved", ({ channelId, media }) => {
+        const state = useRealtimeStore.getState();
+        state.setMedia(media);
+        // A intencao acompanha o canal novo: um reload depois de ser movido
+        // deve religar onde a pessoa esta agora, nao de onde ela saiu.
+        state.setVoiceIntent(channelId);
       });
 
       socketInstance.on("reaction:update", ({ messageId, reactions }) => {
@@ -235,6 +283,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
        */
       socketInstance.on("server:evicted", ({ serverId: incoming }) => {
         if (incoming !== useRealtimeStore.getState().serverId) return;
+        // A intencao NAO e limpa aqui: a call pode estar num canal de OUTRO
+        // servidor (o gateway so tira da voz quem foi expulso do servidor em
+        // que estava falando). Se o canal virou proibido, o `rejoinVoice` no
+        // proximo `connect` recebe a recusa e limpa sozinho.
         window.location.assign("/app");
       });
 

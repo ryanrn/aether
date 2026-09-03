@@ -121,6 +121,13 @@ interface RealtimeState {
    * quando o socket cai (`clearVolatile`).
    */
   selfVoice: VoiceParticipant | null;
+  /**
+   * A INTENCAO de estar na call, que SOBREVIVE a uma queda de socket e a um
+   * reload da aba (ver o comentario de `VOICE_INTENT_KEY`). O `clearVolatile`
+   * nao a toca; so `sair()` explicito, um `voice:update` de saida propria ou um
+   * despejo do servidor a apagam.
+   */
+  voiceIntent: { channelId: string } | null;
   /** credenciais do SFU, validas so enquanto voce esta na call */
   media: MediaGrant | null;
   /** a sala de midia esta conectada de fato (nao e o mesmo que estar no canal) */
@@ -235,6 +242,10 @@ interface RealtimeState {
   syncVoice: (participants: VoiceParticipant[]) => void;
   updateVoice: (participant: VoiceParticipant) => void;
   setVoiceLevels: (levels: Record<string, number>) => void;
+  /** grava/limpa a intencao de estar na call (e persiste em `sessionStorage`) */
+  setVoiceIntent: (channelId: string | null) => void;
+  /** define so a MINHA ocupacao — usado ao religar a call apos um reconnect */
+  setSelfVoice: (participant: VoiceParticipant) => void;
   setMedia: (media: MediaGrant | null) => void;
   setMediaConnected: (connected: boolean) => void;
   setScreenShares: (shares: RemoteScreenShare[]) => void;
@@ -270,6 +281,49 @@ interface RealtimeState {
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const DEFAULT_HISTORY: ChannelHistory = { hasMore: true, loading: false };
 
+/**
+ * A INTENCAO de estar numa call — separada de `selfVoice`/`media`.
+ *
+ * `selfVoice` e `media` sao volateis: caem no `clearVolatile` quando o socket
+ * cai, porque o token de midia morreu e nao sabemos mais quem esta onde. Mas a
+ * pessoa nao "saiu da call" so porque a rede piscou — ela ainda QUER estar la.
+ *
+ * Esse desejo e o que o `RealtimeProvider` usa para reemitir `voice:join` no
+ * reconnect (o gateway tirou a ocupacao no disconnect, e nada a recolocava), e
+ * o que um reload da aba precisa reencontrar — o OAuth do Spotify no desktop
+ * navega a janela inteira, e sem isto a call sumia de vez. Por isso vai para o
+ * `sessionStorage`: sobrevive ao reload, morre ao fechar a aba.
+ */
+const VOICE_INTENT_KEY = "aether:voice-intent";
+
+function lerVoiceIntent(): { channelId: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const cru = window.sessionStorage.getItem(VOICE_INTENT_KEY);
+    if (!cru) return null;
+    const valor = JSON.parse(cru) as { channelId?: unknown };
+    return typeof valor.channelId === "string"
+      ? { channelId: valor.channelId }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function gravarVoiceIntent(intent: { channelId: string } | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (intent) {
+      window.sessionStorage.setItem(VOICE_INTENT_KEY, JSON.stringify(intent));
+    } else {
+      window.sessionStorage.removeItem(VOICE_INTENT_KEY);
+    }
+  } catch {
+    // Modo privado ou storage cheio: o reconnect na MESMA aba ainda funciona
+    // pela copia em memoria; so o religa-apos-reload e que se perde.
+  }
+}
+
 /** Ordena por data e remove duplicata por id — historico e socket se sobrepoem. */
 function mergeById(
   current: ChatMessage[],
@@ -299,6 +353,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   voice: {},
   voiceLevels: {},
   selfVoice: null,
+  voiceIntent: lerVoiceIntent(),
   media: null,
   mediaConnected: false,
   screenShares: [],
@@ -337,9 +392,9 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             /**
              * `voice` zera porque os participantes sao daquele servidor.
              *
-             * `selfVoice`, `media` e `mediaConnected` NAO: sao a minha
-             * chamada, que nao pertence a servidor nenhum. Zera-los aqui era
-             * o que fazia trocar de servidor derrubar a call.
+             * `selfVoice`, `voiceIntent`, `media` e `mediaConnected` NAO: sao
+             * a minha chamada, que nao pertence a servidor nenhum. Zera-los
+             * aqui era o que fazia trocar de servidor derrubar a call.
              */
             voice: {},
             voiceLevels: {},
@@ -364,6 +419,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       voiceLevels: {},
       // O socket caiu: a chamada caiu junto, e ai limpar a MINHA voz esta
       // certo — diferente de so ter trocado de servidor.
+      //
+      // `voiceIntent` NAO entra aqui de proposito: e o desejo de estar na
+      // call, nao o estado dela. Quando o socket voltar, o `RealtimeProvider`
+      // le esse campo e reemite `voice:join` — sem ele, a call sumia a cada
+      // piscada de rede.
       selfVoice: null,
       media: null,
       mediaConnected: false,
@@ -488,12 +548,29 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
        * outro servidor. Apagar aqui era metade do bug.
        */
       const eu = state.selfUserId ? mapa[state.selfUserId] : undefined;
-      return eu ? { voice: mapa, selfVoice: eu } : { voice: mapa };
+      if (!eu) return { voice: mapa };
+      if (eu.channelId && state.voiceIntent?.channelId !== eu.channelId) {
+        gravarVoiceIntent({ channelId: eu.channelId });
+      }
+      return {
+        voice: mapa,
+        selfVoice: eu,
+        ...(eu.channelId ? { voiceIntent: { channelId: eu.channelId } } : null),
+      };
     }),
 
   setMedia: (media) => set({ media }),
   setMediaConnected: (mediaConnected) => set({ mediaConnected }),
   setVoiceLevels: (voiceLevels) => set({ voiceLevels }),
+
+  setVoiceIntent: (channelId) =>
+    set(() => {
+      const voiceIntent = channelId ? { channelId } : null;
+      gravarVoiceIntent(voiceIntent);
+      return { voiceIntent };
+    }),
+
+  setSelfVoice: (selfVoice) => set({ selfVoice }),
   setCameras: (cameras) => set({ cameras }),
   setLocalCamera: (localCameraTrack) => set({ localCameraTrack }),
 
@@ -518,7 +595,10 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         : null,
     })),
   setLocalSharing: (localSharing, track) =>
-    set({ localSharing, localShareTrack: localSharing ? (track ?? null) : null }),
+    set({
+      localSharing,
+      localShareTrack: localSharing ? (track ?? null) : null,
+    }),
   setSharePreset: (sharePreset) => set({ sharePreset }),
   setFocusedShare: (focusedShareUserId) => set({ focusedShareUserId }),
 
@@ -541,16 +621,38 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       if (participant.channelId === null) {
         const { [participant.userId]: _gone, ...rest } = state.voice;
         // Se quem saiu fui eu — por qualquer motivo, inclusive ter sido
-        // desconectado — o token nao serve mais.
+        // desconectado ou outra aba ter clicado em desconectar — o token nao
+        // serve mais e a intencao acabou junto.
+        //
+        // O eco atrasado da troca de servidor NAO cai aqui: o gateway usa
+        // `socket.to(...)` para nao mandar a propria saida de volta a quem
+        // moveu a call (ver `handlers/voice.ts`).
         const leftMyself = participant.userId === state.selfUserId;
+        if (leftMyself) gravarVoiceIntent(null);
         return leftMyself
-          ? { voice: rest, selfVoice: null, media: null, mediaConnected: false }
+          ? {
+              voice: rest,
+              selfVoice: null,
+              voiceIntent: null,
+              media: null,
+              mediaConnected: false,
+            }
           : { voice: rest };
       }
       const souEu = participant.userId === state.selfUserId;
+      // Fui movido de canal (ou reentrei): a intencao acompanha o canal novo,
+      // para um reload religar no lugar certo.
+      if (souEu && state.voiceIntent?.channelId !== participant.channelId) {
+        gravarVoiceIntent({ channelId: participant.channelId });
+      }
       return {
         voice: { ...state.voice, [participant.userId]: participant },
-        ...(souEu ? { selfVoice: participant } : null),
+        ...(souEu
+          ? {
+              selfVoice: participant,
+              voiceIntent: { channelId: participant.channelId },
+            }
+          : null),
       };
     }),
 
@@ -622,7 +724,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         isElsewhere && isFromSomeoneElse
           ? {
               ...state.unread,
-              [message.conversationId]: (state.unread[message.conversationId] ?? 0) + 1,
+              [message.conversationId]:
+                (state.unread[message.conversationId] ?? 0) + 1,
             }
           : state.unread;
 
@@ -659,7 +762,9 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       messages: {
         ...state.messages,
         [channelId]: (state.messages[channelId] ?? []).map((item) =>
-          item.nonce === nonce ? { ...item, pending: false, failed: error } : item,
+          item.nonce === nonce
+            ? { ...item, pending: false, failed: error }
+            : item,
         ),
       },
     })),
