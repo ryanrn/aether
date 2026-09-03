@@ -7,12 +7,14 @@ import { contarRevisoesAction } from "@/server/actions/revisao";
 import { cn } from "@/lib/utils";
 import { JogosTab } from "./jogos-tab";
 import { ComunidadesTab } from "./comunidades-tab";
+import { ChavesTab } from "./chaves-tab";
 
-type Aba = "jogos" | "comunidades";
+type Aba = "jogos" | "comunidades" | "chaves";
 
 const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
   { id: "jogos", rotulo: "Biblioteca de jogos", icone: "library" },
   { id: "comunidades", rotulo: "Comunidades", icone: "compass" },
+  { id: "chaves", rotulo: "Chaves de plano", icone: "key" },
 ];
 
 /**
@@ -61,7 +63,9 @@ export function EquipePanel() {
           const esperando =
             item.id === "jogos"
               ? (revisoes?.jogos ?? 0)
-              : (revisoes?.comunidades ?? 0);
+              : item.id === "comunidades"
+                ? (revisoes?.comunidades ?? 0)
+                : 0;
           return (
             <button
               key={item.id}
@@ -96,12 +100,14 @@ export function EquipePanel() {
               }))
             }
           />
-        ) : (
+        ) : aba === "comunidades" ? (
           <ComunidadesTab
             onPendentes={(n) =>
               setRevisoes((r) => ({ jogos: r?.jogos ?? 0, comunidades: n }))
             }
           />
+        ) : (
+          <ChavesTab />
         )}
       </div>
     </div>

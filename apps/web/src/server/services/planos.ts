@@ -125,6 +125,76 @@ export async function criarChave(params: {
   };
 }
 
+export type EstadoDaChave = "ativa" | "revogada" | "vencida" | "esgotada";
+
+export interface ChaveNaLista {
+  id: string;
+  prefixo: string;
+  tier: PlanTier;
+  dias: number | null;
+  usos: number;
+  maxUsos: number;
+  expiraEm: string | null;
+  motivo: string | null;
+  criadaPor: string | null;
+  criadaEm: string;
+  estado: EstadoDaChave;
+}
+
+/** As chaves ja criadas — sem o codigo, que so existiu na criacao. */
+export async function listarChaves(limite = 60): Promise<ChaveNaLista[]> {
+  const linhas = await prisma.planKey.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limite,
+    select: {
+      id: true,
+      prefixo: true,
+      tier: true,
+      dias: true,
+      usos: true,
+      maxUsos: true,
+      expiraEm: true,
+      revogadaEm: true,
+      motivo: true,
+      criadaPor: true,
+      createdAt: true,
+    },
+  });
+
+  const agora = Date.now();
+  return linhas.map((c) => ({
+    id: c.id,
+    prefixo: c.prefixo,
+    tier: c.tier,
+    dias: c.dias,
+    usos: c.usos,
+    maxUsos: c.maxUsos,
+    expiraEm: c.expiraEm ? c.expiraEm.toISOString() : null,
+    motivo: c.motivo,
+    criadaPor: c.criadaPor,
+    criadaEm: c.createdAt.toISOString(),
+    estado: c.revogadaEm
+      ? "revogada"
+      : c.expiraEm && c.expiraEm.getTime() <= agora
+        ? "vencida"
+        : c.usos >= c.maxUsos
+          ? "esgotada"
+          : "ativa",
+  }));
+}
+
+/**
+ * Cancela uma chave. Marca `revogadaEm` em vez de apagar — quem JA resgatou
+ * continua com o plano; revogar so impede novos resgates, e o historico
+ * segue dizendo que a chave existiu.
+ */
+export async function revogarChave(id: string): Promise<void> {
+  await prisma.planKey.updateMany({
+    where: { id, revogadaEm: null },
+    data: { revogadaEm: new Date() },
+  });
+}
+
 export interface ResgateFeito {
   tier: PlanTier;
   expiraEm: Date | null;
