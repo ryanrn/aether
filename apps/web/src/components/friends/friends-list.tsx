@@ -367,6 +367,7 @@ function Linha({ item }: { item: PublicFriendship }) {
     (estado) => estado.presence[item.user.id] ?? ("OFFLINE" as UserStatus),
   );
   const jogo = useRealtimeStore((estado) => estado.activity[item.user.id]);
+  const musica = useRealtimeStore((estado) => estado.listening[item.user.id]);
   const [pendente, startTransition] = useTransition();
 
   const router = useRouter();
@@ -399,7 +400,7 @@ function Linha({ item }: { item: PublicFriendship }) {
   }
 
   return (
-    <div className="group mx-2 flex items-center gap-3.5 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-base-850/60">
+    <div className="group mx-2 flex items-center gap-3.5 border-t border-line-soft px-3 py-3 transition-colors duration-150 first:border-t-0 hover:rounded-md hover:bg-base-750">
       <Avatar
         userId={item.user.id}
         name={item.user.displayName}
@@ -413,17 +414,24 @@ function Linha({ item }: { item: PublicFriendship }) {
       />
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-bold text-ink-100">
+        <p className="flex items-center gap-2 truncate text-[15px] font-bold text-ink-100">
           {item.user.displayName}
+          <span className="font-normal text-[13px] text-ink-500 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            @{item.user.username}
+          </span>
         </p>
         {jogo?.game ? (
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-ink-300">
-            <AetherIcon
-              name="monitor"
-              className="h-4 w-4 shrink-0"
-              strokeWidth={1.75}
-            />
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-ink-200">
+            <AetherIcon name="gamepad" className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{jogo.game}</span>
+          </p>
+        ) : musica ? (
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-signal-spotify">
+            <AetherIcon name="music" className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              Ouvindo <span className="font-mono">{musica.title}</span>
+              {musica.artists ? ` — ${musica.artists}` : ""}
+            </span>
           </p>
         ) : (
           <p className="mt-0.5 truncate text-[13px] text-ink-300">

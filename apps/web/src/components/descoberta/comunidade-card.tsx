@@ -47,17 +47,17 @@ export function ComunidadeCard({
   }
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-lg border border-line bg-base-900 transition-colors hover:border-line">
+    <article className="group flex flex-col overflow-hidden rounded-lg border border-line bg-base-750 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-[3px] hover:border-line-strong hover:shadow-[var(--shadow-pop)]">
       {/* Banner. `aria-hidden` porque nao carrega informacao — e cor. */}
       <div
         aria-hidden
-        className="relative h-20 shrink-0"
+        className="relative h-24 shrink-0"
         style={{
-          backgroundImage: `linear-gradient(135deg, ${cor}, ${cor}22)`,
+          backgroundImage: `linear-gradient(135deg, ${cor}, ${cor}18)`,
         }}
       >
         {comunidade.oficial ? (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-base-950/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-300 backdrop-blur">
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-xs border border-amber-400/40 bg-base-950/70 px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.03em] text-amber-300 shadow-[var(--shadow-sm)] backdrop-blur">
             <AetherIcon
               name="badge-check"
               className="h-3 w-3"
@@ -68,66 +68,58 @@ export function ComunidadeCard({
         ) : null}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {/*
-            O mesmo Avatar do resto do app, e nao uma <img> propria: ele ja
-            resolve iniciais quando nao ha icone, e o servidor sem icone e o
-            caso comum de quem acabou de criar.
-          */}
-          <Avatar
-            userId={comunidade.id}
-            name={comunidade.nome}
-            src={comunidade.iconUrl}
-            size="sm"
-          />
-          <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink-100">
-            {comunidade.nome}
-          </h3>
-        </div>
+      {/* icone que "pisa" no banner — mesma linguagem do editor de perfil */}
+      <Avatar
+        userId={comunidade.id}
+        name={comunidade.nome}
+        src={comunidade.iconUrl}
+        size="lg"
+        className="-mt-7 ml-5 rounded-md border-[3px] border-base-750 [&>div]:rounded-[9px]"
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col px-5 pb-5 pt-2">
+        <h3 className="mt-3 flex min-w-0 items-center gap-2 truncate font-brand text-[17px] font-semibold text-ink-100">
+          {comunidade.nome}
+        </h3>
 
         <p
           className={cn(
-            "line-clamp-2 min-h-[2.5rem] text-[12px] leading-relaxed",
-            comunidade.descricao ? "text-ink-400" : "text-ink-600 italic",
+            "mt-1.5 line-clamp-2 min-h-[2.6rem] text-[13px] leading-snug",
+            comunidade.descricao ? "text-ink-300" : "text-ink-500 italic",
           )}
         >
           {comunidade.descricao ?? "Sem descricao."}
         </p>
 
-        <div className="flex items-center gap-2 text-[11px] text-ink-500">
-          {/*
-            `online` NULO some, e nao vira zero: a presenca vive na memoria do
-            gateway, e se ele nao respondeu, dizer "0 online" seria afirmar
-            algo falso sobre uma comunidade cheia.
-          */}
+        <div className="my-4 flex items-center gap-4 text-[12px] text-ink-300">
           {comunidade.online !== null ? (
-            <>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-signal-online" />
-                <span className="text-ink-300">{comunidade.online}</span> online
-              </span>
-              <span className="text-ink-700">·</span>
-            </>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-signal-online" />
+              <span className="font-mono font-semibold text-ink-200 tabular-nums">
+                {comunidade.online.toLocaleString("pt-BR")}
+              </span>{" "}
+              online
+            </span>
           ) : null}
           <span>
-            <span className="text-ink-300">{comunidade.membros}</span>{" "}
+            <span className="font-mono font-semibold text-ink-200 tabular-nums">
+              {comunidade.membros.toLocaleString("pt-BR")}
+            </span>{" "}
             {comunidade.membros === 1 ? "membro" : "membros"}
           </span>
           {categoria ? (
-            <>
-              <span className="text-ink-700">·</span>
-              <span>{categoria.nome}</span>
-            </>
+            <span className="text-ink-400">{categoria.nome}</span>
           ) : null}
         </div>
 
-        {erro ? <p className="text-[11px] text-signal-dnd">{erro}</p> : null}
+        {erro ? (
+          <p className="mb-2 text-[12px] text-signal-dnd">{erro}</p>
+        ) : null}
 
         <Button
           type="button"
           size="sm"
-          variant={comunidade.souMembro ? "outline" : "primary"}
+          variant={comunidade.souMembro ? "primary" : "outline"}
           onClick={
             comunidade.souMembro
               ? () => router.push(`/app/s/${comunidade.id}`)
