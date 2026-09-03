@@ -516,6 +516,28 @@ function createWindow() {
     recarregarQuandoAOrigemResponder(window, "render-process-gone");
   });
 
+  /**
+   * Erros da camada de voz vao para o `aether.log`.
+   *
+   * O renderer instalado nao tem console, e "a call caiu e nao sei por que"
+   * (bug relatado) precisa deixar rastro em algum lugar que a pessoa consiga
+   * abrir — o app ja mostra o caminho do log. So as linhas `[voz ...]`
+   * (`mediaWarn` na `lib/voice/debug.ts`): desconexao do SFU e o motivo,
+   * reconexao, falha de dispositivo, recuperacao esgotada. O resto do console
+   * nao entra, para o arquivo nao virar despejo.
+   */
+  window.webContents.on("console-message", (...args) => {
+    // Electron 44 entrega um objeto `{ level, message, ... }`; versoes antigas
+    // entregavam `(event, level, message, line, source)`. Cobre os dois.
+    const detalhe = args[1];
+    const mensagem =
+      detalhe && typeof detalhe === "object" ? detalhe.message : args[2];
+    const nivel =
+      detalhe && typeof detalhe === "object" ? detalhe.level : args[1];
+    if (typeof mensagem !== "string" || !mensagem.startsWith("[voz ")) return;
+    registrar("voz", { nivel, mensagem: mensagem.slice(0, 500) });
+  });
+
   return window;
 }
 

@@ -28,7 +28,7 @@ import {
   podeCapturarSomDoSistema,
   type SomDoSistema,
 } from "./system-audio";
-import { mediaDebugEnabled, mediaLog } from "./debug";
+import { mediaDebugEnabled, mediaLog, mediaWarn } from "./debug";
 import { lerCodecDeTela } from "./codecs";
 import { lerTratamentoDeAudio, paraConstraints } from "./audio-prefs";
 import { criarFiltroDeRuido } from "./noise-filter";
@@ -588,6 +588,7 @@ export async function connectVoiceRoom({
         if (encerrado) return;
         if (!cred) {
           // Gateway recusou: sem acesso, ou nao estou mais em canal.
+          mediaWarn("recuperacao abortada — gateway nao deu credencial nova");
           callbacks.onError(
             "A conexao de voz caiu e nao foi possivel restabelecer.",
           );
@@ -596,7 +597,7 @@ export async function connectVoiceRoom({
 
         try {
           await room.connect(cred.url, cred.token);
-          mediaLog("conexao de voz restabelecida");
+          mediaWarn("conexao de voz restabelecida");
           callbacks.onConnectionChange(true);
           if (!room.canPlaybackAudio) {
             await room.startAudio().catch(() => undefined);
@@ -610,9 +611,10 @@ export async function connectVoiceRoom({
           }
           return;
         } catch (erro) {
-          mediaLog("falha ao restabelecer a conexao de voz", erro);
+          mediaWarn("falha ao restabelecer a conexao de voz", String(erro));
         }
       }
+      mediaWarn("recuperacao esgotou as tentativas");
       callbacks.onError("A conexao de voz caiu. Tente reconectar.");
     } finally {
       recuperando = false;
@@ -701,13 +703,31 @@ export async function connectVoiceRoom({
 
   room.on(RoomEvent.Disconnected, (reason) => {
     callbacks.onConnectionChange(false);
+    const motivo =
+      reason === undefined
+        ? "sem motivo"
+        : (DisconnectReason[reason] ?? String(reason));
     // `disconnect()` proprio, ou um motivo terminal (expulso, sala apagada):
     // nao ha o que recuperar.
-    if (encerrado || !MOTIVOS_RECUPERAVEIS.has(reason)) return;
-    mediaLog("SFU desconectou — tentando recuperar", reason);
+    if (encerrado) return;
+    if (!MOTIVOS_RECUPERAVEIS.has(reason)) {
+      mediaWarn(`SFU desconectou (${motivo}) — motivo terminal, sem recuperar`);
+      return;
+    }
+    mediaWarn(`SFU desconectou (${motivo}) — tentando recuperar`);
     void recuperarConexao();
   });
-  room.on(RoomEvent.Reconnected, () => callbacks.onConnectionChange(true));
+  room.on(RoomEvent.Reconnecting, () => mediaWarn("SFU reconectando"));
+  room.on(RoomEvent.SignalReconnecting, () =>
+    mediaWarn("sinal do SFU reconectando"),
+  );
+  room.on(RoomEvent.Reconnected, () => {
+    mediaWarn("SFU reconectado");
+    callbacks.onConnectionChange(true);
+  });
+  room.on(RoomEvent.MediaDevicesError, (erro: Error) => {
+    mediaWarn("erro de dispositivo de midia", erro.message);
+  });
 
   room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
     if (!room.canPlaybackAudio) {
@@ -731,7 +751,12 @@ export async function connectVoiceRoom({
     mediaLog("minha faixa publicada", publication.source),
   );
 
-  await room.connect(url, token);
+  try {
+    await room.connect(url, token);
+  } catch (erro) {
+    mediaWarn("falha ao conectar a sala de voz", String(erro));
+    throw erro;
+  }
   mediaLog("conectado a sala", room.name);
   callbacks.onConnectionChange(true);
 
@@ -746,7 +771,8 @@ export async function connectVoiceRoom({
       await room.localParticipant.setMicrophoneEnabled(true);
       await aplicarFiltroDeRuido(room);
       await iniciarDetectorLocal();
-    } catch {
+    } catch (erro) {
+      mediaWarn("nao consegui abrir o microfone ao entrar", String(erro));
       callbacks.onError(
         "Nao foi possivel abrir o microfone. Voce continua ouvindo os outros.",
       );

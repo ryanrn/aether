@@ -155,7 +155,7 @@ janela inteira) matava a call de vez.
 | 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, recuperacao com recuo no `RoomEvent.Disconnected`) | ✅ |
 | 3 | Spotify no desktop sem recarregar a janela (janela OAuth dedicada no shell) | ✅ |
 | 4 | Foto de perfil / moldura / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ✅ |
-| 5 | Logs de erro de voz (motivo do `Disconnected`, falha de token) | ⏳ |
+| 5 | Logs de erro de voz sempre ligados (`mediaWarn`), encaminhados ao `aether.log` no desktop | ✅ |
 
 ### O que fechou no estagio 1
 
@@ -214,7 +214,20 @@ janela inteira) matava a call de vez.
   `user` da ocupacao — nao mexe em canal, mudo, camera nem `joinedAt` (chamar
   `joinVoice` de novo teria zerado `speaking`/`streaming`/`camera`).
 
-### Limitacoes que ficaram (estagios 1–4)
+### O que fechou no estagio 5
+
+- **`mediaWarn` sempre emite.** O `mediaLog` fica calado sem `?debug=media` —
+  otimo para o log verboso do SFU, pessimo para "a call caiu e nao sei por que"
+  (o bug relatado). Os eventos que contam passam por `mediaWarn` (`console.warn`,
+  prefixo `[voz ...]`): motivo do `RoomEvent.Disconnected` (nome do
+  `DisconnectReason`), `Reconnecting`/`SignalReconnecting`/`Reconnected`,
+  `MediaDevicesError`, falha do `room.connect`, cada tentativa e o esgotamento
+  da recuperacao.
+- **Desktop encaminha `[voz ...]` ao `aether.log`.** `console-message` no
+  `main.js` filtra so essas linhas e grava via `registrar` — o renderer
+  instalado nao tem console, e o app ja mostra onde o log fica.
+
+### Limitacoes que ficaram (estagios 1–5)
 
 - **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; queda de
   rede real, call passando de 1h, 2 abas e troca de servidor com a call ativa
