@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
+import { logoutAction } from "@/server/actions/auth";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
 import { PlanoTab } from "./plano-tab";
@@ -22,33 +23,52 @@ import { VoiceTab } from "./voice-tab";
  * A unica excecao e o apelido, que e por servidor e por isso diz isso na
  * propria etiqueta.
  *
- * A REVISAO DA EQUIPE (biblioteca de jogos, comunidades) NAO MORA MAIS AQUI.
- * Chegou a viver de emprestado numa aba escondida, e ninguem descobria sem
- * saber que ela existia — a primeira vez que a fila foi medida de verdade
- * havia quatro pedidos parados sem ninguem saber. Agora tem pagina propria,
- * `/app/equipe`, com entrada visivel na trilha lateral. Ver
- * `components/equipe/equipe-panel.tsx`.
+ * Layout do redesign v2: modal de altura cheia, coluna lateral com grupos
+ * ("Usuario" / "Assinatura") e um cabecalho que troca por aba.
  */
 
 type Tab = "conta" | "voz" | "atividade" | "plano";
 
-const TABS: { id: Tab; label: string; icon: AetherIconName }[] = [
-  { id: "conta", label: "Minha conta", icon: "user" },
-  { id: "voz", label: "Voz e video", icon: "mic" },
-  /**
-   * Atividade e aba propria porque deteccao de jogo nao tem relacao nenhuma
-   * com microfone. Nasceu dentro de "Voz e video" so por ter sido onde coube
-   * na hora — e "onde coube" nao e criterio de organizacao.
-   */
-  { id: "atividade", label: "Atividade", icon: "gamepad" },
-  /**
-   * O plano fica por ULTIMO, e nao no topo.
-   *
-   * Vender e legitimo; empurrar nao. Quem abre as configuracoes quase sempre
-   * vai trocar o microfone ou a foto, e a assinatura no primeiro item faria a
-   * tela inteira parecer uma loja.
-   */
-  { id: "plano", label: "Plano", icon: "sparkle" },
+const TABS: {
+  id: Tab;
+  label: string;
+  icon: AetherIconName;
+  grupo: "Usuario" | "Assinatura";
+  titulo: string;
+  sub: string;
+}[] = [
+  {
+    id: "conta",
+    label: "Minha conta",
+    icon: "user",
+    grupo: "Usuario",
+    titulo: "Minha conta",
+    sub: "Sua conta e seus dispositivos.",
+  },
+  {
+    id: "voz",
+    label: "Voz e video",
+    icon: "mic",
+    grupo: "Usuario",
+    titulo: "Voz e video",
+    sub: "Microfone, fones e o teste de som.",
+  },
+  {
+    id: "atividade",
+    label: "Atividade",
+    icon: "gamepad",
+    grupo: "Usuario",
+    titulo: "Atividade",
+    sub: "O que os amigos veem que voce esta fazendo.",
+  },
+  {
+    id: "plano",
+    label: "Plano",
+    icon: "sparkle",
+    grupo: "Assinatura",
+    titulo: "Plano",
+    sub: "Sua assinatura e o que ela libera.",
+  },
 ];
 
 export function AppSettingsModal({
@@ -60,12 +80,6 @@ export function AppSettingsModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /**
-   * O usuario publico mais as preferencias de contato. Como extensao de
-   * `PublicUser`, e nao campo a campo: a copia repetida obrigava a mexer aqui
-   * a cada campo novo do perfil, e foi assim que plano e moldura quase
-   * ficaram de fora desta tela.
-   */
   user: PublicUser & {
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
@@ -75,72 +89,108 @@ export function AppSettingsModal({
   abaInicial?: Tab;
 }) {
   const [active, setActive] = useState<Tab>("conta");
+  const [saindo, sairTransition] = useTransition();
 
-  // Quando abre com uma aba pedida (ex.: `?spotify=ok`), pula para ela.
   useEffect(() => {
     if (open && abaInicial) setActive(abaInicial);
   }, [open, abaInicial]);
+
+  const atual = TABS.find((t) => t.id === active) ?? TABS[0]!;
+  const grupos = ["Usuario", "Assinatura"] as const;
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Configuracoes"
-      description="Sua conta e seus dispositivos."
-      /**
-       * `w-`, e nao `max-w-`: o Modal define largura FIXA de 440px, e
-       * `max-width` so limita — nunca expande. Com `max-w-[760px]` a janela
-       * continuava com 440px e o conteudo saia pela lateral, com barra de
-       * rolagem horizontal.
-       */
-      className="w-[min(880px,calc(100vw-3rem))]"
+      bare
+      className="h-[min(760px,92vh)] w-[min(980px,calc(100vw-2.5rem))] max-w-none overflow-hidden rounded-xl"
     >
-      {/* Altura limitada pela janela: em tela baixa o modal rola por dentro
-          em vez de estourar para fora e cortar os botoes de salvar. */}
-      <div className="flex h-[min(560px,calc(100vh-12rem))] gap-5">
+      <div className="grid h-full grid-cols-[232px_1fr] max-[900px]:grid-cols-1">
         {/*
-          Menu lateral, e nao abas no topo: a lista deve crescer (aparencia,
-          atalhos, notificacoes) sem virar uma fileira apertada.
+          Coluna lateral — grupos e abas. Vira uma fileira rolavel no celular.
         */}
-        <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-line pr-3">
-          {TABS.map((tab) => {
-            const nomeIcone = tab.icon;
-            const selected = active === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActive(tab.id)}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
-                  selected
-                    ? "bg-base-800 text-ink-100"
-                    : "text-ink-400 hover:bg-base-850 hover:text-ink-200",
-                )}
-              >
-                <AetherIcon
-                  name={nomeIcone}
+        <nav
+          role="tablist"
+          aria-label="Secoes das configuracoes"
+          className="flex min-h-0 flex-col overflow-y-auto border-r border-line bg-base-850 px-3 py-5 max-[900px]:flex-row max-[900px]:overflow-x-auto max-[900px]:border-b max-[900px]:border-r-0 max-[900px]:py-3"
+        >
+          <p className="px-3 pb-3 font-brand text-[11px] font-bold uppercase tracking-[0.14em] text-ink-400 max-[900px]:hidden">
+            Configuracoes
+          </p>
+          {grupos.map((g) => (
+            <div key={g} className="max-[900px]:contents">
+              <p className="px-3 pb-2 pt-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-400 max-[900px]:hidden">
+                {g === "Usuario" ? "Usuario" : "Assinatura"}
+              </p>
+              {TABS.filter((t) => t.grupo === g).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active === tab.id}
+                  onClick={() => setActive(tab.id)}
                   className={cn(
-                    "h-3.5 w-3.5 shrink-0",
-                    selected ? "text-accent-400" : "text-ink-500",
+                    "flex h-[38px] shrink-0 items-center gap-3 rounded-sm px-3 text-[14px] font-medium transition-colors max-[900px]:whitespace-nowrap",
+                    active === tab.id
+                      ? "bg-accent-500/12 text-accent-300"
+                      : "text-ink-300 hover:bg-base-750 hover:text-ink-200",
                   )}
-                />
-                {tab.label}
-              </button>
-            );
-          })}
+                >
+                  <AetherIcon
+                    name={tab.icon}
+                    className="h-[17px] w-[17px] shrink-0"
+                  />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          ))}
+
+          <hr className="my-3 border-0 border-t border-line-soft max-[900px]:hidden" />
+          <button
+            type="button"
+            onClick={() => sairTransition(() => logoutAction())}
+            disabled={saindo}
+            className="flex h-[38px] shrink-0 items-center gap-3 rounded-sm px-3 text-[14px] font-medium text-ink-300 transition-colors hover:bg-signal-dnd/15 hover:text-signal-dnd disabled:opacity-50 max-[900px]:whitespace-nowrap"
+          >
+            <AetherIcon name="logout" className="h-[17px] w-[17px] shrink-0" />
+            Sair
+          </button>
         </nav>
 
-        <div className="min-w-0 flex-1 overflow-y-auto pr-1">
-          {active === "conta" ? (
-            <AccountTab user={user} server={server} />
-          ) : active === "voz" ? (
-            <VoiceTab />
-          ) : active === "plano" ? (
-            <PlanoTab />
-          ) : (
-            <ActivityTab />
-          )}
+        {/* Painel */}
+        <div className="flex min-h-0 flex-col bg-base-800">
+          <div className="flex items-center justify-between gap-4 border-b border-line px-6 py-5">
+            <div className="min-w-0">
+              <p className="truncate font-brand text-[20px] font-semibold text-ink-100">
+                {atual.titulo}
+              </p>
+              <p className="mt-0.5 truncate text-[12px] text-ink-300">
+                {atual.sub}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar configuracoes"
+              className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-line text-ink-300 transition-colors hover:border-line-strong hover:bg-base-750 hover:text-ink-100"
+            >
+              <AetherIcon name="x" className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {active === "conta" ? (
+              <AccountTab user={user} server={server} />
+            ) : active === "voz" ? (
+              <VoiceTab />
+            ) : active === "plano" ? (
+              <PlanoTab />
+            ) : (
+              <ActivityTab />
+            )}
+          </div>
         </div>
       </div>
     </Modal>

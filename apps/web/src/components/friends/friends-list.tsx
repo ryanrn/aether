@@ -307,9 +307,7 @@ function AddFriend({
           className={cn(
             "min-w-0 flex-1 rounded-[6px] border bg-base-950 px-3.5 py-2.5 text-[14px] text-ink-100",
             "outline-none transition-colors duration-150 placeholder:text-ink-600",
-            erro
-              ? "border-signal-dnd"
-              : "border-line focus:border-accent-500",
+            erro ? "border-signal-dnd" : "border-line focus:border-accent-500",
           )}
         />
         <button
