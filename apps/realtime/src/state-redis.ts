@@ -97,7 +97,10 @@ function hashToEntry(userId: string, h: Record<string, string>): PresenceEntry {
  * TODOS os campos de uma vez, e `HSET` so acrescenta/atualiza — nenhuma
  * escrita parcial depois disso derruba um campo que ja existia.
  */
-function hashToParticipant(userId: string, h: Record<string, string>): VoiceParticipant {
+function hashToParticipant(
+  userId: string,
+  h: Record<string, string>,
+): VoiceParticipant {
   const selfMuted = decBool(h.selfMuted);
   const serverMuted = decBool(h.serverMuted);
   return {
@@ -153,7 +156,11 @@ return 1
 `;
 
 export function createRedisStore(redis: Redis): StateStore {
-  async function leaveServerFor(userId: string, socketId: string, serverId: string): Promise<boolean> {
+  async function leaveServerFor(
+    userId: string,
+    socketId: string,
+    serverId: string,
+  ): Promise<boolean> {
     const result = (await redis.eval(
       LEAVE_SERVER_LUA,
       4,
@@ -175,7 +182,8 @@ export function createRedisStore(redis: Redis): StateStore {
 
       const existed = (await redis.exists(P_USER(userId))) === 1;
       if (!existed) {
-        const status: UserStatus = initialStatus === "OFFLINE" ? "ONLINE" : initialStatus;
+        const status: UserStatus =
+          initialStatus === "OFFLINE" ? "ONLINE" : initialStatus;
         await redis.hset(P_USER(userId), {
           status,
           game: "",
@@ -197,9 +205,14 @@ export function createRedisStore(redis: Redis): StateStore {
       const existed = (await redis.exists(P_USER(userId))) === 1;
       if (!existed) return null;
 
-      const [curGame, curIcon] = await redis.hmget(P_USER(userId), "game", "gameIcon");
+      const [curGame, curIcon] = await redis.hmget(
+        P_USER(userId),
+        "game",
+        "gameIcon",
+      );
       const nomeMudou = decField(curGame ?? undefined) !== game;
-      const iconeMudou = game !== null && decField(curIcon ?? undefined) !== icon;
+      const iconeMudou =
+        game !== null && decField(curIcon ?? undefined) !== icon;
       if (!nomeMudou && !iconeMudou) return null;
 
       const patch: Record<string, string> = {
@@ -242,7 +255,8 @@ export function createRedisStore(redis: Redis): StateStore {
       if (!h.status) return null;
       if (h.game !== jogoEsperado) return null;
 
-      const nomeNovo = displayName && displayName !== h.game ? displayName : null;
+      const nomeNovo =
+        displayName && displayName !== h.game ? displayName : null;
       if (!cover && !nomeNovo) return null;
       if (cover === decField(h.gameCover) && !nomeNovo) return null;
 
@@ -291,7 +305,8 @@ export function createRedisStore(redis: Redis): StateStore {
       const serverIds = await redis.smembers(P_SOCKET_SERVERS(socketId));
       const vacated: string[] = [];
       for (const serverId of serverIds) {
-        if (await leaveServerFor(userId, socketId, serverId)) vacated.push(serverId);
+        if (await leaveServerFor(userId, socketId, serverId))
+          vacated.push(serverId);
       }
       await redis.del(P_SOCKET_SERVERS(socketId), P_SOCKET(socketId));
       await redis.srem(P_ALL_SOCKETS, socketId);
@@ -377,7 +392,12 @@ export function createRedisStore(redis: Redis): StateStore {
         redis.scard(P_ACTIVE_SERVERS),
         redis.scard(V_ALL_USERS),
       ]);
-      return { sockets: socketsN, users: usersN, servers: serversN, inVoice: inVoiceN };
+      return {
+        sockets: socketsN,
+        users: usersN,
+        servers: serversN,
+        inVoice: inVoiceN,
+      };
     },
 
     async voiceParticipant(userId) {
@@ -394,7 +414,9 @@ export function createRedisStore(redis: Redis): StateStore {
       // `hashToParticipant`: os campos do hash de voz sao gravados juntos.
       const previousChannelId = previous.channelId;
       const previousServerId =
-        hasPrevious && previous.serverId !== serverId ? previous.serverId! : null;
+        hasPrevious && previous.serverId !== serverId
+          ? previous.serverId!
+          : null;
 
       if (previousServerId) {
         await redis.srem(V_SERVER_MEMBERS(previousServerId), userId);
@@ -417,7 +439,9 @@ export function createRedisStore(redis: Redis): StateStore {
         camera: "0",
         serverMuted: previous.serverMuted ?? "0",
         serverDeafened: previous.serverDeafened ?? "0",
-        joinedAt: sameChannel ? (previous.joinedAt ?? String(Date.now())) : String(Date.now()),
+        joinedAt: sameChannel
+          ? (previous.joinedAt ?? String(Date.now()))
+          : String(Date.now()),
         user: JSON.stringify(user),
       });
       await redis.sadd(V_SERVER_MEMBERS(serverId), userId);
@@ -449,7 +473,8 @@ export function createRedisStore(redis: Redis): StateStore {
       if (!existing.serverId) return null;
 
       const next: Record<string, string> = {};
-      if (typeof patch.selfMuted === "boolean") next.selfMuted = encBool(patch.selfMuted);
+      if (typeof patch.selfMuted === "boolean")
+        next.selfMuted = encBool(patch.selfMuted);
       if (typeof patch.selfDeafened === "boolean") {
         next.selfDeafened = encBool(patch.selfDeafened);
         if (patch.selfDeafened) next.selfMuted = "1";
@@ -462,7 +487,10 @@ export function createRedisStore(redis: Redis): StateStore {
       // que contornar isso, e o hash inteiro sempre existe (`joinVoice`
       // grava todos os campos juntos).
       const h = await redis.hgetall(V_USER(userId));
-      return { serverId: h.serverId!, participant: hashToParticipant(userId, h) };
+      return {
+        serverId: h.serverId!,
+        participant: hashToParticipant(userId, h),
+      };
     },
 
     async voiceOfServer(serverId) {
@@ -491,7 +519,10 @@ export function createRedisStore(redis: Redis): StateStore {
 
       await redis.hset(V_USER(userId), "speaking", encBool(speaking));
       const h = await redis.hgetall(V_USER(userId));
-      return { serverId: h.serverId!, participant: hashToParticipant(userId, h) };
+      return {
+        serverId: h.serverId!,
+        participant: hashToParticipant(userId, h),
+      };
     },
 
     async setVoiceCamera(userId, camera) {
@@ -501,7 +532,10 @@ export function createRedisStore(redis: Redis): StateStore {
 
       await redis.hset(V_USER(userId), "camera", encBool(camera));
       const h = await redis.hgetall(V_USER(userId));
-      return { serverId: h.serverId!, participant: hashToParticipant(userId, h) };
+      return {
+        serverId: h.serverId!,
+        participant: hashToParticipant(userId, h),
+      };
     },
 
     async setVoiceStreaming(userId, streaming) {
@@ -511,7 +545,22 @@ export function createRedisStore(redis: Redis): StateStore {
 
       await redis.hset(V_USER(userId), "streaming", encBool(streaming));
       const h = await redis.hgetall(V_USER(userId));
-      return { serverId: h.serverId!, participant: hashToParticipant(userId, h) };
+      return {
+        serverId: h.serverId!,
+        participant: hashToParticipant(userId, h),
+      };
+    },
+
+    async setVoiceUser(userId, user) {
+      const existing = await redis.hgetall(V_USER(userId));
+      if (!existing.serverId) return null;
+
+      await redis.hset(V_USER(userId), "user", JSON.stringify(user));
+      const h = await redis.hgetall(V_USER(userId));
+      return {
+        serverId: h.serverId!,
+        participant: hashToParticipant(userId, h),
+      };
     },
 
     async countStreaming(channelId) {
@@ -524,7 +573,11 @@ export function createRedisStore(redis: Redis): StateStore {
     },
 
     async voiceLocation(userId) {
-      const [serverId, channelId] = await redis.hmget(V_USER(userId), "serverId", "channelId");
+      const [serverId, channelId] = await redis.hmget(
+        V_USER(userId),
+        "serverId",
+        "channelId",
+      );
       if (!serverId) return null;
       return { serverId, channelId: channelId! };
     },
@@ -539,18 +592,25 @@ export function createRedisStore(redis: Redis): StateStore {
       };
 
       const next: Record<string, string> = {};
-      if (typeof patch.serverMuted === "boolean") next.serverMuted = encBool(patch.serverMuted);
+      if (typeof patch.serverMuted === "boolean")
+        next.serverMuted = encBool(patch.serverMuted);
       if (typeof patch.serverDeafened === "boolean") {
         next.serverDeafened = encBool(patch.serverDeafened);
         if (patch.serverDeafened) next.serverMuted = "1";
       }
 
       const after = {
-        muted: next.serverMuted !== undefined ? decBool(next.serverMuted) : before.muted,
+        muted:
+          next.serverMuted !== undefined
+            ? decBool(next.serverMuted)
+            : before.muted,
         deafened:
-          next.serverDeafened !== undefined ? decBool(next.serverDeafened) : before.deafened,
+          next.serverDeafened !== undefined
+            ? decBool(next.serverDeafened)
+            : before.deafened,
       };
-      if (before.muted === after.muted && before.deafened === after.deafened) return null;
+      if (before.muted === after.muted && before.deafened === after.deafened)
+        return null;
 
       if (Object.keys(next).length > 0) await redis.hset(V_USER(userId), next);
       const h = await redis.hgetall(V_USER(userId));

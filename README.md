@@ -154,7 +154,7 @@ janela inteira) matava a call de vez.
 | 1 | `voiceIntent` na store (persiste em `sessionStorage`), `RealtimeProvider` reemite `voice:join` no `connect`, gateway usa `socket.to(...)` para nao mandar a propria saida de servidor de volta a quem moveu a call | ✅ |
 | 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, recuperacao com recuo no `RoomEvent.Disconnected`) | ✅ |
 | 3 | Spotify no desktop sem recarregar a janela (janela OAuth dedicada no shell) | ✅ |
-| 4 | Foto de perfil / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ⏳ |
+| 4 | Foto de perfil / moldura / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ✅ |
 | 5 | Logs de erro de voz (motivo do `Disconnected`, falha de token) | ⏳ |
 
 ### O que fechou no estagio 1
@@ -202,7 +202,19 @@ janela inteira) matava a call de vez.
   `window.location.href` de antes — e ai a call volta sozinha pelo `voiceIntent`
   do estagio 1. No navegador, segue sendo popup.
 
-### Limitacoes que ficaram (estagios 1–3)
+### O que fechou no estagio 4
+
+- **`/internal/profile-changed` no gateway.** A action de perfil (foto, moldura,
+  nome de exibicao) avisa o gateway, que: (1) troca o `PublicUser` gravado na
+  ocupacao de voz via `setVoiceUser` e reemite `voice:update` — a foto nova
+  chega ao card de voz de todo mundo na call **sem reconectar**; (2) corrige
+  `socket.data.user` dos sockets locais para os proximos `voice:join`; (3) manda
+  `friend:changed` aos amigos, cuja tela re-renderiza com a foto do banco.
+- **`StateStore.setVoiceUser`.** Novo metodo (memoria + Redis) que so troca o
+  `user` da ocupacao — nao mexe em canal, mudo, camera nem `joinedAt` (chamar
+  `joinVoice` de novo teria zerado `speaking`/`streaming`/`camera`).
+
+### Limitacoes que ficaram (estagios 1–4)
 
 - **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; queda de
   rede real, call passando de 1h, 2 abas e troca de servidor com a call ativa
@@ -218,6 +230,10 @@ janela inteira) matava a call de vez.
   (sem typecheck) e Electron nao roda no sandbox — `node --check` passou, mas o
   fluxo real (cookie compartilhado, fechamento automatico) so se prova num
   desktop de verdade, e exige o release `0.1.21`.
+- **Perfil: painel de membros de nao-amigos.** A propagacao do estagio 4 cobre
+  o card de voz (todos na call) e a tela dos amigos; quem esta no mesmo servidor
+  mas nao e seu amigo so ve a foto nova no proximo refresh. E com Redis, o
+  `socket.data.user` so e corrigido na instancia que segura o socket.
 
 ---
 
@@ -1706,11 +1722,14 @@ esquecer o sniff de bytes para o bucket publico aceitar arquivo disfarcado.
 - **As actions de perfil nao aceitam `userId`.** O id vem do cookie de sessao.
   Aceitar do cliente seria abrir "editar o perfil de qualquer um" atras de um
   campo de formulario.
-- **Trocar a foto so atualiza a SUA tela na hora.** As outras pessoas veem a
-  foto nova no proximo carregamento delas. O `revalidatePath` vale por sessao,
-  e nao existe evento de socket para isso. Diferente do canal (que ganhou
-  `server:changed`), foto de perfil atravessa TODOS os servidores da pessoa, e
-  um evento global seria bem mais superficie por um ganho cosmetico.
+- **Trocar a foto propaga em tempo real onde importa** (desde as correcoes v2
+  de estabilidade da call, estagio 4): a action chama `/internal/profile-changed`
+  no gateway, que troca o `PublicUser` gravado na ocupacao de voz e reemite
+  `voice:update` — a foto nova chega ao card de voz de todo mundo na call sem
+  reconectar — e manda `friend:changed` aos amigos, cuja tela re-renderiza.
+  RESIDUAL: o painel de membros de quem NAO e seu amigo no mesmo servidor so
+  atualiza no proximo refresh dele; e com Redis (varias instancias) o
+  `socket.data.user` so e corrigido na instancia local.
 - **Mensagens antigas ficam com a foto antiga** ate a pagina ser recarregada:
   o historico vem do banco com o avatar embutido no momento da consulta.
 - **Nao ha auditoria.** O log e por servidor, e trocar a propria foto nao
@@ -2773,9 +2792,10 @@ dado da pessoa por causa de uma cobranca vencida.
   servidor nao adianta nada e o sintoma nao aponta para o bucket. `avatars` vai
   a 10 MB com GIF; `server-icons` fica em 2 MB sem GIF, porque ninguem pediu
   icone animado e ele aparece na barra lateral o tempo todo.
-- **A troca so aparece para os outros no proximo carregamento deles.** Mesma
-  limitacao ja anotada da foto de perfil: `revalidatePath` vale por sessao e
-  nao ha evento de socket para isso. Vale para a moldura tambem.
+- **A troca de moldura propaga como a da foto** (estagio 4 das correcoes v2):
+  `/internal/profile-changed` cobre foto, moldura E nome de exibicao. O card de
+  voz e a tela dos amigos atualizam ao vivo; o painel de membros de nao-amigos
+  fica para o proximo refresh deles.
 - **Nao ha faxina do avatar antigo.** Trocar de foto deixa a anterior no bucket
   para sempre. Ja valia antes; com GIF de ate 10 MB, passa a custar mais.
 - **Banner e badge nao existem.** A estrutura esta pronta — catalogo, resolucao

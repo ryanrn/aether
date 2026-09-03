@@ -50,7 +50,10 @@ async function callInternal(
       );
     }
   } catch (error) {
-    console.error(`[realtime] nao consegui avisar o gateway (${errorLabel}):`, error);
+    console.error(
+      `[realtime] nao consegui avisar o gateway (${errorLabel}):`,
+      error,
+    );
   }
 }
 
@@ -92,7 +95,11 @@ export async function notifyServerDeleted(params: {
   userIds: string[];
 }): Promise<void> {
   if (params.userIds.length === 0) return;
-  await callInternal("/internal/server-deleted", params, "a exclusao do servidor");
+  await callInternal(
+    "/internal/server-deleted",
+    params,
+    "a exclusao do servidor",
+  );
 }
 
 /**
@@ -108,7 +115,31 @@ export async function notifyServerDeleted(params: {
 export async function notifyFriendsChanged(params: {
   userIds: string[];
 }): Promise<void> {
-  await callInternal("/internal/friends-changed", params, "a mudanca de amizade");
+  await callInternal(
+    "/internal/friends-changed",
+    params,
+    "a mudanca de amizade",
+  );
+}
+
+/**
+ * Avisa o gateway que a pessoa mudou o proprio perfil (foto, moldura, nome de
+ * exibicao).
+ *
+ * Necessario porque o gateway congela o `PublicUser` de cada um no handshake e
+ * grava uma copia dele na ocupacao de voz — sem este aviso, a foto nova so
+ * apareceria no card de voz depois de reconectar o socket, e nem "sair e
+ * entrar na call" resolvia. O `revalidatePath` da action so alcanca a propria
+ * sessao; isto alcanca quem esta na call e os amigos.
+ */
+export async function notifyProfileChanged(params: {
+  userId: string;
+}): Promise<void> {
+  await callInternal(
+    "/internal/profile-changed",
+    params,
+    "a mudanca de perfil",
+  );
 }
 
 /**
@@ -136,17 +167,22 @@ export async function presencaDeServidores(
   if (!secret) return null;
 
   try {
-    const response = await fetch(`${GATEWAY_URL}/internal/presenca-de-servidores`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-aether-internal": secret,
+    const response = await fetch(
+      `${GATEWAY_URL}/internal/presenca-de-servidores`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-aether-internal": secret,
+        },
+        body: JSON.stringify({ serverIds }),
+        signal: AbortSignal.timeout(2000),
       },
-      body: JSON.stringify({ serverIds }),
-      signal: AbortSignal.timeout(2000),
-    });
+    );
     if (!response.ok) return null;
-    const corpo = (await response.json()) as { online?: Record<string, number> };
+    const corpo = (await response.json()) as {
+      online?: Record<string, number>;
+    };
     return corpo.online ?? null;
   } catch {
     // Gateway fora do ar ou lento: a vitrine sai sem o contador de online.

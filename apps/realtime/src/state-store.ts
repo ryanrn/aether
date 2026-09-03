@@ -32,7 +32,11 @@ export interface StateStore {
     userId: string,
     game: string | null,
     icon?: string | null,
-  ): Promise<{ servers: string[]; entry: PresenceEntry; nomeMudou: boolean } | null>;
+  ): Promise<{
+    servers: string[];
+    entry: PresenceEntry;
+    nomeMudou: boolean;
+  } | null>;
   setGameCover(
     userId: string,
     jogoEsperado: string,
@@ -96,6 +100,15 @@ export interface StateStore {
   setVoiceStreaming(
     userId: string,
     streaming: boolean,
+  ): Promise<{ serverId: string; participant: VoiceParticipant } | null>;
+  /**
+   * Troca o `PublicUser` gravado na ocupacao de voz — usado quando a pessoa
+   * muda a foto ou o nome de exibicao. So o `user`; nao mexe em canal, mudo,
+   * camera nem tempo de entrada.
+   */
+  setVoiceUser(
+    userId: string,
+    user: PublicUser,
   ): Promise<{ serverId: string; participant: VoiceParticipant } | null>;
   countStreaming(channelId: string): Promise<number>;
   voiceLocation(

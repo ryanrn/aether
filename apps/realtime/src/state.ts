@@ -19,37 +19,51 @@ import type { StateStore } from "./state-store";
  * `import { attachSocket, ... } from "./state"` exatamente como sempre
  * chamou, so que agora com `await`.
  */
-const store: StateStore = redisClients ? createRedisStore(redisClients.main) : memoryStore;
+const store: StateStore = redisClients
+  ? createRedisStore(redisClients.main)
+  : memoryStore;
 
 export const attachSocket: StateStore["attachSocket"] = (...args) =>
   store.attachSocket(...args);
-export const statusOf: StateStore["statusOf"] = (...args) => store.statusOf(...args);
-export const setGame: StateStore["setGame"] = (...args) => store.setGame(...args);
+export const statusOf: StateStore["statusOf"] = (...args) =>
+  store.statusOf(...args);
+export const setGame: StateStore["setGame"] = (...args) =>
+  store.setGame(...args);
 export const setGameCover: StateStore["setGameCover"] = (...args) =>
   store.setGameCover(...args);
 export const setListening: StateStore["setListening"] = (...args) =>
   store.setListening(...args);
 export const presenceEntryOf: StateStore["presenceEntryOf"] = (...args) =>
   store.presenceEntryOf(...args);
-export const joinServer: StateStore["joinServer"] = (...args) => store.joinServer(...args);
-export const leaveServer: StateStore["leaveServer"] = (...args) => store.leaveServer(...args);
+export const joinServer: StateStore["joinServer"] = (...args) =>
+  store.joinServer(...args);
+export const leaveServer: StateStore["leaveServer"] = (...args) =>
+  store.leaveServer(...args);
 export const detachSocket: StateStore["detachSocket"] = (...args) =>
   store.detachSocket(...args);
-export const setStatus: StateStore["setStatus"] = (...args) => store.setStatus(...args);
-export const presenceOf: StateStore["presenceOf"] = (...args) => store.presenceOf(...args);
-export const setFriends: StateStore["setFriends"] = (...args) => store.setFriends(...args);
-export const friendsOf: StateStore["friendsOf"] = (...args) => store.friendsOf(...args);
-export const isConnected: StateStore["isConnected"] = (...args) => store.isConnected(...args);
+export const setStatus: StateStore["setStatus"] = (...args) =>
+  store.setStatus(...args);
+export const presenceOf: StateStore["presenceOf"] = (...args) =>
+  store.presenceOf(...args);
+export const setFriends: StateStore["setFriends"] = (...args) =>
+  store.setFriends(...args);
+export const friendsOf: StateStore["friendsOf"] = (...args) =>
+  store.friendsOf(...args);
+export const isConnected: StateStore["isConnected"] = (...args) =>
+  store.isConnected(...args);
 export const presenceOfFriends: StateStore["presenceOfFriends"] = (...args) =>
   store.presenceOfFriends(...args);
-export const socketIdsOf: StateStore["socketIdsOf"] = (...args) => store.socketIdsOf(...args);
+export const socketIdsOf: StateStore["socketIdsOf"] = (...args) =>
+  store.socketIdsOf(...args);
 /** Numeros para o /health — util para saber se o processo esta vazando estado. */
 export const stats: StateStore["stats"] = () => store.stats();
 
 export const voiceParticipant: StateStore["voiceParticipant"] = (...args) =>
   store.voiceParticipant(...args);
-export const joinVoice: StateStore["joinVoice"] = (...args) => store.joinVoice(...args);
-export const leaveVoice: StateStore["leaveVoice"] = (...args) => store.leaveVoice(...args);
+export const joinVoice: StateStore["joinVoice"] = (...args) =>
+  store.joinVoice(...args);
+export const leaveVoice: StateStore["leaveVoice"] = (...args) =>
+  store.leaveVoice(...args);
 export const setVoiceFlags: StateStore["setVoiceFlags"] = (...args) =>
   store.setVoiceFlags(...args);
 export const voiceOfServer: StateStore["voiceOfServer"] = (...args) =>
@@ -62,12 +76,15 @@ export const setVoiceCamera: StateStore["setVoiceCamera"] = (...args) =>
   store.setVoiceCamera(...args);
 export const setVoiceStreaming: StateStore["setVoiceStreaming"] = (...args) =>
   store.setVoiceStreaming(...args);
+export const setVoiceUser: StateStore["setVoiceUser"] = (...args) =>
+  store.setVoiceUser(...args);
 export const countStreaming: StateStore["countStreaming"] = (...args) =>
   store.countStreaming(...args);
 export const voiceLocation: StateStore["voiceLocation"] = (...args) =>
   store.voiceLocation(...args);
-export const setServerVoiceFlags: StateStore["setServerVoiceFlags"] = (...args) =>
-  store.setServerVoiceFlags(...args);
+export const setServerVoiceFlags: StateStore["setServerVoiceFlags"] = (
+  ...args
+) => store.setServerVoiceFlags(...args);
 export const voiceSocketOf: StateStore["voiceSocketOf"] = (...args) =>
   store.voiceSocketOf(...args);
 
@@ -78,7 +95,10 @@ export const voiceSocketOf: StateStore["voiceSocketOf"] = (...args) =>
  * `StateStore` — as duas implementacoes usariam o mesmo corpo, e exportar
  * daqui evita a pergunta "de qual backend isto vem".
  */
-export function voiceDeparture(userId: string, user: PublicUser): VoiceParticipant {
+export function voiceDeparture(
+  userId: string,
+  user: PublicUser,
+): VoiceParticipant {
   return {
     userId,
     channelId: null,

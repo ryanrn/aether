@@ -17,7 +17,7 @@ import {
   requirePermission,
   requireUser,
 } from "../guards";
-import { resyncGatewayRooms } from "../realtime-notify";
+import { notifyProfileChanged, resyncGatewayRooms } from "../realtime-notify";
 import { uploadUserAvatar } from "../storage";
 import { fail, ok, toActionError } from "./action-result";
 
@@ -70,6 +70,7 @@ export async function uploadAvatarAction(
       },
     });
 
+    await notifyProfileChanged({ userId: session.user.id });
     revalidatePath("/app", "layout");
     return ok({ avatarUrl: result.url });
   } catch (error) {
@@ -109,6 +110,7 @@ export async function setMolduraAction(
       data: { molduraId },
     });
 
+    await notifyProfileChanged({ userId: session.user.id });
     revalidatePath("/app", "layout");
     return ok({ molduraId });
   } catch (error) {
@@ -126,6 +128,7 @@ export async function removeAvatarAction(): Promise<ActionResult<undefined>> {
       data: { avatarUrl: null, avatarEstaticoUrl: null },
     });
 
+    await notifyProfileChanged({ userId: session.user.id });
     revalidatePath("/app", "layout");
     return ok();
   } catch (error) {
@@ -142,7 +145,10 @@ export async function updateDisplayNameAction(
 
     const parsed = displayNameSchema.safeParse(displayName);
     if (!parsed.success) {
-      return fail(parsed.error.issues[0]?.message ?? "Nome invalido", "displayName");
+      return fail(
+        parsed.error.issues[0]?.message ?? "Nome invalido",
+        "displayName",
+      );
     }
 
     await prisma.user.update({
@@ -150,6 +156,7 @@ export async function updateDisplayNameAction(
       data: { displayName: parsed.data },
     });
 
+    await notifyProfileChanged({ userId: session.user.id });
     revalidatePath("/app", "layout");
     return ok({ displayName: parsed.data });
   } catch (error) {

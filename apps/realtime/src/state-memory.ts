@@ -158,7 +158,8 @@ export const memoryStore: StateStore = {
     if (!user) return null;
     if (user.game !== jogoEsperado) return null;
 
-    const nomeNovo = displayName && displayName !== user.game ? displayName : null;
+    const nomeNovo =
+      displayName && displayName !== user.game ? displayName : null;
     if (!cover && !nomeNovo) return null;
     if (cover === user.gameCover && !nomeNovo) return null;
 
@@ -220,7 +221,8 @@ export const memoryStore: StateStore = {
 
     const vacated: string[] = [];
     for (const serverId of [...socket.servers]) {
-      if (await memoryStore.leaveServer(socketId, serverId)) vacated.push(serverId);
+      if (await memoryStore.leaveServer(socketId, serverId))
+        vacated.push(serverId);
     }
 
     const user = users.get(socket.userId);
@@ -297,7 +299,9 @@ export const memoryStore: StateStore = {
   async joinVoice(params) {
     const previous = voice.get(params.userId);
     const previousServerId =
-      previous && previous.serverId !== params.serverId ? previous.serverId : null;
+      previous && previous.serverId !== params.serverId
+        ? previous.serverId
+        : null;
     if (previous) unindex(params.userId, previous.serverId);
 
     voice.set(params.userId, {
@@ -349,7 +353,10 @@ export const memoryStore: StateStore = {
       if (patch.selfDeafened) entry.selfMuted = true;
     }
 
-    return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+    return {
+      serverId: entry.serverId,
+      participant: toParticipant(userId, entry),
+    };
   },
 
   async voiceOfServer(serverId) {
@@ -376,7 +383,10 @@ export const memoryStore: StateStore = {
     if (!entry) return null;
     if (entry.speaking === speaking) return null;
     entry.speaking = speaking;
-    return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+    return {
+      serverId: entry.serverId,
+      participant: toParticipant(userId, entry),
+    };
   },
 
   async setVoiceCamera(userId, camera) {
@@ -384,7 +394,10 @@ export const memoryStore: StateStore = {
     if (!entry) return null;
     if (entry.camera === camera) return null;
     entry.camera = camera;
-    return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+    return {
+      serverId: entry.serverId,
+      participant: toParticipant(userId, entry),
+    };
   },
 
   async setVoiceStreaming(userId, streaming) {
@@ -392,7 +405,20 @@ export const memoryStore: StateStore = {
     if (!entry) return null;
     if (entry.streaming === streaming) return null;
     entry.streaming = streaming;
-    return { serverId: entry.serverId, participant: toParticipant(userId, entry) };
+    return {
+      serverId: entry.serverId,
+      participant: toParticipant(userId, entry),
+    };
+  },
+
+  async setVoiceUser(userId, user) {
+    const entry = voice.get(userId);
+    if (!entry) return null;
+    entry.user = user;
+    return {
+      serverId: entry.serverId,
+      participant: toParticipant(userId, entry),
+    };
   },
 
   async countStreaming(channelId) {
@@ -405,7 +431,9 @@ export const memoryStore: StateStore = {
 
   async voiceLocation(userId) {
     const entry = voice.get(userId);
-    return entry ? { serverId: entry.serverId, channelId: entry.channelId } : null;
+    return entry
+      ? { serverId: entry.serverId, channelId: entry.channelId }
+      : null;
   },
 
   async setServerVoiceFlags(userId, patch) {
@@ -414,13 +442,17 @@ export const memoryStore: StateStore = {
 
     const before = { muted: entry.serverMuted, deafened: entry.serverDeafened };
 
-    if (typeof patch.serverMuted === "boolean") entry.serverMuted = patch.serverMuted;
+    if (typeof patch.serverMuted === "boolean")
+      entry.serverMuted = patch.serverMuted;
     if (typeof patch.serverDeafened === "boolean") {
       entry.serverDeafened = patch.serverDeafened;
       if (patch.serverDeafened) entry.serverMuted = true;
     }
 
-    if (before.muted === entry.serverMuted && before.deafened === entry.serverDeafened) {
+    if (
+      before.muted === entry.serverMuted &&
+      before.deafened === entry.serverDeafened
+    ) {
       return null;
     }
 

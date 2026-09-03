@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
-import { room } from "@aether/shared";
+import { room, SELECT_USUARIO_PUBLICO, toPublicUser } from "@aether/shared";
 import { env } from "./env";
 import { resyncServerRooms } from "./rooms";
 import type { AetherServer } from "./types";
@@ -12,6 +12,7 @@ import {
   presenceOf,
   presenceOfFriends,
   setFriends,
+  setVoiceUser,
   voiceDeparture,
 } from "./state";
 
@@ -35,6 +36,10 @@ import {
  *    gateway guarda os amigos em memoria para nao consultar o banco a cada
  *    mudanca de presenca; sem este aviso, aceitar um pedido so passaria a
  *    valer na proxima reconexao dos dois.
+ *  - `/internal/profile-changed` — a pessoa mudou a propria foto, moldura ou
+ *    nome de exibicao. O `PublicUser` fica congelado no handshake e copiado
+ *    para a ocupacao de voz; sem este aviso a foto nova so aparecia no card de
+ *    voz depois de reconectar o socket.
  *
  * Sem a primeira, apagar a linha no banco nao bastava — a pessoa continuaria
  * recebendo o chat pelo socket ate recarregar a pagina: acesso indevido, nao
@@ -152,8 +157,14 @@ export async function handleInternalRequest(
         serverId?: unknown;
         userId?: unknown;
       };
-      if (typeof body.serverId !== "string" || typeof body.userId !== "string") {
-        json(response, 400, { ok: false, error: "serverId e userId sao obrigatorios" });
+      if (
+        typeof body.serverId !== "string" ||
+        typeof body.userId !== "string"
+      ) {
+        json(response, 400, {
+          ok: false,
+          error: "serverId e userId sao obrigatorios",
+        });
         return true;
       }
 
@@ -173,10 +184,15 @@ export async function handleInternalRequest(
         userIds?: unknown;
       };
       if (typeof body.serverId !== "string" || !Array.isArray(body.userIds)) {
-        json(response, 400, { ok: false, error: "serverId e userIds sao obrigatorios" });
+        json(response, 400, {
+          ok: false,
+          error: "serverId e userIds sao obrigatorios",
+        });
         return true;
       }
-      const userIds = body.userIds.filter((id): id is string => typeof id === "string");
+      const userIds = body.userIds.filter(
+        (id): id is string => typeof id === "string",
+      );
 
       /**
        * Um `evict` por membro, e nao uma rota bulk dedicada: reaproveita a
@@ -188,7 +204,12 @@ export async function handleInternalRequest(
        */
       let affected = 0;
       for (const userId of userIds) {
-        affected += await evict(io, body.serverId, userId, "Este servidor foi excluido.");
+        affected += await evict(
+          io,
+          body.serverId,
+          userId,
+          "Este servidor foi excluido.",
+        );
       }
 
       json(response, 200, { ok: true, sockets: affected });
@@ -258,7 +279,10 @@ export async function handleInternalRequest(
       }
       json(response, 200, { ok: true, online });
     } catch (error) {
-      console.error("[gateway] /internal/presenca-de-servidores falhou:", error);
+      console.error(
+        "[gateway] /internal/presenca-de-servidores falhou:",
+        error,
+      );
       json(response, 500, { ok: false });
     }
     return true;
@@ -300,6 +324,77 @@ export async function handleInternalRequest(
       json(response, 200, { ok: true, atualizados });
     } catch (error) {
       console.error("[gateway] /internal/friends-changed falhou:", error);
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  if (request.url === "/internal/profile-changed") {
+    try {
+      const body = (await readJsonBody(request)) as { userId?: unknown };
+      if (typeof body.userId !== "string") {
+        json(response, 400, { ok: false, error: "userId e obrigatorio" });
+        return true;
+      }
+      const userId = body.userId;
+
+      /**
+       * Quem nao esta conectado nao tem snapshot em memoria para corrigir — o
+       * proximo handshake ja carrega o perfil novo.
+       */
+      if (!(await isConnected(userId))) {
+        json(response, 200, { ok: true, atualizado: false });
+        return true;
+      }
+
+      const row = await prisma.user.findUnique({
+        where: { id: userId },
+        select: SELECT_USUARIO_PUBLICO,
+      });
+      if (!row) {
+        json(response, 404, { ok: false });
+        return true;
+      }
+      const publicUser = toPublicUser(row);
+
+      /**
+       * 1. A foto/nome no card de voz. O `PublicUser` fica gravado na ocupacao
+       * (foi tirado quando a pessoa entrou na call), entao trocamos ali e
+       * reemitimos para o servidor inteiro da call — e assim que a foto nova
+       * chega a quem esta na call com ela, sem ninguem reconectar.
+       */
+      const voz = await setVoiceUser(userId, publicUser);
+      if (voz) {
+        io.to(room.server(voz.serverId)).emit("voice:update", {
+          serverId: voz.serverId,
+          participant: voz.participant,
+        });
+      }
+
+      /**
+       * 2. `socket.data.user` dos sockets LOCAIS — congela no handshake, e sem
+       * isto o proximo `voice:join` (ou mensagem) desta conexao ainda gravaria
+       * o snapshot velho. Best-effort numa so instancia; com Redis, a instancia
+       * que segura o socket pode ser outra — anotado nas limitacoes.
+       */
+      for (const s of io.sockets.sockets.values()) {
+        if (s.data.userId === userId) s.data.user = publicUser;
+      }
+
+      /**
+       * 3. Amigos: a tela deles re-renderiza (o componente de servidor pega a
+       * foto nova do banco). Mesmo evento do `/internal/friends-changed`, sem o
+       * `friend:sync` — presenca nao mudou, so o perfil.
+       */
+      for (const amigoId of await loadFriendIds(userId)) {
+        if (await isConnected(amigoId)) {
+          io.to(room.user(amigoId)).emit("friend:changed");
+        }
+      }
+
+      json(response, 200, { ok: true, atualizado: true });
+    } catch (error) {
+      console.error("[gateway] /internal/profile-changed falhou:", error);
       json(response, 500, { ok: false });
     }
     return true;
