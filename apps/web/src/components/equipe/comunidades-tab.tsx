@@ -150,7 +150,7 @@ export function ComunidadesTab({
       {carregando ? (
         <p className="text-xs text-ink-500">Carregando...</p>
       ) : pedidos.length === 0 ? (
-        <p className="rounded-md border border-base-800 bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
+        <p className="rounded-md border border-line bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
           Nada aqui.
         </p>
       ) : (
@@ -160,7 +160,7 @@ export function ComunidadesTab({
             return (
               <li
                 key={p.id}
-                className="flex flex-col gap-2 rounded-md border border-base-800 bg-base-850/60 p-3"
+                className="flex flex-col gap-2 rounded-md border border-line bg-base-850/60 p-3"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <Avatar

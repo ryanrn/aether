@@ -281,7 +281,7 @@ export function MessageComposer({
           "flex flex-col rounded-lg border bg-base-900 transition-colors",
           tooLong
             ? "border-signal-dnd/50"
-            : "border-base-700 focus-within:border-base-600",
+            : "border-line focus-within:border-line-strong",
           disabled && "opacity-60",
         )}
       >

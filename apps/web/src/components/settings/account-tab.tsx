@@ -373,7 +373,7 @@ export function AccountTab({
               "grid h-9 w-9 place-items-center rounded-full border text-[10px] text-ink-500 transition-colors",
               moldura === null
                 ? "border-accent-400 bg-base-800"
-                : "border-base-800 hover:bg-base-850",
+                : "border-line hover:bg-base-850",
             )}
           >
             —
@@ -443,7 +443,7 @@ export function AccountTab({
         />
       </Field>
 
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         <Field
           label="Apelido neste servidor"
           hint="Vale so aqui. Vazio volta ao seu nome de exibicao."
@@ -465,7 +465,7 @@ export function AccountTab({
         avatar sao "quem eu sou"; isto e "quem pode me alcancar". Misturar os
         dois num bloco so faz a chave passar despercebida.
       */}
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         <h3 className="mb-3 text-[13px] font-semibold text-ink-100">
           Privacidade
         </h3>

@@ -176,7 +176,7 @@ export function ChannelSidebar({
     <>
       <aside
         className={cn(
-          "flex w-[220px] shrink-0 flex-col border-r border-base-800 bg-base-900",
+          "flex w-[220px] shrink-0 flex-col border-r border-line bg-base-900",
           /*
             A outra metade da gaveta. Comeca em `left-16` para encostar na
             trilha, e usa o MESMO deslocamento que ela — deslocar cada uma pela
@@ -193,7 +193,7 @@ export function ChannelSidebar({
           coluna comeca no topo e tem o seu. E o que permite a HUD flutuar
           dentro do centro, em vez de existir um rodape global.
         */}
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-base-800 px-4">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4">
           <h2 className="min-w-0 flex-1 truncate text-[13px] font-bold uppercase tracking-[0.04em] text-ink-100">
             {serverName}
           </h2>
@@ -626,7 +626,7 @@ function ChannelRow({
           </span>
           {channel.isTemporary ? (
             <span
-              className="ml-1 shrink-0 rounded-[3px] border border-base-600 px-1 font-mono text-[9px] uppercase text-ink-500"
+              className="ml-1 shrink-0 rounded-[3px] border border-line-strong px-1 font-mono text-[9px] uppercase text-ink-500"
               title="Canal temporario: some quando esvazia (fase 3)"
             >
               tmp

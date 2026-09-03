@@ -114,7 +114,7 @@ export function ConnectionPanel({
       role="dialog"
       aria-label="Conexao"
       className={cn(
-        "fixed z-50 rounded-lg border border-base-700 bg-base-900 p-3 text-[12px] text-ink-200 shadow-xl",
+        "fixed z-50 rounded-lg border border-line bg-base-900 p-3 text-[12px] text-ink-200 shadow-xl",
         pos ? "opacity-100" : "pointer-events-none opacity-0",
       )}
       style={{ width: LARGURA, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
@@ -162,7 +162,7 @@ export function ConnectionPanel({
         <button
           type="button"
           onClick={ligarDepuracao}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-base-700 px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
         >
           <AetherIcon name="bug" size="sm" className="h-3 w-3" />
           Depuracao
@@ -170,7 +170,7 @@ export function ConnectionPanel({
         <button
           type="button"
           onClick={copiarDiagnostico}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-base-700 px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
         >
           {copiado ? (
             <AetherIcon name="clipboard-check" size="sm" className="h-3 w-3 text-accent-300" />

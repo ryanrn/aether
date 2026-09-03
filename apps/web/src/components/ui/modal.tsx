@@ -43,13 +43,13 @@ export function Modal({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[min(440px,calc(100vw-2rem))] rounded-lg border border-base-600 bg-base-850 p-0 text-ink-200",
+        "m-auto w-[min(440px,calc(100vw-2rem))] rounded-lg border border-line-strong bg-base-850 p-0 text-ink-200",
         "shadow-[var(--shadow-pop)] backdrop:bg-black/70 backdrop:backdrop-blur-[2px]",
         "open:animate-rise",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-base-700 px-5 py-4">
+      <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold tracking-wide text-ink-100">
             {title}

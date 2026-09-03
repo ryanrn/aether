@@ -181,7 +181,7 @@ export function ServerRail({
       <nav
         aria-label="Servidores"
         className={cn(
-          "flex w-16 shrink-0 flex-col items-center gap-3 border-r border-base-800 bg-base-900 py-3",
+          "flex w-16 shrink-0 flex-col items-center gap-3 border-r border-line bg-base-900 py-3",
           /*
             No CELULAR esta trilha nao e uma coluna, e a metade de tras de uma
             gaveta: `fixed` a tira do fluxo, e ai o conteudo ocupa a tela
@@ -341,7 +341,7 @@ export function ServerRail({
           </Link>
         ) : null}
 
-        <span className="h-px w-8 bg-base-700" />
+        <span className="h-px w-8 bg-line" />
 
         <DndContext
           sensors={sensores}
@@ -364,7 +364,7 @@ export function ServerRail({
         </DndContext>
 
         {servers.length > 0 ? (
-          <span className="h-px w-8 bg-base-700" />
+          <span className="h-px w-8 bg-line" />
         ) : null}
 
         <button

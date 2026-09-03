@@ -20,7 +20,7 @@ export function WelcomeCard({ displayName }: { displayName: string }) {
   return (
     <>
       <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-[440px] animate-rise rounded-xl border border-base-700 bg-base-900 p-7">
+        <div className="w-full max-w-[440px] animate-rise rounded-xl border border-line bg-base-900 p-7">
           <div
             aria-hidden
             className="mb-5 h-px w-16"
@@ -61,7 +61,7 @@ export function WelcomeCard({ displayName }: { displayName: string }) {
             <button
               type="button"
               onClick={() => setModal("join")}
-              className="flex items-center gap-3 rounded-lg border border-base-700 px-4 py-3 text-left transition-colors hover:bg-base-850"
+              className="flex items-center gap-3 rounded-lg border border-line px-4 py-3 text-left transition-colors hover:bg-base-850"
             >
               <AetherIcon
                 name="ticket"

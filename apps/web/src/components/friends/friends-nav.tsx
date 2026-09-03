@@ -37,7 +37,7 @@ export function FriendsNav({
        * ha outro caminho ate ela. O trilho mantem os dois destinos alcancaveis
        * em 60px em vez de 244px — o rotulo e o cabecalho e que saem.
        */
-      className="flex w-[60px] shrink-0 flex-col border-r border-base-800 bg-base-900 lg:w-[244px]"
+      className="flex w-[60px] shrink-0 flex-col border-r border-line bg-base-900 lg:w-[244px]"
     >
       <header className="flex h-12 shrink-0 items-center px-4">
         <h2 className="hidden truncate text-[14px] font-bold uppercase tracking-[0.04em] text-ink-100 lg:block">

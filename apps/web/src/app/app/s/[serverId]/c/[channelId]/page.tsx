@@ -81,7 +81,7 @@ export default async function ChannelPage({
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-base-800 px-5">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-5">
         <NavToggle />
         <AetherIcon name={iconeCanal} className="h-4 w-4 text-ink-500" />
         <span className="text-[13px] font-medium text-ink-100">
@@ -89,7 +89,7 @@ export default async function ChannelPage({
         </span>
         {channel.topic ? (
           <>
-            <span className="h-4 w-px bg-base-700" />
+            <span className="h-4 w-px bg-line" />
             <span className="truncate text-[12px] text-ink-400">
               {channel.topic}
             </span>

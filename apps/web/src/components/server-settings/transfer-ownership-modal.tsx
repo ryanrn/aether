@@ -60,7 +60,7 @@ export function TransferOwnershipModal({
           desfazer sozinho — so a nova dona pode devolver.
         </p>
 
-        <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-base-700 p-1.5">
+        <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-line p-1.5">
           {members.length === 0 ? (
             <p className="px-2 py-3 text-center text-[13px] text-ink-500">
               Nao ha outro membro para receber a posse.

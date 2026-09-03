@@ -76,7 +76,7 @@ export function InviteButton({
           <p className="text-[13px] text-signal-dnd">{error}</p>
         ) : (
           <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-md border border-base-600 bg-base-900 px-3 py-2.5 font-mono text-sm tracking-[0.2em] text-accent-400">
+            <code className="flex-1 rounded-md border border-line-strong bg-base-900 px-3 py-2.5 font-mono text-sm tracking-[0.2em] text-accent-400">
               {code}
             </code>
             <Button

@@ -94,7 +94,7 @@ export function MemberPanel({
 
   return (
     <>
-      <aside className="hidden w-[200px] shrink-0 flex-col border-l border-base-800 bg-base-900 lg:flex">
+      <aside className="hidden w-[200px] shrink-0 flex-col border-l border-line bg-base-900 lg:flex">
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {naChamada.length > 0 ? (
             <section className="mb-4">

@@ -168,7 +168,7 @@ export function JogosTab({
       {carregando ? (
         <p className="text-xs text-ink-500">Carregando...</p>
       ) : fila.length === 0 ? (
-        <p className="rounded-md border border-base-800 bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
+        <p className="rounded-md border border-line bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
           Nada aqui.
         </p>
       ) : (
@@ -176,7 +176,7 @@ export function JogosTab({
           {fila.map((jogo) => (
             <li
               key={jogo.id}
-              className="flex flex-col gap-2 rounded-md border border-base-800 bg-base-850/60 p-3"
+              className="flex flex-col gap-2 rounded-md border border-line bg-base-850/60 p-3"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <code className="min-w-0 truncate font-mono text-[11px] text-ink-400">

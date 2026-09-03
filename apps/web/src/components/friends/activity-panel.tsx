@@ -38,7 +38,7 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
        * moldura: numa janela de 900px sobravam 328px para a lista, e o campo
        * de adicionar amigo ficava com 177px. Nada aqui se perde ao sumir.
        */
-      className="hidden w-[260px] shrink-0 flex-col border-l border-base-800 bg-base-900 xl:flex"
+      className="hidden w-[260px] shrink-0 flex-col border-l border-line bg-base-900 xl:flex"
     >
       <h2 className="shrink-0 px-4 pb-3 pt-4 text-[14px] font-bold text-ink-100">
         Ativo agora
@@ -46,7 +46,7 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {jogando.length === 0 ? (
-          <p className="rounded-[10px] border border-dashed border-base-800 px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
+          <p className="rounded-[10px] border border-dashed border-line px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
             Quando alguem da sua lista abrir um jogo ou puser uma musica, aparece aqui.
           </p>
         ) : (
@@ -80,7 +80,7 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   if (!jogo?.game && !musica) return null;
 
   return (
-    <article className="mb-3 rounded-[10px] border border-base-800 bg-base-850 p-3.5">
+    <article className="mb-3 rounded-[10px] border border-line bg-base-850 p-3.5">
       <header className="flex items-center gap-2.5">
         <Avatar
           userId={amigo.user.id}
@@ -106,13 +106,13 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
       </header>
 
       {musica ? (
-        <div className="mt-3 rounded-lg border border-base-800 bg-base-950 p-2.5">
+        <div className="mt-3 rounded-lg border border-line bg-base-950 p-2.5">
           <MusicActivityRow musica={musica} size="lg" />
         </div>
       ) : null}
 
       {jogo?.game ? (
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-base-800 bg-base-950 p-2.5">
+        <div className="mt-3 flex items-center gap-3 rounded-lg border border-line bg-base-950 p-2.5">
           <GameArt
             cover={jogo.cover}
             icon={jogo.icon}

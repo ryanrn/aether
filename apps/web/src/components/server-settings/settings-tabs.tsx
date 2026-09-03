@@ -53,7 +53,7 @@ export function SettingsTabs({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex gap-1 border-b border-base-800">
+      <div className="flex gap-1 border-b border-line">
         {tabs
           .filter((tab) => tab.enabled)
           .map((tab) => (

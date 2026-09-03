@@ -52,7 +52,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   if (estado === "invalido") {
     return (
-      <div className="rounded-md border border-base-700 bg-base-900 p-4">
+      <div className="rounded-md border border-line bg-base-900 p-4">
         <p className="text-[13px] font-medium text-ink-100">
           Este link nao vale mais.
         </p>
@@ -72,7 +72,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   if (pronto) {
     return (
-      <div className="rounded-md border border-base-700 bg-base-900 p-4">
+      <div className="rounded-md border border-line bg-base-900 p-4">
         <p className="text-[13px] font-medium text-ink-100">Senha alterada.</p>
         <p className="mt-2 text-[12px] leading-relaxed text-ink-400">
           Por seguranca, todas as sessoes abertas dessa conta foram encerradas —

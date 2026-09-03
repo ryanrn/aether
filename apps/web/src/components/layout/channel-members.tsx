@@ -33,7 +33,7 @@ export function ChannelMembers({
   >(null);
 
   return (
-    <ul className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-base-800 pl-2">
+    <ul className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-line pl-2">
       {states.map((state) => {
         const muted = state.selfMuted || state.serverMuted;
         const deafened = state.selfDeafened || state.serverDeafened;

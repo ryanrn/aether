@@ -83,8 +83,8 @@ export function CodecDaTela() {
                 "flex items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors",
                 ativo
                   ? "border-accent-600/60 bg-accent-600/10"
-                  : "border-base-700 bg-base-900 hover:border-base-600",
-                !disponivel && "cursor-not-allowed opacity-45 hover:border-base-700",
+                  : "border-line bg-base-900 hover:border-line-strong",
+                !disponivel && "cursor-not-allowed opacity-45 hover:border-line",
               )}
             >
               <span
@@ -92,7 +92,7 @@ export function CodecDaTela() {
                   "mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border",
                   ativo
                     ? "border-accent-500 bg-accent-500"
-                    : "border-base-600",
+                    : "border-line-strong",
                 )}
               >
                 {ativo ? (
@@ -114,7 +114,7 @@ export function CodecDaTela() {
                     dizer isso, a pessoa escolheria e a transmissao falharia.
                   */}
                   {!disponivel ? (
-                    <span className="rounded-full border border-base-600 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-500">
+                    <span className="rounded-full border border-line-strong px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-500">
                       seu navegador nao codifica
                     </span>
                   ) : null}
@@ -166,7 +166,7 @@ export function TratamentoDoMicrofone() {
   if (!tratamento) return null;
 
   return (
-    <div className="border-t border-base-800 pt-5">
+    <div className="border-t border-line pt-5">
       <h4 className="text-[13px] font-medium text-ink-100">
         Tratamento do microfone
       </h4>
@@ -202,7 +202,7 @@ export function TratamentoDoMicrofone() {
         do navegador, esta baixa um modelo e roda a cada 10ms. Juntas, pareceria
         que custam a mesma coisa.
       */}
-      <div className="mt-4 border-t border-base-800 pt-4">
+      <div className="mt-4 border-t border-line pt-4">
         <Chave
           ligada={tratamento.rnnoise}
           onChange={() => alternar("rnnoise")}

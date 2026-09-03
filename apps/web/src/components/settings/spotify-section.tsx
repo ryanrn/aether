@@ -105,7 +105,7 @@ export function SpotifySection() {
 
   if (erro) {
     return (
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         {cabecalho}
         <p className="mt-2 text-[12px] text-signal-dnd">
           Nao consegui consultar o estado do Spotify ({erro}).
@@ -115,7 +115,7 @@ export function SpotifySection() {
   }
   if (!estado) {
     return (
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         {cabecalho}
         <p className="mt-2 text-[12px] text-ink-500">Carregando…</p>
       </div>
@@ -123,7 +123,7 @@ export function SpotifySection() {
   }
   if (!estado.disponivel) {
     return (
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         {cabecalho}
         <p className="mt-2 text-[12px] text-ink-500">
           A integracao com o Spotify nao esta configurada neste servidor.
@@ -155,7 +155,7 @@ export function SpotifySection() {
   }
 
   return (
-    <div className="border-t border-base-800 pt-5">
+    <div className="border-t border-line pt-5">
       {cabecalho}
 
       {!conta ? (
@@ -163,7 +163,7 @@ export function SpotifySection() {
           <button
             type="button"
             onClick={conectar}
-            className="inline-flex items-center gap-2 rounded-md border border-base-600 px-3 py-1.5 text-[12px] text-ink-100 transition-colors hover:bg-base-800"
+            className="inline-flex items-center gap-2 rounded-md border border-line-strong px-3 py-1.5 text-[12px] text-ink-100 transition-colors hover:bg-base-800"
           >
             {ICONE_SPOTIFY}
             Conectar Spotify
@@ -174,7 +174,7 @@ export function SpotifySection() {
           </p>
         </div>
       ) : (
-        <div className="mt-3 rounded-lg border border-base-700 bg-base-900 p-3">
+        <div className="mt-3 rounded-lg border border-line bg-base-900 p-3">
           <div className="flex items-center gap-2.5">
             {ICONE_SPOTIFY}
             <div className="min-w-0 flex-1">

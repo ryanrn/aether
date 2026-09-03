@@ -36,7 +36,7 @@ export default async function InvitePage({
 function InviteError({ message }: { message: string }) {
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
-      <div className="w-full max-w-[380px] rounded-lg border border-base-700 bg-base-850 p-6 text-center">
+      <div className="w-full max-w-[380px] rounded-lg border border-line bg-base-850 p-6 text-center">
         <h1 className="text-sm font-semibold text-ink-100">Convite indisponivel</h1>
         <p className="mt-2 text-[13px] text-ink-400">{message}</p>
         <Link

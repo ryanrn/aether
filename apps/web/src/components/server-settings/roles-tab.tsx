@@ -54,7 +54,7 @@ export function RolesTab({
   return (
     <section className="grid gap-6 md:grid-cols-[220px_1fr]">
       <div className="flex flex-col gap-2">
-        <div className="flex flex-col gap-0.5 rounded-md border border-base-700 bg-base-900 p-1">
+        <div className="flex flex-col gap-0.5 rounded-md border border-line bg-base-900 p-1">
           {roles.map((role) => (
             <button
               key={role.id}
@@ -118,7 +118,7 @@ function CreateRoleButton({ serverId }: { serverId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-base-700 bg-base-900 p-2">
+    <div className="flex flex-col gap-2 rounded-md border border-line bg-base-900 p-2">
       <Input
         value={name}
         onChange={(event) => setName(event.target.value)}
@@ -200,7 +200,7 @@ function RoleEditor({
   return (
     <div className="flex flex-col gap-5">
       {!editable ? (
-        <p className="rounded-md border border-base-700 bg-base-900 px-3 py-2.5 text-[13px] text-ink-400">
+        <p className="rounded-md border border-line bg-base-900 px-3 py-2.5 text-[13px] text-ink-400">
           {role.isOwner
             ? "O cargo do dono nao pode ser editado por ninguem."
             : "Este cargo esta acima do seu na hierarquia — voce so pode visualizar."}
@@ -229,7 +229,7 @@ function RoleEditor({
                 setColor(event.target.value);
                 setSaved(false);
               }}
-              className="h-10 w-12 cursor-pointer rounded-md border border-base-600 bg-base-900 disabled:cursor-not-allowed"
+              className="h-10 w-12 cursor-pointer rounded-md border border-line-strong bg-base-900 disabled:cursor-not-allowed"
             />
             <span className="font-mono text-[12px] text-ink-400">{color}</span>
           </div>
@@ -241,12 +241,12 @@ function RoleEditor({
         {[...grouped.entries()].map(([group, keys]) => (
           <div
             key={group}
-            className="rounded-md border border-base-700 bg-base-900"
+            className="rounded-md border border-line bg-base-900"
           >
-            <p className="border-b border-base-800 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
+            <p className="border-b border-line px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
               {GROUP_LABEL[group] ?? group}
             </p>
-            <div className="flex flex-col divide-y divide-base-800">
+            <div className="flex flex-col divide-y divide-line">
               {keys.map((key) => {
                 const meta = PERMISSION_METADATA[key];
                 const viewerHas = viewerCan(viewer, key);

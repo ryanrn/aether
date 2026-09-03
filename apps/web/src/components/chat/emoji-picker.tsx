@@ -127,7 +127,7 @@ export function EmojiPicker({
     <div
       ref={caixaRef}
       style={{ left: posicao.x, top: posicao.y }}
-      className="fixed z-[70] overflow-hidden rounded-lg border border-base-700 shadow-xl"
+      className="fixed z-[70] overflow-hidden rounded-lg border border-line shadow-xl"
     >
       {/* O `emoji-mart` monta aqui dentro. */}
       <div ref={hostRef} />

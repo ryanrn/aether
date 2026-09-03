@@ -49,7 +49,7 @@ export function AnexosPendentes({
   if (anexos.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-2 border-b border-base-800 px-3 pb-2.5 pt-1">
+    <div className="flex flex-wrap gap-2 border-b border-line px-3 pb-2.5 pt-1">
       {anexos.map((anexo) => (
         <div
           key={anexo.chaveLocal}
@@ -57,7 +57,7 @@ export function AnexosPendentes({
             "group/anexo relative flex items-center gap-2 rounded-md border bg-base-950 py-1.5 pl-1.5 pr-2",
             anexo.estado === "erro"
               ? "border-signal-dnd/50"
-              : "border-base-700",
+              : "border-line",
           )}
         >
           {anexo.previa ? (
@@ -97,7 +97,7 @@ export function AnexosPendentes({
             type="button"
             onClick={() => onRemover(anexo.chaveLocal)}
             aria-label={`Remover ${anexo.nome}`}
-            className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-base-700 bg-base-800 text-ink-400 opacity-0 transition-opacity hover:text-ink-100 group-hover/anexo:opacity-100 focus:opacity-100"
+            className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-line bg-base-800 text-ink-400 opacity-0 transition-opacity hover:text-ink-100 group-hover/anexo:opacity-100 focus:opacity-100"
           >
             <AetherIcon name="x" className="h-2.5 w-2.5" strokeWidth={3} />
           </button>
@@ -127,7 +127,7 @@ export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
             href={anexo.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="block overflow-hidden rounded-md border border-base-800 transition-colors hover:border-base-700"
+            className="block overflow-hidden rounded-md border border-line transition-colors hover:border-line"
             /**
              * O espaco e reservado ANTES de a imagem chegar, com as dimensoes
              * que o servidor guardou. Sem isso o chat pula a cada imagem que
@@ -162,7 +162,7 @@ export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
              * sorteado, e sem isto a pessoa baixaria `a3f9...bin`.
              */
             download={anexo.nome}
-            className="flex max-w-[320px] items-center gap-2.5 rounded-md border border-base-700 bg-base-900 px-3 py-2 transition-colors hover:border-base-600"
+            className="flex max-w-[320px] items-center gap-2.5 rounded-md border border-line bg-base-900 px-3 py-2 transition-colors hover:border-line-strong"
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-base-850 text-ink-400">
               <AetherIcon name="file-text" className="h-4 w-4" />

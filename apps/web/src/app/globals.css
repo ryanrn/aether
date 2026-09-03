@@ -26,44 +26,48 @@
  */
 @theme {
   /*
-   * Superficies — grafite frio, profundidade por ELEVACAO (nao por borda).
-   * Releitura do redesign OpenDesign: contraste maior entre trilho / sidebar /
-   * palco / membros do que a versao anterior (Discord-like) dava.
+   * Superficies — OBSIDIANA fria. Profundidade por ELEVACAO; a borda so
+   * confirma o recorte (ver `--color-line` abaixo). Releitura v2 do redesign
+   * OpenDesign: mais fundo, mais contraste entre trilho / workspace / palco.
    *
-   * 950: Fundo ultra-profundo — trilho de servidores, pocos de contraste (#0d0e11).
-   * 900: Sidebars, lista de DMs, painel de usuario (#15161a).
-   * 850: Hover de item, cabecalhos de painel, modais internos (#1b1d22).
-   * 800: Palco principal — chat / voz (#22242a).
-   * 750: Inputs, popovers, cards elevados (#2a2d34).
-   * 700: Bordas primarias, divisores, botoes secundarios (#383a40).
-   * 600: Bordas de destaque, selecao, barras de rolagem (#4e5058).
-   * 500: Elementos de alto relevo e foco sutil (#6d6f78).
+   * 950: `--s-void` — trilho de servidores, pocos de contraste (#08090b).
+   * 900: `--s-sunken` — fundo do palco quando ha lista rolavel (#0d0f12).
+   * 850: `--s-base` — sidebars, lista de DMs, painel do usuario (#111318).
+   * 800: `--s-raised` — palco principal, cabecalhos de painel (#171a20).
+   * 750: `--s-overlay` — cards, inputs, hover de item (#1c2027).
+   * 700: `--s-pop` — popovers, menus, modal interno, tooltips (#232830).
+   * 600 / 500: cinzas claros, so onde uma borda/knob PRECISA ser solida.
    */
-  --color-base-950: #0d0e11;
-  --color-base-900: #15161a;
-  --color-base-850: #1b1d22;
-  --color-base-800: #22242a;
-  --color-base-750: #2a2d34;
-  --color-base-700: #383a40;
-  --color-base-600: #4e5058;
-  --color-base-500: #6d6f78;
+  --color-base-950: #08090b;
+  --color-base-900: #0d0f12;
+  --color-base-850: #111318;
+  --color-base-800: #171a20;
+  --color-base-750: #1c2027;
+  --color-base-700: #232830;
+  --color-base-600: #3a414c;
+  --color-base-500: #565e6a;
 
   /*
-   * Tipografia e Textos — Alto Contraste & Leiturabilidade Discord/Fluxer.
-   *
-   * 100: Titulos e texto ativo de alto contraste (#f2f3f5).
-   * 200: Mensagens, texto de leitura e nomes de canais (#dbdee1).
-   * 300: Textos secundarios, timestamps e icones ativos (#949ba4).
-   * 400: Cabecalhos de categoria e rotulos mudos (#80848e).
-   * 500: Placeholders e dicas sutis (#60646c).
-   * 600: Divisores discretos e texto desativado (#45474f).
+   * BORDAS — hairline de luz. Uma espessura, tres intensidades. Substituem os
+   * `border-base-*` cinzas: `border-line` no lugar de `border-base-800/700`,
+   * `border-line-strong` no lugar de `border-base-600`.
    */
-  --color-ink-100: #f2f3f5;
-  --color-ink-200: #dbdee1;
-  --color-ink-300: #949ba4;
-  --color-ink-400: #80848e;
-  --color-ink-500: #60646c;
-  --color-ink-600: #45474f;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-soft: rgba(255, 255, 255, 0.05);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+
+  /*
+   * Texto — alto contraste no topo, escada previsivel ate o desativado.
+   * 100 titulos · 200 corpo/leitura · 300 secundario/timestamps ·
+   * 400 rotulos de categoria em versalete · 500 placeholders/ornamentos ·
+   * 600 desativado (unico caso de baixo contraste).
+   */
+  --color-ink-100: #f3f4f6;
+  --color-ink-200: #d7dbe1;
+  --color-ink-300: #a4abb5;
+  --color-ink-400: #8b929c;
+  --color-ink-500: #757c87;
+  --color-ink-600: #4b515b;
 
   /*
    * Acento de Identidade: AETHER Blue (#2f88ff) — um azul eletrico, distinto do
@@ -87,8 +91,20 @@
   --color-signal-online: #3ba55d;
   --color-signal-idle: #e0a53a;
   --color-signal-dnd: #e5484d;
-  --color-signal-offline: #80848e;
-  --color-signal-live: #e5484d;
+  --color-signal-offline: #767d88;
+  /* "Ao vivo" / transmissao vira ROXO no redesign v2 (era vermelho). */
+  --color-signal-live: #a970ff;
+  --color-signal-spotify: #1db954;
+
+  /*
+   * Cores de CARGO — categoricas (padrao de servidor). Marcam papel, nunca
+   * competem com o CTA. Dessaturadas e sempre com rotulo ao lado.
+   */
+  --color-role-founder: #e5a94e;
+  --color-role-admin: #e5626b;
+  --color-role-mod: #46b17f;
+  --color-role-vip: #b98cf0;
+  --color-role-member: #8b93a0;
 
   /*
    * ISOLAMENTO — vermelho mais quente que o `dnd`, reservado ao teste de
@@ -103,18 +119,20 @@
   --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
 
   /*
-   * Raios — escala do redesign (5 / 8 / 11 / 15 / 999).
+   * Raios — escala do redesign v2 (6 / 9 / 12 / 16 / 22 / pill).
    */
   --altura-barra: env(titlebar-area-height, 36px);
 
-  --radius-xs: 5px;
-  --radius-sm: 8px;
-  --radius-md: 11px;
-  --radius-lg: 15px;
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --radius-pill: 999px;
 
-  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -4px rgb(0 0 0 / 0.45);
-  --shadow-pop: 0 8px 32px -4px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -6px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 16px 44px -8px rgb(0 0 0 / 0.62), 0 4px 12px -4px rgb(0 0 0 / 0.5);
 
   /*
    * Movimento — 90 / 170 / 260ms com a mesma curva. `prefers-reduced-motion`

@@ -172,7 +172,7 @@ export function ContextMenu({
           width: largura,
           visibility: posicao ? undefined : "hidden",
         }}
-        className="fixed z-[71] animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-pop"
+        className="fixed z-[71] animate-rise rounded-lg border border-line bg-base-900 p-1 shadow-pop"
       >
         {titulo ? (
           <p className="truncate px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">

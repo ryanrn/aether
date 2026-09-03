@@ -347,7 +347,7 @@ export function ControlBar({
        * ele ja nasce com `min-w-0` e `truncate` — em vez de empurrar os
        * botoes para fora, que sao o que se vem clicar aqui.
        */
-      className="absolute bottom-5 left-1/2 z-30 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-700 bg-base-750/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm md:max-w-none"
+      className="absolute bottom-5 left-1/2 z-30 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-base-750/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur-sm md:max-w-none"
     >
       {/*
         O nome abre o CARTAO, nao as configuracoes.
@@ -405,7 +405,7 @@ export function ControlBar({
         abaInicial={voltouDoSpotify ? "atividade" : undefined}
       />
 
-      <div className="mx-0.5 h-6 w-px bg-base-700" />
+      <div className="mx-0.5 h-6 w-px bg-line" />
 
       <div className="flex items-center gap-1">
         <div className="relative flex items-center">
@@ -449,7 +449,7 @@ export function ControlBar({
                 onClick={() => setMicMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-line bg-base-900 p-1 shadow-xl">
                 <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                   microfone
                 </p>
@@ -475,7 +475,7 @@ export function ControlBar({
                     </button>
                   ))
                 )}
-                <p className="border-t border-base-800 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                <p className="border-t border-line px-2 py-1.5 text-[11px] leading-snug text-ink-600">
                   Os nomes so aparecem depois de voce permitir o microfone uma
                   vez.
                 </p>
@@ -542,7 +542,7 @@ export function ControlBar({
                 onClick={() => setCamMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+              <div className="absolute bottom-11 left-0 z-50 w-72 animate-rise rounded-lg border border-line bg-base-900 p-1 shadow-xl">
                 <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                   camera
                 </p>
@@ -572,7 +572,7 @@ export function ControlBar({
                     </button>
                   ))
                 )}
-                <p className="border-t border-base-800 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                <p className="border-t border-line px-2 py-1.5 text-[11px] leading-snug text-ink-600">
                   Os nomes so aparecem depois de voce permitir a camera uma vez.
                 </p>
               </div>
@@ -638,7 +638,7 @@ export function ControlBar({
                 onClick={() => setPresetOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute bottom-11 left-0 z-50 w-64 animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl">
+              <div className="absolute bottom-11 left-0 z-50 w-64 animate-rise rounded-lg border border-line bg-base-900 p-1 shadow-xl">
                 <p className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                   {localSharing ? "trocar qualidade" : "qualidade"}
                 </p>
@@ -654,7 +654,7 @@ export function ControlBar({
                   isso exigiria recapturar, que e justamente o que evitamos.
                 */}
                 {!localSharing && !noDesktop ? (
-                  <label className="mb-1 flex cursor-pointer items-start gap-2 border-b border-base-800 px-2 pb-2 text-[12px] text-ink-200">
+                  <label className="mb-1 flex cursor-pointer items-start gap-2 border-b border-line px-2 pb-2 text-[12px] text-ink-200">
                     <input
                       type="checkbox"
                       checked={shareAudio}
@@ -734,7 +734,7 @@ export function ControlBar({
 
         {selfVoice ? (
           <>
-            <span className="mx-0.5 h-6 w-px bg-base-700" />
+            <span className="mx-0.5 h-6 w-px bg-line" />
 
             <div className="relative flex items-center">
               <ControlToggle
@@ -761,12 +761,12 @@ export function ControlBar({
                     onClick={() => setNoiseOpen(false)}
                     className="fixed inset-0 z-40 cursor-default"
                   />
-                  <div className="absolute bottom-11 left-1/2 z-50 w-[320px] -translate-x-1/2 animate-rise rounded-lg border border-base-700 bg-base-750 p-4 shadow-[var(--shadow-pop)]">
+                  <div className="absolute bottom-11 left-1/2 z-50 w-[320px] -translate-x-1/2 animate-rise rounded-lg border border-line bg-base-750 p-4 shadow-[var(--shadow-pop)]">
                     <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                       Tratamento do microfone
                     </p>
 
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-base-700 bg-base-850 p-3">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-line bg-base-850 p-3">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-base-950 text-ink-200">
                         <AetherIcon name="sparkle" size="sm" />
                       </span>
@@ -794,7 +794,7 @@ export function ControlBar({
                       isso no meio da call sem derrubar ninguem. `reaplicandoNativo`
                       trava as tres durante a troca.
                     */}
-                    <div className="mt-2 space-y-0.5 rounded-md border border-base-700 bg-base-850 p-1">
+                    <div className="mt-2 space-y-0.5 rounded-md border border-line bg-base-850 p-1">
                       {tratamento
                         ? (
                             [
@@ -831,7 +831,7 @@ export function ControlBar({
                       fala.
                     </p>
 
-                    <div className="mt-3 flex items-center gap-2 border-t border-base-700 pt-3">
+                    <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -842,7 +842,7 @@ export function ControlBar({
                           "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors",
                           micTest
                             ? "border-signal-isolate/40 bg-signal-isolate/15 text-signal-isolate-ink"
-                            : "border-base-700 bg-base-850 text-ink-200 hover:bg-base-800",
+                            : "border-line bg-base-850 text-ink-200 hover:bg-base-800",
                         )}
                       >
                         <AetherIcon name="headset-monitor" size="sm" />
@@ -857,7 +857,7 @@ export function ControlBar({
               ) : null}
             </div>
 
-            <span className="mx-0.5 h-6 w-px bg-base-700" />
+            <span className="mx-0.5 h-6 w-px bg-line" />
 
             <ControlToggle
               active={false}
@@ -962,7 +962,7 @@ function ControlToggle({
             ? "border-signal-dnd/35 bg-signal-dnd/12 text-signal-dnd hover:bg-signal-dnd/20"
             : active
               ? "border-accent-600/60 bg-accent-500/15 text-accent-300 shadow-[inset_0_0_0_1px_var(--color-accent-600)]"
-              : "border-base-700 bg-base-850 text-ink-200 hover:bg-base-800 hover:text-ink-100",
+              : "border-line bg-base-850 text-ink-200 hover:bg-base-800 hover:text-ink-100",
         disabled && "cursor-not-allowed opacity-40",
       )}
     >

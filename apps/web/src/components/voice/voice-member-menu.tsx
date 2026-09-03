@@ -181,7 +181,7 @@ export function VoiceMemberMenu({
       <div
         ref={menuRef}
         style={{ left: position.x, top: position.y, width: MENU_WIDTH }}
-        className="fixed z-[61] animate-rise rounded-lg border border-base-700 bg-base-900 p-1 shadow-xl"
+        className="fixed z-[61] animate-rise rounded-lg border border-line bg-base-900 p-1 shadow-xl"
       >
         <p className="truncate px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
           {participant.user.displayName}
@@ -206,7 +206,7 @@ export function VoiceMemberMenu({
           <div
             className={cn(
               "px-2 pb-2.5 pt-1",
-              (canMute || canDeafen || canMove) && "border-b border-base-800",
+              (canMute || canDeafen || canMove) && "border-b border-line",
             )}
           >
             <div className="flex items-center justify-between gap-2">
@@ -268,7 +268,7 @@ export function VoiceMemberMenu({
             </button>
 
             {moving ? (
-              <div className="max-h-40 overflow-y-auto border-t border-base-800 pt-1">
+              <div className="max-h-40 overflow-y-auto border-t border-line pt-1">
                 {targets.map((channel) => (
                   <button
                     key={channel.id}
@@ -285,7 +285,7 @@ export function VoiceMemberMenu({
         ) : null}
 
         {error ? (
-          <p className="border-t border-base-800 px-2 py-1.5 text-[11px] leading-snug text-signal-dnd">
+          <p className="border-t border-line px-2 py-1.5 text-[11px] leading-snug text-signal-dnd">
             {error}
           </p>
         ) : null}

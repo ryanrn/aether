@@ -54,7 +54,7 @@ export function EquipePanel() {
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-base-800 pb-px">
+      <div className="flex gap-1 border-b border-line pb-px">
         {ABAS.map((item) => {
           const nomeIcone = item.icone;
           const selected = aba === item.id;

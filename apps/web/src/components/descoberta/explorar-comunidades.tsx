@@ -61,7 +61,7 @@ export function ExplorarComunidades({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-base-800 px-6 py-5">
+      <header className="shrink-0 border-b border-line px-6 py-5">
         <div className="flex items-center gap-2.5">
           <AetherIcon name="compass" className="h-5 w-5 text-accent-400" />
           <h1 className="text-[17px] font-semibold text-ink-100">
@@ -103,7 +103,7 @@ export function ExplorarComunidades({
               placeholder="Buscar comunidades"
               maxLength={60}
               aria-label="Buscar comunidades"
-              className="h-9 w-full rounded-md border border-base-800 bg-base-950 pl-8 pr-3 text-[13px] text-ink-100 placeholder:text-ink-600 focus:border-accent-500 focus:outline-none"
+              className="h-9 w-full rounded-md border border-line bg-base-950 pl-8 pr-3 text-[13px] text-ink-100 placeholder:text-ink-600 focus:border-accent-500 focus:outline-none"
             />
           </div>
         </div>
@@ -117,7 +117,7 @@ export function ExplorarComunidades({
         ) : null}
 
         {comunidades.length === 0 && !carregando ? (
-          <div className="rounded-lg border border-base-800 bg-base-900 px-4 py-10 text-center">
+          <div className="rounded-lg border border-line bg-base-900 px-4 py-10 text-center">
             <p className="text-[13px] text-ink-400">
               {busca || categoria
                 ? "Nada encontrado com esse filtro."

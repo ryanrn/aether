@@ -49,7 +49,7 @@ export function ResgatarChave({
   return (
     <div className={cn("w-full", className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-700 bg-base-950 px-3 py-2 focus-within:border-amber-400/50">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-base-950 px-3 py-2 focus-within:border-amber-400/50">
           <AetherIcon
             name="key"
             className="h-3.5 w-3.5 shrink-0 text-ink-500"

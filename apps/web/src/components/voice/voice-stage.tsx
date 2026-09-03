@@ -19,8 +19,11 @@ import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import { startMicLevel, type MicLevelHandle } from "@/lib/voice/mic-level";
 import {
   listMicrophones,
+  listSpeakers,
   readPreferredMicrophone,
+  readPreferredSpeaker,
   savePreferredMicrophone,
+  savePreferredSpeaker,
   type AudioDevice,
 } from "@/lib/voice/devices";
 import { ScreenShareView } from "@/components/voice/screen-share-view";
@@ -116,7 +119,7 @@ export function VoiceStage({
   if (participants.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-        <div className="grid h-16 w-16 place-items-center rounded-lg border border-base-700 bg-base-900">
+        <div className="grid h-16 w-16 place-items-center rounded-lg border border-line bg-base-900">
           <AetherIcon name="voice" size="lg" className="text-ink-500" />
         </div>
         <div className="text-center">
@@ -186,7 +189,13 @@ export function VoiceStage({
           className={cn(
             sharing
               ? "flex gap-2"
-              : "grid gap-4 grid-cols-[repeat(auto-fit,minmax(230px,1fr))]",
+              : /*
+                 `auto-fill` + teto de 300px por coluna: com 1-2 participantes o
+                 card NAO estica para a largura toda (o que, com `aspect-[4/3]`,
+                 gerava um card gigante e barra de rolagem). `justify-center`
+                 centra quando ha poucos; `content-start` cola no topo.
+                */
+                "grid gap-4 grid-cols-[repeat(auto-fill,minmax(200px,300px))] justify-center content-start",
           )}
         >
           {participants.map((participant) => (
@@ -277,7 +286,7 @@ function FaixaDeConexao({
           aria-label="Detalhes da conexao"
           onClick={onAbrirPainel}
           className={cn(
-            "rounded-md border border-base-700 p-1.5 text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-200",
+            "rounded-md border border-line p-1.5 text-ink-400 transition-colors hover:bg-base-800 hover:text-ink-200",
             painelAberto && "bg-base-800 text-ink-200",
           )}
         >
@@ -289,26 +298,37 @@ function FaixaDeConexao({
 }
 
 /**
- * Faixa de ISOLAMENTO — aparece quando o teste de microfone esta ativo.
- * O audio NAO vai para a call: `startMicLevel` abre um stream local proprio,
- * so para desenhar o medidor. Um seletor compacto troca o aparelho na hora
- * (guarda a mesma preferencia que a call e as Configuracoes usam).
+ * Faixa de ISOLAMENTO — teste de microfone ativo.
+ *
+ * O audio NAO vai para a call — `startMicLevel({ monitor: true })` abre um
+ * stream local proprio e TOCA de volta para a pessoa se ouvir. Nada e
+ * transmitido nem gravado. Seletores compactos trocam o microfone (entrada) e
+ * o fone (saida) na hora, guardando a MESMA preferencia da call e das
+ * Configuracoes.
  */
 function MonitorStrip() {
   const micTest = useMicTest();
   const setMicTest = useRealtimeStore((state) => state.setMicTest);
   const [level, setLevel] = useState(0);
-  const [dispositivos, setDispositivos] = useState<AudioDevice[]>([]);
+  const [mics, setMics] = useState<AudioDevice[]>([]);
+  const [saidas, setSaidas] = useState<AudioDevice[]>([]);
   const [micId, setMicId] = useState<string | null>(null);
+  const [saidaId, setSaidaId] = useState<string | null>(null);
   const handleRef = useRef<MicLevelHandle | null>(null);
 
-  useEffect(() => setMicId(readPreferredMicrophone()), []);
+  useEffect(() => {
+    setMicId(readPreferredMicrophone());
+    setSaidaId(readPreferredSpeaker());
+  }, []);
 
   useEffect(() => {
     if (!micTest) return;
-    void listMicrophones().then(setDispositivos);
+    void listMicrophones().then(setMics);
+    void listSpeakers().then(setSaidas);
   }, [micTest]);
 
+  // (re)abre o monitoramento quando liga ou quando troca o MICROFONE. Trocar
+  // so o fone nao reabre nada — vai por `setOutput` abaixo.
   useEffect(() => {
     if (!micTest) return;
     let cancelado = false;
@@ -318,13 +338,15 @@ function MonitorStrip() {
       try {
         const handle = await startMicLevel({
           deviceId: micId ?? undefined,
+          monitor: true,
+          outputDeviceId: readPreferredSpeaker(),
           onLevel: (l) => !cancelado && setLevel(l),
         });
         if (cancelado) handle.stop();
         else {
           handleRef.current = handle;
-          // Depois da permissao os rotulos aparecem — reconsulta.
-          void listMicrophones().then((d) => !cancelado && setDispositivos(d));
+          void listMicrophones().then((d) => !cancelado && setMics(d));
+          void listSpeakers().then((d) => !cancelado && setSaidas(d));
         }
       } catch {
         if (!cancelado) setMicTest(false);
@@ -344,31 +366,60 @@ function MonitorStrip() {
     setMicId(deviceId);
     savePreferredMicrophone(deviceId);
   }
+  function trocarSaida(deviceId: string) {
+    setSaidaId(deviceId);
+    savePreferredSpeaker(deviceId);
+    void handleRef.current?.setOutput(deviceId);
+  }
 
   return (
     <div
       data-od-id="monitor-strip"
       className="mx-4 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-signal-isolate/35 bg-signal-isolate/[0.12] px-3.5 py-2.5"
     >
-      <AetherIcon name="headset-off" size="lg" className="text-signal-isolate" />
+      <AetherIcon name="headset-monitor" size="lg" className="text-signal-isolate" />
       <span className="min-w-0 flex-1 leading-tight">
         <b className="block text-[12.5px] font-semibold text-signal-isolate-ink">
           Ouvindo a propria voz — modo teste
         </b>
         <span className="block text-[11px] text-ink-400">
-          Seu microfone esta sendo monitorado so para voce. Ninguem na call recebe este audio.
+          Voce se ouve so para ajustar o microfone. Ninguem na call recebe este audio. Use fones para evitar eco.
         </span>
       </span>
 
-      {dispositivos.length > 1 ? (
-        <label className="flex items-center gap-1.5 text-[11px] text-ink-400">
+      {mics.length > 1 ? (
+        <label
+          className="flex items-center gap-1.5 text-[11px] text-ink-400"
+          title="Microfone"
+        >
           <AetherIcon name="mic" size="sm" className="shrink-0 text-ink-500" />
           <select
             value={micId ?? ""}
             onChange={(e) => trocarMic(e.target.value)}
-            className="max-w-[180px] truncate rounded-sm border border-base-700 bg-base-900 px-1.5 py-1 text-[11px] text-ink-200"
+            className="max-w-[150px] truncate rounded-sm border border-line bg-base-900 px-1.5 py-1 text-[11px] text-ink-200"
           >
-            {dispositivos.map((d) => (
+            {mics.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {saidas.length > 1 ? (
+        <label
+          className="flex items-center gap-1.5 text-[11px] text-ink-400"
+          title="Fone / alto-falante"
+        >
+          <AetherIcon name="headset" size="sm" className="shrink-0 text-ink-500" />
+          <select
+            value={saidaId ?? ""}
+            onChange={(e) => trocarSaida(e.target.value)}
+            className="max-w-[150px] truncate rounded-sm border border-line bg-base-900 px-1.5 py-1 text-[11px] text-ink-200"
+          >
+            <option value="">Padrao do sistema</option>
+            {saidas.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
                 {d.label}
               </option>
@@ -467,7 +518,7 @@ function ParticipantCard({
                 "border-accent-500/55 bg-accent-500/[0.06] speak-glow",
                 !temNivel && "speak-glow-auto",
               )
-            : "border-base-700",
+            : "border-line",
       )}
     >
       {menuAnchor ? (

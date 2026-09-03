@@ -71,7 +71,7 @@ export function VoiceTab() {
             Nenhum microfone encontrado. Conecte um e abra esta tela de novo.
           </p>
         ) : (
-          <div className="flex flex-col gap-1 rounded-md border border-base-700 bg-base-900 p-1">
+          <div className="flex flex-col gap-1 rounded-md border border-line bg-base-900 p-1">
             {devices.map((device) => (
               <button
                 key={device.deviceId}
@@ -104,7 +104,7 @@ export function VoiceTab() {
               : "Nenhum alto-falante encontrado."}
           </p>
         ) : (
-          <div className="flex flex-col gap-1 rounded-md border border-base-700 bg-base-900 p-1">
+          <div className="flex flex-col gap-1 rounded-md border border-line bg-base-900 p-1">
             {speakers.map((device) => (
               <button
                 key={device.deviceId}
@@ -131,7 +131,7 @@ export function VoiceTab() {
         onDeviceListRefreshed={setDevices}
       />
 
-      <div className="rounded-md border border-base-700 bg-base-900 p-3">
+      <div className="rounded-md border border-line bg-base-900 p-3">
         <p className="text-[11px] uppercase tracking-[0.1em] text-ink-500">
           Ainda nao disponivel
         </p>
@@ -149,7 +149,7 @@ export function VoiceTab() {
         tres chaves de microfone; quem ia desligar a supressao de ruido
         esbarrava em AV1.
       */}
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
           Microfone — avancado
         </h3>
@@ -158,7 +158,7 @@ export function VoiceTab() {
         </div>
       </div>
 
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         <div className="flex items-center gap-2">
           <AetherIcon name="screen-share" size="sm" className="text-ink-500" />
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">

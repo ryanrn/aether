@@ -64,7 +64,7 @@ export function ModalDeAssinatura({
       <div
         className={cn(
           "relative flex flex-col w-full max-w-[620px] max-h-[90vh] overflow-hidden rounded-xl",
-          "border border-base-700 bg-base-900 shadow-pop text-ink-100",
+          "border border-line bg-base-900 shadow-pop text-ink-100",
         )}
         role="dialog"
         aria-modal="true"
@@ -102,7 +102,7 @@ export function ModalDeAssinatura({
           {/* Seletores: Para mim / Como presente & Moeda */}
           <div className="flex flex-col items-center gap-3">
             {/* Destinatário */}
-            <div className="inline-flex rounded-md p-1 bg-base-950 border border-base-800">
+            <div className="inline-flex rounded-md p-1 bg-base-950 border border-line">
               <button
                 type="button"
                 onClick={() => setRecipient("self")}
@@ -131,7 +131,7 @@ export function ModalDeAssinatura({
             </div>
 
             {/* Alternador de Moeda */}
-            <div className="inline-flex rounded-md p-1 bg-base-950 border border-base-800">
+            <div className="inline-flex rounded-md p-1 bg-base-950 border border-line">
               <button
                 type="button"
                 onClick={() => setCurrency("BRL")}
@@ -161,7 +161,7 @@ export function ModalDeAssinatura({
 
           {/* Card de Informações de Pagamento (BRL) */}
           {currency === "BRL" && (
-            <div className="rounded-lg border border-base-750 bg-base-950/60 p-4 text-[12px] text-ink-300 flex flex-col gap-2">
+            <div className="rounded-lg border border-line bg-base-950/60 p-4 text-[12px] text-ink-300 flex flex-col gap-2">
               <div className="flex items-center gap-2 font-semibold text-ink-100">
                 <AetherIcon
                   name="shield-check"
@@ -191,7 +191,7 @@ export function ModalDeAssinatura({
             <div
               className={cn(
                 "relative flex flex-col justify-between p-5 rounded-xl border transition-all duration-150",
-                "bg-base-850 border-base-700 hover:border-base-600",
+                "bg-base-850 border-line hover:border-line-strong",
               )}
             >
               <div className="flex flex-col items-center text-center gap-1.5 mb-5">
@@ -261,7 +261,7 @@ export function ModalDeAssinatura({
           </div>
 
           {/* Termos e Rodapé Legal */}
-          <div className="text-[10.5px] leading-relaxed text-ink-500 text-center border-t border-base-800 pt-4 flex flex-col gap-1.5">
+          <div className="text-[10.5px] leading-relaxed text-ink-500 text-center border-t border-line pt-4 flex flex-col gap-1.5">
             <p>
               Ao comprar, você concorda com nossos{" "}
               <a href="#" className="text-accent-400 hover:underline">
@@ -292,7 +292,7 @@ export function ModalDeAssinatura({
           </div>
 
           {/* Footer de Chamada para Ação Final */}
-          <div className="flex flex-col items-center gap-3 pt-4 border-t border-base-800 text-center">
+          <div className="flex flex-col items-center gap-3 pt-4 border-t border-line text-center">
             <h4 className="text-sm font-bold text-ink-100">
               Pronto para fazer um upgrade?
             </h4>

@@ -125,7 +125,7 @@ export function SelfUserCard({
       <div
         ref={cardRef}
         style={{ left: position.x, top: position.y, width: CARD_WIDTH }}
-        className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-base-700 bg-base-800 shadow-[var(--shadow-pop)]"
+        className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-line bg-base-800 shadow-[var(--shadow-pop)]"
       >
         <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />
 
@@ -152,7 +152,7 @@ export function SelfUserCard({
             ocuparia espaco para dizer nada.
           */}
           {channel ? (
-            <div className="mt-3 rounded-md border border-base-700 bg-base-900 p-2.5">
+            <div className="mt-3 rounded-md border border-line bg-base-900 p-2.5">
               <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-500">
                 em voz
               </p>
@@ -207,7 +207,7 @@ export function SelfUserCard({
             </div>
           ) : null}
 
-          <div className="mt-3 border-t border-base-700 pt-2">
+          <div className="mt-3 border-t border-line pt-2">
             {OPCOES.map((opcao) => {
               const ativo = status === opcao.status;
               return (
@@ -243,7 +243,7 @@ export function SelfUserCard({
               onClose();
               onOpenSettings();
             }}
-            className="mt-2 flex w-full items-center gap-2.5 rounded-md border-t border-base-700 px-2 pb-1 pt-2.5 text-left text-[13px] text-ink-300 transition-colors hover:text-ink-100"
+            className="mt-2 flex w-full items-center gap-2.5 rounded-md border-t border-line px-2 pb-1 pt-2.5 text-left text-[13px] text-ink-300 transition-colors hover:text-ink-100"
           >
             <AetherIcon name="settings" className="h-3.5 w-3.5 shrink-0" />
             Configuracoes

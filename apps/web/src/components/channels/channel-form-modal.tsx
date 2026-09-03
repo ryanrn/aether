@@ -197,7 +197,7 @@ export function ChannelFormModal({
                       "flex items-center gap-2 rounded-md border px-3 py-2.5 text-[13px] transition-colors",
                       values.type === value
                         ? "border-accent-600/60 bg-accent-500/8 text-ink-100"
-                        : "border-base-600 text-ink-400 hover:border-base-500 hover:text-ink-200",
+                        : "border-line-strong text-ink-400 hover:border-line-strong hover:text-ink-200",
                     )}
                   >
                     <AetherIcon name={icone} className="h-4 w-4" />
@@ -239,7 +239,7 @@ export function ChannelFormModal({
                   event.target.value === "" ? null : event.target.value,
                 )
               }
-              className="h-10 w-full rounded-md border border-base-600 bg-base-900 px-3 text-sm text-ink-100 transition-colors hover:border-base-500 focus:border-accent-600 focus:outline-none"
+              className="h-10 w-full rounded-md border border-line-strong bg-base-900 px-3 text-sm text-ink-100 transition-colors hover:border-line-strong focus:border-accent-600 focus:outline-none"
             >
               <option value="">Sem categoria</option>
               {categories.map((category) => (
@@ -263,7 +263,7 @@ export function ChannelFormModal({
             </Field>
           ) : null}
 
-          <div className="flex flex-col gap-2 rounded-md border border-base-700 bg-base-900 p-3">
+          <div className="flex flex-col gap-2 rounded-md border border-line bg-base-900 p-3">
             <Toggle
               checked={values.isPrivate}
               onChange={(checked) => set("isPrivate", checked)}
@@ -281,7 +281,7 @@ export function ChannelFormModal({
           {values.isPrivate ? (
             <div className="flex flex-col gap-2">
               <Label>Cargos com acesso</Label>
-              <div className="flex flex-col gap-1 rounded-md border border-base-700 bg-base-900 p-2">
+              <div className="flex flex-col gap-1 rounded-md border border-line bg-base-900 p-2">
                 {roles
                   .filter((role) => !role.isOwner)
                   .map((role) => {

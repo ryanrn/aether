@@ -49,7 +49,7 @@ export function PremiumShowcaseScreen({
   return (
     <div className="relative flex-1 flex flex-col h-full min-h-0 overflow-y-auto bg-base-950 text-ink-100 selection:bg-accent-500/30">
       {/* Top Header / Sub-navigation (Print 3) */}
-      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-base-800 bg-base-900/90 px-6 backdrop-blur-md">
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-line bg-base-900/90 px-6 backdrop-blur-md">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 font-bold tracking-wide text-ink-100">
             <AetherIcon name="crown" className="h-5 w-5 text-accent-400" />
@@ -89,7 +89,7 @@ export function PremiumShowcaseScreen({
           {assinante ? (
             <SeloPlano tier={tierAtual} />
           ) : (
-            <span className="rounded-full border border-base-700 px-2.5 py-1 text-[11px] text-ink-400">
+            <span className="rounded-full border border-line px-2.5 py-1 text-[11px] text-ink-400">
               Assinatura em breve
             </span>
           )}
@@ -101,7 +101,7 @@ export function PremiumShowcaseScreen({
         {/* HERO SECTION (Print 3) */}
         <section
           id="inicio"
-          className="relative mx-4 mt-4 overflow-hidden rounded-2xl border border-base-750 bg-gradient-to-br from-[#2b1b4d] via-[#1a1738] to-[#111214] p-8 md:p-14 shadow-panel"
+          className="relative mx-4 mt-4 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-[#2b1b4d] via-[#1a1738] to-[#111214] p-8 md:p-14 shadow-panel"
         >
           {/* Background Glows & Particles */}
           <div className="pointer-events-none absolute -right-20 -top-20 h-96 w-96 rounded-full bg-accent-500/20 blur-3xl" />
@@ -233,7 +233,7 @@ export function PremiumShowcaseScreen({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
+            <div className="flex flex-col justify-between rounded-xl border border-line bg-base-900 p-5 hover:border-line-strong transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/15 text-accent-400">
                   <AetherIcon name="palette" className="h-5 w-5" />
@@ -253,7 +253,7 @@ export function PremiumShowcaseScreen({
               </div>
             </div>
 
-            <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
+            <div className="flex flex-col justify-between rounded-xl border border-line bg-base-900 p-5 hover:border-line-strong transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/15 text-purple-400">
                   <AetherIcon name="zap" className="h-5 w-5" />
@@ -273,7 +273,7 @@ export function PremiumShowcaseScreen({
               </div>
             </div>
 
-            <div className="flex flex-col justify-between rounded-xl border border-base-750 bg-base-900 p-5 hover:border-base-600 transition-colors">
+            <div className="flex flex-col justify-between rounded-xl border border-line bg-base-900 p-5 hover:border-line-strong transition-colors">
               <div className="flex flex-col gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/15 text-green-400">
                   <AetherIcon name="shield" className="h-5 w-5" />
@@ -310,7 +310,7 @@ export function PremiumShowcaseScreen({
             </p>
 
             {/* Alternador Mensal / Anual */}
-            <div className="mt-2 inline-flex items-center rounded-full bg-base-900 p-1 border border-base-750">
+            <div className="mt-2 inline-flex items-center rounded-full bg-base-900 p-1 border border-line">
               <button
                 type="button"
                 onClick={() => setBillingPeriod("monthly")}
@@ -344,7 +344,7 @@ export function PremiumShowcaseScreen({
           {/* Pricing Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
             {/* PLANO BÁSICO (Print 4) */}
-            <div className="flex flex-col justify-between rounded-2xl border border-base-700 bg-base-900 p-6 md:p-8 hover:border-base-600 transition-all">
+            <div className="flex flex-col justify-between rounded-2xl border border-line bg-base-900 p-6 md:p-8 hover:border-line-strong transition-all">
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-1">
                   <h3 className="text-lg font-black uppercase tracking-wide text-ink-100">
@@ -360,7 +360,7 @@ export function PremiumShowcaseScreen({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 border-t border-base-800 pt-5">
+                <div className="flex flex-col gap-3 border-t border-line pt-5">
                   <div className="flex items-center gap-2.5 text-xs text-ink-200">
                     <AetherIcon
                       name="check"

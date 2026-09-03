@@ -40,7 +40,7 @@ export default function AuthLayout({
           </span>
         </Link>
 
-        <div className="rounded-lg border border-base-700 bg-base-850/90 p-6 shadow-[var(--shadow-panel)] backdrop-blur-sm surface-grain">
+        <div className="rounded-lg border border-line bg-base-850/90 p-6 shadow-[var(--shadow-panel)] backdrop-blur-sm surface-grain">
           {children}
         </div>
 

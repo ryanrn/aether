@@ -70,7 +70,7 @@ export function PlanoTab() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-[12px]">
           <thead>
-            <tr className="border-b border-base-800 text-left">
+            <tr className="border-b border-line text-left">
               <th className="py-2 pr-3 font-medium text-ink-400"> </th>
               {(["FREE", "PLUS", "PRO"] as PlanTier[]).map((t) => (
                 <th
@@ -124,14 +124,14 @@ export function PlanoTab() {
         Mostrar a tabela sem ele daria a entender que os limites ja valem — e
         cobrar por isso seria vender o que nao existe.
       */}
-      <p className="rounded-md border border-base-750 bg-base-900 px-3 py-2.5 text-[11px] leading-relaxed text-ink-400">
+      <p className="rounded-md border border-line bg-base-900 px-3 py-2.5 text-[11px] leading-relaxed text-ink-400">
         <strong className="text-ink-300">Em construção.</strong> Os limites
         acima ainda não são aplicados — todo mundo transmite e envia igual hoje.
         A tabela mostra para onde vai, e o plano ja fica registrado na sua
         conta.
       </p>
 
-      <div className="border-t border-base-800 pt-5">
+      <div className="border-t border-line pt-5">
         <h3 className="text-[13px] font-medium text-ink-100">
           Resgatar uma chave
         </h3>
@@ -170,7 +170,7 @@ function Linha({
   valores: (t: PlanTier) => string;
 }) {
   return (
-    <tr className="border-b border-base-800/60">
+    <tr className="border-b border-line/60">
       <td className="py-2 pr-3 text-ink-400">{rotulo}</td>
       {(["FREE", "PLUS", "PRO"] as PlanTier[]).map((t) => (
         <td

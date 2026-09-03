@@ -34,10 +34,10 @@ export function MembersTab({
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-md border border-base-700">
+      <div className="overflow-hidden rounded-md border border-line">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-base-800 bg-base-900 text-left">
+            <tr className="border-b border-line bg-base-900 text-left">
               <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
                 Membro
               </th>
@@ -47,7 +47,7 @@ export function MembersTab({
               <th className="w-24 px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-base-800">
+          <tbody className="divide-y divide-line">
             {members.map((member) => {
               const isOwnerMember = member.user.id === ownerId;
               const editable =

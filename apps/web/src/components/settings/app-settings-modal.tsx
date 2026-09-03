@@ -102,7 +102,7 @@ export function AppSettingsModal({
           Menu lateral, e nao abas no topo: a lista deve crescer (aparencia,
           atalhos, notificacoes) sem virar uma fileira apertada.
         */}
-        <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-base-800 pr-3">
+        <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-line pr-3">
           {TABS.map((tab) => {
             const nomeIcone = tab.icon;
             const selected = active === tab.id;

@@ -76,14 +76,14 @@ export function ComparisonTable({
   return (
     <div
       className={cn(
-        "w-full overflow-hidden rounded-lg border border-base-700 bg-base-900/70",
+        "w-full overflow-hidden rounded-lg border border-line bg-base-900/70",
         className,
       )}
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[460px] text-left text-[13px] text-ink-200">
           <thead>
-            <tr className="border-b border-base-700 bg-base-850/80 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+            <tr className="border-b border-line bg-base-850/80 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
               <th className="px-4 py-3">Recurso</th>
               {COLUNAS.map((t) => (
                 <th
@@ -103,7 +103,7 @@ export function ComparisonTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-base-800">
+          <tbody className="divide-y divide-line">
             {linhas.map((linha) => (
               <tr
                 key={linha.nome}

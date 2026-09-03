@@ -92,7 +92,7 @@ export function MemberModerationModal({
                     "rounded-md border px-3 py-1.5 text-[12px] transition-colors",
                     duration === option.id
                       ? "border-signal-dnd/50 bg-signal-dnd/10 text-signal-dnd"
-                      : "border-base-700 text-ink-300 hover:bg-base-850",
+                      : "border-line text-ink-300 hover:bg-base-850",
                   )}
                 >
                   {option.label}
@@ -112,7 +112,7 @@ export function MemberModerationModal({
             rows={2}
             maxLength={500}
             placeholder="Fica registrado no log de auditoria"
-            className="resize-none rounded-md border border-base-700 bg-base-950 px-3 py-2 text-[13px] text-ink-200 outline-none transition-colors focus:border-base-600 placeholder:text-ink-600"
+            className="resize-none rounded-md border border-line bg-base-950 px-3 py-2 text-[13px] text-ink-200 outline-none transition-colors focus:border-line-strong placeholder:text-ink-600"
           />
         </label>
 

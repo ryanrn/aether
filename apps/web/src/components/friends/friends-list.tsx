@@ -91,7 +91,7 @@ export function FriendsList({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-base-800 px-5">
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line px-5">
         <NavToggle />
         {/*
           O TITULO SAI no celular. As abas logo ao lado ja dizem onde se esta,
@@ -144,8 +144,8 @@ export function FriendsList({
 
       {formAberto ? <AddFriend inputRef={inputRef} /> : null}
 
-      <div className="shrink-0 border-b border-base-800 px-5 pb-3">
-        <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-base-800 bg-base-850/60 px-3.5 py-2.5">
+      <div className="shrink-0 border-b border-line px-5 pb-3">
+        <div className="mx-auto flex w-full max-w-[960px] items-center gap-2.5 rounded-[6px] border border-line bg-base-850/60 px-3.5 py-2.5">
           <AetherIcon
             name="search"
             className="h-[18px] w-[18px] shrink-0 text-ink-600"
@@ -249,7 +249,7 @@ function Vazio({
           : "Sua lista esta vazia. Peca o nome de usuario de alguem e mande o convite acima.";
 
   return (
-    <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-base-800 px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
+    <p className="mx-auto mt-8 max-w-[560px] rounded-[10px] border border-dashed border-line px-6 py-10 text-center text-[13px] leading-relaxed text-ink-500">
       {texto}
     </p>
   );
@@ -286,7 +286,7 @@ function AddFriend({
   }
 
   return (
-    <div className="mx-auto my-4 w-full max-w-[960px] shrink-0 rounded-[10px] border border-base-800 bg-base-850 px-5 py-4">
+    <div className="mx-auto my-4 w-full max-w-[960px] shrink-0 rounded-[10px] border border-line bg-base-850 px-5 py-4">
       <h2 className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink-100">
         Adicionar amigo
       </h2>
@@ -309,7 +309,7 @@ function AddFriend({
             "outline-none transition-colors duration-150 placeholder:text-ink-600",
             erro
               ? "border-signal-dnd"
-              : "border-base-800 focus:border-accent-500",
+              : "border-line focus:border-accent-500",
           )}
         />
         <button
@@ -562,7 +562,7 @@ function BotaoAcao({
       disabled={pendente}
       onClick={onClick}
       className={cn(
-        "grid h-9 w-9 place-items-center rounded-full border border-base-800 bg-base-850 text-ink-300",
+        "grid h-9 w-9 place-items-center rounded-full border border-line bg-base-850 text-ink-300",
         "transition-colors duration-150 disabled:opacity-40",
         perigo
           ? "hover:bg-signal-dnd hover:text-white"

@@ -79,7 +79,7 @@ export function VitrineSection({ serverId }: { serverId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-base-800 pt-4">
+    <div className="flex flex-col gap-3 border-t border-line pt-4">
       <div className="flex items-baseline justify-between gap-2">
         <h4 className="text-[13px] font-semibold text-ink-100">
           Explorar comunidades
@@ -146,7 +146,7 @@ export function VitrineSection({ serverId }: { serverId: string }) {
               maxLength={160}
               rows={2}
               placeholder="Do que se trata este servidor?"
-              className="resize-none rounded-md border border-base-800 bg-base-950 px-2.5 py-2 text-[13px] text-ink-100 placeholder:text-ink-600 focus:border-accent-500 focus:outline-none"
+              className="resize-none rounded-md border border-line bg-base-950 px-2.5 py-2 text-[13px] text-ink-100 placeholder:text-ink-600 focus:border-accent-500 focus:outline-none"
             />
             <span className="self-end text-[10px] text-ink-600">
               {descricao.length}/160

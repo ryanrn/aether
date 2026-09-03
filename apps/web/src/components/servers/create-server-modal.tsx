@@ -62,7 +62,7 @@ export function CreateServerModal({
       title="Adicionar servidor"
       description="Crie uma comunidade nova ou entre com um convite."
     >
-      <div className="mb-4 flex gap-1 rounded-md border border-base-700 bg-base-900 p-1">
+      <div className="mb-4 flex gap-1 rounded-md border border-line bg-base-900 p-1">
         {(
           [
             ["create", "Criar servidor"],

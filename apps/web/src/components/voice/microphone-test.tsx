@@ -135,8 +135,8 @@ export function MicrophoneTest({
       {/* Card principal com o medidor e o botão de ação */}
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border border-base-750 bg-base-900 px-3.5 py-3 transition-colors duration-150",
-          testing && "border-base-700 bg-base-900/90 shadow-panel",
+          "flex items-center gap-3 rounded-lg border border-line bg-base-900 px-3.5 py-3 transition-colors duration-150",
+          testing && "border-line bg-base-900/90 shadow-panel",
         )}
       >
         {/* Barra segmentada inclinada com altura progressiva */}
@@ -200,8 +200,8 @@ export function MicrophoneTest({
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500",
             testing
-              ? "bg-base-800 text-ink-100 border border-base-700 hover:bg-base-750 active:bg-base-700"
-              : "bg-base-800 text-ink-300 border border-base-700 hover:bg-base-750 hover:text-ink-100 active:bg-base-700",
+              ? "bg-base-800 text-ink-100 border border-line hover:bg-base-750 active:bg-base-700"
+              : "bg-base-800 text-ink-300 border border-line hover:bg-base-750 hover:text-ink-100 active:bg-base-700",
           )}
         >
           {testing ? (

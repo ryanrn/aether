@@ -134,7 +134,7 @@ export function AuditTab({
 
   if (entries.length === 0) {
     return (
-      <section className="rounded-md border border-base-700 p-6 text-center">
+      <section className="rounded-md border border-line p-6 text-center">
         <p className="text-[13px] text-ink-400">Nada registrado ainda.</p>
       </section>
     );
@@ -148,7 +148,7 @@ export function AuditTab({
           return (
             <li
               key={entry.id}
-              className="flex items-start gap-3 border-b border-base-800 py-2.5 last:border-b-0"
+              className="flex items-start gap-3 border-b border-line py-2.5 last:border-b-0"
             >
               <AetherIcon
                 name={descriptor.icon}

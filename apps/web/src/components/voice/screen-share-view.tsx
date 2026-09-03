@@ -99,7 +99,7 @@ export function ScreenShareView() {
               type="button"
               onClick={() => setFocusedShare(item.userId)}
               title={`Ver a tela de ${item.label}`}
-              className="group relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-base-700 bg-base-950 transition-colors hover:border-accent-600/60"
+              className="group relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-line bg-base-950 transition-colors hover:border-accent-600/60"
             >
               {podeVer(item.userId) ? (
                 <TrackVideo
@@ -197,7 +197,7 @@ function FocusedStream({
   return (
     <div
       ref={containerRef}
-      className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-base-700 bg-base-950"
+      className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-base-950"
     >
       <TrackVideo
         track={track}
@@ -289,7 +289,7 @@ function ScreenAudioVolume() {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40 cursor-default"
           />
-          <div className="absolute right-0 top-9 z-50 w-44 animate-rise rounded-lg border border-base-700 bg-base-900 p-2.5 shadow-xl">
+          <div className="absolute right-0 top-9 z-50 w-44 animate-rise rounded-lg border border-line bg-base-900 p-2.5 shadow-xl">
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-ink-300">Audio da tela</span>
               <span className="font-mono text-[11px] tabular-nums text-ink-500">
@@ -334,7 +334,7 @@ function StreamAction({
         "grid h-7 w-7 place-items-center rounded-md border backdrop-blur transition-colors",
         active
           ? "border-accent-600/60 bg-accent-600/20 text-accent-300"
-          : "border-base-600 bg-base-900/80 text-ink-300 hover:bg-base-800 hover:text-ink-100",
+          : "border-line-strong bg-base-900/80 text-ink-300 hover:bg-base-800 hover:text-ink-100",
       )}
     >
       {children}
@@ -399,7 +399,7 @@ function Convite({
   onAceitar: () => void;
 }) {
   return (
-    <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-base-800 bg-base-950">
+    <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-line bg-base-950">
       <div className="flex max-w-sm flex-col items-center gap-4 p-8 text-center">
         <span className="grid h-14 w-14 place-items-center rounded-full bg-base-850">
           <AetherIcon

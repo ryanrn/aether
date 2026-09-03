@@ -30,7 +30,7 @@ export function ForgotPasswordForm() {
 
   if (enviado) {
     return (
-      <div className="rounded-md border border-base-700 bg-base-900 p-4">
+      <div className="rounded-md border border-line bg-base-900 p-4">
         <p className="text-[13px] font-medium text-ink-100">
           Se existir uma conta com esse e-mail, o link ja foi enviado.
         </p>

@@ -138,7 +138,7 @@ export function MessageItem({
               botao andar para dentro sem que ninguem tivesse pedido.
             */
             "absolute right-2 top-0 z-10 grid h-6 w-6 place-items-center rounded-md",
-            "border border-base-700 bg-base-850 text-ink-400 shadow-sm",
+            "border border-line bg-base-850 text-ink-400 shadow-sm",
             "opacity-0 transition-opacity duration-150",
             "group-hover/message:opacity-100 focus:opacity-100 hover:text-ink-100",
           )}
@@ -234,7 +234,7 @@ export function MessageItem({
                     "transition-colors duration-150 disabled:cursor-not-allowed",
                     reacao.mine
                       ? "border-accent-600/60 bg-accent-600/15 text-accent-300"
-                      : "border-base-700 bg-base-800/60 text-ink-300 hover:border-base-600",
+                      : "border-line bg-base-800/60 text-ink-300 hover:border-line-strong",
                   )}
                 >
                   <span className="text-[13px]">{reacao.emoji}</span>

@@ -64,7 +64,7 @@ export default async function DmPage({
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-base-800 px-5">
+      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-5">
         <NavToggle />
         <Avatar
           userId={outro.id}

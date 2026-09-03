@@ -365,7 +365,7 @@ export function UserActivityCard({
       <div
         ref={cardRef}
         style={{ left: position.x, top: position.y, width: CARD_WIDTH }}
-        className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-base-700 bg-base-900 shadow-xl"
+        className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-line bg-base-900 shadow-xl"
       >
         {/* Faixa superior: so cor, para o avatar ter onde se apoiar. */}
         <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />
@@ -410,7 +410,7 @@ export function UserActivityCard({
           </div>
 
           {estado || game || musica ? (
-            <div className="mt-3 border-t border-base-800 pt-3">
+            <div className="mt-3 border-t border-line pt-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
                 atividade
               </p>
@@ -534,7 +534,7 @@ export function UserActivityCard({
               type="button"
               onClick={mandarMensagem}
               disabled={abrindoConversa}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 bg-base-800 px-3 py-2 text-[12px] font-medium text-ink-200 transition-colors hover:bg-base-750 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-line bg-base-800 px-3 py-2 text-[12px] font-medium text-ink-200 transition-colors hover:bg-base-750 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AetherIcon name="message" size="sm" />
               {abrindoConversa ? "Abrindo..." : "Mandar mensagem"}
@@ -554,7 +554,7 @@ export function UserActivityCard({
             PESSOA abre tudo, e isto passou a morar aqui.
           */}
           {podeVolume ? (
-            <div className="mt-3 border-t border-base-800 pt-3">
+            <div className="mt-3 border-t border-line pt-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12px] text-ink-300">Volume</span>
                 <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-500">
@@ -587,7 +587,7 @@ export function UserActivityCard({
                   className={cn(
                     "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] transition-colors",
                     participant?.serverMuted
-                      ? "border-base-700 text-ink-200 hover:bg-base-800"
+                      ? "border-line text-ink-200 hover:bg-base-800"
                       : "border-signal-dnd/40 text-signal-dnd hover:bg-signal-dnd/10",
                   )}
                 >
@@ -609,7 +609,7 @@ export function UserActivityCard({
                   className={cn(
                     "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] transition-colors",
                     participant?.serverDeafened
-                      ? "border-base-700 text-ink-200 hover:bg-base-800"
+                      ? "border-line text-ink-200 hover:bg-base-800"
                       : "border-signal-dnd/40 text-signal-dnd hover:bg-signal-dnd/10",
                   )}
                 >
@@ -640,7 +640,7 @@ export function UserActivityCard({
                 onChange={(evento) => {
                   if (evento.target.value) mover(evento.target.value);
                 }}
-                className="mt-1 w-full rounded-md border border-base-700 bg-base-950 px-2 py-1.5 text-[12px] text-ink-200"
+                className="mt-1 w-full rounded-md border border-line bg-base-950 px-2 py-1.5 text-[12px] text-ink-200"
               >
                 <option value="">Escolher canal...</option>
                 {destinos.map((item) => (
@@ -697,7 +697,7 @@ export function UserActivityCard({
                   <button
                     type="button"
                     onClick={() => setConfirmandoBloqueio(false)}
-                    className="flex-1 rounded-md border border-base-700 px-2 py-1.5 text-[11px] text-ink-300 transition-colors hover:bg-base-800"
+                    className="flex-1 rounded-md border border-line px-2 py-1.5 text-[11px] text-ink-300 transition-colors hover:bg-base-800"
                   >
                     Cancelar
                   </button>
@@ -707,7 +707,7 @@ export function UserActivityCard({
               <button
                 type="button"
                 onClick={() => setConfirmandoBloqueio(true)}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-base-700 px-3 py-1.5 text-[11px] text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-line px-3 py-1.5 text-[11px] text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
               >
                 <AetherIcon name="ban" size="sm" className="h-3 w-3" />
                 Bloquear

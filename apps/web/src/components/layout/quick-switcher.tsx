@@ -138,8 +138,8 @@ export function QuickSwitcher() {
         if (evento.target === evento.currentTarget) setAberto(false);
       }}
     >
-      <div className="w-full max-w-[540px] overflow-hidden rounded-lg border border-base-700 bg-base-900 shadow-pop">
-        <div className="flex items-center gap-2.5 border-b border-base-800 px-4 py-3">
+      <div className="w-full max-w-[540px] overflow-hidden rounded-lg border border-line bg-base-900 shadow-pop">
+        <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
           {carregando && !itens ? (
             <AetherIcon
               name="loader"
@@ -165,7 +165,7 @@ export function QuickSwitcher() {
             aria-label="Ir para"
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink-100 outline-none placeholder:text-ink-500"
           />
-          <kbd className="shrink-0 rounded border border-base-700 px-1.5 py-0.5 font-mono text-[10px] text-ink-500">
+          <kbd className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-500">
             esc
           </kbd>
         </div>

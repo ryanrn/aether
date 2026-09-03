@@ -90,7 +90,7 @@ export function MemberRolesModal({
       description="Marque os cargos deste membro. As mudancas valem na hora."
     >
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2.5 rounded-md border border-base-700 bg-base-900 p-3">
+        <div className="flex items-center gap-2.5 rounded-md border border-line bg-base-900 p-3">
           <Avatar
             userId={member.user.id}
             name={member.user.displayName}
@@ -147,7 +147,7 @@ export function MemberRolesModal({
             do seu na hierarquia.
           </p>
         ) : (
-          <div className="flex flex-col gap-1 rounded-md border border-base-700 bg-base-900 p-2">
+          <div className="flex flex-col gap-1 rounded-md border border-line bg-base-900 p-2">
             {roles.map((role) => {
               const checked = assigned.includes(role.id);
               return (

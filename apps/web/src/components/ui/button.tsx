@@ -8,9 +8,9 @@ const VARIANTS: Record<Variant, string> = {
   primary:
     "bg-accent-500 text-white font-medium hover:bg-accent-400 active:bg-accent-600 shadow-[0_0_20px_-6px_var(--color-accent-500)]",
   secondary:
-    "bg-base-700 text-ink-100 font-medium hover:bg-base-600 active:bg-base-700 border border-base-600/50 hover:border-base-500/60",
+    "bg-base-700 text-ink-100 font-medium hover:bg-base-600 active:bg-base-700 border border-line-strong/50 hover:border-line-strong/60",
   outline:
-    "border border-base-600 text-ink-200 font-medium hover:border-base-500 hover:text-ink-100 hover:bg-base-800 active:bg-base-750",
+    "border border-line-strong text-ink-200 font-medium hover:border-line-strong hover:text-ink-100 hover:bg-base-800 active:bg-base-750",
   ghost:
     "text-ink-300 font-medium hover:text-ink-100 hover:bg-base-850 active:bg-base-800",
   danger:

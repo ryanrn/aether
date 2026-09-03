@@ -47,7 +47,7 @@ export function ComunidadeCard({
   }
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-lg border border-base-800 bg-base-900 transition-colors hover:border-base-700">
+    <article className="flex flex-col overflow-hidden rounded-lg border border-line bg-base-900 transition-colors hover:border-line">
       {/* Banner. `aria-hidden` porque nao carrega informacao — e cor. */}
       <div
         aria-hidden

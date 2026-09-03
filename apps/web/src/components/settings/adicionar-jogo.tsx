@@ -96,7 +96,7 @@ export function AdicionarJogo() {
   }
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-md border border-base-800 bg-base-950 p-3">
+    <div className="flex flex-col gap-2.5 rounded-md border border-line bg-base-950 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-500">
           adicionar um jogo
@@ -116,7 +116,7 @@ export function AdicionarJogo() {
       </p>
 
       {aviso ? (
-        <p className="rounded-md border border-base-700 bg-base-900 px-2.5 py-2 text-[12px] text-ink-300">
+        <p className="rounded-md border border-line bg-base-900 px-2.5 py-2 text-[12px] text-ink-300">
           {aviso}
         </p>
       ) : null}
@@ -130,7 +130,7 @@ export function AdicionarJogo() {
           Nada para sugerir. Abra o jogo antes, e deixe a deteccao ligada.
         </p>
       ) : (
-        <div className="max-h-44 overflow-y-auto rounded-md border border-base-800">
+        <div className="max-h-44 overflow-y-auto rounded-md border border-line">
           {candidatos.map((c) => (
             <button
               key={c}

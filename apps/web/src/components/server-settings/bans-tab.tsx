@@ -36,7 +36,7 @@ export function BansTab({
 
   if (bans.length === 0) {
     return (
-      <section className="rounded-md border border-base-700 p-6 text-center">
+      <section className="rounded-md border border-line p-6 text-center">
         <p className="text-[13px] text-ink-400">Nenhum banimento ativo.</p>
         <p className="mt-1 text-[12px] text-ink-500">
           Banimentos vencidos saem desta lista sozinhos, mas continuam no log de
@@ -54,7 +54,7 @@ export function BansTab({
         {bans.map((ban) => (
           <li
             key={ban.userId}
-            className="flex items-center gap-3 rounded-md border border-base-700 px-3 py-2.5"
+            className="flex items-center gap-3 rounded-md border border-line px-3 py-2.5"
           >
             <Avatar
               userId={ban.user.id}

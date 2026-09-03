@@ -168,7 +168,7 @@ export function AvatarCropper({
     >
       <div className="flex flex-col items-center gap-4 p-4">
         <div
-          className="relative touch-none select-none overflow-hidden rounded-full border border-base-700 bg-base-950"
+          className="relative touch-none select-none overflow-hidden rounded-full border border-line bg-base-950"
           style={{ width: JANELA_PX, height: JANELA_PX, cursor: "grab" }}
           onPointerDown={aoPressionar}
           onPointerMove={aoMover}
