@@ -249,7 +249,19 @@ export function ControlBar({
     const novo = { ...lerTratamentoDeAudio(), rnnoise: ligar };
     setTratamento(novo);
     salvarTratamentoDeAudio(novo);
-    await roomControls?.definirSupressaoAvancada(ligar);
+    const aplicado = await roomControls?.definirSupressaoAvancada(ligar);
+    /**
+     * `false` numa call com o mic ABERTO = o worklet nao carregou de verdade
+     * — nao deixa a chave mentir, reverte. Com o mic MUTADO, `false` e
+     * esperado: a `room.ts` reaplica a preferencia quando a faixa republica
+     * (ao desmutar). Sem call, `roomControls` e null e a preferencia salva
+     * acima ja vale para a proxima conexao.
+     */
+    if (roomControls && aplicado === false && !muted) {
+      const revertido = { ...novo, rnnoise: !ligar };
+      setTratamento(revertido);
+      salvarTratamentoDeAudio(revertido);
+    }
   }
 
   /**

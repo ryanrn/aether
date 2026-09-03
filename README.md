@@ -156,6 +156,7 @@ janela inteira) matava a call de vez.
 | 3 | Spotify no desktop sem recarregar a janela (janela OAuth dedicada no shell) | ✅ |
 | 4 | Foto de perfil / moldura / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ✅ |
 | 5 | Logs de erro de voz sempre ligados (`mediaWarn`), encaminhados ao `aether.log` no desktop | ✅ |
+| 6 | Supressao de ruido aplica ao vivo mesmo se ligada com o mic mutado (reaplica no `LocalTrackPublished`) | ✅ |
 
 ### O que fechou no estagio 1
 
@@ -227,7 +228,16 @@ janela inteira) matava a call de vez.
   `main.js` filtra so essas linhas e grava via `registrar` — o renderer
   instalado nao tem console, e o app ja mostra onde o log fica.
 
-### Limitacoes que ficaram (estagios 1–5)
+### O que fechou no estagio 6
+
+- **Supressao de ruido ligada com o mic mutado agora vale.** `setProcessor` age
+  na faixa publicada, e mutar despublica — a chave devolvia `false` calada e a
+  interface mentia "ligado" ate reconectar. O `RoomEvent.LocalTrackPublished`
+  (dispara ao desmutar, reconectar, trocar de aparelho) reaplica a preferencia,
+  idempotente pelo `getProcessor()?.name`. O dock reverte a chave se
+  `definirSupressaoAvancada` falhar com o mic ABERTO (worklet nao carregou).
+
+### Limitacoes que ficaram (estagios 1–6)
 
 - **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; queda de
   rede real, call passando de 1h, 2 abas e troca de servidor com a call ativa
@@ -3070,6 +3080,16 @@ Usa `LocalAudioTrack.setProcessor` do proprio SDK, e nao troca de faixa na mao:
 o LiveKit ja republica na reconexao e acompanha mudo e troca de aparelho —
 fazer por fora obrigaria a reimplementar tudo isso, no trecho que ja custou
 caro aqui (o caso do PRO X2).
+
+**Correcao (estabilidade da call, v2): ligar a supressao com o mic MUTADO.**
+O `setProcessor` age na faixa PUBLICADA, e mutar despublica — entao ligar a
+chave mutado devolvia `false` e nao fazia nada, embora a interface marcasse
+"ligado". So reconectar a call aplicava a escolha. Agora o
+`RoomEvent.LocalTrackPublished` (que dispara ao desmutar) reaplica
+`aplicarFiltroDeRuido`, idempotente pelo `getProcessor()?.name`. E o dock so
+mantem a chave ligada se `definirSupressaoAvancada` confirmou OU o mic estava
+mutado; `false` com o mic aberto (worklet nao carregou) reverte a chave em vez
+de mentir.
 
 ### `wasm-unsafe-eval` na CSP
 

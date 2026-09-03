@@ -140,11 +140,14 @@ export interface VoiceRoomHandle {
   localCameraTrack: () => Track | null;
   /**
    * Liga/desliga o RNNoise na faixa de microfone JA publicada, sem reabrir o
-   * dispositivo. `false` quando nao ha faixa (fora de call, ou mic ainda nao
-   * publicado) — o botao no dock fica desabilitado nesse caso, em vez de fingir.
+   * dispositivo. Ligar: `setProcessor(criarFiltroDeRuido())`. Desligar:
+   * `stopProcessor()`.
    *
-   * Ligar: `setProcessor(criarFiltroDeRuido())`. Desligar: `stopProcessor()`.
-   * O SDK reaplica o processador na reconexao sozinho.
+   * `false` quando nao ha faixa — o caso comum e o mic MUTADO (o LiveKit
+   * despublica). A preferencia ja foi salva pelo dock, e o
+   * `RoomEvent.LocalTrackPublished` reaplica quando a faixa volta (ao desmutar,
+   * numa reconexao, ao trocar de aparelho). Antes disto, so reconectar a call
+   * aplicava a escolha feita com o mic mutado.
    */
   definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
   /**
@@ -239,7 +242,13 @@ async function aplicarFiltroDeRuido(room: Room): Promise<void> {
 /**
  * Liga/desliga o RNNoise na faixa de mic publicada. Usada tanto na entrada
  * (via `aplicarFiltroDeRuido`, que respeita a preferencia) quanto pelo botao
- * do dock ao vivo. Devolve `false` quando nao ha faixa para processar.
+ * do dock ao vivo.
+ *
+ * Devolve `false` quando nao ha faixa para processar — o caso comum e o mic
+ * MUTADO: o LiveKit despublica a faixa. Nao ha o que fazer agora, mas a
+ * preferencia ja foi salva pelo chamador e o `RoomEvent.LocalTrackPublished`
+ * reaplica `aplicarFiltroDeRuido` quando a faixa volta (ao desmutar). Antes
+ * disto, so reconectar aplicava a escolha.
  */
 async function alternarFiltroDeRuido(
   room: Room,
@@ -250,12 +259,22 @@ async function alternarFiltroDeRuido(
       Track.Source.Microphone,
     );
     const faixa = publicacao?.audioTrack;
-    if (!faixa) return false;
+    if (!faixa) {
+      mediaLog(
+        "filtro de ruido: sem faixa de mic (mutado?) — aplica ao voltar",
+      );
+      return false;
+    }
 
+    const jaTem = faixa.getProcessor()?.name === "rnnoise";
     if (ligado) {
+      // Idempotente: `aplicarFiltroDeRuido` roda na entrada E no
+      // `LocalTrackPublished`, e os dois podem cair juntos no startup.
+      if (jaTem) return true;
       await faixa.setProcessor(criarFiltroDeRuido());
       mediaLog("filtro de ruido ligado");
     } else {
+      if (!jaTem) return true;
       await faixa.stopProcessor();
       mediaLog("filtro de ruido desligado");
     }
@@ -263,7 +282,7 @@ async function alternarFiltroDeRuido(
   } catch (erro) {
     // O som cru segue publicado: `setProcessor` so troca a faixa quando o
     // processador devolve uma, e `stopProcessor` volta pra faixa original.
-    mediaLog("nao consegui alternar o filtro de ruido", erro);
+    mediaWarn("nao consegui alternar o filtro de ruido", String(erro));
     return false;
   }
 }
@@ -680,8 +699,12 @@ export async function connectVoiceRoom({
    * analisador precisa reapontar ou fica medindo uma faixa morta.
    */
   room.on(RoomEvent.LocalTrackPublished, (publication) => {
-    if (publication.source === Track.Source.Microphone)
-      detectorLocal?.retarget();
+    if (publication.source !== Track.Source.Microphone) return;
+    detectorLocal?.retarget();
+    // A faixa de mic (re)apareceu — ao desmutar, numa reconexao, ao trocar de
+    // aparelho. Reaplica a preferencia de RNNoise: sem isto, ligar a supressao
+    // com o mic mutado so passava a valer depois de reconectar a call.
+    void aplicarFiltroDeRuido(room);
   });
 
   /**
