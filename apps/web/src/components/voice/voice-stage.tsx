@@ -507,6 +507,38 @@ function ParticipantCard({
   const temNivel = speaking && nivelBruto > 0.012;
   const vl = temNivel ? Math.min(1, Math.max(0.25, nivelBruto * 3.2)) : null;
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const [pipOk, setPipOk] = useState(false);
+  useEffect(() => {
+    setPipOk(
+      typeof document !== "undefined" && document.pictureInPictureEnabled,
+    );
+  }, []);
+
+  async function alternarTelaCheia() {
+    const el = cardRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement === el) await document.exitFullscreen();
+      else await el.requestFullscreen();
+    } catch {
+      /* recusado pelo navegador/Electron — sem acao */
+    }
+  }
+
+  async function alternarPip() {
+    const v = videoElRef.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement)
+        await document.exitPictureInPicture();
+      else await v.requestPictureInPicture();
+    } catch {
+      /* recusado */
+    }
+  }
+
   /**
    * A camera de quem esta neste bloco: a propria vem do estado local, a dos
    * outros vem da sala. So desenhamos se o participante TAMBEM se anuncia com
@@ -534,11 +566,13 @@ function ParticipantCard({
 
   return (
     <div
+      ref={cardRef}
       onContextMenu={openMenu}
+      onDoubleClick={faixa ? () => void alternarTelaCheia() : undefined}
       data-od-id={`peer-${participant.userId}`}
       style={vl !== null ? ({ "--vl": vl } as React.CSSProperties) : undefined}
       className={cn(
-        "group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border bg-base-850 p-4 transition-[border-color,background-color,transform] duration-200",
+        "group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border bg-base-850 p-4 transition-[border-color,background-color,transform] duration-200 [&:fullscreen]:aspect-auto [&:fullscreen]:rounded-none [&:fullscreen]:border-0 [&:fullscreen]:bg-black",
         compact ? "aspect-square w-32 shrink-0 gap-1.5 p-2" : "aspect-[4/3]",
         !isSelf && "cursor-context-menu",
         !compact && "hover:-translate-y-px",
@@ -562,7 +596,40 @@ function ParticipantCard({
 
       {/* Com camera/tela, o video OCUPA o bloco e o avatar sai. */}
       {faixa ? (
-        <CameraVideo track={faixa} espelhar={isSelf} />
+        <>
+          <CameraVideo
+            track={faixa}
+            espelhar={isSelf}
+            onElement={(el) => (videoElRef.current = el)}
+          />
+          {/*
+            Botoes da camera: tela cheia + PiP. Sempre um pouco visiveis (no
+            toque nao ha hover); acendem no hover. Duplo-clique no card tambem
+            abre tela cheia. Escondidos nas miniaturas (compact) — la nao cabem.
+          */}
+          <div
+            onDoubleClick={(e) => e.stopPropagation()}
+            className={cn(
+              "absolute right-2 top-2 z-[2] flex items-center gap-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100",
+              compact && "hidden",
+            )}
+          >
+            {pipOk ? (
+              <CameraAction
+                label="Picture-in-picture"
+                onClick={() => void alternarPip()}
+              >
+                <AetherIcon name="pip" size="sm" />
+              </CameraAction>
+            ) : null}
+            <CameraAction
+              label="Tela cheia"
+              onClick={() => void alternarTelaCheia()}
+            >
+              <AetherIcon name="maximize" size="sm" />
+            </CameraAction>
+          </div>
+        </>
       ) : (
         <div className="relative">
           <Avatar
@@ -699,6 +766,32 @@ function ParticipantCard({
   );
 }
 
+/** Botao pequeno no canto do card de camera (tela cheia / PiP). */
+function CameraAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={label}
+      aria-label={label}
+      className="grid h-8 w-8 place-items-center rounded-md border border-line-strong bg-base-950/70 text-ink-200 backdrop-blur transition-colors hover:bg-base-800 hover:text-ink-100 active:scale-95"
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * O <video> de uma camera.
  *
@@ -707,16 +800,29 @@ function ParticipantCard({
  *
  * A PROPRIA camera aparece espelhada; a dos OUTROS nunca.
  */
-function CameraVideo({ track, espelhar }: { track: Track; espelhar: boolean }) {
+function CameraVideo({
+  track,
+  espelhar,
+  onElement,
+}: {
+  track: Track;
+  espelhar: boolean;
+  /** o <video>, para o card poder pedir picture-in-picture */
+  onElement?: (el: HTMLVideoElement | null) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const elemento = ref.current;
     if (!elemento) return;
     track.attach(elemento);
+    onElement?.(elemento);
     return () => {
       track.detach(elemento);
+      onElement?.(null);
     };
+    // `onElement` e closure nova a cada render; incluir reanexaria a faixa.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track]);
 
   return (

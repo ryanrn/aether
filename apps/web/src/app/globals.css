@@ -114,9 +114,15 @@
   --color-signal-isolate: #ff4d51;
   --color-signal-isolate-ink: #ff8a8d;
 
-  --font-sans: var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-brand: var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
+  --font-sans:
+    var(--font-sans-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-brand:
+    var(--font-brand-face), var(--font-sans-ui), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono:
+    var(--font-mono-jet), ui-monospace, "JetBrains Mono", "Cascadia Code",
+    monospace;
 
   /*
    * Raios — escala do redesign v2 (6 / 9 / 12 / 16 / 22 / pill).
@@ -131,8 +137,10 @@
   --radius-pill: 999px;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -6px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 16px 44px -8px rgb(0 0 0 / 0.62), 0 4px 12px -4px rgb(0 0 0 / 0.5);
+  --shadow-panel:
+    0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -6px rgb(0 0 0 / 0.5);
+  --shadow-pop:
+    0 16px 44px -8px rgb(0 0 0 / 0.62), 0 4px 12px -4px rgb(0 0 0 / 0.5);
 
   /*
    * Movimento — 90 / 170 / 260ms com a mesma curva. `prefers-reduced-motion`
@@ -152,10 +160,19 @@
   --vl: 0.6;
   --glow-speak:
     0 0 0 calc(1px + var(--vl) * 1.6px)
-      color-mix(in oklch, var(--color-accent-500) calc(46% + var(--vl) * 32%), transparent),
+      color-mix(
+        in oklch,
+        var(--color-accent-500) calc(46% + var(--vl) * 32%),
+        transparent
+      ),
     0 0 calc(14px + var(--vl) * 26px) calc(-4px + var(--vl) * 2px)
-      color-mix(in oklch, var(--color-accent-500) calc(30% + var(--vl) * 30%), transparent),
-    inset 0 0 28px -10px color-mix(in oklch, var(--color-accent-500) 40%, transparent);
+      color-mix(
+        in oklch,
+        var(--color-accent-500) calc(30% + var(--vl) * 30%),
+        transparent
+      ),
+    inset 0 0 28px -10px
+      color-mix(in oklch, var(--color-accent-500) 40%, transparent);
 }
 
 @layer base {
@@ -276,7 +293,8 @@
 
   /* halo do acento, usado em estados ativos */
   .ring-accent-soft {
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 45%, transparent),
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent-500) 45%, transparent),
       0 0 24px -8px var(--color-accent-500);
   }
 
@@ -321,9 +339,12 @@
    */
   .isolate-ring {
     box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--color-signal-isolate) 55%, transparent),
-      0 0 22px -6px color-mix(in oklch, var(--color-signal-isolate) 45%, transparent),
-      inset 0 0 30px -12px color-mix(in oklch, var(--color-signal-isolate) 40%, transparent);
+      0 0 0 1px
+        color-mix(in oklch, var(--color-signal-isolate) 55%, transparent),
+      0 0 22px -6px
+        color-mix(in oklch, var(--color-signal-isolate) 45%, transparent),
+      inset 0 0 30px -12px
+        color-mix(in oklch, var(--color-signal-isolate) 40%, transparent);
   }
 
   .animate-in-fast {
@@ -403,6 +424,16 @@
  * Regra que vale lembrar: dentro de uma area `drag`, TUDO deixa de receber
  * clique. Qualquer botao ali precisa de `app-no-drag`, ou vira enfeite.
  */
+/*
+ * Card de participante em tela cheia: o <video> da camera para de recortar
+ * (`cover` -> `contain`) e o fundo fica preto — a Tailwind nao consegue
+ * expressar "quando um ancestral esta em :fullscreen".
+ */
+[data-od-id^="peer-"]:fullscreen video {
+  object-fit: contain;
+  background: #000;
+}
+
 .app-drag {
   -webkit-app-region: drag;
 }
