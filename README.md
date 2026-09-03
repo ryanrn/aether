@@ -152,7 +152,7 @@ janela inteira) matava a call de vez.
 | Estagio | O que muda | Estado |
 | --- | --- | --- |
 | 1 | `voiceIntent` na store (persiste em `sessionStorage`), `RealtimeProvider` reemite `voice:join` no `connect`, gateway usa `socket.to(...)` para nao mandar a propria saida de servidor de volta a quem moveu a call | ✅ |
-| 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, pedido no `RoomEvent.Disconnected`) | ⏳ |
+| 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, recuperacao com recuo no `RoomEvent.Disconnected`) | ✅ |
 | 3 | Spotify no desktop sem perder a call | ⏳ |
 | 4 | Foto de perfil / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ⏳ |
 | 5 | Logs de erro de voz (motivo do `Disconnected`, falha de token) | ⏳ |
@@ -173,16 +173,34 @@ janela inteira) matava a call de vez.
   — chegava um `voice:update` com `channelId: null` logo depois do join novo.
   Agora e `socket.to(...)`, que exclui o remetente.
 
-### Limitacoes que ficaram (estagio 1)
+### O que fechou no estagio 2
 
-- **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; o teste
-  de queda de rede real, 2 abas e troca de servidor com a call ativa fica para
-  o ambiente do time.
+- **`MediaGrant.expiresAt`.** O gateway carimba o vencimento do token (`1h`) na
+  credencial. Enquanto a conexao vive, o proprio SDK do LiveKit ja renova o
+  token (o servidor empurra um `refreshToken`) — o buraco era a rede cair
+  atravessando o vencimento, com a reconexao automatica esgotando as tentativas
+  num token morto.
+- **`voice:refresh-token` no gateway.** Revalida `VIEW_CHANNEL` + `CONNECT` e
+  reemite a credencial. Recusa (e o cliente para de tentar) quem nao esta mais
+  em canal ou perdeu o acesso.
+- **Recuperacao com recuo na `room.ts`.** No `RoomEvent.Disconnected` com motivo
+  recuperavel (fora expulsao / sala apagada / identidade duplicada), pede token
+  novo e `room.connect` de novo — `0 → 2s → 5s → 10s → 20s → 30s` — republicando
+  o microfone e o filtro de ruido. `disconnect()` marca `encerrado` antes de
+  tudo para nao entrar no laco ao sair de proposito.
+
+### Limitacoes que ficaram (estagios 1–2)
+
+- **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; queda de
+  rede real, call passando de 1h, 2 abas e troca de servidor com a call ativa
+  ficam para o ambiente do time.
 - **`sessionStorage` e por aba.** Um crash que fecha a janela (nao so recarrega)
   perde a intencao — nao ha como religar sozinho numa aba nova.
-- **A janela do token do LiveKit continua de 1h** ate o estagio 2: uma call que
-  passa de 1h e sofre uma oscilacao de rede ainda perde a midia (o `selfVoice`
-  do gateway sobrevive, entao a UI diz "conectado" sem audio).
+- **A recuperacao do SFU e um `room.connect` inteiro.** Uma transmissao de tela
+  ou camera ligada no momento da queda nao volta sozinha — so o microfone. Cair
+  no meio de uma transmissao ainda pede religar a tela na mao.
+- **TTL do token ainda e 1h.** Baixar agora e seguro (a rede de seguranca
+  existe), mas fica como follow-up para nao arriscar regressao sem E2E.
 
 ---
 

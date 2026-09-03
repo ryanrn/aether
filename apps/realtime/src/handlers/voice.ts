@@ -194,6 +194,64 @@ export function registerVoiceHandlers(
     if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
   });
 
+  /**
+   * Token de midia novo para a sala em que a pessoa JA esta.
+   *
+   * O SDK do LiveKit troca o token sozinho enquanto a conexao vive, mas se a
+   * rede cai atravessando o vencimento a reconexao automatica dele esgota as
+   * tentativas com um token morto. Ai o cliente pede aqui.
+   *
+   * Revalida a permissao antes de reemitir: quem perdeu CONNECT enquanto
+   * falava recebe recusa e para de tentar, em vez de insistir com um token
+   * que o SFU sempre vai negar. Mesmo limitador do `voice:join` — o custo
+   * (consultas + emissao de token) e identico.
+   */
+  socket.on("voice:refresh-token", async (ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+
+    if (!joinLimiter.take(userId)) {
+      respond({ ok: false, error: "Espere um instante." });
+      return;
+    }
+
+    try {
+      const location = await voiceLocation(userId);
+      if (!location) {
+        respond({ ok: false, error: "Voce nao esta em um canal de voz" });
+        return;
+      }
+
+      const access = await loadMemberAccess(location.serverId, userId);
+      const bits = access
+        ? await getChannelPermissions(access, location.channelId)
+        : null;
+      if (
+        bits === null ||
+        !has(bits, "VIEW_CHANNEL") ||
+        !has(bits, "CONNECT")
+      ) {
+        respond({ ok: false, error: "Voce nao tem mais acesso a este canal" });
+        return;
+      }
+
+      const media = await createMediaCredentials({
+        channelId: location.channelId,
+        userId,
+        displayName: user.displayName,
+        permissions: bits,
+      });
+      if (!media) {
+        respond({ ok: false, error: "Midia indisponivel neste servidor" });
+        return;
+      }
+
+      respond({ ok: true, media });
+    } catch (error) {
+      console.error("[gateway] voice:refresh-token falhou:", error);
+      respond({ ok: false, error: "Falha ao renovar" });
+    }
+  });
+
   socket.on("voice:state", async (patch) => {
     if (!patch || typeof patch !== "object") return;
     const updated = await setVoiceFlags(userId, {

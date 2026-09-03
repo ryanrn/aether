@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { MediaGrant } from "@aether/shared";
 import { useRealtimeStore, useSelfVoice } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import {
-  connectVoiceRoom,
-  type VoiceRoomHandle,
-} from "@/lib/voice/room";
+import { connectVoiceRoom, type VoiceRoomHandle } from "@/lib/voice/room";
 
 /**
  * Liga e desliga a sessao de midia conforme voce entra e sai de canais de voz.
@@ -25,7 +23,9 @@ export function VoiceSession() {
   const selfVoice = useSelfVoice();
   const media = useRealtimeStore((state) => state.media);
   const setVoiceError = useRealtimeStore((state) => state.setVoiceError);
-  const setMediaConnected = useRealtimeStore((state) => state.setMediaConnected);
+  const setMediaConnected = useRealtimeStore(
+    (state) => state.setMediaConnected,
+  );
   const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
   const setCameras = useRealtimeStore((state) => state.setCameras);
   const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
@@ -41,7 +41,8 @@ export function VoiceSession() {
    * nao ha como o SFU impedir alguem de ouvir sem tambem cortar o video. Esta
    * limitacao esta registrada no README.
    */
-  const muted = (selfVoice?.selfMuted ?? false) || (selfVoice?.serverMuted ?? false);
+  const muted =
+    (selfVoice?.selfMuted ?? false) || (selfVoice?.serverMuted ?? false);
   const deafened =
     (selfVoice?.selfDeafened ?? false) || (selfVoice?.serverDeafened ?? false);
 
@@ -76,6 +77,37 @@ export function VoiceSession() {
           socket.emit("voice:streaming", false);
         },
         onError: (message) => setVoiceError(message),
+        /**
+         * Token de midia novo para a sala atual. A `room.ts` chama quando a
+         * conexao com o SFU cai de vez; o gateway revalida a permissao e
+         * reemite. `null` quando o socket esta fora ou o gateway recusa/demora
+         * — ai a `room.ts` para de tentar (e, se o socket voltar, o
+         * `RealtimeProvider` religa a call por inteiro).
+         */
+        renovarCredencial: () =>
+          new Promise<MediaGrant | null>((resolve) => {
+            if (!socket.connected) {
+              resolve(null);
+              return;
+            }
+            let respondido = false;
+            const encerra = (grant: MediaGrant | null) => {
+              if (respondido) return;
+              respondido = true;
+              resolve(grant);
+            };
+            socket.emit("voice:refresh-token", (r) => {
+              if (r.ok) {
+                setVoiceError(null);
+                encerra(r.media);
+              } else {
+                setVoiceError(r.error);
+                encerra(null);
+              }
+            });
+            // A rede pode nunca devolver o ack — nao deixa a promessa pendurada.
+            setTimeout(() => encerra(null), 8000);
+          }),
       },
     })
       .then((handle) => {
@@ -95,7 +127,8 @@ export function VoiceSession() {
         setRoomControls({
           setMicrophone: (deviceId) => handle.setMicrophone(deviceId),
           setOutputDevice: (deviceId) => handle.setOutputDevice(deviceId),
-          setUserVolume: (userId, volume) => handle.setUserVolume(userId, volume),
+          setUserVolume: (userId, volume) =>
+            handle.setUserVolume(userId, volume),
           setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
           definirSupressaoAvancada: (ligado) =>
@@ -116,7 +149,10 @@ export function VoiceSession() {
             return deu;
           },
           startShare: async (preset, withSystemAudio) => {
-            const started = await handle.startScreenShare(preset, withSystemAudio);
+            const started = await handle.startScreenShare(
+              preset,
+              withSystemAudio,
+            );
             if (started) {
               setLocalSharing(true, handle.localScreenTrack());
               setSharePreset(preset);

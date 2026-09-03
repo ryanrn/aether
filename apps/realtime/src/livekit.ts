@@ -4,11 +4,7 @@ import {
   TrackSource,
   TrackType,
 } from "livekit-server-sdk";
-import {
-  alturaExcedeOPlano,
-  has,
-  type PermissionBits,
-} from "@aether/shared";
+import { alturaExcedeOPlano, has, type PermissionBits } from "@aether/shared";
 import { env } from "./env";
 
 /**
@@ -34,17 +30,16 @@ import { env } from "./env";
  * identidade de quem o gerou. E o token nao carrega so entrada: carrega os
  * grants de publicacao (microfone, tela, camera) que o @aether/access decidiu.
  *
- * Por que 1h e nao 5 minutos, que seria o rigor de manual: o SDK do LiveKit
- * reapresenta ESTE MESMO token ao reconectar, e nosso cliente nao implementa
- * refresh. Com 5 minutos, qualquer oscilacao de rede depois do quinto minuto
- * de call derrubaria a pessoa de vez. 1h corta a janela em seis sem regressao
- * pratica — e a reconexao automatica do LiveKit desiste em ~1 minuto de queda,
- * bem dentro disso.
+ * Por que 1h e nao 5 minutos, que seria o rigor de manual: enquanto a conexao
+ * vive, o SDK do LiveKit ja troca o token sozinho (o servidor empurra um
+ * `refreshToken` antes do vencimento). O buraco e a rede cair ATRAVESSANDO o
+ * vencimento — a reconexao automatica esgota as tentativas com um token morto.
  *
- * O caminho para descer mais esta anotado nas limitacoes do README: reemitir
- * pelo gateway em `RoomEvent.Disconnected`, ai o TTL pode ser de minutos.
+ * Isso agora tem rede de seguranca: `RoomEvent.Disconnected` na `room.ts` pede
+ * `voice:refresh-token` ao gateway e reconecta. Com ela no ar, baixar o TTL
+ * virou mudanca sem regressao — fica como follow-up.
  */
-const TOKEN_TTL = "1h";
+const TOKEN_TTL_SECONDS = 60 * 60;
 
 export interface MediaCredentials {
   url: string;
@@ -53,6 +48,8 @@ export interface MediaCredentials {
   canPublish: boolean;
   canShareScreen: boolean;
   canUseCamera: boolean;
+  /** epoch (ms) do vencimento — o cliente renova antes disso */
+  expiresAt: number;
 }
 
 export function isMediaEnabled(): boolean {
@@ -80,7 +77,7 @@ export async function createMediaCredentials(params: {
   const token = new AccessToken(config.apiKey, config.apiSecret, {
     identity: params.userId,
     name: params.displayName,
-    ttl: TOKEN_TTL,
+    ttl: TOKEN_TTL_SECONDS,
   });
 
   /**
@@ -118,6 +115,7 @@ export async function createMediaCredentials(params: {
     canPublish,
     canShareScreen,
     canUseCamera,
+    expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000,
   };
 }
 
@@ -263,7 +261,10 @@ export async function conferirQualidadeDaTela(params: {
       await client.mutePublishedTrack(room, params.userId, tela.sid, true);
       silenciada = true;
     } catch (error) {
-      console.error("[gateway] nao consegui silenciar a tela acima do plano:", error);
+      console.error(
+        "[gateway] nao consegui silenciar a tela acima do plano:",
+        error,
+      );
     }
 
     return { alturaPublicada: altura, alturaMax: params.alturaMax, silenciada };

@@ -2,6 +2,7 @@
 
 import {
   createLocalScreenTracks,
+  DisconnectReason,
   LocalVideoTrack,
   Room,
   RoomEvent,
@@ -12,6 +13,7 @@ import {
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client";
+import type { MediaGrant } from "@aether/shared";
 import {
   isAudioSourceError,
   isDesktopApp,
@@ -43,10 +45,7 @@ import {
 } from "./volumes";
 import { createMicAnalyser } from "./mic-analyser";
 import { createSpeechGate } from "./speech-gate";
-import {
-  startConnectionStats,
-  type ConnectionStats,
-} from "./connection-stats";
+import { startConnectionStats, type ConnectionStats } from "./connection-stats";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -101,6 +100,15 @@ export interface VoiceRoomCallbacks {
    */
   onLocalShareEnded: () => void;
   onError: (message: string) => void;
+  /**
+   * Pede ao gateway um token de midia novo para a MESMA sala. Chamado quando a
+   * conexao com o SFU cai de vez (a reconexao automatica do LiveKit desistiu),
+   * tipicamente porque a rede ficou fora atravessando o vencimento do token.
+   *
+   * Devolve `null` quando o gateway recusa (perdi o acesso ou nao estou mais
+   * em canal) ou nao responde — nesse caso a sala para de tentar.
+   */
+  renovarCredencial: () => Promise<MediaGrant | null>;
 }
 
 export interface VoiceRoomHandle {
@@ -153,7 +161,9 @@ export interface VoiceRoomHandle {
    * enquanto ninguem assina — o painel so monta quando aberto. Devolve o
    * cancelador.
    */
-  subscribeConnectionStats: (cb: (stats: ConnectionStats) => void) => () => void;
+  subscribeConnectionStats: (
+    cb: (stats: ConnectionStats) => void,
+  ) => () => void;
   disconnect: () => Promise<void>;
 }
 
@@ -536,6 +546,78 @@ export async function connectVoiceRoom({
   let ultimoRmsLocal = 0;
   /** poll que empurra os niveis de audio de todos para o glow */
   let nivelTimer: ReturnType<typeof setInterval> | null = null;
+  /** `disconnect()` foi chamado — nao tentar recuperar a conexao */
+  let encerrado = false;
+  /** ha uma recuperacao de conexao em andamento */
+  let recuperando = false;
+
+  const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  /**
+   * Motivos de `RoomEvent.Disconnected` em que vale tentar reconectar. Fora
+   * desta lista (expulso, sala apagada, identidade duplicada, saida do
+   * cliente) reconectar so bateria numa porta fechada.
+   */
+  const MOTIVOS_RECUPERAVEIS = new Set<DisconnectReason | undefined>([
+    undefined,
+    DisconnectReason.UNKNOWN_REASON,
+    DisconnectReason.SERVER_SHUTDOWN,
+    DisconnectReason.STATE_MISMATCH,
+    DisconnectReason.JOIN_FAILURE,
+    DisconnectReason.SIGNAL_CLOSE,
+    DisconnectReason.CONNECTION_TIMEOUT,
+    DisconnectReason.MEDIA_FAILURE,
+  ]);
+
+  /**
+   * A conexao com o SFU caiu de vez (a reconexao automatica do LiveKit ja
+   * desistiu). Pede um token novo ao gateway e reconecta — com recuo, ate
+   * conseguir ou o gateway recusar.
+   */
+  async function recuperarConexao(): Promise<void> {
+    if (recuperando || encerrado) return;
+    recuperando = true;
+    const atrasos = [0, 2000, 5000, 10_000, 20_000, 30_000];
+    try {
+      for (const atraso of atrasos) {
+        if (encerrado) return;
+        if (atraso) await espera(atraso);
+        if (encerrado) return;
+
+        const cred = await callbacks.renovarCredencial();
+        if (encerrado) return;
+        if (!cred) {
+          // Gateway recusou: sem acesso, ou nao estou mais em canal.
+          callbacks.onError(
+            "A conexao de voz caiu e nao foi possivel restabelecer.",
+          );
+          return;
+        }
+
+        try {
+          await room.connect(cred.url, cred.token);
+          mediaLog("conexao de voz restabelecida");
+          callbacks.onConnectionChange(true);
+          if (!room.canPlaybackAudio) {
+            await room.startAudio().catch(() => undefined);
+          }
+          if (canPublish) {
+            await room.localParticipant
+              .setMicrophoneEnabled(true)
+              .catch(() => undefined);
+            await aplicarFiltroDeRuido(room);
+            detectorLocal?.retarget();
+          }
+          return;
+        } catch (erro) {
+          mediaLog("falha ao restabelecer a conexao de voz", erro);
+        }
+      }
+      callbacks.onError("A conexao de voz caiu. Tente reconectar.");
+    } finally {
+      recuperando = false;
+    }
+  }
 
   function faixaDoMicrofone(): MediaStreamTrack | null {
     return (
@@ -584,7 +666,10 @@ export async function connectVoiceRoom({
       mediaLog("detector de fala local ligado");
     } catch (erro) {
       // Sem analisador local, o ActiveSpeakersChanged acima volta a valer.
-      mediaLog("detector de fala local falhou; usando ActiveSpeakersChanged", erro);
+      mediaLog(
+        "detector de fala local falhou; usando ActiveSpeakersChanged",
+        erro,
+      );
     }
   }
 
@@ -593,7 +678,8 @@ export async function connectVoiceRoom({
    * analisador precisa reapontar ou fica medindo uma faixa morta.
    */
   room.on(RoomEvent.LocalTrackPublished, (publication) => {
-    if (publication.source === Track.Source.Microphone) detectorLocal?.retarget();
+    if (publication.source === Track.Source.Microphone)
+      detectorLocal?.retarget();
   });
 
   /**
@@ -613,7 +699,14 @@ export async function connectVoiceRoom({
     },
   );
 
-  room.on(RoomEvent.Disconnected, () => callbacks.onConnectionChange(false));
+  room.on(RoomEvent.Disconnected, (reason) => {
+    callbacks.onConnectionChange(false);
+    // `disconnect()` proprio, ou um motivo terminal (expulso, sala apagada):
+    // nao ha o que recuperar.
+    if (encerrado || !MOTIVOS_RECUPERAVEIS.has(reason)) return;
+    mediaLog("SFU desconectou — tentando recuperar", reason);
+    void recuperarConexao();
+  });
   room.on(RoomEvent.Reconnected, () => callbacks.onConnectionChange(true));
 
   room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -936,8 +1029,12 @@ export async function connectVoiceRoom({
         return false;
       }
 
-      const videoTrack = tracks.find((track) => track.kind === Track.Kind.Video);
-      const audioTrack = tracks.find((track) => track.kind === Track.Kind.Audio);
+      const videoTrack = tracks.find(
+        (track) => track.kind === Track.Kind.Video,
+      );
+      const audioTrack = tracks.find(
+        (track) => track.kind === Track.Kind.Audio,
+      );
 
       /**
        * `createLocalScreenTracks` marca as fontes (ScreenShare e
@@ -1180,6 +1277,10 @@ export async function connectVoiceRoom({
     },
 
     async disconnect() {
+      // Antes de qualquer coisa: barra a recuperacao automatica. Sem isto, o
+      // `RoomEvent.Disconnected` disparado pelo `room.disconnect()` abaixo
+      // entraria no laco de reconexao.
+      encerrado = true;
       detectorLocal?.stop();
       detectorLocal = null;
       if (nivelTimer) clearInterval(nivelTimer);

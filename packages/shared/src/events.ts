@@ -117,12 +117,18 @@ export function safeMusicActivity(raw: {
   url?: unknown;
   since?: unknown;
 }): MusicActivity | null {
-  const title = typeof raw.title === "string" ? raw.title.slice(0, MUSIC_TITLE_MAX).trim() : "";
+  const title =
+    typeof raw.title === "string"
+      ? raw.title.slice(0, MUSIC_TITLE_MAX).trim()
+      : "";
   if (!title) return null;
   const artists =
-    typeof raw.artists === "string" ? raw.artists.slice(0, MUSIC_ARTISTS_MAX).trim() : "";
+    typeof raw.artists === "string"
+      ? raw.artists.slice(0, MUSIC_ARTISTS_MAX).trim()
+      : "";
   const url =
-    typeof raw.url === "string" && /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+$/.test(raw.url)
+    typeof raw.url === "string" &&
+    /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+$/.test(raw.url)
       ? raw.url
       : null;
   const since =
@@ -174,7 +180,11 @@ export const GAME_ICON_MAX_CHARS = 32 * 1024;
 export function safeGameCover(cover: unknown): string | null {
   if (typeof cover !== "string") return null;
   if (cover.length === 0 || cover.length > 300) return null;
-  if (!/^https:\/\/images\.igdb\.com\/igdb\/image\/upload\/[A-Za-z0-9_]+\/[A-Za-z0-9_-]+\.(jpg|png|webp)$/.test(cover)) {
+  if (
+    !/^https:\/\/images\.igdb\.com\/igdb\/image\/upload\/[A-Za-z0-9_]+\/[A-Za-z0-9_-]+\.(jpg|png|webp)$/.test(
+      cover,
+    )
+  ) {
     return null;
   }
   return cover;
@@ -196,15 +206,13 @@ export interface ReadyPayload {
 }
 
 export type JoinServerAck =
-  | { ok: true; presence: PresenceEntry[] }
-  | { ok: false; error: string };
+  { ok: true; presence: PresenceEntry[] } | { ok: false; error: string };
 
 /** Quantas mensagens o historico devolve por pagina. */
 export const MESSAGE_PAGE_SIZE = 50;
 
 export type SendMessageAck =
-  | { ok: true; message: PublicMessage }
-  | { ok: false; error: string };
+  { ok: true; message: PublicMessage } | { ok: false; error: string };
 
 export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }
@@ -218,14 +226,12 @@ export interface DmResumo {
 }
 
 export type DmOpenAck =
-  | { ok: true; dm: DmResumo }
-  | { ok: false; error: string };
+  { ok: true; dm: DmResumo } | { ok: false; error: string };
 
 export type ReactionAck = { ok: true } | { ok: false; error: string };
 
 export type DmListAck =
-  | { ok: true; conversas: DmResumo[] }
-  | { ok: false; error: string };
+  { ok: true; conversas: DmResumo[] } | { ok: false; error: string };
 
 /**
  * Credenciais para o SFU. `null` quando o servidor nao tem LiveKit
@@ -241,11 +247,19 @@ export interface MediaGrant {
   canShareScreen: boolean;
   /** o token permite publicar a camera (depende de CAMERA) */
   canUseCamera: boolean;
+  /**
+   * Epoch (ms) em que o token para de valer.
+   *
+   * O SDK do LiveKit ja troca o token sozinho enquanto a conexao esta de pe
+   * (o servidor empurra um `refreshToken`), mas se a rede cair ATRAVESSANDO o
+   * vencimento a reconexao automatica esgota as tentativas com um token morto.
+   * O cliente usa este campo como aviso para pedir `voice:refresh-token` antes
+   * disso acontecer.
+   */
+  expiresAt: number;
 }
 
-export type VoiceModerateAck =
-  | { ok: true }
-  | { ok: false; error: string };
+export type VoiceModerateAck = { ok: true } | { ok: false; error: string };
 
 export type VoiceJoinAck =
   | {
@@ -254,6 +268,16 @@ export type VoiceJoinAck =
       media: MediaGrant | null;
     }
   | { ok: false; error: string };
+
+/**
+ * Resposta a `voice:refresh-token`: um token de midia NOVO para a MESMA sala.
+ *
+ * Recusa (`ok: false`) quando a pessoa nao esta mais em canal de voz ou perdeu
+ * o acesso a ele enquanto falava — nesse caso o cliente para de tentar
+ * reconectar em vez de insistir com um token que sempre sera negado.
+ */
+export type VoiceRefreshAck =
+  { ok: true; media: MediaGrant } | { ok: false; error: string };
 
 export interface ServerToClientEvents {
   /** primeiro evento apos o handshake: confirma quem o gateway achou que voce e */
@@ -488,6 +512,12 @@ export interface ClientToServerEvents {
   ) => void;
   /** desconecta da voz, seja qual for o canal */
   "voice:leave": () => void;
+  /**
+   * Pede um token de midia novo para a sala em que ja estou — usado quando a
+   * conexao com o SFU cai atravessando o vencimento do token e a reconexao
+   * automatica do LiveKit desiste. Revalida a permissao antes de reemitir.
+   */
+  "voice:refresh-token": (ack: (result: VoiceRefreshAck) => void) => void;
   /**
    * Moderacao de voz sobre outra pessoa: silenciar ou ensurdecer pelo servidor.
    * Diferente de `voice:state`, que e sobre voce mesmo.
