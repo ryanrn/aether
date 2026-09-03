@@ -1,6 +1,13 @@
 "use strict";
 
-const { app, BrowserWindow, ipcMain, powerMonitor, session, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  powerMonitor,
+  session,
+  shell,
+} = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
@@ -28,7 +35,8 @@ const { registrar } = require("./log");
  */
 
 /** Origem oficial. Tudo fora daqui abre no navegador do sistema, nunca aqui. */
-const APP_ORIGIN = process.env.AETHER_APP_URL ?? "https://aether-mocha-phi.vercel.app";
+const APP_ORIGIN =
+  process.env.AETHER_APP_URL ?? "https://aether-mocha-phi.vercel.app";
 
 function isAllowedUrl(rawUrl) {
   try {
@@ -213,7 +221,9 @@ function installDisplayMediaHandler(targetSession) {
      * nao tem como dar errado.
      */
     const parent =
-      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+      BrowserWindow.getFocusedWindow() ??
+      BrowserWindow.getAllWindows()[0] ??
+      null;
 
     void pickSource(parent)
       .then((choice) => {
@@ -603,6 +613,79 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on("desktop:audio-capture-failed", (_evento, detalhes) =>
       disableAudioPreference(detalhes),
     );
+
+    /**
+     * OAuth do Spotify numa janela DEDICADA.
+     *
+     * Antes a pagina navegava a janela principal para `/api/spotify/connect` —
+     * a unica opcao possivel, porque o navegador do sistema nao tem o cookie
+     * de sessao e a janela-filha do renderer cai no `setWindowOpenHandler`
+     * (que manda tudo para fora). Navegar a janela principal recarrega o app
+     * inteiro na volta, e isso derrubava a chamada de voz.
+     *
+     * Aqui a janela e criada pelo PROCESSO PRINCIPAL, entao nao passa pelo
+     * `setWindowOpenHandler`, e usa `session.defaultSession` — o mesmo cookie
+     * da janela principal. A janela principal nao navega; a call nem pisca.
+     *
+     * Fecha sozinha quando o callback termina (a pagina de callback, sem
+     * `window.opener`, navega para `${APP_ORIGIN}/app?spotify=...`), ou por
+     * prazo, ou se a pessoa fechar na mao.
+     */
+    ipcMain.handle("desktop:spotify-connect", () => {
+      return new Promise((resolve) => {
+        const parent =
+          janelaPrincipal && !janelaPrincipal.isDestroyed()
+            ? janelaPrincipal
+            : undefined;
+
+        const oauth = new BrowserWindow({
+          parent,
+          width: 520,
+          height: 760,
+          title: "Conectar Spotify",
+          autoHideMenuBar: true,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            // Sem preload: aqui roda so o fluxo OAuth, nada do app.
+          },
+        });
+
+        // Spotify nao abre janelas-filha, mas se abrisse: para o sistema.
+        oauth.webContents.setWindowOpenHandler(({ url }) => {
+          void shell.openExternal(url);
+          return { action: "deny" };
+        });
+
+        let terminado = false;
+        const terminar = () => {
+          if (terminado) return;
+          terminado = true;
+          clearTimeout(prazo);
+          if (!oauth.isDestroyed()) oauth.close();
+          resolve();
+        };
+
+        const aoNavegar = (_evento, url) => {
+          if (typeof url === "string" && url.startsWith(`${APP_ORIGIN}/app`)) {
+            terminar();
+          }
+        };
+        oauth.webContents.on("did-navigate", aoNavegar);
+        oauth.webContents.on("did-navigate-in-page", aoNavegar);
+        oauth.on("closed", () => {
+          if (terminado) return;
+          terminado = true;
+          clearTimeout(prazo);
+          resolve();
+        });
+
+        // Rede travada ou pessoa que desiste sem fechar: nao deixa orfa.
+        const prazo = setTimeout(terminar, 5 * 60 * 1000);
+
+        void oauth.loadURL(`${APP_ORIGIN}/api/spotify/connect`);
+      });
+    });
 
     instalarDeteccaoDeJogo();
     instalarLoopback();

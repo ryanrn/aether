@@ -42,7 +42,8 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
   loopback: {
     disponivel: () => ipcRenderer.invoke("desktop:loopback-available"),
     saidas: () => ipcRenderer.invoke("desktop:loopback-devices"),
-    iniciar: (deviceId) => ipcRenderer.invoke("desktop:loopback-start", deviceId),
+    iniciar: (deviceId) =>
+      ipcRenderer.invoke("desktop:loopback-start", deviceId),
     /** o que foi respondido no seletor sobre levar o som do sistema */
     escolhaDoSeletor: () => ipcRenderer.invoke("desktop:share-audio-choice"),
     parar: () => ipcRenderer.invoke("desktop:loopback-stop"),
@@ -91,8 +92,20 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
     aoFicarPronta: (callback) => {
       const handler = (_evento, versao) => callback(versao);
       ipcRenderer.on("desktop:atualizacao-pronta", handler);
-      return () => ipcRenderer.removeListener("desktop:atualizacao-pronta", handler);
+      return () =>
+        ipcRenderer.removeListener("desktop:atualizacao-pronta", handler);
     },
+  },
+
+  /**
+   * OAuth do Spotify numa janela dedicada do processo principal.
+   *
+   * A pagina so consegue PEDIR que abra; a janela, a sessao compartilhada e o
+   * fechamento automatico ficam no main. Resolve quando o fluxo termina — a
+   * seccao das configuracoes re-checa o estado ai.
+   */
+  spotify: {
+    conectar: () => ipcRenderer.invoke("desktop:spotify-connect"),
   },
 
   gameDetection: {

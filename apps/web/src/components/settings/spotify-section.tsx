@@ -67,22 +67,34 @@ export function SpotifySection() {
   const conta = estado?.conta ?? null;
 
   function conectar() {
-    const noDesktop =
-      typeof (window as { aetherDesktop?: unknown }).aetherDesktop ===
-        "object" &&
-      (window as { aetherDesktop?: unknown }).aetherDesktop !== null;
+    const desktop = (
+      window as {
+        aetherDesktop?: { spotify?: { conectar?: () => Promise<void> } };
+      }
+    ).aetherDesktop;
 
-    if (noDesktop) {
+    /**
+     * Desktop com a janela dedicada (shell 0.1.21+): o processo principal abre
+     * o OAuth numa BrowserWindow filha que COMPARTILHA a sessao — a janela
+     * principal do app nao navega, entao a call nao pisca. Ao fechar,
+     * re-checamos o estado.
+     */
+    if (desktop?.spotify?.conectar) {
+      void desktop.spotify.conectar().then(() => void carregar());
+      return;
+    }
+
+    if (desktop) {
       /**
-       * No desktop o OAuth tem de acontecer NESTA janela: o navegador do
-       * sistema nao tem o cookie de sessao do Aether, e uma janela Electron
-       * filha e bloqueada pelo `setWindowOpenHandler`. Navega aqui; o callback
-       * cai em `/app?spotify=ok` e a barra de controle reabre as
-       * configuracoes ja na aba Atividade.
+       * Shell antigo, sem a janela dedicada: navega a janela principal. O
+       * navegador do sistema nao tem o cookie de sessao, e a janela filha do
+       * renderer e bloqueada pelo `setWindowOpenHandler`. A call volta sozinha
+       * quando a pagina recarrega — ver `voiceIntent` no `realtime-store`.
        */
       window.location.href = "/api/spotify/connect";
       return;
     }
+
     // No navegador: popup. O callback (aberto por `window.open`) se fecha
     // sozinho, e esta seccao re-checa o estado quando o app recupera o foco.
     window.open(

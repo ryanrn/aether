@@ -153,7 +153,7 @@ janela inteira) matava a call de vez.
 | --- | --- | --- |
 | 1 | `voiceIntent` na store (persiste em `sessionStorage`), `RealtimeProvider` reemite `voice:join` no `connect`, gateway usa `socket.to(...)` para nao mandar a propria saida de servidor de volta a quem moveu a call | ✅ |
 | 2 | Refresh do token do LiveKit (evento `voice:refresh-token` no gateway, recuperacao com recuo no `RoomEvent.Disconnected`) | ✅ |
-| 3 | Spotify no desktop sem perder a call | ⏳ |
+| 3 | Spotify no desktop sem recarregar a janela (janela OAuth dedicada no shell) | ✅ |
 | 4 | Foto de perfil / nome propagam em tempo real (rota interna `/internal/profile-changed`) | ⏳ |
 | 5 | Logs de erro de voz (motivo do `Disconnected`, falha de token) | ⏳ |
 
@@ -189,7 +189,20 @@ janela inteira) matava a call de vez.
   o microfone e o filtro de ruido. `disconnect()` marca `encerrado` antes de
   tudo para nao entrar no laco ao sair de proposito.
 
-### Limitacoes que ficaram (estagios 1–2)
+### O que fechou no estagio 3
+
+- **Janela OAuth dedicada no desktop.** O shell (`0.1.21`) ganhou
+  `desktop:spotify-connect`: o processo principal abre `/api/spotify/connect`
+  numa `BrowserWindow` filha que usa `session.defaultSession` — o MESMO cookie
+  da janela principal. A janela principal nao navega, entao a call nem pisca.
+  A filha fecha sozinha quando o callback termina (navega para
+  `${APP_ORIGIN}/app?spotify=...`), por prazo de 5 min, ou na mao.
+- **Degrada com seguranca.** `spotify-section.tsx` so usa o caminho novo se
+  `window.aetherDesktop.spotify.conectar` existe; num shell antigo cai no
+  `window.location.href` de antes — e ai a call volta sozinha pelo `voiceIntent`
+  do estagio 1. No navegador, segue sendo popup.
+
+### Limitacoes que ficaram (estagios 1–3)
 
 - **Sem E2E local.** `typecheck`, `vitest` (364) e `next build` passam; queda de
   rede real, call passando de 1h, 2 abas e troca de servidor com a call ativa
@@ -201,6 +214,10 @@ janela inteira) matava a call de vez.
   no meio de uma transmissao ainda pede religar a tela na mao.
 - **TTL do token ainda e 1h.** Baixar agora e seguro (a rede de seguranca
   existe), mas fica como follow-up para nao arriscar regressao sem E2E.
+- **A janela OAuth do desktop nao foi exercitada.** `@aether/desktop` e JS puro
+  (sem typecheck) e Electron nao roda no sandbox — `node --check` passou, mas o
+  fluxo real (cookie compartilhado, fechamento automatico) so se prova num
+  desktop de verdade, e exige o release `0.1.21`.
 
 ---
 
