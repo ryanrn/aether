@@ -56,6 +56,7 @@ export function SelfUserCard({
   anchor,
   onClose,
   onOpenSettings,
+  onLogout,
 }: {
   user: PublicUser;
   /** para resolver o NOME do canal ocupado — a voz so carrega o id */
@@ -63,6 +64,11 @@ export function SelfUserCard({
   anchor: SelfCardAnchor;
   onClose: () => void;
   onOpenSettings: () => void;
+  /**
+   * Sair da conta. So o cartao da trilha (fora de servidor) passa isto — na
+   * HUD o "Sair" ja vive no proprio dock. Sem a prop, a linha nao aparece.
+   */
+  onLogout?: () => void;
 }) {
   const socket = useSocket();
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -237,17 +243,35 @@ export function SelfUserCard({
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenSettings();
-            }}
-            className="mt-2 flex w-full items-center gap-2.5 rounded-md border-t border-line px-2 pb-1 pt-2.5 text-left text-[13px] text-ink-300 transition-colors hover:text-ink-100"
-          >
-            <AetherIcon name="settings" className="h-3.5 w-3.5 shrink-0" />
-            Configuracoes
-          </button>
+          <div className="mt-2 border-t border-line pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenSettings();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-ink-300 transition-colors hover:bg-base-750 hover:text-ink-100"
+            >
+              <AetherIcon name="settings" className="h-3.5 w-3.5 shrink-0" />
+              Configuracoes
+            </button>
+            {onLogout ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onLogout();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-signal-dnd transition-colors hover:bg-signal-dnd/10"
+              >
+                <AetherIcon
+                  name="disconnect"
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+                Sair da conta
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </>,

@@ -52,8 +52,11 @@ export function AccountTab({
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };
-  /** servidor aberto agora — o apelido vale so nele */
-  server: { id: string; memberId: string; nickname: string | null };
+  /**
+   * Servidor aberto agora — o apelido vale so nele. `null` quando as
+   * configuracoes sao abertas fora de um servidor: o campo de apelido some.
+   */
+  server: { id: string; memberId: string; nickname: string | null } | null;
 }) {
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [moldura, setMoldura] = useState(user.moldura);
@@ -93,7 +96,7 @@ export function AccountTab({
 
   const podeAnimar = podeAvatarAnimado(user.plano);
   const [displayName, setDisplayName] = useState(user.displayName);
-  const [nickname, setNickname] = useState(server.nickname ?? "");
+  const [nickname, setNickname] = useState(server?.nickname ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [aceitaDeServidor, setAceitaDeServidor] = useState(user.allowServerDms);
@@ -243,6 +246,7 @@ export function AccountTab({
   }
 
   function saveNickname() {
+    if (!server) return;
     setError(null);
     setSaved(false);
     startTransition(async () => {
@@ -449,22 +453,24 @@ export function AccountTab({
         />
       </Field>
 
-      <div className="border-t border-line pt-5">
-        <Field
-          label="Apelido neste servidor"
-          hint="Vale so aqui. Vazio volta ao seu nome de exibicao."
-        >
-          <Input
-            value={nickname}
-            onChange={(event) => {
-              setNickname(event.target.value);
-              setSaved(false);
-            }}
-            placeholder={displayName}
-            maxLength={32}
-          />
-        </Field>
-      </div>
+      {server ? (
+        <div className="border-t border-line pt-5">
+          <Field
+            label="Apelido neste servidor"
+            hint="Vale so aqui. Vazio volta ao seu nome de exibicao."
+          >
+            <Input
+              value={nickname}
+              onChange={(event) => {
+                setNickname(event.target.value);
+                setSaved(false);
+              }}
+              placeholder={displayName}
+              maxLength={32}
+            />
+          </Field>
+        </div>
+      ) : null}
 
       {/*
         PRIVACIDADE, separada dos campos de identidade por uma linha: nome e
@@ -517,13 +523,15 @@ export function AccountTab({
         >
           {pending ? "Salvando..." : "Salvar nome"}
         </Button>
-        <Button
-          variant="secondary"
-          onClick={saveNickname}
-          disabled={pending || nickname.trim() === (server.nickname ?? "")}
-        >
-          Salvar apelido
-        </Button>
+        {server ? (
+          <Button
+            variant="secondary"
+            onClick={saveNickname}
+            disabled={pending || nickname.trim() === (server.nickname ?? "")}
+          >
+            Salvar apelido
+          </Button>
+        ) : null}
         {saved ? (
           <span className="text-[13px] text-signal-online">Salvo.</span>
         ) : null}

@@ -27,6 +27,9 @@ export default async function AppLayout({
     countIncomingRequests(session.user.id),
   ]);
 
+  // `email` fica no servidor — o menu da trilha nao precisa dele.
+  const { email: _email, ...railUser } = session.user;
+
   return (
     /**
      * O provedor e a sessao de midia moram AQUI, e nao no layout do servidor.
@@ -53,6 +56,7 @@ export default async function AppLayout({
         <NavBackdrop />
         <ServerRail
           servers={servers}
+          user={railUser}
           pendingRequests={pendingRequests}
           equipe={session.user.equipe}
         />

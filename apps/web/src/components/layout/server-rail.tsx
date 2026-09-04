@@ -25,10 +25,12 @@ import {
   rotuloDeRevisoes,
   totalDeRevisoes,
   type PublicServer,
+  type PublicUser,
   type RevisoesPendentes,
 } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
+import { UserRailMenu } from "@/components/layout/user-rail-menu";
 import { useShellStore } from "@/lib/stores/shell-store";
 import {
   NAV_ESCONDIDA,
@@ -72,10 +74,16 @@ const ICONE_ATIVO = "rounded-[18px]";
 
 export function ServerRail({
   servers,
+  user,
   pendingRequests = 0,
   equipe = false,
 }: {
   servers: PublicServer[];
+  /** o proprio usuario — para o menu de conta/config/sair no rodape */
+  user: PublicUser & {
+    allowServerDms: boolean;
+    allowServerFriendRequests: boolean;
+  };
   /** pedidos de amizade esperando VOCE decidir — o ponto no botao de amigos */
   pendingRequests?: number;
   /**
@@ -393,6 +401,13 @@ export function ServerRail({
         >
           <AetherIcon name="plus" size="lg" className="h-[22px] w-[22px]" />
         </button>
+
+        {/*
+          O proprio usuario, colado no rodape (`mt-auto` no botao). E o unico
+          caminho para Configuracoes e "Sair da conta" quando nao se esta
+          dentro de um servidor — a HUD de voz, que tem os dois, so monta la.
+        */}
+        <UserRailMenu user={user} />
       </nav>
 
       <CreateServerModal open={modalOpen} onClose={() => setModalOpen(false)} />

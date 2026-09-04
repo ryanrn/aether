@@ -84,7 +84,12 @@ export function AppSettingsModal({
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };
-  server: { id: string; memberId: string; nickname: string | null };
+  /**
+   * O servidor aberto, so para o campo "apelido neste servidor". `null` quando
+   * as configuracoes sao abertas de fora de um servidor (trilha lateral) — ai
+   * o apelido some e o resto (que e tudo global) continua igual.
+   */
+  server: { id: string; memberId: string; nickname: string | null } | null;
   /** aba a abrir quando o modal e mostrado (ex.: volta do OAuth do Spotify) */
   abaInicial?: Tab;
 }) {
