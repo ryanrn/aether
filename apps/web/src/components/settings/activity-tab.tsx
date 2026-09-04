@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { SwitchVisual, ToggleRow } from "@/components/ui/switch";
 import { AdicionarJogo } from "./adicionar-jogo";
 import { SpotifySection } from "./spotify-section";
 import {
@@ -103,15 +104,15 @@ export function ActivityTab() {
 
       {noDesktop ? (
         <>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-line bg-base-900 p-3 transition-colors hover:border-line-strong">
-            <input
-              type="checkbox"
-              checked={ligada}
-              disabled={salvando}
-              onChange={(event) => void alternar(event.target.checked)}
-              className="mt-0.5 accent-accent-500"
-            />
-            <span className="min-w-0 flex-1">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={ligada}
+            disabled={salvando}
+            onClick={() => void alternar(!ligada)}
+            className="grid grid-cols-[1fr_auto] items-start gap-3 rounded-md border border-line bg-base-900 p-3 text-left transition-colors hover:border-line-strong disabled:opacity-60"
+          >
+            <span className="min-w-0">
               <span className="block text-[13px] text-ink-100">
                 Mostrar o jogo que estou jogando
               </span>
@@ -120,7 +121,10 @@ export function ActivityTab() {
                 esta nele.
               </span>
             </span>
-          </label>
+            <span className="pt-0.5">
+              <SwitchVisual checked={ligada} disabled={salvando} />
+            </span>
+          </button>
 
           {/*
             Mostrar o que foi detectado AGORA e a unica forma honesta de dizer
@@ -183,29 +187,17 @@ export function ActivityTab() {
           </div>
 
           {podeIniciar ? (
-            <div className="border-t border-line pt-5">
+            <div className="border-t border-line pt-4">
               <h3 className="text-[13px] font-medium text-ink-100">
                 Ao ligar o computador
               </h3>
-              <label className="mt-3 flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={iniciaJunto}
-                  disabled={salvandoInicio}
-                  onChange={(evento) => alternarInicio(evento.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
-                />
-                <span className="leading-tight">
-                  <span className="block text-[13px] text-ink-200">
-                    Abrir o Aether junto com o Windows
-                  </span>
-                  <span className="block text-[11px] text-ink-500">
-                    A janela abre normalmente, nao escondida. Quem manda nisto e
-                    a inicializacao do Windows: tirar o Aether de la pelo
-                    Gerenciador de Tarefas tambem desmarca esta caixa.
-                  </span>
-                </span>
-              </label>
+              <ToggleRow
+                checked={iniciaJunto}
+                disabled={salvandoInicio}
+                onCheckedChange={alternarInicio}
+                title="Abrir o Aether junto com o Windows"
+                description="A janela abre normalmente, nao escondida. Quem manda nisto e a inicializacao do Windows: tirar o Aether de la pelo Gerenciador de Tarefas tambem desmarca esta chave."
+              />
             </div>
           ) : null}
 

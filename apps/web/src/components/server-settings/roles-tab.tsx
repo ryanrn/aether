@@ -19,6 +19,7 @@ import { canManageRole, viewerCan } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
+import { SwitchVisual } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 const GROUP_LABEL: Record<string, string> = {
@@ -252,23 +253,22 @@ function RoleEditor({
                 const viewerHas = viewerCan(viewer, key);
                 const locked = !editable || !viewerHas;
 
+                const ativo = permissions.includes(key);
                 return (
-                  <label
+                  <button
                     key={key}
+                    type="button"
+                    role="switch"
+                    aria-checked={ativo}
+                    disabled={locked}
+                    onClick={() => toggle(key, !ativo)}
                     className={cn(
-                      "flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors",
+                      "grid grid-cols-[1fr_auto] items-start gap-3 px-3 py-2.5 text-left transition-colors",
                       locked
                         ? "cursor-not-allowed opacity-55"
-                        : "hover:bg-base-850",
+                        : "cursor-pointer hover:bg-base-850",
                     )}
                   >
-                    <input
-                      type="checkbox"
-                      checked={permissions.includes(key)}
-                      disabled={locked}
-                      onChange={(event) => toggle(key, event.target.checked)}
-                      className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
-                    />
                     <span className="leading-tight">
                       <span className="block text-[13px] text-ink-200">
                         {meta.label}
@@ -280,7 +280,10 @@ function RoleEditor({
                           : ""}
                       </span>
                     </span>
-                  </label>
+                    <span className="pt-0.5">
+                      <SwitchVisual checked={ativo} disabled={locked} />
+                    </span>
+                  </button>
                 );
               })}
             </div>

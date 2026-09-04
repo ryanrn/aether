@@ -16,6 +16,7 @@ import {
   type TratamentoDeAudio,
 } from "@/lib/voice/audio-prefs";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { ToggleRow } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 /**
@@ -196,24 +197,24 @@ export function TratamentoDoMicrofone() {
         favorecer fala e achatam o resto.
       </p>
 
-      <div className="mt-3 flex flex-col gap-2.5">
-        <Chave
-          ligada={tratamento.supressaoDeRuido}
-          onChange={() => alternar("supressaoDeRuido")}
-          titulo="Supressao de ruido"
-          detalhe="Corta ventilador, teclado e chiado constante. Tambem corta sustentacao e reverberacao de instrumento."
+      <div className="mt-2 flex flex-col">
+        <ToggleRow
+          checked={tratamento.supressaoDeRuido}
+          onCheckedChange={() => alternar("supressaoDeRuido")}
+          title="Supressao de ruido"
+          description="Corta ventilador, teclado e chiado constante. Tambem corta sustentacao e reverberacao de instrumento."
         />
-        <Chave
-          ligada={tratamento.cancelamentoDeEco}
-          onChange={() => alternar("cancelamentoDeEco")}
-          titulo="Cancelamento de eco"
-          detalhe="Impede que o som da sua caixa volte para a call. Desligado, use fone — sem ele o eco e certo."
+        <ToggleRow
+          checked={tratamento.cancelamentoDeEco}
+          onCheckedChange={() => alternar("cancelamentoDeEco")}
+          title="Cancelamento de eco"
+          description="Impede que o som da sua caixa volte para a call. Desligado, use fone — sem ele o eco e certo."
         />
-        <Chave
-          ligada={tratamento.ganhoAutomatico}
-          onChange={() => alternar("ganhoAutomatico")}
-          titulo="Ganho automatico"
-          detalhe="Equilibra o volume da sua voz. Em musica, ele bombeia: sobe nas pausas e abaixa no ataque."
+        <ToggleRow
+          checked={tratamento.ganhoAutomatico}
+          onCheckedChange={() => alternar("ganhoAutomatico")}
+          title="Ganho automatico"
+          description="Equilibra o volume da sua voz. Em musica, ele bombeia: sobe nas pausas e abaixa no ataque."
         />
       </div>
 
@@ -222,12 +223,12 @@ export function TratamentoDoMicrofone() {
         do navegador, esta baixa um modelo e roda a cada 10ms. Juntas, pareceria
         que custam a mesma coisa.
       */}
-      <div className="mt-4 border-t border-line pt-4">
-        <Chave
-          ligada={tratamento.rnnoise}
-          onChange={() => alternar("rnnoise")}
-          titulo="Supressao de ruido avancada (RNNoise)"
-          detalhe="Modelo de IA rodando na sua maquina, alem da supressao do navegador. Corta teclado, ventilador e ar-condicionado que a nativa deixa passar. Baixa ~1,9 MB na primeira vez e usa mais CPU."
+      <div className="mt-4 border-t border-line pt-2">
+        <ToggleRow
+          checked={tratamento.rnnoise}
+          onCheckedChange={() => alternar("rnnoise")}
+          title="Supressao de ruido avancada (RNNoise)"
+          description="Modelo de IA rodando na sua maquina, alem da supressao do navegador. Corta teclado, ventilador e ar-condicionado que a nativa deixa passar. Baixa ~1,9 MB na primeira vez e usa mais CPU."
         />
         <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
           Nada do seu audio sai da maquina para isso: o modelo roda no proprio
@@ -273,32 +274,5 @@ export function TratamentoDoMicrofone() {
         A mudanca vale na proxima vez que voce entrar numa call.
       </p>
     </div>
-  );
-}
-
-function Chave({
-  ligada,
-  onChange,
-  titulo,
-  detalhe,
-}: {
-  ligada: boolean;
-  onChange: () => void;
-  titulo: string;
-  detalhe: string;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start gap-2.5">
-      <input
-        type="checkbox"
-        checked={ligada}
-        onChange={onChange}
-        className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
-      />
-      <span className="leading-tight">
-        <span className="block text-[13px] text-ink-200">{titulo}</span>
-        <span className="block text-[11px] text-ink-500">{detalhe}</span>
-      </span>
-    </label>
   );
 }

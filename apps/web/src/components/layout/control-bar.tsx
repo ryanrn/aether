@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { SwitchVisual } from "@/components/ui/switch";
 import type {
   PublicChannel,
   PublicUser,
@@ -677,20 +678,23 @@ export function ControlBar({
                   isso exigiria recapturar, que e justamente o que evitamos.
                 */}
                 {!localSharing && !noDesktop ? (
-                  <label className="mb-1 flex cursor-pointer items-start gap-2 border-b border-line px-2 pb-2 text-[12px] text-ink-200">
-                    <input
-                      type="checkbox"
-                      checked={shareAudio}
-                      onChange={toggleShareAudio}
-                      className="mt-0.5 accent-accent-500"
-                    />
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={shareAudio}
+                    onClick={() => toggleShareAudio()}
+                    className="mb-1 flex w-full items-start gap-2.5 border-b border-line px-2 pb-2 text-left text-[12px] text-ink-200"
+                  >
+                    <span className="pt-0.5">
+                      <SwitchVisual checked={shareAudio} />
+                    </span>
                     <span className="leading-snug">
                       Levar o som do sistema
                       <span className="mt-0.5 block text-[11px] text-ink-500">
                         Aba e tela inteira oferecem som; janela avulsa nao.
                       </span>
                     </span>
-                  </label>
+                  </button>
                 ) : null}
                 {PRESET_LIST.map((preset) => {
                   const active = localSharing && preset.id === sharePreset;
@@ -789,7 +793,13 @@ export function ControlBar({
                       Tratamento do microfone
                     </p>
 
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-line bg-base-850 p-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={rnnoise}
+                      onClick={() => void alternarRuido(!rnnoise)}
+                      className="flex w-full items-start gap-3 rounded-md border border-line bg-base-850 p-3 text-left"
+                    >
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-base-950 text-ink-200">
                         <AetherIcon name="sparkle" size="sm" />
                       </span>
@@ -803,13 +813,10 @@ export function ControlBar({
                           deixa passar. Baixa ~1,9 MB na primeira vez.
                         </span>
                       </span>
-                      <input
-                        type="checkbox"
-                        checked={rnnoise}
-                        onChange={(e) => void alternarRuido(e.target.checked)}
-                        className="mt-0.5 accent-accent-500"
-                      />
-                    </label>
+                      <span className="pt-0.5">
+                        <SwitchVisual checked={rnnoise} />
+                      </span>
+                    </button>
 
                     {rnnoise ? (
                       <div className="mt-2 rounded-md border border-line bg-base-850 px-3 py-2.5">
@@ -865,22 +872,21 @@ export function ControlBar({
                               ["ganhoAutomatico", "Ganho automatico"],
                             ] as const
                           ).map(([campo, rotulo]) => (
-                            <label
+                            <button
                               key={campo}
+                              type="button"
+                              role="switch"
+                              aria-checked={tratamento[campo]}
+                              disabled={reaplicandoNativo}
+                              onClick={() => void alternarNativo(campo)}
                               className={cn(
-                                "flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-1.5 text-[12px] text-ink-200 hover:bg-base-800",
+                                "flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-[12px] text-ink-200 hover:bg-base-800",
                                 reaplicandoNativo && "cursor-wait opacity-60",
                               )}
                             >
                               {rotulo}
-                              <input
-                                type="checkbox"
-                                checked={tratamento[campo]}
-                                disabled={reaplicandoNativo}
-                                onChange={() => void alternarNativo(campo)}
-                                className="accent-accent-500"
-                              />
-                            </label>
+                              <SwitchVisual checked={tratamento[campo]} />
+                            </button>
                           ))
                         : null}
                     </div>

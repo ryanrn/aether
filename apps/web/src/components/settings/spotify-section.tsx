@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { Switch } from "@/components/ui/switch";
 import {
   disconnectSpotifyAction,
   setSpotifyVisibilityAction,
 } from "@/server/actions/spotify";
-import { cn } from "@/lib/utils";
 
 /**
  * Seccao "Spotify" da aba Atividade.
@@ -206,14 +206,14 @@ export function SpotifySection() {
             </button>
           </div>
 
-          <div className="mt-3 space-y-2.5">
-            <Chave
+          <div className="mt-3 space-y-3">
+            <ChaveDeVisibilidade
               rotulo="Exibir no perfil"
               ligada={conta.showOnProfile}
               disabled={salvando}
               onChange={(v) => void alternar({ showOnProfile: v })}
             />
-            <Chave
+            <ChaveDeVisibilidade
               rotulo="Exibir o Spotify como seu status"
               ligada={conta.showAsStatus}
               disabled={salvando}
@@ -226,7 +226,8 @@ export function SpotifySection() {
   );
 }
 
-function Chave({
+/** Linha compacta dentro do card da conta: rotulo + `Switch`. */
+function ChaveDeVisibilidade({
   rotulo,
   ligada,
   disabled,
@@ -238,26 +239,14 @@ function Chave({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3">
       <span className="text-[13px] text-ink-200">{rotulo}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={ligada}
+      <Switch
+        checked={ligada}
         disabled={disabled}
-        onClick={() => onChange(!ligada)}
-        className={cn(
-          "relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-50",
-          ligada ? "bg-accent-500" : "bg-base-700",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-[3px] h-4 w-4 rounded-full bg-white transition-[left]",
-            ligada ? "left-[19px]" : "left-[3px]",
-          )}
-        />
-      </button>
-    </label>
+        onCheckedChange={onChange}
+        label={rotulo}
+      />
+    </div>
   );
 }

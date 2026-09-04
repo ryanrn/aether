@@ -24,6 +24,7 @@ import { MOLDURA_ESTILO } from "@/components/ui/molduras";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
+import { ToggleRow } from "@/components/ui/switch";
 
 /**
  * Minha conta: foto, nome de exibicao e apelido no servidor atual.
@@ -63,9 +64,11 @@ export function AccountTab({
    * antes: sem ela, descobrir que escolheu o arquivo errado custa um upload
    * inteiro e uma volta ao seletor.
    */
-  const [previa, setPrevia] = useState<
-    { url: string; arquivo: File; animado: boolean } | null
-  >(null);
+  const [previa, setPrevia] = useState<{
+    url: string;
+    arquivo: File;
+    animado: boolean;
+  } | null>(null);
 
   /*
    * `createObjectURL` prende o arquivo na memoria ate ser revogado. Sem esta
@@ -397,8 +400,11 @@ export function AccountTab({
                 className={cn(
                   "relative grid h-9 w-9 place-items-center rounded-full transition-transform",
                   MOLDURA_ESTILO[m.id],
-                  ativa && "ring-2 ring-accent-400 ring-offset-2 ring-offset-base-900",
-                  liberada ? "hover:scale-105" : "cursor-not-allowed opacity-30",
+                  ativa &&
+                    "ring-2 ring-accent-400 ring-offset-2 ring-offset-base-900",
+                  liberada
+                    ? "hover:scale-105"
+                    : "cursor-not-allowed opacity-30",
                 )}
               >
                 {/* o miolo escuro deixa a amostra parecer o que ela e: um anel */}
@@ -466,61 +472,39 @@ export function AccountTab({
         dois num bloco so faz a chave passar despercebida.
       */}
       <div className="border-t border-line pt-5">
-        <h3 className="mb-3 text-[13px] font-semibold text-ink-100">
+        <h3 className="mb-1 text-[13px] font-semibold text-ink-100">
           Privacidade
         </h3>
-        <label className="flex cursor-pointer items-start gap-2.5">
-          <input
-            type="checkbox"
+        <div className="flex flex-col">
+          <ToggleRow
             checked={aceitaDeServidor}
             disabled={pending}
-            onChange={(evento) =>
+            onCheckedChange={(v) =>
               salvarChave(
-                evento.target.checked,
+                v,
                 aceitaDeServidor,
                 setAceitaDeServidor,
                 setAllowServerDmsAction,
               )
             }
-            className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
+            title="Receber mensagens diretas de quem divide um servidor comigo"
+            description="Seus amigos sempre conseguem falar com voce, com isto ligado ou nao. Desligar nao apaga conversa nenhuma — quem ja falou com voce volta a alcancar se voce religar."
           />
-          <span className="leading-tight">
-            <span className="block text-[13px] text-ink-200">
-              Receber mensagens diretas de quem divide um servidor comigo
-            </span>
-            <span className="block text-[11px] text-ink-500">
-              Seus amigos sempre conseguem falar com voce, com isto ligado ou
-              nao. Desligar nao apaga conversa nenhuma — quem ja falou com voce
-              volta a alcancar se voce religar.
-            </span>
-          </span>
-        </label>
-
-        <label className="mt-3 flex cursor-pointer items-start gap-2.5">
-          <input
-            type="checkbox"
+          <ToggleRow
             checked={aceitaPedidos}
             disabled={pending}
-            onChange={(evento) =>
+            onCheckedChange={(v) =>
               salvarChave(
-                evento.target.checked,
+                v,
                 aceitaPedidos,
                 setAceitaPedidos,
                 setAllowServerFriendRequestsAction,
               )
             }
-            className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent-500)]"
+            title="Receber pedidos de amizade de quem divide um servidor comigo"
+            description="Desligando, so quem souber seu nome de usuario exato consegue te mandar pedido."
           />
-          <span className="leading-tight">
-            <span className="block text-[13px] text-ink-200">
-              Receber pedidos de amizade de quem divide um servidor comigo
-            </span>
-            <span className="block text-[11px] text-ink-500">
-              Desligando, so quem souber seu nome de usuario exato consegue te
-              mandar pedido.
-            </span>
-          </span>
-        </label>
+        </div>
       </div>
 
       <FieldError>{error}</FieldError>

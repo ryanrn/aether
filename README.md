@@ -138,6 +138,18 @@ e feita em estagios, cada um com regressao verde:
 - **`lucide-react` ainda esta em `apps/web/package.json`.** Nenhum arquivo o
   importa; remover a dependencia (e mexer no lockfile) fica para uma limpeza a parte.
 
+### Chave liga/desliga unificada (`components/ui/switch.tsx`)
+
+O redesign padroniza toda chave numa pilula (`.switch`) e numa linha
+(`.toggle-row`); antes o app tinha tres aparencias — a pilula propria do
+`spotify-section`, o `Chave` do `media-advanced` e `<input type="checkbox">`
+cru nas telas de privacidade/atividade e na matriz de permissoes. Agora todas
+passam por `<Switch>` / `<ToggleRow>` (e `<SwitchVisual>` quando a linha
+inteira ja e o `<button role="switch">`). Migrados: Config › Minha conta ›
+Privacidade, Config › Voz e video › Tratamento do microfone, Config ›
+Atividade, `spotify-section`, o popover de ruido do dock, e a matriz de
+permissoes de cargo (`roles-tab`).
+
 ---
 
 ## Estabilidade da call (correcoes v2)
