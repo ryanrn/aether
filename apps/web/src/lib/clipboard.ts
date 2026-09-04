@@ -33,6 +33,19 @@ export async function copiarTexto(texto: string): Promise<boolean> {
   }
 
   try {
+    /**
+     * A SELECAO ANTERIOR PRECISA SAIR DO CAMINHO.
+     *
+     * `execCommand("copy")` copia o que estiver selecionado no documento. Se o
+     * `select()` abaixo nao pegar (elemento sem foco, por exemplo), ele copia a
+     * selecao que ja existia na pagina — e o que vai para a area de
+     * transferencia e um pedaco de HTML renderizado, que cola como um bloco
+     * formatado em vez do texto. Foi exatamente esse o sintoma relatado
+     * ("copiou um print").
+     */
+    const selecao = window.getSelection();
+    selecao?.removeAllRanges();
+
     const area = document.createElement("textarea");
     area.value = texto;
     // `readonly` evita o teclado virtual no celular; fora da tela evita o
@@ -42,9 +55,16 @@ export async function copiarTexto(texto: string): Promise<boolean> {
     area.style.top = "-1000px";
     area.style.opacity = "0";
     document.body.appendChild(area);
+    // `focus()` ANTES do `select()`: sem foco no elemento, a selecao nao vale.
+    area.focus();
     area.select();
     area.setSelectionRange(0, texto.length);
-    const ok = document.execCommand("copy");
+
+    // Se a selecao nao pegou, copiar agora pegaria a coisa errada — melhor
+    // falhar e dizer isso do que colocar lixo na area de transferencia.
+    const pegou = area.selectionEnd - area.selectionStart === texto.length;
+    const ok = pegou ? document.execCommand("copy") : false;
+
     document.body.removeChild(area);
     return ok;
   } catch {

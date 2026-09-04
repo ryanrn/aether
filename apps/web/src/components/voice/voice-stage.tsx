@@ -36,6 +36,7 @@ import {
 } from "@/components/voice/voice-member-menu";
 import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
 import { ConnectionPanel } from "@/components/voice/connection-panel";
+import { MediaDebugPanel } from "@/components/voice/media-debug-panel";
 import { cn } from "@/lib/utils";
 
 /**
@@ -73,6 +74,7 @@ export function VoiceStage({
 
   const isHere = selfVoice?.channelId === channel.id;
   const [statsOpen, setStatsOpen] = useState(false);
+  const [depuracaoAberta, setDepuracaoAberta] = useState(false);
   /**
    * Tela em destaque minimizada: a grade de participantes volta a ser o
    * assunto (para ver as cameras dos amigos) e a tela vira um bloco flutuante
@@ -195,8 +197,21 @@ export function VoiceStage({
         <ConnectionPanel
           anchorEl={statsButtonRef.current}
           onClose={() => setStatsOpen(false)}
+          onAbrirDepuracao={() => setDepuracaoAberta(true)}
         />
       ) : null}
+
+      {/*
+        A janela de Depuracao mora AQUI, e nao dentro do `ConnectionPanel`.
+        Enquanto morava la, ela era filha de um popover que se fecha ao
+        detectar clique fora dele — e QUALQUER clique dentro da depuracao
+        contava como "fora", entao o popover fechava e levava a janela junto.
+        Foi isso que fazia a aba "Saida" e o "Copiar tudo" fecharem tudo.
+      */}
+      <MediaDebugPanel
+        open={depuracaoAberta}
+        onClose={() => setDepuracaoAberta(false)}
+      />
 
       {/* faixa vermelha de isolamento — teste de microfone ativo */}
       {isHere ? <MonitorStrip /> : null}
