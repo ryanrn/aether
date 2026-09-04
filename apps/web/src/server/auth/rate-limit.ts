@@ -56,7 +56,10 @@ export function rateLimitInMemory(
   if (bucket.hits.length >= limit) {
     const oldest = bucket.hits[0]!;
     buckets.set(key, bucket);
-    return { ok: false, retryAfter: Math.ceil((windowMs - (now - oldest)) / 1000) };
+    return {
+      ok: false,
+      retryAfter: Math.ceil((windowMs - (now - oldest)) / 1000),
+    };
   }
 
   bucket.hits.push(now);
@@ -69,15 +72,20 @@ export function rateLimitInMemory(
  * o custo de uma ida ao Redis por tentativa de login e irrelevante perto do
  * scrypt que vem logo depois.
  *
- * Se o Redis falhar, PERMITE a acao (fail-open) e registra. E a escolha certa
- * aqui: rate limit e defesa em profundidade, nao a autenticacao em si. Um
- * Redis fora do ar nao pode derrubar o login do produto inteiro — a senha
- * continua sendo verificada normalmente.
+ * QUANDO O REDIS FALHA, o comportamento depende de `failClosed`:
+ *
+ *  - padrao (`false`): PERMITE a acao. Rate limit e defesa em profundidade, e
+ *    um Redis fora do ar nao pode derrubar recurso comum do produto.
+ *  - `failClosed: true` (login/registro): NAO libera as cegas. Cai para o
+ *    contador EM MEMORIA — imperfeito no serverless (cada instancia tem o seu),
+ *    mas remover a protecao de forca bruta inteira no exato momento em que o
+ *    Redis pisca e um convite. Isto foi apontado na auditoria (H2).
  */
 export async function rateLimit(
   key: string,
   limit: number,
   windowMs: number,
+  opts?: { failClosed?: boolean },
 ): Promise<RateLimitResult> {
   const config = readRedisConfig();
   if (!config) return rateLimitInMemory(key, limit, windowMs);
@@ -85,6 +93,13 @@ export async function rateLimit(
   try {
     return await limitarJanelaDeslizante(config, key, limit, windowMs);
   } catch (error) {
+    if (opts?.failClosed) {
+      console.error(
+        "[rate-limit] Redis indisponivel — caindo para contador em memoria:",
+        error,
+      );
+      return rateLimitInMemory(key, limit, windowMs);
+    }
     console.error("[rate-limit] Redis indisponivel, liberando:", error);
     return { ok: true, retryAfter: 0 };
   }
@@ -95,8 +110,6 @@ export async function clientKey(scope: string): Promise<string> {
   const headerList = await headers();
   const forwarded = headerList.get("x-forwarded-for");
   const ip =
-    forwarded?.split(",")[0]?.trim() ??
-    headerList.get("x-real-ip") ??
-    "local";
+    forwarded?.split(",")[0]?.trim() ?? headerList.get("x-real-ip") ?? "local";
   return `${scope}:${ip}`;
 }

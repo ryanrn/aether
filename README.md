@@ -3736,11 +3736,16 @@ leem o mesmo estado antes de qualquer uma escrever — a corrida exata que um
 limite de tentativas e um consumo unico existem para impedir.
 
 - **As duas falhas tem politicas OPOSTAS, de proposito.** Rate limit com Redis
-  fora do ar **libera** (fail-open): e defesa em profundidade, e derrubar o
-  login inteiro por causa de um cache seria pior que o risco. Consumo de
-  ticket **recusa** (fail-closed): responder "acho que nao foi usado" abriria
-  a janela de replay que o mecanismo existe para fechar, e o custo de recusar
-  e so uma reconexao.
+  fora do ar **libera** (fail-open) PARA RECURSO COMUM: e defesa em
+  profundidade, e derrubar o app inteiro por causa de um cache seria pior que o
+  risco. Consumo de ticket **recusa** (fail-closed): responder "acho que nao
+  foi usado" abriria a janela de replay que o mecanismo existe para fechar, e o
+  custo de recusar e so uma reconexao.
+  - **Correcao (auditoria H2): login, registro e pedido de reset passam
+    `{ failClosed: true }`.** Nesses, um Redis com erro NAO libera as cegas —
+    cai para o contador em memoria (imperfeito no serverless, mas melhor que
+    remover a protecao de forca bruta / email-bombing no exato momento em que o
+    Redis pisca). Recurso comum segue fail-open.
 - **Sem as variaveis, o furo da fase 1 continua aberto em producao.** O codigo
   esta pronto, mas ate o Upstash ser provisionado e as variaveis subirem, a
   Vercel segue com contador por instancia — ou seja, quase nenhuma protecao

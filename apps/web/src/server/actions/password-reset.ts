@@ -53,8 +53,12 @@ export async function requestPasswordResetAction(
   }
   const alvo = parsed.data.toLowerCase();
 
-  // Por IP: impede varrer muitos enderecos de uma vez.
-  const porIp = await rateLimit(await clientKey("reset-ip"), 5, 15 * 60_000);
+  // Por IP: impede varrer muitos enderecos de uma vez. `failClosed` porque um
+  // flood de pedidos de reset e email-bombing de uma vitima — nao pode ficar
+  // sem freio se o Redis piscar (auditoria H2).
+  const porIp = await rateLimit(await clientKey("reset-ip"), 5, 15 * 60_000, {
+    failClosed: true,
+  });
   if (!porIp.ok) {
     return {
       ok: false,
@@ -62,7 +66,9 @@ export async function requestPasswordResetAction(
     };
   }
   // Por e-mail: impede encher a caixa de UMA pessoa trocando de rede.
-  const porEmail = await rateLimit(`reset-email:${alvo}`, 3, 15 * 60_000);
+  const porEmail = await rateLimit(`reset-email:${alvo}`, 3, 15 * 60_000, {
+    failClosed: true,
+  });
   if (!porEmail.ok) {
     // Mesma mensagem do caso acima: nao dizemos que este e-mail existe.
     return {
@@ -152,7 +158,11 @@ export async function resetPasswordAction(
 
   // Impede forca bruta sobre o token: 32 bytes ja sao inadivinhaveis, mas o
   // custo desta linha e zero e o teto vale por qualquer descuido futuro.
-  const limite = await rateLimit(await clientKey("reset-confirm"), 10, 15 * 60_000);
+  const limite = await rateLimit(
+    await clientKey("reset-confirm"),
+    10,
+    15 * 60_000,
+  );
   if (!limite.ok) {
     return {
       ok: false,

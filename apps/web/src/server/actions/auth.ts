@@ -2,11 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@aether/db";
-import {
-  loginSchema,
-  registerSchema,
-  type ActionResult,
-} from "@aether/shared";
+import { loginSchema, registerSchema, type ActionResult } from "@aether/shared";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { createSession, destroySession } from "../auth/session";
@@ -24,7 +20,9 @@ export async function registerAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   try {
-    const limit = await rateLimit(await clientKey("register"), 5, 10 * 60_000);
+    const limit = await rateLimit(await clientKey("register"), 5, 10 * 60_000, {
+      failClosed: true,
+    });
     if (!limit.ok) {
       return fail(
         `Muitas tentativas. Aguarde ${limit.retryAfter}s antes de tentar de novo.`,
@@ -39,7 +37,10 @@ export async function registerAction(
     });
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return fail(issue?.message ?? "Dados invalidos", String(issue?.path[0] ?? ""));
+      return fail(
+        issue?.message ?? "Dados invalidos",
+        String(issue?.path[0] ?? ""),
+      );
     }
 
     const { username, displayName, email, password } = parsed.data;
@@ -79,11 +80,11 @@ export async function loginAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   try {
-    const limit = await rateLimit(await clientKey("login"), 10, 5 * 60_000);
+    const limit = await rateLimit(await clientKey("login"), 10, 5 * 60_000, {
+      failClosed: true,
+    });
     if (!limit.ok) {
-      return fail(
-        `Muitas tentativas de login. Aguarde ${limit.retryAfter}s.`,
-      );
+      return fail(`Muitas tentativas de login. Aguarde ${limit.retryAfter}s.`);
     }
 
     const parsed = loginSchema.safeParse({
@@ -92,7 +93,10 @@ export async function loginAction(
     });
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return fail(issue?.message ?? "Dados invalidos", String(issue?.path[0] ?? ""));
+      return fail(
+        issue?.message ?? "Dados invalidos",
+        String(issue?.path[0] ?? ""),
+      );
     }
 
     const identifier = parsed.data.identifier.toLowerCase();
