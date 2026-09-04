@@ -5,6 +5,7 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import { getOrCreateInviteAction } from "@/server/actions/servers";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { copiarTexto } from "@/lib/clipboard";
 
 export function InviteButton({
   serverId,
@@ -36,13 +37,14 @@ export function InviteButton({
 
   async function copy() {
     if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code);
+    // `copiarTexto` tem plano B: no aplicativo de desktop a API moderna de
+    // area de transferencia rejeita calada. Ver lib/clipboard.ts.
+    if (await copiarTexto(code)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("Nao foi possivel copiar. Selecione o codigo manualmente.");
+      return;
     }
+    setError("Nao foi possivel copiar. Selecione o codigo manualmente.");
   }
 
   return (

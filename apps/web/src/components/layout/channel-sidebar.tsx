@@ -50,6 +50,7 @@ import {
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
+import { copiarTexto } from "@/lib/clipboard";
 import { ChannelMembers } from "./channel-members";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reorderChannelAction } from "@/server/actions/channels";
@@ -763,7 +764,7 @@ function ChannelRow({
         <ItemDoMenu
           icone={<AetherIcon name="link" size="sm" />}
           onClick={() => {
-            void navigator.clipboard.writeText(
+            void copiarTexto(
               `${window.location.origin}/app/s/${serverId}/c/${channel.id}`,
             );
             menu.fechar();

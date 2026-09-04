@@ -13,6 +13,7 @@ import {
 } from "@/server/actions/chaves";
 import type { ChaveNaLista } from "@/server/services/planos";
 import { cn } from "@/lib/utils";
+import { copiarTexto } from "@/lib/clipboard";
 
 /**
  * Gerar e gerenciar chaves de plano, sem sair do painel.
@@ -84,13 +85,11 @@ export function ChavesTab() {
 
   function copiar() {
     if (!gerada) return;
-    void navigator.clipboard
-      ?.writeText(gerada.codigo)
-      .then(() => {
-        setCopiado(true);
-        setTimeout(() => setCopiado(false), 2000);
-      })
-      .catch(() => undefined);
+    void copiarTexto(gerada.codigo).then((ok) => {
+      if (!ok) return;
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    });
   }
 
   function revogar(id: string) {

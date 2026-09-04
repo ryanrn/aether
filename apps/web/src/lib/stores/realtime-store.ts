@@ -15,6 +15,7 @@ import type {
 import type { Track } from "livekit-client";
 import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
+import type { MediaDebug } from "@/lib/voice/media-debug";
 import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
 
 /**
@@ -208,6 +209,12 @@ interface RealtimeState {
     subscribeConnectionStats: (
       cb: (stats: ConnectionStats) => void,
     ) => () => void;
+    /**
+     * Assina as estatisticas COMPLETAS (painel de Depuracao). Bem mais caro:
+     * le o relatorio inteiro das duas conexoes a cada segundo, e por isso so
+     * roda com a janela de depuracao aberta.
+     */
+    subscribeMediaDebug: (cb: (debug: MediaDebug) => void) => () => void;
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
@@ -326,20 +333,54 @@ function gravarVoiceIntent(intent: { channelId: string } | null): void {
   }
 }
 
+/**
+ * Ordem cronologica estavel.
+ *
+ * `createdAt` e ISO 8601 em UTC: a ordem lexicografica dos bytes JA e a
+ * cronologica, entao `<` basta. O `id` (cuid) so desempata.
+ *
+ * NAO usa `localeCompare`: ele carrega a colacao do Intl e e ~7x mais lento
+ * (medido). Numa lista de mil mensagens isso e chamado milhares de vezes por
+ * mensagem que chega — e ninguem precisa de regra de idioma para ordenar
+ * carimbo de data.
+ */
+function compararMensagens(a: ChatMessage, b: ChatMessage): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
 /** Ordena por data e remove duplicata por id — historico e socket se sobrepoem. */
 function mergeById(
   current: ChatMessage[],
   incoming: ChatMessage[],
 ): ChatMessage[] {
-  const byId = new Map<string, ChatMessage>();
-  for (const message of [...current, ...incoming]) {
-    byId.set(message.id, { ...byId.get(message.id), ...message });
+  /**
+   * CAMINHO RAPIDO: uma mensagem nova, que nao existe na lista e e mais recente
+   * que a ultima. E o caso esmagadoramente comum — alguem mandou algo agora.
+   *
+   * Sem ele, CADA mensagem recebida remontava o Map inteiro e reordenava a
+   * lista inteira: trabalho O(n log n) num handler de socket, com a thread
+   * principal travada, para acrescentar um item no fim.
+   */
+  if (incoming.length === 1 && current.length > 0) {
+    const nova = incoming[0]!;
+    const ultima = current[current.length - 1]!;
+    if (
+      compararMensagens(ultima, nova) < 0 &&
+      !current.some((m) => m.id === nova.id)
+    ) {
+      return [...current, nova];
+    }
   }
-  return [...byId.values()].sort((a, b) =>
-    a.createdAt === b.createdAt
-      ? a.id.localeCompare(b.id)
-      : a.createdAt.localeCompare(b.createdAt),
-  );
+
+  const byId = new Map<string, ChatMessage>();
+  for (const message of current) byId.set(message.id, message);
+  for (const message of incoming) {
+    const anterior = byId.get(message.id);
+    byId.set(message.id, anterior ? { ...anterior, ...message } : message);
+  }
+  return [...byId.values()].sort(compararMensagens);
 }
 
 export const useRealtimeStore = create<RealtimeState>((set) => ({

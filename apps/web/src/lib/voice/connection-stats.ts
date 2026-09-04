@@ -2,6 +2,7 @@
 
 import { ConnectionQuality, RoomEvent, Track, type Room } from "livekit-client";
 import { paresDoRelatorio, rttDosPares, type ParDeCandidatos } from "./ice-rtt";
+import { relatoriosDaSessao, type NomeDaConexao } from "./pc-access";
 
 /**
  * Estatisticas da conexao de midia — o que o painel de "Conexao" mostra.
@@ -41,7 +42,7 @@ export interface ConnectionSample {
 
 /** O que cada `RTCPeerConnection` da sessao esta usando, para diagnostico. */
 export interface RotaDaConexao {
-  pc: "publisher" | "subscriber";
+  pc: NomeDaConexao;
   pares: ParDeCandidatos[];
   /** o RTT que ESTA rota contribuiu nesta amostra */
   rttMs: number | null;
@@ -165,45 +166,6 @@ export function startConnectionStats(
   };
 }
 
-/** O minimo do `PCTransport` do livekit-client que precisamos tocar. */
-interface PCTransportLike {
-  getStats: () => Promise<RTCStatsReport | undefined>;
-}
-
-/**
- * As `RTCPeerConnection`s da sessao, via o `pcManager` interno do
- * livekit-client. NAO e API publica — por isso o acesso e por cast e
- * defensivo: se a forma mudar numa atualizacao da lib, devolvemos `[]`, o
- * ping vira `null` e o painel mostra "—" em vez de quebrar.
- */
-function pcTransports(
-  room: Room,
-): { nome: "publisher" | "subscriber"; pc: PCTransportLike }[] {
-  const manager = (
-    room as unknown as {
-      engine?: {
-        pcManager?: {
-          publisher?: PCTransportLike;
-          subscriber?: PCTransportLike;
-        };
-      };
-    }
-  ).engine?.pcManager;
-  if (!manager) {
-    avisarSemPcManager();
-    return [];
-  }
-  return (
-    [
-      { nome: "publisher" as const, pc: manager.publisher },
-      { nome: "subscriber" as const, pc: manager.subscriber },
-    ] satisfies { nome: "publisher" | "subscriber"; pc?: PCTransportLike }[]
-  ).filter(
-    (t): t is { nome: "publisher" | "subscriber"; pc: PCTransportLike } =>
-      typeof t.pc?.getStats === "function",
-  );
-}
-
 /**
  * Os pares de candidatos de cada conexao, com o RTT que cada uma daria.
  *
@@ -214,27 +176,9 @@ function pcTransports(
  * mostrar QUAL rota deu qual numero.
  */
 async function rotasDaConexao(room: Room): Promise<RotaDaConexao[]> {
-  const rotas: RotaDaConexao[] = [];
-  for (const { nome, pc } of pcTransports(room)) {
-    let relatorio: RTCStatsReport | undefined;
-    try {
-      relatorio = await pc.getStats();
-    } catch {
-      continue;
-    }
-    if (!relatorio) continue;
-    const pares = paresDoRelatorio(relatorio);
-    rotas.push({ pc: nome, pares, rttMs: rttDosPares(pares) });
-  }
-  return rotas;
-}
-
-let avisou = false;
-function avisarSemPcManager(): void {
-  if (avisou) return;
-  avisou = true;
-  console.warn(
-    "[voz] sem acesso ao pcManager do livekit-client para medir o ping — " +
-      "a forma interna da lib mudou? O painel de Conexao vai mostrar '—'.",
-  );
+  const relatorios = await relatoriosDaSessao(room);
+  return relatorios.map(({ nome, report }) => {
+    const pares = paresDoRelatorio(report);
+    return { pc: nome, pares, rttMs: rttDosPares(pares) };
+  });
 }

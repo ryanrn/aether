@@ -6,6 +6,8 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import { cn } from "@/lib/utils";
+import { copiarTexto } from "@/lib/clipboard";
+import { MediaDebugPanel } from "@/components/voice/media-debug-panel";
 
 /**
  * Painel de "Conexao" — ping, perda de pacotes e regiao da sessao de voz.
@@ -37,6 +39,8 @@ export function ConnectionPanel({
   );
   const [stats, setStats] = useState<ConnectionStats | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [falhouCopiar, setFalhouCopiar] = useState(false);
+  const [depuracaoAberta, setDepuracaoAberta] = useState(false);
   const painelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -62,10 +66,7 @@ export function ConnectionPanel({
       const alvo = e.target as Node;
       // O proprio botao de sinal ja alterna aberto/fechado no onClick dele —
       // fechar aqui tambem faria o clique reabrir logo em seguida.
-      if (
-        !painelRef.current?.contains(alvo) &&
-        !anchorEl.contains(alvo)
-      ) {
+      if (!painelRef.current?.contains(alvo) && !anchorEl.contains(alvo)) {
         onClose();
       }
     }
@@ -82,110 +83,127 @@ export function ConnectionPanel({
     };
   }, [onClose, anchorEl]);
 
-  function copiarDiagnostico() {
+  async function copiarDiagnostico() {
+    setFalhouCopiar(false);
     const dump = {
       geradoEm: new Date().toISOString(),
       userAgent: navigator.userAgent,
       stats,
     };
-    void navigator.clipboard
-      ?.writeText(JSON.stringify(dump, null, 2))
-      .then(() => {
-        setCopiado(true);
-        setTimeout(() => setCopiado(false), 2000);
-      })
-      .catch(() => undefined);
-  }
-
-  function ligarDepuracao() {
-    const url = new URL(window.location.href);
-    url.searchParams.set("debug", "media");
-    window.location.href = url.toString();
+    // `copiarTexto` tem plano B: no aplicativo de desktop a API moderna de
+    // area de transferencia rejeita calada. Ver lib/clipboard.ts.
+    if (await copiarTexto(JSON.stringify(dump, null, 2))) {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+      return;
+    }
+    setFalhouCopiar(true);
   }
 
   const rtt = stats?.rttMs ?? null;
   const loss = stats?.lossPct ?? null;
-  const ruim =
-    (rtt !== null && rtt >= 250) || (loss !== null && loss >= 10);
+  const ruim = (rtt !== null && rtt >= 250) || (loss !== null && loss >= 10);
 
   return createPortal(
-    <div
-      ref={painelRef}
-      role="dialog"
-      aria-label="Conexao"
-      className={cn(
-        "fixed z-50 rounded-lg border border-line bg-base-900 p-3 text-[12px] text-ink-200 shadow-xl",
-        pos ? "opacity-100" : "pointer-events-none opacity-0",
-      )}
-      style={{ width: LARGURA, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
-    >
-      <div className="mb-2 flex items-center gap-2 text-ink-100">
-        <AetherIcon name="activity" size="sm" className="text-accent-300" />
-        <span className="font-medium">Conexao</span>
-        <span
-          className={cn(
-            "ml-auto rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em]",
-            qualidadeClasse(stats?.quality),
-          )}
-        >
-          {stats?.quality ?? "…"}
-        </span>
-      </div>
+    <>
+      <MediaDebugPanel
+        open={depuracaoAberta}
+        onClose={() => setDepuracaoAberta(false)}
+      />
+      <div
+        ref={painelRef}
+        role="dialog"
+        aria-label="Conexao"
+        className={cn(
+          "fixed z-50 rounded-lg border border-line bg-base-900 p-3 text-[12px] text-ink-200 shadow-xl",
+          pos ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        style={{
+          width: LARGURA,
+          left: pos?.left ?? -9999,
+          top: pos?.top ?? -9999,
+        }}
+      >
+        <div className="mb-2 flex items-center gap-2 text-ink-100">
+          <AetherIcon name="activity" size="sm" className="text-accent-300" />
+          <span className="font-medium">Conexao</span>
+          <span
+            className={cn(
+              "ml-auto rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em]",
+              qualidadeClasse(stats?.quality),
+            )}
+          >
+            {stats?.quality ?? "…"}
+          </span>
+        </div>
 
-      <Sparkline history={stats?.history ?? []} />
+        <Sparkline history={stats?.history ?? []} />
 
-      <div className="mt-2 space-y-1">
-        <Linha rotulo="Regiao" valor={stats?.region ?? "—"} mono />
-        <Linha
-          rotulo="Ping medio"
-          valor={stats?.rttMediaMs != null ? `${stats.rttMediaMs} ms` : "—"}
-        />
-        <Linha
-          rotulo="Ultimo ping"
-          valor={rtt != null ? `${rtt} ms` : "—"}
-        />
-        <Linha
-          rotulo="Perda de pacotes enviados"
-          valor={loss != null ? `${loss.toFixed(1)}%` : "—"}
-          alerta={loss != null && loss >= 10}
-        />
-      </div>
+        <div className="mt-2 space-y-1">
+          <Linha rotulo="Regiao" valor={stats?.region ?? "—"} mono />
+          <Linha
+            rotulo="Ping medio"
+            valor={stats?.rttMediaMs != null ? `${stats.rttMediaMs} ms` : "—"}
+          />
+          <Linha rotulo="Ultimo ping" valor={rtt != null ? `${rtt} ms` : "—"} />
+          <Linha
+            rotulo="Perda de pacotes enviados"
+            valor={loss != null ? `${loss.toFixed(1)}%` : "—"}
+            alerta={loss != null && loss >= 10}
+          />
+        </div>
 
-      {ruim ? (
-        <p className="mt-2 rounded-sm bg-signal-idle/10 px-2 py-1.5 text-[11px] leading-snug text-signal-idle">
-          Ping acima de 250 ms ou perda acima de 10% deixam a voz robotica ou
-          com atraso. Se persistir, desconecte e entre de novo.
+        {ruim ? (
+          <p className="mt-2 rounded-sm bg-signal-idle/10 px-2 py-1.5 text-[11px] leading-snug text-signal-idle">
+            Ping acima de 250 ms ou perda acima de 10% deixam a voz robotica ou
+            com atraso. Se persistir, desconecte e entre de novo.
+          </p>
+        ) : null}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDepuracaoAberta(true)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
+          >
+            <AetherIcon name="bug" size="sm" className="h-3 w-3" />
+            Depuracao
+          </button>
+          <button
+            type="button"
+            onClick={() => void copiarDiagnostico()}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
+          >
+            {copiado ? (
+              <AetherIcon
+                name="clipboard-check"
+                size="sm"
+                className="h-3 w-3 text-accent-300"
+              />
+            ) : (
+              <AetherIcon name="copy" size="sm" className="h-3 w-3" />
+            )}
+            {copiado ? "Copiado" : "Copiar diagnostico"}
+          </button>
+        </div>
+
+        {/*
+        Copiar que falha precisa DIZER que falhou. No aplicativo de desktop a
+        API de area de transferencia rejeita calada, e o botao piscava
+        "Copiado" com a area vazia.
+      */}
+        {falhouCopiar ? (
+          <p className="mt-2 rounded-sm bg-signal-dnd/10 px-2 py-1.5 text-[11px] leading-snug text-signal-dnd">
+            Nao consegui copiar. Abra a Depuracao e selecione o texto a mao.
+          </p>
+        ) : null}
+
+        <p className="mt-2.5 flex items-center gap-1.5 text-[10px] text-ink-500">
+          <AetherIcon name="lock" size="sm" className="h-3 w-3" />
+          Conexao criptografada (DTLS-SRTP) ate o servidor de midia.
         </p>
-      ) : null}
-
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={ligarDepuracao}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
-        >
-          <AetherIcon name="bug" size="sm" className="h-3 w-3" />
-          Depuracao
-        </button>
-        <button
-          type="button"
-          onClick={copiarDiagnostico}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] transition-colors hover:bg-base-800"
-        >
-          {copiado ? (
-            <AetherIcon name="clipboard-check" size="sm" className="h-3 w-3 text-accent-300" />
-          ) : (
-            <AetherIcon name="copy" size="sm" className="h-3 w-3" />
-          )}
-          {copiado ? "Copiado" : "Copiar diagnostico"}
-        </button>
       </div>
-
-      <p className="mt-2.5 flex items-center gap-1.5 text-[10px] text-ink-500">
-        <AetherIcon name="lock" size="sm" className="h-3 w-3" />
-        Conexao criptografada (DTLS-SRTP) ate o servidor de midia.
-      </p>
-    </div>,
+    </>,
     document.body,
   );
 }
@@ -232,7 +250,9 @@ function qualidadeClasse(q: ConnectionStats["quality"] | undefined): string {
 function Sparkline({ history }: { history: ConnectionStats["history"] }) {
   const W = 276;
   const H = 44;
-  const pings = history.map((h) => h.rttMs).filter((v): v is number => v !== null);
+  const pings = history
+    .map((h) => h.rttMs)
+    .filter((v): v is number => v !== null);
   if (pings.length < 2) {
     return (
       <div className="grid h-11 place-items-center rounded-sm bg-base-950 text-[10px] text-ink-600">

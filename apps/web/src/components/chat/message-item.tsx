@@ -13,6 +13,7 @@ import {
   useMenuDeContexto,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
+import { copiarTexto } from "@/lib/clipboard";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
 /**
@@ -270,7 +271,7 @@ export function MessageItem({
             <ItemDoMenu
               icone={<AetherIcon name="copy" className="h-3.5 w-3.5" />}
               onClick={() => {
-                void navigator.clipboard.writeText(selecao ?? message.content);
+                void copiarTexto(selecao ?? message.content);
                 menu.fechar();
               }}
             >

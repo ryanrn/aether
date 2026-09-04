@@ -131,6 +131,7 @@ export function VoiceSession() {
             handle.setUserVolume(userId, volume),
           setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
+          subscribeMediaDebug: (cb) => handle.subscribeMediaDebug(cb),
           definirSupressaoAvancada: (ligado) =>
             handle.definirSupressaoAvancada(ligado),
           definirForcaSupressao: (forca) => handle.definirForcaSupressao(forca),

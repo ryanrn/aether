@@ -46,6 +46,7 @@ import {
 import { createMicAnalyser } from "./mic-analyser";
 import { createSpeechGate } from "./speech-gate";
 import { startConnectionStats, type ConnectionStats } from "./connection-stats";
+import { startMediaDebug, type MediaDebug } from "./media-debug";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -172,6 +173,12 @@ export interface VoiceRoomHandle {
   subscribeConnectionStats: (
     cb: (stats: ConnectionStats) => void,
   ) => () => void;
+  /**
+   * Assina as estatisticas COMPLETAS (painel de Depuracao). Muito mais caro
+   * que o de cima — le o relatorio inteiro das duas conexoes a cada segundo —
+   * e por isso so roda enquanto a janela de depuracao esta aberta.
+   */
+  subscribeMediaDebug: (cb: (debug: MediaDebug) => void) => () => void;
   disconnect: () => Promise<void>;
 }
 
@@ -958,6 +965,10 @@ export async function connectVoiceRoom({
 
     subscribeConnectionStats(cb) {
       return startConnectionStats(room, cb);
+    },
+
+    subscribeMediaDebug(cb) {
+      return startMediaDebug(room, cb);
     },
 
     /**
