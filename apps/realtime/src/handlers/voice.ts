@@ -96,7 +96,14 @@ export function registerVoiceHandlers(
      * pagado o custo que o limite existe para evitar.
      */
     if (!joinLimiter.take(userId)) {
-      respond({ ok: false, error: "Espere um instante para entrar de novo." });
+      // `retriable`: a recusa e por ritmo, nao por permissao. O religa-a-call
+      // do cliente tenta de novo em vez de abandonar a intencao de estar na
+      // call.
+      respond({
+        ok: false,
+        error: "Espere um instante para entrar de novo.",
+        retriable: true,
+      });
       return;
     }
 
@@ -185,7 +192,8 @@ export function registerVoiceHandlers(
       });
     } catch (error) {
       console.error("[gateway] voice:join falhou:", error);
-      respond({ ok: false, error: "Falha ao conectar" });
+      // Erro de banco/rede e passageiro — o cliente pode tentar de novo.
+      respond({ ok: false, error: "Falha ao conectar", retriable: true });
     }
   });
 

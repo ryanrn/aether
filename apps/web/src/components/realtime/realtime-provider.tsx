@@ -105,7 +105,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
      * do proprio ack porque o broadcast de `voice:update` so alcanca quem esta
      * na sala do servidor, e a pessoa pode ter recarregado na tela de amigos.
      */
-    function rejoinVoice(target: TypedSocket) {
+    function rejoinVoice(target: TypedSocket, tentativa = 0) {
       const state = useRealtimeStore.getState();
       const intent = state.voiceIntent;
       if (!intent || state.media) return;
@@ -115,8 +115,22 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         { channelId: intent.channelId },
         (resultado) => {
           const store = useRealtimeStore.getState();
+          // O canal pode ter mudado enquanto o ack voltava (a pessoa clicou
+          // "desconectar", ou foi movida). Ignora respostas de canal antigo.
+          if (store.voiceIntent?.channelId !== intent.channelId) return;
+
           if (!resultado.ok) {
-            // Canal apagado, ou perdi o acesso enquanto estava fora.
+            if (resultado.retriable && tentativa < 4 && !cancelled) {
+              // Recusa passageira (rate-limit numa tempestade de reconexao,
+              // falha momentanea): tenta de novo com recuo, sem descartar a
+              // intencao de estar na call.
+              const recuo = 1000 * 2 ** tentativa; // 1s, 2s, 4s, 8s
+              setTimeout(() => {
+                if (target.connected) rejoinVoice(target, tentativa + 1);
+              }, recuo);
+              return;
+            }
+            // Definitiva (canal apagado, sem acesso) ou tentativas esgotadas.
             store.setVoiceIntent(null);
             store.setVoiceError(resultado.error);
             return;

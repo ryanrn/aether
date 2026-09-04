@@ -267,7 +267,18 @@ export type VoiceJoinAck =
       participants: VoiceParticipant[];
       media: MediaGrant | null;
     }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /**
+       * A recusa e passageira (rate-limit, falha momentanea) e vale tentar de
+       * novo — diferente de "canal nao existe" ou "seu cargo nao permite", que
+       * sao definitivas. Usado pelo religa-a-call do reconnect: sem isto, um
+       * `voice:join` barrado pelo limitador numa tempestade de reconexao
+       * apagava a intencao de estar na call de vez.
+       */
+      retriable?: boolean;
+    };
 
 /**
  * Resposta a `voice:refresh-token`: um token de midia NOVO para a MESMA sala.
