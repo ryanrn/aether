@@ -24,6 +24,12 @@ export interface ParDeCandidatos {
    * de "numero congelado no aperto de mao inicial".
    */
   respostas?: number;
+  /**
+   * Bytes que JA PASSARAM por este par. E o discriminador que importa: o
+   * caminho por onde a midia corre de verdade e o que tem trafego.
+   */
+  bytesEnviados?: number;
+  bytesRecebidos?: number;
 }
 
 /**
@@ -84,6 +90,8 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
       tipoRemoto: tipoDoCandidato.get(par.remoteCandidateId ?? ""),
       protocolo: protocoloDoCandidato.get(par.localCandidateId ?? ""),
       respostas: p.responsesReceived,
+      bytesEnviados: par.bytesSent,
+      bytesRecebidos: par.bytesReceived,
     };
   });
 }
@@ -94,32 +102,62 @@ function ehRelay(par: ParDeCandidatos): boolean {
 }
 
 /**
- * Dado um `RTCStatsReport`, o RTT (ms) do melhor par de candidatos ICE, ou
- * `null` quando ainda nao ha medicao.
+ * Dado um `RTCStatsReport`, o RTT (ms) do par de candidatos por onde a chamada
+ * REALMENTE corre, ou `null` quando ainda nao ha medicao.
  *
  * `currentRoundTripTime` e o round-trip das checagens STUN de consentimento
  * ate o outro lado (aqui, o SFU) — a latencia REAL da rede. Vem em SEGUNDOS.
- *
- * Escolha:
- *  1. par SELECIONADO, se for direto (nao-relay) e tiver RTT;
- *  2. senao, o menor RTT entre os pares diretos que deram `succeeded`;
- *  3. senao, o menor RTT entre os pares via relay (TURN) — pior, mas real;
- *  4. senao, `null`.
  */
 export function rttDoRelatorio(report: RTCStatsReport): number | null {
   return rttDosPares(paresDoRelatorio(report));
 }
 
+/**
+ * Qual par representa a chamada.
+ *
+ * NAO da para confiar em `transport.selectedCandidatePairId`. Medido em
+ * producao, numa maquina com mais de uma interface de rede (adaptador virtual
+ * de VPN/Hyper-V/WSL ao lado da placa real), o relatorio trazia TRES pares
+ * `succeeded` ao mesmo tempo:
+ *
+ *   host  -> host   121ms   1 resposta    (congelado no aperto de mao)
+ *   host  -> host   117ms   5 respostas   <- o "selecionado"
+ *   prflx -> host     5ms   3 respostas   <- o caminho real da internet
+ *
+ * Os `host` sao a interface virtual; o `prflx` (peer-reflexive, descoberto
+ * atraves do NAT) e por onde a midia corre. Seguir o "selecionado" mostrava
+ * 117ms numa chamada de 5ms.
+ *
+ * O discriminador honesto e o TRAFEGO: o par por onde a midia passa e o que
+ * tem bytes. Isso nao e escolher o numero mais bonito — e medir o caminho
+ * certo. A ordem:
+ *
+ *  1. entre os pares vivos, o que mais MOVEU BYTES (o da chamada);
+ *  2. empate ou sem contagem de bytes: o par SELECIONADO;
+ *  3. sem nenhum dos dois: o menor RTT (ainda melhor que um valor congelado).
+ *
+ * Pares via relay (TURN) so entram se nao houver caminho direto: o RTT deles
+ * inclui o desvio pelo servidor TURN.
+ */
 export function rttDosPares(pares: ParDeCandidatos[]): number | null {
-  const usaveis = pares.filter(
+  const vivos = pares.filter(
     (p) => p.rttMs !== null && (p.state === "succeeded" || p.selecionado),
   );
-  if (usaveis.length === 0) return null;
+  if (vivos.length === 0) return null;
 
-  const selDireto = usaveis.find((p) => p.selecionado && !ehRelay(p));
-  if (selDireto) return selDireto.rttMs;
+  const diretos = vivos.filter((p) => !ehRelay(p));
+  const alvo = diretos.length > 0 ? diretos : vivos;
 
-  const diretos = usaveis.filter((p) => !ehRelay(p));
-  const alvo = diretos.length > 0 ? diretos : usaveis;
+  const comTrafego = alvo.filter((p) => (p.bytesEnviados ?? 0) > 0);
+  if (comTrafego.length > 0) {
+    const carregando = comTrafego.reduce((a, b) =>
+      (b.bytesEnviados ?? 0) > (a.bytesEnviados ?? 0) ? b : a,
+    );
+    return carregando.rttMs;
+  }
+
+  const selecionado = alvo.find((p) => p.selecionado);
+  if (selecionado) return selecionado.rttMs;
+
   return Math.min(...alvo.map((p) => p.rttMs as number));
 }
