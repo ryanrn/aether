@@ -18,6 +18,9 @@ import { defineConfig } from "vitest/config";
 const stub = (name: string) =>
   fileURLToPath(new URL(`./tests/stubs/${name}.ts`, import.meta.url));
 
+/** O `@/` do app web — mesmo alias do tsconfig de `apps/web`. */
+const webSrc = fileURLToPath(new URL("./apps/web/src", import.meta.url));
+
 export default defineConfig({
   test: {
     include: ["tests/unit/**/*.test.ts"],
@@ -27,7 +30,7 @@ export default defineConfig({
     testTimeout: 20_000,
   },
   resolve: {
-    alias: {
+    alias: [
       /**
        * O rate limit do app web declara `server-only` e le `next/headers`.
        * A funcao sob teste (`rateLimit`) e pura — os dois imports existem por
@@ -35,8 +38,10 @@ export default defineConfig({
        * testavel fora dele. Substituir por stub deixa o modulo carregar sem
        * arrastar o runtime do Next para dentro da suite.
        */
-      "server-only": stub("server-only"),
-      "next/headers": stub("next-headers"),
-    },
+      { find: "server-only", replacement: stub("server-only") },
+      { find: "next/headers", replacement: stub("next-headers") },
+      // O `@/` do app web, igual ao tsconfig de apps/web.
+      { find: /^@\//, replacement: `${webSrc}/` },
+    ],
   },
 });

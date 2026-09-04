@@ -9,7 +9,10 @@
      * de DOM que o codigo compartilhado referencia.
      */
     "lib": ["ES2022", "DOM"],
-    "allowJs": false
+    "allowJs": false,
+    /** O `@/` do app web, igual ao tsconfig de apps/web e ao alias do vitest. */
+    "baseUrl": ".",
+    "paths": { "@/*": ["apps/web/src/*"] }
   },
   "include": ["tests/**/*.ts", "vitest.config.mts"]
 }
