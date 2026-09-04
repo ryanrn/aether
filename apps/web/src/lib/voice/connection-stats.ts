@@ -154,9 +154,6 @@ interface PCTransportLike {
  * livekit-client. NAO e API publica — por isso o acesso e por cast e
  * defensivo: se a forma mudar numa atualizacao da lib, devolvemos `[]`, o
  * ping vira `null` e o painel mostra "—" em vez de quebrar.
- *
- * Ordem: `publisher` primeiro (o caminho ativo quando o mic esta publicado),
- * `subscriber` depois. Os dois falam com o MESMO PoP, entao o RTT bate.
  */
 function pcTransports(room: Room): PCTransportLike[] {
   const manager = (
@@ -178,7 +175,17 @@ function pcTransports(room: Room): PCTransportLike[] {
   );
 }
 
+/**
+ * O MENOR RTT entre as duas conexoes (publisher e subscriber).
+ *
+ * As duas falam com o mesmo SFU pelo mesmo caminho de rede, entao em regime
+ * normal os numeros batem. Quando NAO batem — uma delas caiu num par relay, ou
+ * esta entre checagens STUN — o menor e o que representa a rede de verdade.
+ * Pegar "a primeira que responder" fazia o ping pular de ~7ms para ~120ms
+ * conforme a ordem das respostas.
+ */
 async function rttDaConexao(room: Room): Promise<number | null> {
+  const medidas: number[] = [];
   for (const pc of pcTransports(room)) {
     let relatorio: RTCStatsReport | undefined;
     try {
@@ -187,9 +194,9 @@ async function rttDaConexao(room: Room): Promise<number | null> {
       continue;
     }
     const rtt = relatorio ? rttDoRelatorio(relatorio) : null;
-    if (rtt !== null) return rtt;
+    if (rtt !== null) medidas.push(rtt);
   }
-  return null;
+  return medidas.length > 0 ? Math.min(...medidas) : null;
 }
 
 let avisou = false;

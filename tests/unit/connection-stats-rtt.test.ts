@@ -2,16 +2,17 @@ import { describe, expect, it } from "vitest";
 import { rttDoRelatorio } from "@/lib/voice/ice-rtt";
 
 /**
- * O ping do painel de Conexao (correcao: vinha inflado ~117ms).
+ * O ping do painel de Conexao.
  *
- * Antes o RTT saia de `getSenderStats().roundTripTime` — o RTT do RTCP do
- * AUDIO, esparso e sistematicamente alto. Agora sai do `currentRoundTripTime`
- * do par de candidatos ICE ativo: a latencia real da rede ate o SFU.
+ * Historia: primeiro vinha de `getSenderStats().roundTripTime` (RTCP do audio,
+ * esparso e inflado — ~117ms fixo). Trocou para o `currentRoundTripTime` do par
+ * de candidatos ICE. Ai apareceu ~7ms (correto!), mas as vezes pulava para
+ * ~120ms: o par "selecionado" no relatorio as vezes e um RELAY (TURN), que
+ * roteia por um servidor distante. Agora a funcao ignora o relay quando ha um
+ * caminho direto.
  *
- * `rttDoRelatorio` e a parte pura: dado um RTCStatsReport, devolve o RTT em ms
- * do par certo, ou null quando ainda nao ha medicao. Um `Map` serve de dublê
- * do report (tem `forEach`, que e tudo que a funcao usa); a chave do Map vira
- * o `id` de cada stat, como num relatorio de verdade.
+ * `rttDoRelatorio` e a parte pura. Um `Map` serve de dublê do RTCStatsReport
+ * (so `forEach` e usado); a chave do Map vira o `id` de cada stat.
  */
 
 function report(
@@ -23,54 +24,100 @@ function report(
   return m as unknown as RTCStatsReport;
 }
 
+const HOST_LOCAL = { type: "local-candidate", candidateType: "host" };
+const HOST_REMOTE = { type: "remote-candidate", candidateType: "host" };
+const RELAY_LOCAL = { type: "local-candidate", candidateType: "relay" };
+
 describe("rttDoRelatorio", () => {
-  it("segue o transport.selectedCandidatePairId", () => {
+  it("par selecionado direto: usa o RTT dele", () => {
     const r = report({
-      T1: { type: "transport", selectedCandidatePairId: "P_boa" },
-      P_ruim: {
-        type: "candidate-pair",
-        nominated: true,
-        state: "succeeded",
-        currentRoundTripTime: 0.5,
-      },
-      P_boa: {
+      T1: { type: "transport", selectedCandidatePairId: "P" },
+      L: HOST_LOCAL,
+      R: HOST_REMOTE,
+      P: {
         type: "candidate-pair",
         state: "succeeded",
-        currentRoundTripTime: 0.004,
+        localCandidateId: "L",
+        remoteCandidateId: "R",
+        currentRoundTripTime: 0.007,
       },
     });
-    expect(rttDoRelatorio(r)).toBe(4);
+    expect(rttDoRelatorio(r)).toBe(7);
   });
 
   it("converte segundos -> ms e arredonda", () => {
     const r = report({
-      T1: { type: "transport", selectedCandidatePairId: "P1" },
-      P1: { type: "candidate-pair", currentRoundTripTime: 0.1173 },
+      T1: { type: "transport", selectedCandidatePairId: "P" },
+      P: {
+        type: "candidate-pair",
+        state: "succeeded",
+        currentRoundTripTime: 0.1173,
+      },
     });
     expect(rttDoRelatorio(r)).toBe(117);
   });
 
-  it("sem transport, cai para o par nominated + succeeded", () => {
+  it("selecionado e RELAY, existe um direto: usa o direto (o caso ~7 vs ~120)", () => {
     const r = report({
-      P_fail: {
+      T1: { type: "transport", selectedCandidatePairId: "P_relay" },
+      L_relay: RELAY_LOCAL,
+      L_host: HOST_LOCAL,
+      R: HOST_REMOTE,
+      P_relay: {
         type: "candidate-pair",
-        nominated: true,
-        state: "failed",
-        currentRoundTripTime: 0.9,
-      },
-      P_ok: {
-        type: "candidate-pair",
-        nominated: true,
         state: "succeeded",
-        currentRoundTripTime: 0.021,
+        localCandidateId: "L_relay",
+        remoteCandidateId: "R",
+        currentRoundTripTime: 0.12,
+      },
+      P_host: {
+        type: "candidate-pair",
+        state: "succeeded",
+        localCandidateId: "L_host",
+        remoteCandidateId: "R",
+        currentRoundTripTime: 0.007,
       },
     });
-    expect(rttDoRelatorio(r)).toBe(21);
+    expect(rttDoRelatorio(r)).toBe(7);
   });
 
-  it("respeita o `selected` do Firefox quando nao ha transport", () => {
+  it("so ha caminho relay: usa o relay (real, ainda que pior)", () => {
     const r = report({
-      A: { type: "candidate-pair", selected: false, currentRoundTripTime: 0.3 },
+      T1: { type: "transport", selectedCandidatePairId: "P" },
+      L: RELAY_LOCAL,
+      P: {
+        type: "candidate-pair",
+        state: "succeeded",
+        localCandidateId: "L",
+        currentRoundTripTime: 0.09,
+      },
+    });
+    expect(rttDoRelatorio(r)).toBe(90);
+  });
+
+  it("varios diretos succeeded: pega o menor", () => {
+    const r = report({
+      A: {
+        type: "candidate-pair",
+        state: "succeeded",
+        currentRoundTripTime: 0.04,
+      },
+      B: {
+        type: "candidate-pair",
+        state: "succeeded",
+        currentRoundTripTime: 0.011,
+      },
+    });
+    expect(rttDoRelatorio(r)).toBe(11);
+  });
+
+  it("respeita o `selected` do Firefox", () => {
+    const r = report({
+      A: {
+        type: "candidate-pair",
+        selected: false,
+        currentRoundTripTime: 0.3,
+      },
       B: {
         type: "candidate-pair",
         selected: true,
@@ -82,37 +129,39 @@ describe("rttDoRelatorio", () => {
 
   it("currentRoundTripTime ausente -> null (nao '0 ms')", () => {
     const r = report({
-      T1: { type: "transport", selectedCandidatePairId: "P1" },
-      P1: { type: "candidate-pair", state: "succeeded", nominated: true },
+      T1: { type: "transport", selectedCandidatePairId: "P" },
+      P: { type: "candidate-pair", state: "succeeded" },
     });
     expect(rttDoRelatorio(r)).toBeNull();
   });
 
   it("currentRoundTripTime 0 -> null (entre checagens STUN)", () => {
     const r = report({
-      T1: { type: "transport", selectedCandidatePairId: "P1" },
-      P1: { type: "candidate-pair", currentRoundTripTime: 0 },
+      T1: { type: "transport", selectedCandidatePairId: "P" },
+      P: {
+        type: "candidate-pair",
+        state: "succeeded",
+        currentRoundTripTime: 0,
+      },
     });
     expect(rttDoRelatorio(r)).toBeNull();
   });
 
-  it("relatorio sem nenhum candidate-pair -> null", () => {
+  it("par nao-succeeded e nao-selecionado e ignorado", () => {
+    const r = report({
+      P: {
+        type: "candidate-pair",
+        state: "in-progress",
+        currentRoundTripTime: 0.02,
+      },
+    });
+    expect(rttDoRelatorio(r)).toBeNull();
+  });
+
+  it("relatorio sem candidate-pair -> null", () => {
     const r = report({
       X: { type: "outbound-rtp", kind: "audio", packetsSent: 100 },
     });
     expect(rttDoRelatorio(r)).toBeNull();
-  });
-
-  it("selectedCandidatePairId aponta para id inexistente -> cai no fallback", () => {
-    const r = report({
-      T1: { type: "transport", selectedCandidatePairId: "sumiu" },
-      P1: {
-        type: "candidate-pair",
-        nominated: true,
-        state: "succeeded",
-        currentRoundTripTime: 0.033,
-      },
-    });
-    expect(rttDoRelatorio(r)).toBe(33);
   });
 });
