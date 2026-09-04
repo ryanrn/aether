@@ -392,18 +392,36 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       const state = useRealtimeStore.getState();
       for (const [channelId, messages] of Object.entries(state.messages)) {
         const last = [...messages].reverse().find((m) => !m.pending);
-        if (!last) continue;
-        socket?.emit(
-          "message:history",
-          { conversationId: channelId, after: last.id },
-          (result) => {
-            if (!result.ok) return;
-            useRealtimeStore
-              .getState()
-              .seedMessages(channelId, result.messages);
-          },
-        );
+        if (last) recoverChannelGap(channelId, last.id, 0);
       }
+    }
+
+    /**
+     * Uma pagina do intervalo perdido, e a proxima se ainda houver.
+     *
+     * Antes fazia UMA chamada e parava, ignorando `hasMore` — depois de uma
+     * queda longa (notebook que dormiu), qualquer canal com mais de
+     * `MESSAGE_PAGE_SIZE` mensagens novas ficava com um BURACO no meio do
+     * historico que so o F5 fechava (auditoria M3). Agora pagina em cadeia,
+     * com teto: acima de ~5 paginas o custo nao vale, e o F5 resolve o resto.
+     */
+    function recoverChannelGap(
+      channelId: string,
+      afterId: string,
+      pagina: number,
+    ) {
+      socket?.emit(
+        "message:history",
+        { conversationId: channelId, after: afterId },
+        (result) => {
+          if (!result.ok || result.messages.length === 0) return;
+          useRealtimeStore.getState().seedMessages(channelId, result.messages);
+          const ultima = result.messages[result.messages.length - 1];
+          if (result.hasMore && ultima && pagina < 5) {
+            recoverChannelGap(channelId, ultima.id, pagina + 1);
+          }
+        },
+      );
     }
 
     if (socket.connected) join();
