@@ -67,7 +67,8 @@ export function readCookie(
  * Com Redis configurado, a lembranca e COMPARTILHADA entre instancias — que e
  * o que faz o uso unico continuar valendo com mais de uma maquina de gateway.
  * Sem Redis, cai para memoria: correto com uma instancia (o caso de hoje),
- * e a segunda maquina reabriria a janela de replay.
+ * e a segunda maquina reabriria a janela de replay. O mesmo vale quando o
+ * Redis esta configurado mas indisponivel — ver `consumeTicket`.
  */
 const usedTickets = new Map<string, number>();
 let lastSweep = Date.now();
@@ -99,14 +100,38 @@ async function consumeTicket(jti: string): Promise<boolean> {
     );
   } catch (error) {
     /**
-     * Fail-CLOSED, ao contrario do rate limit. Aqui a duvida e "este ticket ja
-     * foi usado?", e responder "acho que nao" com o Redis fora do ar abriria a
-     * janela de replay que este codigo existe para fechar. O custo de recusar
-     * e uma reconexao: o cliente ja pede um ticket novo a cada tentativa.
+     * Redis fora do ar: cai para a lembranca EM MEMORIA desta instancia, e nao
+     * recusa direto (auditoria M5).
+     *
+     * O fail-closed anterior transformava qualquer soluco do Redis em queda
+     * total de conexoes NOVAS — nenhum handshake por ticket passava ate o Redis
+     * voltar. Caro demais para o que protege: o ticket ja e de uso unico,
+     * assinado, e vive no maximo SOCKET_TICKET_TTL_SEGUNDOS.
+     *
+     * A memoria local mantem o uso unico REAL dentro desta instancia — que e o
+     * unico caso hoje (uma maquina de gateway). Com mais de uma instancia, e
+     * so durante a queda do Redis, um ticket capturado poderia ser reusado uma
+     * vez em outra instancia dentro da sua janela de ~5 min. Exposicao bem
+     * menor que derrubar todo mundo que tenta entrar.
      */
-    console.error("[gateway] Redis indisponivel ao consumir ticket:", error);
-    return false;
+    logarRedisIndisponivel(error);
+    return consumeTicketInMemory(jti);
   }
+}
+
+/**
+ * Um erro por minuto, no maximo: um Redis intermitente encheria o log de linha
+ * identica a cada handshake e enterraria o resto.
+ */
+let ultimoAvisoRedis = 0;
+function logarRedisIndisponivel(error: unknown): void {
+  const agora = Date.now();
+  if (agora - ultimoAvisoRedis < 60_000) return;
+  ultimoAvisoRedis = agora;
+  console.error(
+    "[gateway] Redis indisponivel ao consumir ticket — caindo para memoria local (uso unico so vale por instancia ate o Redis voltar):",
+    error,
+  );
 }
 
 /**
