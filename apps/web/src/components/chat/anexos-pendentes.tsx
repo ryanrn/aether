@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import type { PublicAttachment } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
@@ -55,9 +57,7 @@ export function AnexosPendentes({
           key={anexo.chaveLocal}
           className={cn(
             "group/anexo relative flex items-center gap-2 rounded-md border bg-base-950 py-1.5 pl-1.5 pr-2",
-            anexo.estado === "erro"
-              ? "border-signal-dnd/50"
-              : "border-line",
+            anexo.estado === "erro" ? "border-signal-dnd/50" : "border-line",
           )}
         >
           {anexo.previa ? (
@@ -116,18 +116,30 @@ export function AnexosPendentes({
  * conhecido, justamente para nada alem de midia ser renderizado.
  */
 export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
+  /**
+   * So as imagens, na ordem em que aparecem — e o que o visor navega com as
+   * setas. `useMemo` para o array nao ser recriado a cada render (o
+   * `ImageLightbox` guarda o indice contra ele).
+   */
+  const imagens = useMemo(
+    () => anexos.filter((a) => ehImagem(a.mime)),
+    [anexos],
+  );
+  const [visor, setVisor] = useState<number | null>(null);
+
   if (anexos.length === 0) return null;
 
   return (
     <div className="mt-1.5 flex flex-wrap gap-2">
       {anexos.map((anexo) =>
         ehImagem(anexo.mime) ? (
-          <a
+          <button
             key={anexo.id}
-            href={anexo.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="block overflow-hidden rounded-md border border-line transition-colors hover:border-line"
+            type="button"
+            onClick={() =>
+              setVisor(imagens.findIndex((i) => i.id === anexo.id))
+            }
+            className="block cursor-zoom-in overflow-hidden rounded-md border border-line transition-colors hover:border-line-strong"
             /**
              * O espaco e reservado ANTES de a imagem chegar, com as dimensoes
              * que o servidor guardou. Sem isso o chat pula a cada imagem que
@@ -150,7 +162,7 @@ export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
               loading="lazy"
               className="h-full w-full max-w-[320px] object-cover"
             />
-          </a>
+          </button>
         ) : (
           <a
             key={anexo.id}
@@ -178,6 +190,15 @@ export function AnexosDaMensagem({ anexos }: { anexos: PublicAttachment[] }) {
           </a>
         ),
       )}
+
+      {imagens.length > 0 ? (
+        <ImageLightbox
+          images={imagens}
+          open={visor !== null}
+          startIndex={visor ?? 0}
+          onClose={() => setVisor(null)}
+        />
+      ) : null}
     </div>
   );
 }
