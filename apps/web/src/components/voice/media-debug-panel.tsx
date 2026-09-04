@@ -167,6 +167,23 @@ function Transporte({ debug }: { debug: MediaDebug }) {
   }
   return (
     <div className="flex flex-col gap-6">
+      {/*
+        O ping so quer dizer alguma coisa junto com a PONTA do outro lado. Um
+        ping alto com o no de midia em outro continente e distancia, nao defeito
+        da rede de quem esta ligando — e a diferenca muda completamente o que
+        fazer a respeito. Por isso a regiao fica aqui em cima do numero, e nao
+        so escondida na coluna da esquerda.
+      */}
+      <section className="flex flex-col gap-2">
+        <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+          Servidor de midia
+        </h3>
+        <Grade>
+          <Campo rotulo="Regiao" valor={debug.regiao ?? "—"} mono destaque />
+          <Campo rotulo="No" valor={debug.servidor ?? "—"} mono />
+        </Grade>
+      </section>
+
       <Grafico titulo="Ping" serie={debug.historico.ping} unidade="ms" />
 
       {debug.transportes.map((t) => (
