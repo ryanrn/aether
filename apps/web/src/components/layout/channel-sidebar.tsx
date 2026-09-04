@@ -56,6 +56,7 @@ import { reorderChannelAction } from "@/server/actions/channels";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
 import { CategoryFormModal } from "@/components/channels/category-form-modal";
 import { InviteButton } from "@/components/servers/invite-button";
+import { ServerMenu } from "@/components/layout/server-menu";
 
 /**
  * Arvore de canais no estilo TeamSpeak: categorias colapsaveis e, abaixo de
@@ -200,9 +201,16 @@ export function ChannelSidebar({
           dentro do centro, em vez de existir um rodape global.
         */}
         <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-line px-4">
-          <h2 className="min-w-0 flex-1 truncate text-[14px] font-bold uppercase tracking-[0.04em] text-ink-100">
-            {serverName}
-          </h2>
+          {/*
+            O nome vira MENU para quem nao e dono — e o unico lugar com "Sair
+            do servidor". Para o dono continua sendo so o titulo: ele nao pode
+            sair, sai transferindo a posse ou excluindo (Configuracoes).
+          */}
+          <ServerMenu
+            serverId={serverId}
+            serverName={serverName}
+            isOwner={viewer.isOwner}
+          />
           {/*
             "Convidar" mora AQUI, e nao no cabecalho do palco como no desenho.
             Motivo: o cabecalho do palco so existe com um canal aberto, e
