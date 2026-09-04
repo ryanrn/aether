@@ -2,12 +2,12 @@
 
 Quatro pecas. Duas ja estao hospedadas:
 
-| peca | onde | estado |
-| --- | --- | --- |
-| Banco (Postgres) | Supabase, `sa-east-1` | ja hospedado |
-| SFU (midia) | LiveKit Cloud | ja hospedado |
-| Gateway WebSocket | **Fly.io, regiao `gru`** | a fazer |
-| App web (Next) | **Vercel, regiao `gru1`** | a fazer |
+| peca              | onde                      | estado       |
+| ----------------- | ------------------------- | ------------ |
+| Banco (Postgres)  | Supabase, `sa-east-1`     | ja hospedado |
+| SFU (midia)       | LiveKit Cloud             | ja hospedado |
+| Gateway WebSocket | **Fly.io, regiao `gru`**  | a fazer      |
+| App web (Next)    | **Vercel, regiao `gru1`** | a fazer      |
 
 **Por que GRU nos dois:** o gateway consulta o Postgres a cada mensagem
 enviada, e as Server Actions do Next tambem falam com o banco. Com o Supabase
@@ -138,22 +138,27 @@ npx vercel --prod
 
 ### Variaveis
 
-| variavel | de onde vem |
-| --- | --- |
-| `AUTH_SECRET` | o mesmo do gateway — e ele que valida o ticket |
-| `DATABASE_URL` | Supabase, com `connection_limit=5` |
-| `DIRECT_URL` | conexao direta (porta 5432) |
-| `NEXT_PUBLIC_REALTIME_URL` | endereco do gateway no Fly |
-| `SUPABASE_URL` | URL do projeto Supabase (icone de servidor) |
-| `SUPABASE_SERVICE_ROLE_KEY` | chave service_role, no painel do Supabase |
+| variavel                    | de onde vem                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `AUTH_SECRET`               | o mesmo do gateway — e ele que valida o ticket                                     |
+| `DATABASE_URL`              | Supabase, com `connection_limit=5`                                                 |
+| `DIRECT_URL`                | conexao direta (porta 5432)                                                        |
+| `NEXT_PUBLIC_REALTIME_URL`  | endereco do gateway no Fly                                                         |
+| `SUPABASE_URL`              | URL do projeto Supabase (icone de servidor)                                        |
+| `SUPABASE_SERVICE_ROLE_KEY` | chave service_role, no painel do Supabase                                          |
+| `CRON_SECRET`               | opcional — habilita a faxina diaria de anexos orfaos; pode repetir o `AUTH_SECRET` |
 
 `NEXT_PUBLIC_APP_URL` **nao** entra aqui: o app web nao a usa. Quem le essa
 variavel e o gateway, para saber qual origem liberar no CORS.
 
-As duas ultimas sao **opcionais**: sem elas o app sobe igual e so o upload de
-icone responde que nao esta configurado. O `scripts/vercel-env.mjs` so as envia
-quando as duas estao preenchidas no `.env` — meia configuracao falharia na hora
-do upload, longe da causa.
+`SUPABASE_*` e `CRON_SECRET` sao **opcionais**: sem as de Supabase o upload de
+icone responde que nao esta configurado; sem `CRON_SECRET` a rota
+`/api/cron/limpar-anexos` responde 503 e os anexos orfaos so se acumulam (nada
+quebra). O `scripts/vercel-env.mjs` so envia o par de Supabase quando os dois
+estao no `.env`, e o `CRON_SECRET` quando ele existe.
+
+**O cron em si** ja esta declarado no `vercel.json` (`crons`) — a Vercel o
+registra sozinha no proximo deploy. So falta o segredo.
 
 > A `SUPABASE_SERVICE_ROLE_KEY` **ignora Row Level Security por completo**.
 > Ela nao tem prefixo `NEXT_PUBLIC_` de proposito: se vazasse para o bundle do
@@ -195,9 +200,9 @@ recusada.
 
 ## Estado atual (verificado)
 
-| peca | endereco |
-| --- | --- |
-| App web | https://aether-mocha-phi.vercel.app |
+| peca    | endereco                                       |
+| ------- | ---------------------------------------------- |
+| App web | https://aether-mocha-phi.vercel.app            |
 | Gateway | https://aether-gateway-earnest-dew-229.fly.dev |
 
 Use sempre o endereco **aliased** da Vercel, nao o do deploy especifico

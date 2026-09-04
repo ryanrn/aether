@@ -51,6 +51,15 @@ const OPTIONAL_REDIS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
 const OPTIONAL_EMAIL = ["RESEND_API_KEY", "EMAIL_FROM"];
 
 /**
+ * Vercel Cron (faxina diaria de anexos orfaos). OPCIONAL: sem ela, a rota
+ * /api/cron/limpar-anexos responde 503 e os orfaos so se acumulam — nada
+ * quebra, mas a conta do R2 cresce. O Vercel injeta
+ * `Authorization: Bearer $CRON_SECRET` nas chamadas de cron QUANDO esta
+ * variavel existe; pode repetir o valor do AUTH_SECRET.
+ */
+const OPTIONAL_CRON = ["CRON_SECRET"];
+
+/**
  * Cloudflare R2 (anexo no chat). Opcionais e em BLOCO: as cinco andam juntas.
  *
  * Tres delas o next.config.ts le para montar o CSP, e isso acontece em TEMPO
@@ -159,6 +168,17 @@ if (emailMissing.length === 0) {
   );
 }
 
+const cronMissing = OPTIONAL_CRON.filter((key) => !env[key]);
+if (cronMissing.length === 0) {
+  for (const key of OPTIONAL_CRON) payload[key] = env[key];
+} else {
+  console.log(
+    "aviso: CRON_SECRET ausente no .env — a faxina diaria de anexos orfaos\n" +
+      "       (/api/cron/limpar-anexos) vai responder 503 ate ela existir.\n" +
+      "       Pode repetir o valor do AUTH_SECRET.",
+  );
+}
+
 /**
  * Chamamos via `npx` porque o CLI da Vercel normalmente nao esta instalado
  * global. No Windows o alvo e um `.cmd`, e desde a correcao do CVE-2024-27980
@@ -174,10 +194,10 @@ if (emailMissing.length === 0) {
  */
 function addVar(name, value, target) {
   return new Promise((resolve) => {
-    const child = spawn(
-      `npx --yes vercel env add ${name} ${target} --force`,
-      { stdio: ["pipe", "ignore", "pipe"], shell: true },
-    );
+    const child = spawn(`npx --yes vercel env add ${name} ${target} --force`, {
+      stdio: ["pipe", "ignore", "pipe"],
+      shell: true,
+    });
 
     let stderr = "";
     child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
@@ -219,7 +239,9 @@ for (const [name, value] of Object.entries(payload)) {
       console.log(`  ok     ${name} (${target})`);
     } else {
       failed += 1;
-      console.log(`  FALHA  ${name} (${target}) — ${result.error.split("\n")[0]}`);
+      console.log(
+        `  FALHA  ${name} (${target}) — ${result.error.split("\n")[0]}`,
+      );
     }
   }
 }
