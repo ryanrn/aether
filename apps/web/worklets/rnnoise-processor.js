@@ -29,12 +29,43 @@ const QUADRO = 480;
  */
 const ESCALA = 32768;
 
+/**
+ * O RNNoise sozinho preserva fala e corta ruido ESTACIONARIO (ventilador,
+ * chiado). Barulho impulsivo — clique de teclado, estalo — e o ponto fraco
+ * dele. O que ajuda de verdade e a probabilidade de voz que ele ja calcula a
+ * cada quadro (`_rnnoise_process_frame` devolve 0..1): quando ela esta baixa,
+ * quase nada de fala esta acontecendo, e abaixar o ganho ai mata o teclado
+ * das PAUSAS — que e a maior parte do que incomoda.
+ *
+ *  - `ATAQUE` curto para nao comer o inicio de palavra;
+ *  - `SEGURA` mantem aberto um tempo depois da fala parar, para nao cortar
+ *    respiro e final de frase;
+ *  - `SOLTA` mais lento, para o gate fechar sem "bombear".
+ */
+const VAD_LIMIAR = 0.5;
+const ATAQUE_S = 0.005;
+const SOLTA_S = 0.12;
+const SEGURA_S = 0.15;
+
 class RnnoiseProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
 
     this.pronto = false;
     this.ligado = true;
+    /**
+     * Forca do gate pela VAD, 0..1. `0` = RNNoise puro (nenhum gate); `1` =
+     * agressivo (piso ~ -30 dB nas pausas). Vem da preferencia do usuario.
+     */
+    this.forca = 0;
+    /** Envelope atual do gate e quanto ainda "segura aberto". */
+    this.ganhoPorta = 1;
+    this.seguraRestante = 0;
+
+    this.attackCoef = Math.exp(-1 / (ATAQUE_S * sampleRate));
+    this.releaseCoef = Math.exp(-1 / (SOLTA_S * sampleRate));
+    this.seguraAmostras = Math.round(SEGURA_S * sampleRate);
+
     /** Acumula entrada ate fechar um quadro de 480. */
     this.entrada = new Float32Array(QUADRO);
     this.naEntrada = 0;
@@ -45,7 +76,13 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
     this.quadro = new Float32Array(QUADRO);
 
     this.port.onmessage = (evento) => {
-      if (evento.data?.tipo === "ligado") this.ligado = evento.data.valor === true;
+      if (evento.data?.tipo === "ligado") {
+        this.ligado = evento.data.valor === true;
+      }
+      if (evento.data?.tipo === "forca") {
+        const v = Number(evento.data.valor);
+        if (Number.isFinite(v)) this.forca = Math.min(1, Math.max(0, v));
+      }
     };
 
     /**
@@ -75,10 +112,30 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
       heap[base + i] = this.quadro[i] * ESCALA;
     }
 
-    this.wasm._rnnoise_process_frame(this.estado, this.buffer, this.buffer);
+    // O retorno e a probabilidade de voz do quadro (0..1) — antes era jogado
+    // fora.
+    const vad = this.wasm._rnnoise_process_frame(
+      this.estado,
+      this.buffer,
+      this.buffer,
+    );
+
+    /**
+     * Alvo do gate: fala (ou dentro do tempo de "segura") => ganho cheio;
+     * pausa => piso. `forca` 0 zera o gate (piso = 1), reproduzindo o
+     * comportamento antigo exatamente.
+     */
+    const piso = 1 - this.forca * 0.97;
+    const falando = vad >= VAD_LIMIAR;
+    if (falando) this.seguraRestante = this.seguraAmostras;
+    const alvo = falando || this.seguraRestante > 0 ? 1 : piso;
 
     for (let i = 0; i < QUADRO; i++) {
-      this.saida[this.fimSaida % this.saida.length] = heap[base + i] / ESCALA;
+      const coef = alvo > this.ganhoPorta ? this.attackCoef : this.releaseCoef;
+      this.ganhoPorta = alvo + (this.ganhoPorta - alvo) * coef;
+      if (this.seguraRestante > 0) this.seguraRestante--;
+      this.saida[this.fimSaida % this.saida.length] =
+        (heap[base + i] / ESCALA) * this.ganhoPorta;
       this.fimSaida++;
     }
   }

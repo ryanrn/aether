@@ -133,6 +133,7 @@ export function VoiceSession() {
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
           definirSupressaoAvancada: (ligado) =>
             handle.definirSupressaoAvancada(ligado),
+          definirForcaSupressao: (forca) => handle.definirForcaSupressao(forca),
           reaplicarTratamentoNativo: () => handle.reaplicarTratamentoNativo(),
           /**
            * A faixa local vai para a store DEPOIS de a camera ligar de fato.

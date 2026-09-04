@@ -1,6 +1,10 @@
 "use client";
 
-import type { AudioProcessorOptions, TrackProcessor, Track } from "livekit-client";
+import type {
+  AudioProcessorOptions,
+  TrackProcessor,
+  Track,
+} from "livekit-client";
 
 /**
  * Supressao de ruido por RNNoise, como processador do LiveKit.
@@ -22,24 +26,46 @@ import type { AudioProcessorOptions, TrackProcessor, Track } from "livekit-clien
 /** Onde o bundle do worklet mora. Gerado por `npm run build:worklet`. */
 const ARQUIVO_DO_WORKLET = "/rnnoise-worklet.js";
 
-export interface FiltroDeRuido
-  extends TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> {
+export interface FiltroDeRuido extends TrackProcessor<
+  Track.Kind.Audio,
+  AudioProcessorOptions
+> {
   /** Liga e desliga sem refazer o grafo — o worklet so passa o som adiante. */
   definirLigado(ligado: boolean): void;
+  /**
+   * Forca do gate pela VAD, 0..1. `0` = RNNoise puro; `1` = agressivo (corta
+   * quase tudo nas pausas). Aplica ao vivo, sem refazer o grafo.
+   */
+  definirForca(forca: number): void;
   /** O WASM subiu? `false` significa que o som esta passando cru. */
   estaAtivo(): boolean;
 }
 
-export function criarFiltroDeRuido(): FiltroDeRuido {
+export function criarFiltroDeRuido(forcaInicial = 0): FiltroDeRuido {
   let contexto: AudioContext | null = null;
+  /** Contexto NOSSO (48 kHz) — precisa ser fechado por nos; o do LiveKit nao. */
+  let contextoProprio = false;
   let origem: MediaStreamAudioSourceNode | null = null;
   let no: AudioWorkletNode | null = null;
   let destino: MediaStreamAudioDestinationNode | null = null;
   let ativo = false;
   let ligado = true;
+  let forca = Math.min(1, Math.max(0, forcaInicial));
 
   async function montar(opts: AudioProcessorOptions): Promise<void> {
-    contexto = opts.audioContext;
+    /**
+     * Contexto PROPRIO a 48 kHz. O RNNoise so trabalha nessa taxa (quadros de
+     * 480 = 10 ms a 48 k); o do LiveKit pode vir em 44,1 k, e ai o modelo
+     * recebe audio "torto" e suprime pior. Se o navegador recusar a taxa
+     * fixa, cai no contexto do LiveKit — pior que 48 k, melhor que sem filtro.
+     */
+    try {
+      contexto = new AudioContext({ sampleRate: 48000 });
+      contextoProprio = true;
+    } catch {
+      contexto = opts.audioContext;
+      contextoProprio = false;
+    }
 
     /**
      * `addModule` e idempotente por URL no mesmo contexto, mas nao entre
@@ -65,6 +91,7 @@ export function criarFiltroDeRuido(): FiltroDeRuido {
       if (evento.data?.tipo === "falhou") ativo = false;
     };
     no.port.postMessage({ tipo: "ligado", valor: ligado });
+    no.port.postMessage({ tipo: "forca", valor: forca });
 
     destino = contexto.createMediaStreamDestination();
     origem.connect(no);
@@ -76,9 +103,13 @@ export function criarFiltroDeRuido(): FiltroDeRuido {
       origem?.disconnect();
       no?.disconnect();
       no?.port.close();
+      // O contexto de 48 kHz e NOSSO — quem cria fecha. O do LiveKit nunca.
+      if (contextoProprio) void contexto?.close();
     } catch {
       // Grafo ja derrubado com o contexto: nao ha o que soltar.
     }
+    contexto = null;
+    contextoProprio = false;
     origem = null;
     no = null;
     destino = null;
@@ -118,6 +149,11 @@ export function criarFiltroDeRuido(): FiltroDeRuido {
     definirLigado(valor: boolean) {
       ligado = valor;
       no?.port.postMessage({ tipo: "ligado", valor });
+    },
+
+    definirForca(valor: number) {
+      forca = Math.min(1, Math.max(0, valor));
+      no?.port.postMessage({ tipo: "forca", valor: forca });
     },
 
     estaAtivo() {

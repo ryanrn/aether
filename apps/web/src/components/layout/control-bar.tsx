@@ -265,6 +265,17 @@ export function ControlBar({
   }
 
   /**
+   * Forca do gate pela VAD do RNNoise (0..1). Grava e aplica ao vivo — o
+   * `room.ts` empurra no worklet sem refazer o grafo.
+   */
+  function ajustarForcaRuido(valor: number) {
+    const novo = { ...lerTratamentoDeAudio(), forcaRnnoise: valor };
+    setTratamento(novo);
+    salvarTratamentoDeAudio(novo);
+    roomControls?.definirForcaSupressao(valor);
+  }
+
+  /**
    * Alterna uma das TRES nativas (supressao nativa, eco, ganho). Grava e, se
    * houver call, `restartTrack` re-adquire o mic com a constraint nova sem
    * derrubar ninguem. Trava o popover durante a troca.
@@ -799,6 +810,42 @@ export function ControlBar({
                         className="mt-0.5 accent-accent-500"
                       />
                     </label>
+
+                    {rnnoise ? (
+                      <div className="mt-2 rounded-md border border-line bg-base-850 px-3 py-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-ink-200">
+                            Forca
+                          </span>
+                          <span className="font-mono text-[10px] text-ink-500">
+                            {Math.round(
+                              (tratamento?.forcaRnnoise ?? 0.5) * 100,
+                            )}
+                            %
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={tratamento?.forcaRnnoise ?? 0.5}
+                          onChange={(e) =>
+                            ajustarForcaRuido(Number(e.target.value))
+                          }
+                          className="mt-1.5 w-full accent-accent-500"
+                          aria-label="Forca da supressao de ruido"
+                        />
+                        <p className="mt-1 flex justify-between text-[10px] text-ink-500">
+                          <span>suave</span>
+                          <span>agressivo</span>
+                        </p>
+                        <p className="mt-1.5 text-[11px] leading-snug text-ink-500">
+                          Mais forca corta melhor o teclado nas pausas, mas pode
+                          engolir o comeco de uma palavra ou um sussurro.
+                        </p>
+                      </div>
+                    ) : null}
 
                     {/*
                       As tres nativas. Vinham so em Configuracoes porque muda-las

@@ -193,6 +193,8 @@ interface RealtimeState {
      * `false` quando nao ha faixa publicada — o botao fica desabilitado.
      */
     definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
+    /** forca do gate pela VAD do RNNoise (0..1), ao vivo */
+    definirForcaSupressao: (forca: number) => void;
     /**
      * Reaplica as constraints nativas do mic (supressao nativa, eco, ganho)
      * lendo a preferencia atual. `false` se nao houver faixa ou se falhar.

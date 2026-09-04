@@ -31,7 +31,7 @@ import {
 import { mediaDebugEnabled, mediaLog, mediaWarn } from "./debug";
 import { lerCodecDeTela } from "./codecs";
 import { lerTratamentoDeAudio, paraConstraints } from "./audio-prefs";
-import { criarFiltroDeRuido } from "./noise-filter";
+import { criarFiltroDeRuido, type FiltroDeRuido } from "./noise-filter";
 import {
   readPreferredMicrophone,
   readPreferredSpeaker,
@@ -150,6 +150,11 @@ export interface VoiceRoomHandle {
    * aplicava a escolha feita com o mic mutado.
    */
   definirSupressaoAvancada: (ligado: boolean) => Promise<boolean>;
+  /**
+   * Forca do gate pela VAD do RNNoise (0..1), ao vivo. Sem efeito se o RNNoise
+   * nao estiver ativo na faixa.
+   */
+  definirForcaSupressao: (forca: number) => void;
   /**
    * Reaplica as constraints NATIVAS do microfone (supressao nativa, eco, ganho)
    * lendo a preferencia atual — `restartTrack` re-adquire a faixa com as novas
@@ -271,7 +276,9 @@ async function alternarFiltroDeRuido(
       // Idempotente: `aplicarFiltroDeRuido` roda na entrada E no
       // `LocalTrackPublished`, e os dois podem cair juntos no startup.
       if (jaTem) return true;
-      await faixa.setProcessor(criarFiltroDeRuido());
+      await faixa.setProcessor(
+        criarFiltroDeRuido(lerTratamentoDeAudio().forcaRnnoise),
+      );
       mediaLog("filtro de ruido ligado");
     } else {
       if (!jaTem) return true;
@@ -285,6 +292,14 @@ async function alternarFiltroDeRuido(
     mediaWarn("nao consegui alternar o filtro de ruido", String(erro));
     return false;
   }
+}
+
+/** O filtro RNNoise ativo na faixa de mic, ou `null`. */
+function filtroDeRuidoAtivo(room: Room): FiltroDeRuido | null {
+  const proc = room.localParticipant
+    .getTrackPublication(Track.Source.Microphone)
+    ?.audioTrack?.getProcessor();
+  return proc?.name === "rnnoise" ? (proc as FiltroDeRuido) : null;
 }
 
 export async function connectVoiceRoom({
@@ -846,6 +861,10 @@ export async function connectVoiceRoom({
 
     async definirSupressaoAvancada(ligado) {
       return alternarFiltroDeRuido(room, ligado);
+    },
+
+    definirForcaSupressao(forca) {
+      filtroDeRuidoAtivo(room)?.definirForca(forca);
     },
 
     async reaplicarTratamentoNativo() {

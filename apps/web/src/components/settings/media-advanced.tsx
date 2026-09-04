@@ -15,6 +15,7 @@ import {
   salvarTratamentoDeAudio,
   type TratamentoDeAudio,
 } from "@/lib/voice/audio-prefs";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,7 +85,8 @@ export function CodecDaTela() {
                 ativo
                   ? "border-accent-600/60 bg-accent-600/10"
                   : "border-line bg-base-900 hover:border-line-strong",
-                !disponivel && "cursor-not-allowed opacity-45 hover:border-line",
+                !disponivel &&
+                  "cursor-not-allowed opacity-45 hover:border-line",
               )}
             >
               <span
@@ -96,13 +98,19 @@ export function CodecDaTela() {
                 )}
               >
                 {ativo ? (
-                  <AetherIcon name="check" size="sm" className="h-2.5 w-2.5 text-base-950 [stroke-width:3]" />
+                  <AetherIcon
+                    name="check"
+                    size="sm"
+                    className="h-2.5 w-2.5 text-base-950 [stroke-width:3]"
+                  />
                 ) : null}
               </span>
 
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] text-ink-100">{codec.rotulo}</span>
+                  <span className="text-[13px] text-ink-100">
+                    {codec.rotulo}
+                  </span>
                   {codec.recomendado ? (
                     <span className="rounded-full bg-accent-600/20 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-accent-300">
                       recomendado
@@ -151,14 +159,26 @@ function descricao(codec: EscolhaDeCodec): string {
 
 export function TratamentoDoMicrofone() {
   const [tratamento, setTratamento] = useState<TratamentoDeAudio | null>(null);
+  const roomControls = useRealtimeStore((s) => s.roomControls);
 
   useEffect(() => setTratamento(lerTratamentoDeAudio()), []);
 
   function alternar(campo: keyof TratamentoDeAudio) {
     if (!tratamento) return;
-    const novo = { ...tratamento, [campo]: !tratamento[campo] };
+    const valorAtual = tratamento[campo];
+    if (typeof valorAtual !== "boolean") return;
+    const novo = { ...tratamento, [campo]: !valorAtual };
     setTratamento(novo);
     salvarTratamentoDeAudio(novo);
+  }
+
+  /** Forca do gate do RNNoise (0..1). Aplica ao vivo se houver call. */
+  function ajustarForca(valor: number) {
+    if (!tratamento) return;
+    const novo = { ...tratamento, forcaRnnoise: valor };
+    setTratamento(novo);
+    salvarTratamentoDeAudio(novo);
+    roomControls?.definirForcaSupressao(valor);
   }
 
   // Ate ler a preferencia, nao desenha caixa nenhuma: mostrar tudo ligado e
@@ -211,9 +231,42 @@ export function TratamentoDoMicrofone() {
         />
         <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
           Nada do seu audio sai da maquina para isso: o modelo roda no proprio
-          navegador. Se ele nao carregar, sua voz continua indo normalmente —
-          so sem o filtro.
+          navegador. Se ele nao carregar, sua voz continua indo normalmente — so
+          sem o filtro.
         </p>
+
+        {tratamento.rnnoise ? (
+          <div className="mt-3 rounded-md border border-line bg-base-900 px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-ink-200">
+                Forca do gate
+              </span>
+              <span className="font-mono text-[11px] text-ink-500">
+                {Math.round(tratamento.forcaRnnoise * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={tratamento.forcaRnnoise}
+              onChange={(e) => ajustarForca(Number(e.target.value))}
+              className="mt-1.5 w-full accent-[var(--color-accent-500)]"
+              aria-label="Forca da supressao de ruido"
+            />
+            <p className="mt-1 flex justify-between text-[10px] text-ink-500">
+              <span>suave (RNNoise puro)</span>
+              <span>agressivo</span>
+            </p>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-500">
+              O RNNoise deixa passar barulho impulsivo (teclado, estalo). O gate
+              usa a deteccao de voz do proprio modelo para abaixar o som nas
+              pausas. Mais forca corta melhor, mas pode engolir o comeco de
+              palavras ou um sussurro.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <p className="mt-3 text-[11px] text-ink-500">

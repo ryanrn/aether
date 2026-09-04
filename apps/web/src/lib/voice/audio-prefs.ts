@@ -31,6 +31,15 @@ export interface TratamentoDeAudio {
    * As nativas ja resolvem o caso comum.
    */
   rnnoise: boolean;
+  /**
+   * Forca do gate pela VAD do RNNoise, 0..1.
+   *
+   * O RNNoise sozinho deixa passar barulho impulsivo (teclado, estalo). O gate
+   * usa a probabilidade de voz que ele ja calcula para abaixar o ganho nas
+   * pausas — `0` desliga o gate (RNNoise puro), `1` corta quase tudo quando
+   * voce nao esta falando. So tem efeito com `rnnoise` ligado.
+   */
+  forcaRnnoise: number;
 }
 
 export const TRATAMENTO_PADRAO: TratamentoDeAudio = {
@@ -38,6 +47,7 @@ export const TRATAMENTO_PADRAO: TratamentoDeAudio = {
   cancelamentoDeEco: true,
   ganhoAutomatico: true,
   rnnoise: false,
+  forcaRnnoise: 0.5,
 };
 
 const STORAGE_KEY = "aether.tratamento-audio";
@@ -71,6 +81,12 @@ export function lerTratamentoDeAudio(): TratamentoDeAudio {
         typeof salvo.rnnoise === "boolean"
           ? salvo.rnnoise
           : TRATAMENTO_PADRAO.rnnoise,
+      forcaRnnoise:
+        typeof salvo.forcaRnnoise === "number" &&
+        salvo.forcaRnnoise >= 0 &&
+        salvo.forcaRnnoise <= 1
+          ? salvo.forcaRnnoise
+          : TRATAMENTO_PADRAO.forcaRnnoise,
     };
   } catch {
     return TRATAMENTO_PADRAO;

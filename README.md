@@ -3091,6 +3091,33 @@ mantem a chave ligada se `definirSupressaoAvancada` confirmou OU o mic estava
 mutado; `false` com o mic aberto (worklet nao carregou) reverte a chave em vez
 de mentir.
 
+### Parte 2 — gate pela VAD, e 48 kHz forcado
+
+O RNNoise (modelo de 2018, ~85 mil parametros) preserva fala e corta ruido
+ESTACIONARIO — ventilador, chiado, ar-condicionado. Barulho impulsivo (clique
+de teclado mecanico, estalo) e o ponto fraco dele, e nenhum ajuste no modelo
+muda isso. Dois lugares que ajudam:
+
+**A probabilidade de voz que ele ja calcula.** `_rnnoise_process_frame` devolve
+um float 0..1 por quadro de 10 ms — antes jogado fora. Quando esta baixa, quase
+nao ha fala; clique de teclado nas pausas quase nao a move. O worklet agora
+suaviza esse valor (ataque ~5 ms para nao comer inicio de palavra, `segura`
+~150 ms, `solta` ~120 ms) e abaixa o ganho da saida quando ela cai — matando o
+teclado das PAUSAS, que e a maior parte do que incomoda. Uma chave `forca`
+(0..1) controla o piso: `0` = RNNoise puro (comportamento antigo, exato); `1` =
+piso ~ -30 dB. Padrao `0.5`. Slider no dock e em Configuracoes, ao vivo via
+`FiltroDeRuido.definirForca` -> `postMessage` no worklet, sem refazer o grafo.
+
+**48 kHz forcado.** O worklet assume quadros de 480 amostras = 10 ms A 48 kHz;
+o `AudioContext` do LiveKit pode vir em 44,1 k, e ai o modelo recebe audio
+"torto". O `criarFiltroDeRuido` agora cria um `AudioContext` PROPRIO a 48 kHz
+(fechado por nos no `desmontar`), com fallback para o do LiveKit se o navegador
+recusar a taxa fixa.
+
+Nao entrou: modelo melhor (DeepFilterNet e companhia sao 3-8x a CPU e um projeto
+proprio de integracao com ONNX Runtime Web). Krisp esta fora — SDK proprietario
+pago, sem versao web.
+
 ### `wasm-unsafe-eval` na CSP
 
 Foi preciso liberar, e vale saber o tamanho: `'wasm-unsafe-eval'` permite
