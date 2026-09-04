@@ -1,7 +1,7 @@
 "use client";
 
 import { ConnectionQuality, RoomEvent, Track, type Room } from "livekit-client";
-import { rttDoRelatorio } from "./ice-rtt";
+import { paresDoRelatorio, rttDosPares, type ParDeCandidatos } from "./ice-rtt";
 
 /**
  * Estatisticas da conexao de midia — o que o painel de "Conexao" mostra.
@@ -39,6 +39,14 @@ export interface ConnectionSample {
   lossPct: number | null;
 }
 
+/** O que cada `RTCPeerConnection` da sessao esta usando, para diagnostico. */
+export interface RotaDaConexao {
+  pc: "publisher" | "subscriber";
+  pares: ParDeCandidatos[];
+  /** o RTT que ESTA rota contribuiu nesta amostra */
+  rttMs: number | null;
+}
+
 export interface ConnectionStats {
   region: string | null;
   quality: ConnectionQualityLabel;
@@ -49,6 +57,14 @@ export interface ConnectionStats {
   /** perda de pacotes ENVIADOS na ultima janela */
   lossPct: number | null;
   history: ConnectionSample[];
+  /**
+   * Os pares de candidatos de cada conexao, so da ULTIMA amostra (fora do
+   * historico, que ficaria enorme). Alimenta o "Copiar diagnostico" — e o que
+   * permite ver POR QUE o ping deu o numero que deu, sem adivinhar.
+   *
+   * Nao carrega endereco nenhum: so tipo de candidato e protocolo.
+   */
+  rotas: RotaDaConexao[];
 }
 
 /** ~2 min de historico, amostrado a cada 2s */
@@ -83,7 +99,11 @@ export function startConnectionStats(
     if (parado) return;
 
     // RTT: o round-trip real da rede ate o SFU, do par de candidatos ICE ativo.
-    const rttMs = await rttDaConexao(room);
+    const rotas = await rotasDaConexao(room);
+    const medidas = rotas
+      .map((r) => r.rttMs)
+      .filter((v): v is number => v !== null);
+    const rttMs = medidas.length > 0 ? Math.min(...medidas) : null;
 
     // Perda: do stream de audio, onde ela importa.
     let lossPct: number | null = null;
@@ -128,6 +148,7 @@ export function startConnectionStats(
       rttMediaMs,
       lossPct,
       history: [...history],
+      rotas,
     });
   }
 
@@ -155,7 +176,9 @@ interface PCTransportLike {
  * defensivo: se a forma mudar numa atualizacao da lib, devolvemos `[]`, o
  * ping vira `null` e o painel mostra "—" em vez de quebrar.
  */
-function pcTransports(room: Room): PCTransportLike[] {
+function pcTransports(
+  room: Room,
+): { nome: "publisher" | "subscriber"; pc: PCTransportLike }[] {
   const manager = (
     room as unknown as {
       engine?: {
@@ -170,33 +193,40 @@ function pcTransports(room: Room): PCTransportLike[] {
     avisarSemPcManager();
     return [];
   }
-  return [manager.publisher, manager.subscriber].filter(
-    (pc): pc is PCTransportLike => typeof pc?.getStats === "function",
+  return (
+    [
+      { nome: "publisher" as const, pc: manager.publisher },
+      { nome: "subscriber" as const, pc: manager.subscriber },
+    ] satisfies { nome: "publisher" | "subscriber"; pc?: PCTransportLike }[]
+  ).filter(
+    (t): t is { nome: "publisher" | "subscriber"; pc: PCTransportLike } =>
+      typeof t.pc?.getStats === "function",
   );
 }
 
 /**
- * O MENOR RTT entre as duas conexoes (publisher e subscriber).
+ * Os pares de candidatos de cada conexao, com o RTT que cada uma daria.
  *
- * As duas falam com o mesmo SFU pelo mesmo caminho de rede, entao em regime
- * normal os numeros batem. Quando NAO batem — uma delas caiu num par relay, ou
- * esta entre checagens STUN — o menor e o que representa a rede de verdade.
- * Pegar "a primeira que responder" fazia o ping pular de ~7ms para ~120ms
- * conforme a ordem das respostas.
+ * As duas (publisher e subscriber) falam com o mesmo SFU pelo mesmo caminho,
+ * entao em regime normal os numeros batem. Quando NAO batem — uma caiu num par
+ * relay, ou esta com o valor congelado do aperto de mao inicial — quem decide
+ * e o `Math.min` la em cima. O dump volta junto para o diagnostico poder
+ * mostrar QUAL rota deu qual numero.
  */
-async function rttDaConexao(room: Room): Promise<number | null> {
-  const medidas: number[] = [];
-  for (const pc of pcTransports(room)) {
+async function rotasDaConexao(room: Room): Promise<RotaDaConexao[]> {
+  const rotas: RotaDaConexao[] = [];
+  for (const { nome, pc } of pcTransports(room)) {
     let relatorio: RTCStatsReport | undefined;
     try {
       relatorio = await pc.getStats();
     } catch {
       continue;
     }
-    const rtt = relatorio ? rttDoRelatorio(relatorio) : null;
-    if (rtt !== null) medidas.push(rtt);
+    if (!relatorio) continue;
+    const pares = paresDoRelatorio(relatorio);
+    rotas.push({ pc: nome, pares, rttMs: rttDosPares(pares) });
   }
-  return medidas.length > 0 ? Math.min(...medidas) : null;
+  return rotas;
 }
 
 let avisou = false;

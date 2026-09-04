@@ -6,12 +6,91 @@
  * WebRTC. `connection-stats.ts` liga isto na `RTCPeerConnection` da sessao.
  */
 
-interface ParUsavel {
-  rttMs: number;
-  /** true quando o caminho passa por um servidor TURN (detour, RTT inflado). */
-  relay: boolean;
-  /** o par que o ICE marcou como em uso agora. */
+/** Um par de candidatos ja lido e classificado. */
+export interface ParDeCandidatos {
+  id?: string;
+  state?: string;
+  nominated?: boolean;
+  /** o par que o ICE diz estar em uso agora */
   selecionado: boolean;
+  /** `currentRoundTripTime` em ms; `null` quando ainda nao foi medido */
+  rttMs: number | null;
+  /** host | srflx | prflx | relay — o "relay" e TURN, e infla o RTT */
+  tipoLocal?: string;
+  tipoRemoto?: string;
+  protocolo?: string;
+  /**
+   * Quantas respostas de STUN este par ja recebeu. Diferencia "medicao viva"
+   * de "numero congelado no aperto de mao inicial".
+   */
+  respostas?: number;
+}
+
+/**
+ * Le o relatorio uma vez e devolve todos os pares ja classificados.
+ *
+ * NAO expoe endereco nenhum — so o TIPO do candidato (host/srflx/relay) e o
+ * protocolo. O diagnostico que a pessoa copia nao pode carregar o IP dela.
+ */
+export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
+  let selectedId: string | undefined;
+  const brutos: RTCIceCandidatePairStats[] = [];
+  const tipoDoCandidato = new Map<string, string>();
+  const protocoloDoCandidato = new Map<string, string>();
+
+  report.forEach((s) => {
+    switch (s.type) {
+      case "transport": {
+        const id = (s as RTCTransportStats).selectedCandidatePairId;
+        if (typeof id === "string") selectedId = id;
+        break;
+      }
+      case "candidate-pair":
+        brutos.push(s as RTCIceCandidatePairStats);
+        break;
+      case "local-candidate":
+      case "remote-candidate": {
+        const c = s as {
+          id?: string;
+          candidateType?: string;
+          protocol?: string;
+        };
+        if (typeof c.id !== "string") break;
+        if (typeof c.candidateType === "string") {
+          tipoDoCandidato.set(c.id, c.candidateType);
+        }
+        if (typeof c.protocol === "string") {
+          protocoloDoCandidato.set(c.id, c.protocol);
+        }
+        break;
+      }
+    }
+  });
+
+  return brutos.map((par) => {
+    const p = par as RTCIceCandidatePairStats & {
+      selected?: boolean;
+      responsesReceived?: number;
+    };
+    const rtt = par.currentRoundTripTime;
+    return {
+      id: par.id,
+      state: par.state,
+      nominated: par.nominated,
+      selecionado: par.id === selectedId || p.selected === true,
+      // `> 0`: entre uma checagem STUN e a proxima o campo vem 0 ou ausente.
+      rttMs: typeof rtt === "number" && rtt > 0 ? Math.round(rtt * 1000) : null,
+      tipoLocal: tipoDoCandidato.get(par.localCandidateId ?? ""),
+      tipoRemoto: tipoDoCandidato.get(par.remoteCandidateId ?? ""),
+      protocolo: protocoloDoCandidato.get(par.localCandidateId ?? ""),
+      respostas: p.responsesReceived,
+    };
+  });
+}
+
+/** O caminho passa por um TURN? Ai o RTT inclui o desvio. */
+function ehRelay(par: ParDeCandidatos): boolean {
+  return par.tipoLocal === "relay" || par.tipoRemoto === "relay";
 }
 
 /**
@@ -26,78 +105,21 @@ interface ParUsavel {
  *  2. senao, o menor RTT entre os pares diretos que deram `succeeded`;
  *  3. senao, o menor RTT entre os pares via relay (TURN) — pior, mas real;
  *  4. senao, `null`.
- *
- * O passo 2/3 existe porque a `RTCPeerConnection` pode manter mais de um par
- * `succeeded` (ex.: um direto e um relay), e as vezes o "selecionado" no
- * relatorio e o relay — que roteia por um TURN distante e infla o numero
- * (foi o que fazia o ping pular de ~7ms para ~120ms).
  */
 export function rttDoRelatorio(report: RTCStatsReport): number | null {
-  let selectedId: string | undefined;
-  const pares: RTCIceCandidatePairStats[] = [];
-  const porId = new Map<string, RTCIceCandidatePairStats>();
-  const tipoDoCandidato = new Map<string, string>();
+  return rttDosPares(paresDoRelatorio(report));
+}
 
-  report.forEach((s) => {
-    switch (s.type) {
-      case "transport": {
-        const id = (s as RTCTransportStats).selectedCandidatePairId;
-        if (typeof id === "string") selectedId = id;
-        break;
-      }
-      case "candidate-pair": {
-        const par = s as RTCIceCandidatePairStats;
-        pares.push(par);
-        if (typeof par.id === "string") porId.set(par.id, par);
-        break;
-      }
-      case "local-candidate":
-      case "remote-candidate": {
-        const c = s as { id?: string; candidateType?: string };
-        if (typeof c.id === "string" && typeof c.candidateType === "string") {
-          tipoDoCandidato.set(c.id, c.candidateType);
-        }
-        break;
-      }
-    }
-  });
-
-  const ehRelay = (par: RTCIceCandidatePairStats): boolean =>
-    tipoDoCandidato.get(par.localCandidateId ?? "") === "relay" ||
-    tipoDoCandidato.get(par.remoteCandidateId ?? "") === "relay";
-
-  const selecionadoDoFirefox = pares.find(
-    (p) => (p as { selected?: boolean }).selected === true,
+export function rttDosPares(pares: ParDeCandidatos[]): number | null {
+  const usaveis = pares.filter(
+    (p) => p.rttMs !== null && (p.state === "succeeded" || p.selecionado),
   );
-
-  const usaveis: ParUsavel[] = [];
-  for (const par of pares) {
-    const rtt = par.currentRoundTripTime;
-    // `> 0`: entre uma checagem STUN e a proxima o campo vem 0 ou ausente.
-    if (typeof rtt !== "number" || rtt <= 0) continue;
-    // So conta par que de fato vingou.
-    const ok =
-      par.state === "succeeded" ||
-      par.id === selectedId ||
-      par === selecionadoDoFirefox;
-    if (!ok) continue;
-
-    usaveis.push({
-      rttMs: Math.round(rtt * 1000),
-      relay: ehRelay(par),
-      selecionado: par.id === selectedId || par === selecionadoDoFirefox,
-    });
-  }
-
   if (usaveis.length === 0) return null;
 
-  const selDireto = usaveis.find((p) => p.selecionado && !p.relay);
+  const selDireto = usaveis.find((p) => p.selecionado && !ehRelay(p));
   if (selDireto) return selDireto.rttMs;
 
-  const diretos = usaveis.filter((p) => !p.relay);
-  if (diretos.length > 0) {
-    return Math.min(...diretos.map((p) => p.rttMs));
-  }
-
-  return Math.min(...usaveis.map((p) => p.rttMs));
+  const diretos = usaveis.filter((p) => !ehRelay(p));
+  const alvo = diretos.length > 0 ? diretos : usaveis;
+  return Math.min(...alvo.map((p) => p.rttMs as number));
 }
