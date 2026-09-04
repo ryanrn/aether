@@ -1,7 +1,7 @@
 "use client";
 
 import type { Room } from "livekit-client";
-import { paresDoRelatorio } from "./ice-rtt";
+import { paresDoRelatorio, type ParDeCandidatos } from "./ice-rtt";
 import { relatoriosDaSessao, type NomeDaConexao } from "./pc-access";
 
 /**
@@ -37,6 +37,17 @@ export interface DebugTransporte {
   pacotesRecebidos: number | null;
   bytesEnviados: number | null;
   bytesRecebidos: number | null;
+  /**
+   * TODOS os pares de candidatos desta conexao, nao so o vencedor.
+   *
+   * O painel mostrava apenas o par ativo, e era justamente a comparacao entre
+   * os pares que respondia "por que o ping deu esse numero": um caminho de
+   * 6ms e outro de 119ms podem existir ao mesmo tempo para o MESMO servidor,
+   * e ver os dois lado a lado e o que distingue caminho ruim de amostra ruim.
+   */
+  pares: ParDeCandidatos[];
+  /** o `id` do par que carrega a midia — o que definiu o `pingMs` acima */
+  paresAtivoId?: string;
 }
 
 export interface DebugAudioSaida {
@@ -173,6 +184,8 @@ export function startMediaDebug(
           ? `${ativo.tipoLocal ?? "?"}/${ativo.protocolo ?? "?"} → ${ativo.tipoRemoto ?? "?"}`
           : null,
         relay: ativo?.tipoLocal === "relay" || ativo?.tipoRemoto === "relay",
+        pares,
+        paresAtivoId: ativo?.id,
         pingMs: ativo?.rttMs ?? null,
         bitrateSaidaDisponivelKbps:
           bitrateDisponivel !== null

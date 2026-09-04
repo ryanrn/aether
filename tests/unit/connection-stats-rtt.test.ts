@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rttDoRelatorio } from "@/lib/voice/ice-rtt";
+import { paresDoRelatorio, rttDoRelatorio } from "@/lib/voice/ice-rtt";
 
 /**
  * O ping do painel de Conexao.
@@ -218,5 +218,92 @@ describe("rttDoRelatorio", () => {
       X: { type: "outbound-rtp", kind: "audio", packetsSent: 100 },
     });
     expect(rttDoRelatorio(r)).toBeNull();
+  });
+});
+
+/**
+ * Os campos que o painel de Depuracao usa para EXPLICAR o ping.
+ *
+ * `rttMs` sozinho nao responde a pergunta que importa quando ele esta alto:
+ * "esse caminho custa isso, ou foi uma amostra atrasada?". `rttMedioMs`
+ * (media de todas as respostas de STUN) responde. E `familia` responde a
+ * outra metade: o ICE escolhe par por PRIORIDADE, nao por latencia, e a mesma
+ * maquina pode ter caminho otimo por IPv4 e pessimo por IPv6 para o mesmo
+ * destino.
+ */
+describe("paresDoRelatorio — campos de diagnostico", () => {
+  it("deriva a familia do endereco local sem guardar o endereco", () => {
+    const pares = paresDoRelatorio(
+      report({
+        L4: { ...HOST_L, address: "192.168.15.9", protocol: "udp" },
+        L6: { ...HOST_L, address: "2804:7f0:79c0:cf22::1", protocol: "udp" },
+        R: HOST_R,
+        P4: {
+          type: "candidate-pair",
+          state: "succeeded",
+          localCandidateId: "L4",
+          remoteCandidateId: "R",
+          currentRoundTripTime: 0.006,
+        },
+        P6: {
+          type: "candidate-pair",
+          state: "succeeded",
+          localCandidateId: "L6",
+          remoteCandidateId: "R",
+          currentRoundTripTime: 0.119,
+        },
+      }),
+    );
+    const p4 = pares.find((p) => p.id === "P4");
+    const p6 = pares.find((p) => p.id === "P6");
+    expect(p4?.familia).toBe("IPv4");
+    expect(p6?.familia).toBe("IPv6");
+    // O endereco nao pode vazar para o objeto que a pessoa copia.
+    expect(JSON.stringify(pares)).not.toContain("192.168");
+    expect(JSON.stringify(pares)).not.toContain("2804:");
+  });
+
+  it("media do RTT separa caminho ruim de amostra ruim", () => {
+    const pares = paresDoRelatorio(
+      report({
+        L: { ...HOST_L, address: "10.0.0.2" },
+        R: HOST_R,
+        // Ultima checagem em 119ms, mas as 10 anteriores somam 60ms:
+        // media de 6ms => o caminho e bom, a amostra e que atrasou.
+        P_amostra: {
+          type: "candidate-pair",
+          state: "succeeded",
+          localCandidateId: "L",
+          remoteCandidateId: "R",
+          currentRoundTripTime: 0.119,
+          totalRoundTripTime: 0.06,
+          responsesReceived: 10,
+          requestsSent: 12,
+        },
+      }),
+    );
+    const p = pares[0];
+    expect(p?.rttMs).toBe(119);
+    expect(p?.rttMedioMs).toBe(6);
+    expect(p?.requisicoes).toBe(12);
+  });
+
+  it("sem respostas, a media e null em vez de dividir por zero", () => {
+    const pares = paresDoRelatorio(
+      report({
+        L: HOST_L,
+        R: HOST_R,
+        P: {
+          type: "candidate-pair",
+          state: "in-progress",
+          localCandidateId: "L",
+          remoteCandidateId: "R",
+          totalRoundTripTime: 0,
+          responsesReceived: 0,
+        },
+      }),
+    );
+    expect(pares[0]?.rttMedioMs).toBeNull();
+    expect(pares[0]?.familia).toBeUndefined();
   });
 });

@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { copiarTexto } from "@/lib/clipboard";
 import type { Amostra, MediaDebug } from "@/lib/voice/media-debug";
+import type { ParDeCandidatos } from "@/lib/voice/ice-rtt";
 import { cn } from "@/lib/utils";
 
 /**
@@ -220,8 +221,101 @@ function Transporte({ debug }: { debug: MediaDebug }) {
             <Campo rotulo="Bytes enviados" valor={bytes(t.bytesEnviados)} />
             <Campo rotulo="Bytes recebidos" valor={bytes(t.bytesRecebidos)} />
           </Grade>
+
+          <RotasIce pares={t.pares} ativoId={t.paresAtivoId} />
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Todos os pares de candidatos ICE desta conexao, nao so o vencedor.
+ *
+ * POR QUE ESTA TABELA EXISTE: o painel mostrava um ping so, e um ping so nao
+ * responde a pergunta que importa quando ele esta alto. Podem coexistir, para
+ * o MESMO servidor, um caminho de 6ms e um de 119ms — e a diferenca entre
+ * "esse caminho custa 119ms" e "uma amostra desse caminho deu 119ms" esta na
+ * coluna MEDIO, nao na coluna ATUAL.
+ *
+ * Como ler:
+ *  - ATUAL e a ultima checagem de STUN; MEDIO e a media de todas elas.
+ *    Medio baixo com atual alto = caminho bom, amostra atrasada.
+ *    Medio alto = o caminho custa isso mesmo.
+ *  - BYTES diz por onde a midia REALMENTE passa; e o par que define o ping.
+ *  - FAM (IPv4/IPv6) importa porque o ICE escolhe por prioridade, nao por
+ *    latencia: a mesma maquina pode ter caminho otimo por uma familia e
+ *    pessimo pela outra para o mesmo destino.
+ *
+ * Nenhum endereco aparece — so tipo, familia e protocolo.
+ */
+function RotasIce({
+  pares,
+  ativoId,
+}: {
+  pares: ParDeCandidatos[];
+  ativoId?: string;
+}) {
+  if (pares.length === 0) return null;
+  const ordenados = [...pares].sort(
+    (a, b) => (b.bytesEnviados ?? 0) - (a.bytesEnviados ?? 0),
+  );
+  return (
+    <div className="mt-1">
+      <h4 className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-600">
+        Rotas ICE ({pares.length})
+      </h4>
+      <div className="overflow-x-auto rounded-md border border-line">
+        <table className="w-full min-w-[560px] border-collapse text-[11px]">
+          <thead>
+            <tr className="bg-base-900 text-left font-mono text-[9px] uppercase tracking-[0.1em] text-ink-600">
+              <th className="px-2 py-1.5 font-normal">Caminho</th>
+              <th className="px-2 py-1.5 font-normal">Fam</th>
+              <th className="px-2 py-1.5 text-right font-normal">Atual</th>
+              <th className="px-2 py-1.5 text-right font-normal">Medio</th>
+              <th className="px-2 py-1.5 text-right font-normal">Resp/Req</th>
+              <th className="px-2 py-1.5 text-right font-normal">Bytes env.</th>
+              <th className="px-2 py-1.5 font-normal">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono text-ink-300">
+            {ordenados.map((p, i) => {
+              const ativo = p.id != null && p.id === ativoId;
+              return (
+                <tr
+                  key={p.id ?? i}
+                  className={cn(
+                    "border-t border-line-soft",
+                    ativo && "bg-accent-500/10 text-ink-100",
+                  )}
+                >
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    {ativo ? "▶ " : "  "}
+                    {p.tipoLocal ?? "?"}/{p.protocolo ?? "?"} →{" "}
+                    {p.tipoRemoto ?? "?"}
+                  </td>
+                  <td className="px-2 py-1.5">{p.familia ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-right">{ms(p.rttMs)}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    {ms(p.rttMedioMs)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {p.respostas ?? "—"}/{p.requisicoes ?? "—"}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {bytes(p.bytesEnviados ?? null)}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {p.state ?? "—"}
+                    {p.nominated ? " ·nom" : ""}
+                    {p.selecionado ? " ·sel" : ""}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

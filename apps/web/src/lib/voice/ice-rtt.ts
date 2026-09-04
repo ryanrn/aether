@@ -30,6 +30,27 @@ export interface ParDeCandidatos {
    */
   bytesEnviados?: number;
   bytesRecebidos?: number;
+  /**
+   * IPv4 ou IPv6, derivado do endereco do candidato LOCAL (endereco de IPv6
+   * tem ":"). So a familia e guardada — o endereco em si nunca sai daqui.
+   *
+   * Importa porque a maquina pode ter caminho bom por uma familia e ruim pela
+   * outra para o MESMO servidor, e o ICE escolhe por prioridade, nao por
+   * latencia.
+   */
+  familia?: "IPv4" | "IPv6";
+  /**
+   * RTT MEDIO de todas as respostas de STUN ja recebidas neste par
+   * (`totalRoundTripTime / responsesReceived`).
+   *
+   * E o campo que desempata "o caminho custa isso" de "uma amostra deu isso":
+   * `rttMs` e so a ULTIMA medicao. Media de 5ms com ultima de 119ms significa
+   * caminho rapido com uma amostra atrasada; media de 119ms significa que o
+   * caminho custa 119ms mesmo.
+   */
+  rttMedioMs: number | null;
+  /** quantas checagens de STUN ja foram ENVIADAS neste par */
+  requisicoes?: number;
 }
 
 /**
@@ -43,6 +64,7 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
   const brutos: RTCIceCandidatePairStats[] = [];
   const tipoDoCandidato = new Map<string, string>();
   const protocoloDoCandidato = new Map<string, string>();
+  const familiaDoCandidato = new Map<string, "IPv4" | "IPv6">();
 
   report.forEach((s) => {
     switch (s.type) {
@@ -60,6 +82,7 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
           id?: string;
           candidateType?: string;
           protocol?: string;
+          address?: string;
         };
         if (typeof c.id !== "string") break;
         if (typeof c.candidateType === "string") {
@@ -67,6 +90,10 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
         }
         if (typeof c.protocol === "string") {
           protocoloDoCandidato.set(c.id, c.protocol);
+        }
+        // So a FAMILIA fica guardada; o endereco morre aqui dentro.
+        if (typeof c.address === "string" && c.address.length > 0) {
+          familiaDoCandidato.set(c.id, c.address.includes(":") ? "IPv6" : "IPv4");
         }
         break;
       }
@@ -77,8 +104,16 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
     const p = par as RTCIceCandidatePairStats & {
       selected?: boolean;
       responsesReceived?: number;
+      totalRoundTripTime?: number;
+      requestsSent?: number;
     };
     const rtt = par.currentRoundTripTime;
+    const total = p.totalRoundTripTime;
+    const respostas = p.responsesReceived;
+    const medio =
+      typeof total === "number" && typeof respostas === "number" && respostas > 0
+        ? Math.round((total / respostas) * 1000)
+        : null;
     return {
       id: par.id,
       state: par.state,
@@ -92,6 +127,9 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
       respostas: p.responsesReceived,
       bytesEnviados: par.bytesSent,
       bytesRecebidos: par.bytesReceived,
+      familia: familiaDoCandidato.get(par.localCandidateId ?? ""),
+      rttMedioMs: medio,
+      requisicoes: p.requestsSent,
     };
   });
 }
