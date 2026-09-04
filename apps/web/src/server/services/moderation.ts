@@ -62,6 +62,29 @@ export async function listActiveBans(serverId: string): Promise<ServerBan[]> {
   }));
 }
 
+/**
+ * Esta pessoa esta banida DESTE servidor AGORA?
+ *
+ * Uma copia so da regra "ban vencido nao conta". `descoberta.ts` ja filtrava
+ * por `expiresAt`; `invites.ts` NAO (auditoria M2) — bloqueava em qualquer
+ * linha de `Ban`, entao um ban de 1 dia virava permanente para reentrada por
+ * convite. Os dois caminhos passam a chamar isto.
+ */
+export async function banAtivo(
+  serverId: string,
+  userId: string,
+): Promise<boolean> {
+  const ban = await prisma.ban.findFirst({
+    where: {
+      serverId,
+      userId,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { id: true },
+  });
+  return ban !== null;
+}
+
 /** Remove a participacao. A pessoa pode voltar por convite. */
 export async function removeMember(memberId: string): Promise<void> {
   // O cascade do schema derruba MemberRole junto.
@@ -107,7 +130,10 @@ export async function banMember(params: {
   ]);
 }
 
-export async function unban(serverId: string, userId: string): Promise<boolean> {
+export async function unban(
+  serverId: string,
+  userId: string,
+): Promise<boolean> {
   const result = await prisma.ban.deleteMany({ where: { serverId, userId } });
   return result.count > 0;
 }

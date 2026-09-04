@@ -8,6 +8,7 @@ import {
   type VitrineStatus,
 } from "@aether/shared";
 import { presencaDeServidores } from "../realtime-notify";
+import { banAtivo } from "./moderation";
 
 /**
  * "Explorar comunidades" — a vitrine.
@@ -75,7 +76,11 @@ export async function listarVitrine(
        */
       members: { where: { userId }, select: { id: true }, take: 1 },
     },
-    orderBy: [{ oficial: "desc" }, { members: { _count: "desc" } }, { name: "asc" }],
+    orderBy: [
+      { oficial: "desc" },
+      { members: { _count: "desc" } },
+      { name: "asc" },
+    ],
     take: POR_PAGINA,
   });
 
@@ -136,15 +141,9 @@ export async function entrarEmComunidade(
   });
   if (!servidor) return { ok: false, motivo: "nao-encontrado" };
 
-  const banido = await prisma.ban.findFirst({
-    where: {
-      serverId,
-      userId,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-    },
-    select: { id: true },
-  });
-  if (banido) return { ok: false, motivo: "banido" };
+  if (await banAtivo(serverId, userId)) {
+    return { ok: false, motivo: "banido" };
+  }
 
   const jaMembro = await prisma.serverMember.findUnique({
     where: { serverId_userId: { serverId, userId } },
@@ -217,7 +216,11 @@ export async function lerAjustesDeVitrine(serverId: string) {
  */
 export async function salvarAjustesDeVitrine(
   serverId: string,
-  ajustes: { querAparecer: boolean; descricao: string; categoria: string | null },
+  ajustes: {
+    querAparecer: boolean;
+    descricao: string;
+    categoria: string | null;
+  },
 ): Promise<{ status: VitrineStatus; voltouParaFila: boolean }> {
   const atual = await prisma.server.findUnique({
     where: { id: serverId },
@@ -278,7 +281,11 @@ export async function reavaliarVitrinePorRenomear(
   const r = await prisma.server.updateMany({
     // So mexe em quem esta APROVADO: privado e pendente nao tem o que perder.
     where: { id: serverId, vitrine: "APROVADO" },
-    data: { vitrine: "PENDENTE", vitrineRevisadaPor: null, vitrineRevisadaEm: null },
+    data: {
+      vitrine: "PENDENTE",
+      vitrineRevisadaPor: null,
+      vitrineRevisadaEm: null,
+    },
   });
   return r.count === 1;
 }

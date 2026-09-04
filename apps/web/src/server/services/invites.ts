@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@aether/db";
 import type { ActionResult } from "@aether/shared";
 import { writeAudit } from "../audit";
+import { banAtivo } from "./moderation";
 
 /**
  * Regras de convite.
@@ -33,20 +34,26 @@ export async function joinServerByCode(
     },
   });
 
-  if (!invite) return { ok: false, error: "Convite invalido ou expirado", field: "code" };
+  if (!invite)
+    return { ok: false, error: "Convite invalido ou expirado", field: "code" };
   if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
     return { ok: false, error: "Convite invalido ou expirado", field: "code" };
   }
   if (invite.maxUses !== null && invite.uses >= invite.maxUses) {
-    return { ok: false, error: "Este convite atingiu o limite de usos", field: "code" };
+    return {
+      ok: false,
+      error: "Este convite atingiu o limite de usos",
+      field: "code",
+    };
   }
 
-  const banned = await prisma.ban.findUnique({
-    where: { serverId_userId: { serverId: invite.serverId, userId } },
-    select: { id: true },
-  });
-  if (banned) {
-    return { ok: false, error: "Voce esta banido deste servidor", field: "code" };
+  // `banAtivo` (nao `findUnique`) porque ban vencido nao conta — auditoria M2.
+  if (await banAtivo(invite.serverId, userId)) {
+    return {
+      ok: false,
+      error: "Voce esta banido deste servidor",
+      field: "code",
+    };
   }
 
   const existing = await prisma.serverMember.findUnique({
