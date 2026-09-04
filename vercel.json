@@ -3,5 +3,11 @@
   "framework": "nextjs",
   "buildCommand": "npm run build:ci",
   "outputDirectory": "apps/web/.next",
-  "regions": ["gru1"]
+  "regions": ["gru1"],
+  "crons": [
+    {
+      "path": "/api/cron/limpar-anexos",
+      "schedule": "17 4 * * *"
+    }
+  ]
 }
