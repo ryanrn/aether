@@ -86,10 +86,17 @@ export function ImageLightbox({
         if (e.target === ref.current) onClose();
       }}
       aria-label={`Imagem: ${atual.nome}`}
-      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-black/85 backdrop:backdrop-blur-[2px]"
+      /**
+       * `pt` = altura da barra de titulo do Electron. O `<dialog showModal>`
+       * sobe para o "top layer" e cobre TUDO, inclusive a faixa com os botoes
+       * de minimizar/fechar — sem a folga, os controles do visor caem em cima
+       * deles. `env(titlebar-area-height)` so existe no desktop (Window Controls
+       * Overlay); no navegador cai para `0px` e nao ha folga sobrando.
+       */
+      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 pt-[env(titlebar-area-height,0px)] backdrop:bg-black/85 backdrop:backdrop-blur-[2px]"
     >
       <div
-        className="relative flex h-full w-full items-center justify-center p-4 sm:p-10"
+        className="relative flex h-full w-full items-center justify-center px-4 py-3 sm:px-10"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
@@ -132,14 +139,14 @@ export function ImageLightbox({
           </>
         ) : null}
 
-        <figure className="flex max-h-full max-w-full flex-col items-center gap-3">
+        <figure className="flex min-h-0 max-w-full flex-col items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={atual.url}
             alt={atual.nome}
             width={atual.largura ?? undefined}
             height={atual.altura ?? undefined}
-            className="max-h-[82vh] max-w-full rounded-md object-contain shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]"
+            className="max-h-[calc(100dvh-env(titlebar-area-height,0px)-5rem)] max-w-full rounded-md object-contain shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]"
           />
           <figcaption className="flex items-center gap-2 text-[12px] text-ink-300">
             <span className="max-w-[60vw] truncate">{atual.nome}</span>
