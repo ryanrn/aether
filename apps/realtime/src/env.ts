@@ -45,6 +45,28 @@ if (!livekit && (livekitUrl || livekitKey || livekitSecret)) {
   );
 }
 
+/**
+ * Origens liberadas para o handshake.
+ *
+ * Uma LISTA. Antes era uma string unica (`NEXT_PUBLIC_APP_URL`), e isso
+ * derrubava o realtime inteiro sempre que a URL de producao da Vercel
+ * divergia do valor no Fly, ou num preview deploy — o navegador so manda o
+ * cookie/handshake se a origem bater exatamente (auditoria M4).
+ *
+ * `REALTIME_CORS_ORIGINS` (opcional, virgula-separada) e a lista completa;
+ * sem ela, cai em `NEXT_PUBLIC_APP_URL` sozinha, comportamento de antes.
+ * `NEXT_PUBLIC_APP_URL` fica so como URL canonica (link de e-mail etc.) — nao
+ * misturar as duas responsabilidades numa variavel so.
+ */
+const corsOrigin = (
+  process.env.REALTIME_CORS_ORIGINS ??
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "http://localhost:3000"
+)
+  .split(",")
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter((o) => o.length > 0);
+
 export const env = {
   /** null = sem SFU configurado; a voz funciona sem audio */
   livekit,
@@ -57,9 +79,13 @@ export const env = {
    * explicitamente liberada e credentials estiver ligado. Sem isso o gateway
    * recebe conexao anonima e recusa tudo.
    */
-  corsOrigin: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  corsOrigin,
   isProduction: process.env.NODE_ENV === "production",
 } as const;
+
+if (corsOrigin.length === 0) {
+  throw new Error("NEXT_PUBLIC_APP_URL nao tem nenhuma origem valida.");
+}
 
 if (Number.isNaN(env.port)) {
   throw new Error("REALTIME_PORT precisa ser um numero.");

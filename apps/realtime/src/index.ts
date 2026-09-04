@@ -202,7 +202,10 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
    * `ready` de todo mundo.
    */
   void joinAllServerRooms(socket).catch((erro) => {
-    console.error("[gateway] nao consegui entrar nas salas dos servidores:", erro);
+    console.error(
+      "[gateway] nao consegui entrar nas salas dos servidores:",
+      erro,
+    );
   });
 
   /**
@@ -257,7 +260,7 @@ const stopSessionGuard = startSessionGuard(io);
 
 httpServer.listen(env.port, () => {
   console.log(`[gateway] ouvindo em http://localhost:${env.port}/ws`);
-  console.log(`[gateway] origem liberada para cookie: ${env.corsOrigin}`);
+  console.log(`[gateway] origens liberadas: ${env.corsOrigin.join(", ")}`);
 });
 
 /**
