@@ -126,9 +126,10 @@ export function ChannelSidebar({
       ? alvoId.slice(4)
       : (containerDoCanal.get(alvoId) ?? SOLTOS);
 
-    const irmaos = destino === SOLTOS
-      ? looseChannels
-      : (categories.find((c) => c.id === destino)?.channels ?? []);
+    const irmaos =
+      destino === SOLTOS
+        ? looseChannels
+        : (categories.find((c) => c.id === destino)?.channels ?? []);
 
     const indiceAlvo = irmaos.findIndex((c) => c.id === alvoId);
     // Sobre a area vazia: vai para o fim.
@@ -144,10 +145,14 @@ export function ChannelSidebar({
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [channelModal, setChannelModal] = useState<
-    { mode: "create"; categoryId: string | null } | { mode: "edit"; channelId: string } | null
+    | { mode: "create"; categoryId: string | null }
+    | { mode: "edit"; channelId: string }
+    | null
   >(null);
   const [categoryModal, setCategoryModal] = useState<
-    { mode: "create" } | { mode: "edit"; categoryId: string; name: string } | null
+    | { mode: "create" }
+    | { mode: "edit"; categoryId: string; name: string }
+    | null
   >(null);
 
   const canCreate = viewerCan(viewer, "CREATE_CHANNEL");
@@ -176,14 +181,15 @@ export function ChannelSidebar({
     <>
       <aside
         className={cn(
-          "flex w-[220px] shrink-0 flex-col border-r border-line bg-base-900",
+          "flex w-[248px] shrink-0 flex-col border-r border-line bg-base-900",
           /*
-            A outra metade da gaveta. Comeca em `left-16` para encostar na
-            trilha, e usa o MESMO deslocamento que ela — deslocar cada uma pela
-            propria largura deixaria esta com a borda direita em cima daquela.
+            A outra metade da gaveta. Comeca na largura da trilha (68px) para
+            encostar nela, e usa o MESMO deslocamento que ela — deslocar cada
+            uma pela propria largura deixaria esta com a borda direita em cima
+            daquela.
           */
           NAV_GAVETA,
-          "max-md:left-16",
+          "max-md:left-[68px]",
           navAberta ? NAV_VISIVEL : NAV_ESCONDIDA,
         )}
       >
@@ -193,8 +199,8 @@ export function ChannelSidebar({
           coluna comeca no topo e tem o seu. E o que permite a HUD flutuar
           dentro do centro, em vez de existir um rodape global.
         */}
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4">
-          <h2 className="min-w-0 flex-1 truncate text-[13px] font-bold uppercase tracking-[0.04em] text-ink-100">
+        <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-line px-4">
+          <h2 className="min-w-0 flex-1 truncate text-[14px] font-bold uppercase tracking-[0.04em] text-ink-100">
             {serverName}
           </h2>
           {/*
@@ -226,119 +232,137 @@ export function ChannelSidebar({
             collisionDetection={closestCenter}
             onDragEnd={aoSoltarCanal}
           >
-          {looseChannels.length > 0 ? (
-            <ListaSoltavel id={SOLTOS} itens={looseChannels.map((c) => c.id)} className="mb-3 flex flex-col gap-0.5">
-              {looseChannels.map((channel) => (
-                <ChannelRow
-                  key={channel.id}
-                  serverId={serverId}
-                  serverName={serverName}
-                  channel={channel}
-                  active={channel.id === activeChannelId}
-                  channelPermissions={channelPermissions}
-                  viewer={viewer}
-                  voiceChannels={voiceChannels}
-                  onEdit={() => setChannelModal({ mode: "edit", channelId: channel.id })}
-                />
-              ))}
-            </ListaSoltavel>
-          ) : null}
+            {looseChannels.length > 0 ? (
+              <ListaSoltavel
+                id={SOLTOS}
+                itens={looseChannels.map((c) => c.id)}
+                className="mb-3 flex flex-col gap-0.5"
+              >
+                {looseChannels.map((channel) => (
+                  <ChannelRow
+                    key={channel.id}
+                    serverId={serverId}
+                    serverName={serverName}
+                    channel={channel}
+                    active={channel.id === activeChannelId}
+                    channelPermissions={channelPermissions}
+                    viewer={viewer}
+                    voiceChannels={voiceChannels}
+                    onEdit={() =>
+                      setChannelModal({ mode: "edit", channelId: channel.id })
+                    }
+                  />
+                ))}
+              </ListaSoltavel>
+            ) : null}
 
-          {categories.map((category) => {
-            const isCollapsed = collapsed[category.id] ?? false;
-            return (
-              <section key={category.id} className="mb-3">
-                <div className="group flex items-center gap-0.5 px-1.5">
-                  <button
-                    type="button"
-                    onClick={() => toggle(category.id)}
-                    /*
+            {categories.map((category) => {
+              const isCollapsed = collapsed[category.id] ?? false;
+              return (
+                <section key={category.id} className="mb-3">
+                  <div className="group flex items-center gap-0.5 px-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggle(category.id)}
+                      /*
                       Um ponto maior e um tom mais claro que antes: a
                       categoria e o que da estrutura a lista, e estava
                       apagada demais para cumprir esse papel.
                     */
-                    className="flex flex-1 items-center gap-1 py-1 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 transition-colors hover:text-ink-200"
-                  >
-                    <AetherIcon
-                      name="chevron"
-                      size="sm"
-                      className={cn(
-                        "h-3 w-3 transition-transform duration-200",
-                        isCollapsed && "-rotate-90",
-                      )}
-                    />
-                    <span className="truncate">{category.name}</span>
-                  </button>
-
-                  {canCreate ? (
-                    <div className="flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                      <IconAction
-                        label="Renomear categoria"
-                        onClick={() =>
-                          setCategoryModal({
-                            mode: "edit",
-                            categoryId: category.id,
-                            name: category.name,
-                          })
-                        }
-                      >
-                        <AetherIcon name="pencil" size="sm" className="h-3 w-3" />
-                      </IconAction>
-                      <DeleteCategoryButton
-                        serverId={serverId}
-                        categoryId={category.id}
-                        name={category.name}
+                      className="flex flex-1 items-center gap-1 py-1 text-left text-[12px] font-bold uppercase tracking-[0.08em] text-ink-400 transition-colors hover:text-ink-200"
+                    >
+                      <AetherIcon
+                        name="chevron"
+                        size="sm"
+                        className={cn(
+                          "h-3 w-3 transition-transform duration-200",
+                          isCollapsed && "-rotate-90",
+                        )}
                       />
-                      <IconAction
-                        label="Criar canal nesta categoria"
-                        onClick={() =>
-                          setChannelModal({ mode: "create", categoryId: category.id })
-                        }
-                      >
-                        <AetherIcon name="plus" size="sm" />
-                      </IconAction>
-                    </div>
-                  ) : null}
-                </div>
+                      <span className="truncate">{category.name}</span>
+                    </button>
 
-                {!isCollapsed ? (
-                  <ListaSoltavel
-                    id={`cat:${category.id}`}
-                    itens={category.channels.map((c) => c.id)}
-                    className="mt-0.5 flex flex-col gap-0.5"
-                  >
-                    {category.channels.map((channel) => (
-                      <ChannelRow
-                        key={channel.id}
-                        serverId={serverId}
-                        serverName={serverName}
-                        channel={channel}
-                        active={channel.id === activeChannelId}
-                        channelPermissions={channelPermissions}
-                  viewer={viewer}
-                  voiceChannels={voiceChannels}
-                        onEdit={() =>
-                          setChannelModal({ mode: "edit", channelId: channel.id })
-                        }
-                      />
-                    ))}
-                    {category.channels.length === 0 ? (
-                      <li className="px-2 py-1 text-[12px] text-ink-500">
-                        Sem canais visiveis
-                      </li>
+                    {canCreate ? (
+                      <div className="flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                        <IconAction
+                          label="Renomear categoria"
+                          onClick={() =>
+                            setCategoryModal({
+                              mode: "edit",
+                              categoryId: category.id,
+                              name: category.name,
+                            })
+                          }
+                        >
+                          <AetherIcon
+                            name="pencil"
+                            size="sm"
+                            className="h-3 w-3"
+                          />
+                        </IconAction>
+                        <DeleteCategoryButton
+                          serverId={serverId}
+                          categoryId={category.id}
+                          name={category.name}
+                        />
+                        <IconAction
+                          label="Criar canal nesta categoria"
+                          onClick={() =>
+                            setChannelModal({
+                              mode: "create",
+                              categoryId: category.id,
+                            })
+                          }
+                        >
+                          <AetherIcon name="plus" size="sm" />
+                        </IconAction>
+                      </div>
                     ) : null}
-                  </ListaSoltavel>
-                ) : null}
-              </section>
-            );
-          })}
+                  </div>
+
+                  {!isCollapsed ? (
+                    <ListaSoltavel
+                      id={`cat:${category.id}`}
+                      itens={category.channels.map((c) => c.id)}
+                      className="mt-0.5 flex flex-col gap-0.5"
+                    >
+                      {category.channels.map((channel) => (
+                        <ChannelRow
+                          key={channel.id}
+                          serverId={serverId}
+                          serverName={serverName}
+                          channel={channel}
+                          active={channel.id === activeChannelId}
+                          channelPermissions={channelPermissions}
+                          viewer={viewer}
+                          voiceChannels={voiceChannels}
+                          onEdit={() =>
+                            setChannelModal({
+                              mode: "edit",
+                              channelId: channel.id,
+                            })
+                          }
+                        />
+                      ))}
+                      {category.channels.length === 0 ? (
+                        <li className="px-2 py-1 text-[12px] text-ink-500">
+                          Sem canais visiveis
+                        </li>
+                      ) : null}
+                    </ListaSoltavel>
+                  ) : null}
+                </section>
+              );
+            })}
           </DndContext>
 
           {canCreate ? (
             <div className="mt-1 flex flex-col gap-1 px-1">
               <button
                 type="button"
-                onClick={() => setChannelModal({ mode: "create", categoryId: null })}
+                onClick={() =>
+                  setChannelModal({ mode: "create", categoryId: null })
+                }
                 className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] text-ink-500 transition-colors hover:bg-base-850 hover:text-ink-200"
               >
                 <AetherIcon name="plus" size="sm" />
@@ -444,8 +468,9 @@ function DeleteCategoryButton({
           });
         }}
       >
-        Tem certeza de que deseja excluir <strong className="text-ink-100">{name}</strong>?
-        Os canais dentro dela viram canais soltos — eles NAO sao apagados.
+        Tem certeza de que deseja excluir{" "}
+        <strong className="text-ink-100">{name}</strong>? Os canais dentro dela
+        viram canais soltos — eles NAO sao apagados.
       </ConfirmDialog>
     </>
   );
@@ -483,7 +508,11 @@ function ChannelRow({
       : "hash";
 
   const canEdit = channelAllows(channelPermissions, channel.id, "EDIT_CHANNEL");
-  const canDelete = channelAllows(channelPermissions, channel.id, "DELETE_CHANNEL");
+  const canDelete = channelAllows(
+    channelPermissions,
+    channel.id,
+    "DELETE_CHANNEL",
+  );
 
   /**
    * Menu de clique direito do canal.
@@ -600,7 +629,7 @@ function ChannelRow({
           draggable={false}
 
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]",
+            "flex min-w-0 flex-1 items-center gap-2 px-2 py-[7px] text-[14px]",
             /*
               O canal aberto fica em NEGRITO, e nao so com fundo e cor
               diferentes. E o mesmo raciocinio dos icones da trilha: quem nao
@@ -614,14 +643,19 @@ function ChannelRow({
         >
           <AetherIcon
             name={nomeIcone}
-            size="sm"
+            size="md"
             className={cn(
               "shrink-0",
               channel.isPrivate ? "text-signal-idle" : "text-ink-500",
               active && !channel.isPrivate && "text-accent-500",
             )}
           />
-          <span className={cn("truncate", unread > 0 && "font-semibold text-ink-100")}>
+          <span
+            className={cn(
+              "truncate",
+              unread > 0 && "font-semibold text-ink-100",
+            )}
+          >
             {channel.name}
           </span>
           {channel.isTemporary ? (
@@ -662,7 +696,11 @@ function ChannelRow({
                     })
                   }
                 >
-                  <AetherIcon name="chevron" size="sm" className="h-3 w-3 rotate-180" />
+                  <AetherIcon
+                    name="chevron"
+                    size="sm"
+                    className="h-3 w-3 rotate-180"
+                  />
                 </IconAction>
                 <IconAction
                   label="Mover para baixo"
@@ -705,7 +743,11 @@ function ChannelRow({
         />
       ) : null}
 
-      <ContextMenu ponto={menu.ponto} onClose={menu.fechar} titulo={channel.name}>
+      <ContextMenu
+        ponto={menu.ponto}
+        onClose={menu.fechar}
+        titulo={channel.name}
+      >
         {/*
           Copiar o link vem primeiro e aparece para todo mundo: e a unica coisa
           do menu que nao depende de cargo, e a mais pedida.
@@ -735,7 +777,9 @@ function ChannelRow({
               Editar canal
             </ItemDoMenu>
             <ItemDoMenu
-              icone={<AetherIcon name="chevron" size="sm" className="rotate-180" />}
+              icone={
+                <AetherIcon name="chevron" size="sm" className="rotate-180" />
+              }
               disabled={pending}
               onClick={() => {
                 menu.fechar();

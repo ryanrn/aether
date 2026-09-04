@@ -54,9 +54,10 @@ export function MemberPanel({
   viewer: ViewerContext;
 }) {
   const [editing, setEditing] = useState<PublicMember | null>(null);
-  const [openCard, setOpenCard] = useState<
-    { member: PublicMember; anchor: CardAnchor } | null
-  >(null);
+  const [openCard, setOpenCard] = useState<{
+    member: PublicMember;
+    anchor: CardAnchor;
+  } | null>(null);
   // O registro inteiro em vez de um seletor por membro: hook dentro do map
   // quebraria as regras dos hooks, e a referencia so muda quando a presenca muda.
   const presence = useRealtimeStore((state) => state.presence);
@@ -72,7 +73,10 @@ export function MemberPanel({
     // roles ja vem ordenado por position desc
     const top = member.roles.find((role) => !role.isDefault) ?? member.roles[0];
     const key = top?.name ?? "Membros";
-    const group = groups.get(key) ?? { color: top?.color ?? "#6B7280", members: [] };
+    const group = groups.get(key) ?? {
+      color: top?.color ?? "#6B7280",
+      members: [],
+    };
     group.members.push(member);
     groups.set(key, group);
   }
@@ -94,12 +98,12 @@ export function MemberPanel({
 
   return (
     <>
-      <aside className="hidden w-[200px] shrink-0 flex-col border-l border-line bg-base-900 lg:flex">
+      <aside className="hidden w-[224px] shrink-0 flex-col border-l border-line bg-base-900 lg:flex">
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {naChamada.length > 0 ? (
             <section className="mb-4">
-              <h3 className="flex items-center gap-1.5 px-1.5 pb-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-accent-300">
-                <AetherIcon name="voice" size="sm" className="h-3 w-3" />
+              <h3 className="flex items-center gap-1.5 px-1.5 pb-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.08em] text-accent-300">
+                <AetherIcon name="voice" size="sm" className="h-3.5 w-3.5" />
                 Na chamada — {naChamada.length}
               </h3>
               <ul className="flex flex-col gap-0.5">
@@ -127,7 +131,7 @@ export function MemberPanel({
                   Mesma escala que os cabecalhos de categoria da arvore
                   passaram a usar. A COR continua vindo do cargo (`style`).
                 */
-                className="px-1.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em]"
+                className="px-1.5 pb-1.5 text-[12px] font-bold uppercase tracking-[0.08em]"
                 style={{ color: group.color }}
               >
                 {name} — {group.members.length}
@@ -200,8 +204,7 @@ function MemberRow({
   editable: boolean;
   presence: UserStatus;
   voiceState:
-    | { speaking: boolean; selfMuted: boolean; serverMuted: boolean }
-    | undefined;
+    { speaking: boolean; selfMuted: boolean; serverMuted: boolean } | undefined;
   onOpenCard: (member: PublicMember, event: React.MouseEvent) => void;
   onEditRoles: () => void;
 }) {
@@ -212,11 +215,11 @@ function MemberRow({
 
   return (
     <li>
-      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-base-850">
+      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-[7px] transition-colors hover:bg-base-850">
         <button
           type="button"
           onClick={(event) => onOpenCard(member, event)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
           <Avatar
             userId={member.user.id}
@@ -224,12 +227,12 @@ function MemberRow({
             src={member.user.avatarUrl}
             moldura={member.user.moldura}
             status={presence}
-            size="xs"
+            size="sm"
             speaking={falando}
           />
           <span
             className={cn(
-              "min-w-0 flex-1 truncate text-[12px] font-medium",
+              "min-w-0 flex-1 truncate text-[13px] font-medium",
               !color && (falando ? "text-accent-300" : "text-ink-200"),
               mudo && "text-ink-500",
             )}

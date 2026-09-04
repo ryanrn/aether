@@ -21,7 +21,12 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import { rotuloDeRevisoes, totalDeRevisoes, type PublicServer, type RevisoesPendentes } from "@aether/shared";
+import {
+  rotuloDeRevisoes,
+  totalDeRevisoes,
+  type PublicServer,
+  type RevisoesPendentes,
+} from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
 import { useShellStore } from "@/lib/stores/shell-store";
@@ -62,8 +67,8 @@ import { useUnreadByServer } from "@/lib/stores/realtime-store";
  * e a regra simplesmente nao existiria no CSS — o hover nao faria nada, sem
  * erro em lugar nenhum. Foi o que eu escrevi primeiro.
  */
-const ICONE_REPOUSO = "rounded-[22px] group-hover:rounded-[16px]";
-const ICONE_ATIVO = "rounded-[16px]";
+const ICONE_REPOUSO = "rounded-[24px] group-hover:rounded-[18px]";
+const ICONE_ATIVO = "rounded-[18px]";
 
 export function ServerRail({
   servers,
@@ -150,7 +155,9 @@ export function ServerRail({
    */
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   function aoSoltar(evento: DragEndEvent) {
@@ -181,7 +188,7 @@ export function ServerRail({
       <nav
         aria-label="Servidores"
         className={cn(
-          "flex w-16 shrink-0 flex-col items-center gap-3 border-r border-line bg-base-900 py-3",
+          "flex w-[68px] shrink-0 flex-col items-center gap-3 border-r border-line bg-base-900 py-3",
           /*
             No CELULAR esta trilha nao e uma coluna, e a metade de tras de uma
             gaveta: `fixed` a tira do fluxo, e ai o conteudo ocupa a tela
@@ -210,13 +217,13 @@ export function ServerRail({
           />
           <span
             className={cn(
-              "grid h-11 w-11 place-items-center transition-all duration-150",
+              "grid h-12 w-12 place-items-center transition-all duration-150",
               emAmigos
                 ? `${ICONE_ATIVO} bg-base-800 text-ink-100`
                 : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
             )}
           >
-            <AetherIcon name="users" size="lg" className="h-5 w-5" />
+            <AetherIcon name="users" size="lg" className="h-[22px] w-[22px]" />
           </span>
           {pendingRequests > 0 ? (
             <span
@@ -252,13 +259,13 @@ export function ServerRail({
           />
           <span
             className={cn(
-              "grid h-11 w-11 place-items-center transition-all duration-150",
+              "grid h-12 w-12 place-items-center transition-all duration-150",
               emOlimpo
                 ? `${ICONE_ATIVO} bg-amber-400/15 text-amber-300`
                 : `${ICONE_REPOUSO} bg-base-800 text-amber-400/80 group-hover:bg-amber-400/10 group-hover:text-amber-300`,
             )}
           >
-            <AetherIcon name="crown" size="lg" className="h-5 w-5" />
+            <AetherIcon name="crown" size="lg" className="h-[22px] w-[22px]" />
           </span>
         </Link>
 
@@ -287,13 +294,18 @@ export function ServerRail({
           />
           <span
             className={cn(
-              "grid h-11 w-11 place-items-center transition-all duration-150",
+              "grid h-12 w-12 place-items-center transition-all duration-150",
               emExplorar
                 ? ICONE_ATIVO + " bg-accent-500 text-white"
-                : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-accent-500 group-hover:text-white",
+                : ICONE_REPOUSO +
+                    " bg-base-800 text-ink-300 group-hover:bg-accent-500 group-hover:text-white",
             )}
           >
-            <AetherIcon name="compass" size="lg" className="h-5 w-5" />
+            <AetherIcon
+              name="compass"
+              size="lg"
+              className="h-[22px] w-[22px]"
+            />
           </span>
         </Link>
 
@@ -322,13 +334,18 @@ export function ServerRail({
             />
             <span
               className={cn(
-                "relative grid h-11 w-11 place-items-center transition-all duration-150",
+                "relative grid h-12 w-12 place-items-center transition-all duration-150",
                 emEquipe
                   ? ICONE_ATIVO + " bg-signal-dnd/15 text-signal-dnd"
-                  : ICONE_REPOUSO + " bg-base-800 text-ink-300 group-hover:bg-signal-dnd/10 group-hover:text-signal-dnd",
+                  : ICONE_REPOUSO +
+                      " bg-base-800 text-ink-300 group-hover:bg-signal-dnd/10 group-hover:text-signal-dnd",
               )}
             >
-              <AetherIcon name="shield" size="lg" className="h-5 w-5" />
+              <AetherIcon
+                name="shield"
+                size="lg"
+                className="h-[22px] w-[22px]"
+              />
               {esperandoRevisao > 0 ? (
                 <span
                   aria-hidden
@@ -363,20 +380,18 @@ export function ServerRail({
           </SortableContext>
         </DndContext>
 
-        {servers.length > 0 ? (
-          <span className="h-px w-8 bg-line" />
-        ) : null}
+        {servers.length > 0 ? <span className="h-px w-8 bg-line" /> : null}
 
         <button
           type="button"
           onClick={() => setModalOpen(true)}
           title="Adicionar servidor"
           className={cn(
-            `grid h-11 w-11 place-items-center ${ICONE_REPOUSO} bg-base-800 text-ink-300 transition-all duration-150`,
+            `grid h-12 w-12 place-items-center ${ICONE_REPOUSO} bg-base-800 text-ink-300 transition-all duration-150`,
             "transition-colors duration-150 hover:text-ink-100",
           )}
         >
-          <AetherIcon name="plus" size="lg" className="h-5 w-5" />
+          <AetherIcon name="plus" size="lg" className="h-[22px] w-[22px]" />
         </button>
       </nav>
 
@@ -442,11 +457,9 @@ function ItemDeServidor({
       <span className="relative">
         <span
           className={cn(
-            "grid h-11 w-11 place-items-center overflow-hidden text-[13px] font-semibold text-ink-100",
+            "grid h-12 w-12 place-items-center overflow-hidden text-[15px] font-semibold text-ink-100",
             "transition-all duration-150",
-            ativo
-              ? `${ICONE_ATIVO} bg-base-800`
-              : ICONE_REPOUSO,
+            ativo ? `${ICONE_ATIVO} bg-base-800` : ICONE_REPOUSO,
           )}
           style={
             server.iconUrl
