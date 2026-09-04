@@ -3444,23 +3444,30 @@ SFU real nunca entra no caminho).
   container do proxy ficar instavel, esse script e o unico que cai junto — os
   outros nao dependem dele.
 
-### Falha conhecida: `verify-phase5` (2 assercoes)
+### `verify-phase5` (2 assercoes) — diagnosticado 04/09/2026
 
 O job de integracao roda o `verify-phase5`, mostra a saida inteira, mas **nao
 derruba a build por causa dele** (lista `CONHECIDAS` em `verify-all-ci.mjs`).
-Duas assercoes falham, as duas sobre um canal de voz com overwrite de
+Duas assercoes falhavam, as duas sobre um canal de voz com overwrite de
 `deny: SCREEN_SHARE` no cargo padrao:
 
 - "sem SCREEN_SHARE, o indicador NAO acende nem mentindo pelo socket"
 - "trocar de canal encerra a transmissao"
 
-**O que se sabe:** o MESMO overwrite de `SCREEN_SHARE` e barrado corretamente
-no token do `verify-phase4` ("sem SCREEN_SHARE, a fonte de tela nao esta no
-token" passa) — entao `getChannelPermissions` calcula certo, e o defeito esta
-no caminho do handler `voice:streaming` (ou na leitura de `voiceLocation` logo
-antes dele), nao no calculo de permissao. O script nunca tinha rodado em
-ambiente automatizado (nao ha contagem dele no README nem no DEPLOY), entao
-nao da para dizer se e regressao ou se sempre foi assim. Em investigacao.
+**Nao e defeito no codigo do token nem no calculo de permissao.** A hipotese
+antiga ("o `verify-phase4` prova que o overwrite e barrado") era falsa: o
+`verify-phase4` sempre nega `SPEAK | SCREEN_SHARE` JUNTOS, nunca isola um
+`deny: SCREEN_SHARE` sozinho. `tests/unit/livekit-token.test.ts` agora cobre
+exatamente o caso isolado e passa: `createMediaCredentials` NAO poe
+`screen_share`/`screen_share_audio` no token quando so o SCREEN_SHARE foi
+negado, mesmo com SPEAK mantido.
+
+**A causa e a fixture.** `requireSeedFixture` cria o overwrite mirando o CARGO
+PADRAO do servidor. Se o `joao` esta no servidor de teste sem esse cargo (uso
+normal trocou o cargo dele, um teste de moderacao mexeu), o overwrite mira um
+cargo que ele nao tem e o deny nunca se aplica. `lib/fixture.mjs` agora
+CHECA isso e falha cedo com o remedio (`scripts/restore-fixture.mjs`, que
+tambem passou a garantir o cargo padrao de quem ja e membro).
 
 ### Duas coisas que a primeira rodada revelou
 

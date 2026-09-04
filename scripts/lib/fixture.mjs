@@ -86,6 +86,7 @@ export async function requireSeedFixture(prisma) {
 
   const membership = await prisma.serverMember.findUnique({
     where: { serverId_userId: { serverId: server.id, userId: member.id } },
+    include: { roles: { select: { roleId: true } } },
   });
   if (!membership) {
     fail(
@@ -101,6 +102,26 @@ export async function requireSeedFixture(prisma) {
   });
   if (!defaultRole) {
     fail("Cargo padrao nao encontrado no servidor de seed.", "npm run db:seed");
+  }
+
+  /**
+   * `joao` PRECISA ter o cargo padrao, e nao so ser membro.
+   *
+   * O `verify-phase5` cria um canal com overwrite `deny: SCREEN_SHARE` NO CARGO
+   * PADRAO. Se `joao` perdeu esse cargo em uso normal (ganhou outro no lugar,
+   * um teste o trocou), o overwrite mira um cargo que ele nao tem, o deny nunca
+   * se aplica, e duas assercoes de tela falham sem nada estar errado no app —
+   * exatamente a "falha conhecida" que este projeto carregou por semanas.
+   */
+  const temCargoPadrao = membership.roles.some(
+    (r) => r.roleId === defaultRole.id,
+  );
+  if (!temCargoPadrao) {
+    fail(
+      `O usuario de teste "joao" e membro de "${server.name}" mas NAO tem o cargo padrao.`,
+      "Os testes de permissao de canal miram esse cargo. Restaure com:\n" +
+        "  npx dotenv -e .env -- node scripts/restore-fixture.mjs",
+    );
   }
 
   return { owner, member, server, membership, defaultRole };

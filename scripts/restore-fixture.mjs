@@ -38,17 +38,28 @@ try {
     where: { serverId_userId: { serverId: server.id, userId: member.id } },
   });
 
+  const role = await prisma.role.findFirst({
+    where: { serverId: server.id, isDefault: true },
+    select: { id: true, name: true },
+  });
+  if (!role) {
+    console.log("Cargo padrao nao encontrado. Rode: npm run db:seed");
+    process.exit(1);
+  }
+
   if (existing) {
-    console.log("joao ja era membro; nada a recriar");
-  } else {
-    const role = await prisma.role.findFirst({
-      where: { serverId: server.id, isDefault: true },
-      select: { id: true, name: true },
+    /**
+     * Ja e membro — mas o `verify-phase5` mira o CARGO PADRAO num overwrite de
+     * canal, entao ser membro sem esse cargo ainda quebra dois testes de tela.
+     * `upsert` para garantir o cargo sem falhar se ja estiver la.
+     */
+    await prisma.memberRole.upsert({
+      where: { memberId_roleId: { memberId: existing.id, roleId: role.id } },
+      create: { memberId: existing.id, roleId: role.id },
+      update: {},
     });
-    if (!role) {
-      console.log("Cargo padrao nao encontrado. Rode: npm run db:seed");
-      process.exit(1);
-    }
+    console.log(`joao ja era membro; cargo ${role.name} garantido`);
+  } else {
     const created = await prisma.serverMember.create({
       data: { serverId: server.id, userId: member.id },
     });
