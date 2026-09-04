@@ -80,6 +80,21 @@ export function VoiceStage({
    */
   const [telaMinimizada, setTelaMinimizada] = useState(false);
   const statsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const sharing = shares.length > 0 || localSharing;
+
+  /**
+   * Ninguem mais transmitindo: volta ao estado normal para a proxima vez.
+   *
+   * Este efeito fica ANTES de qualquer `return` da funcao de proposito: sair
+   * da call zera `participants` e faz o componente retornar cedo (bloco
+   * abaixo), e um hook depois desse ponto seria "menos hooks que o render
+   * anterior" — o React #300 que derrubava a tela ao desconectar.
+   */
+  useEffect(() => {
+    if (!sharing && telaMinimizada) setTelaMinimizada(false);
+  }, [sharing, telaMinimizada]);
+
   const full =
     channel.userLimit !== null &&
     participants.length >= channel.userLimit &&
@@ -154,13 +169,7 @@ export function VoiceStage({
    * participantes descem para uma faixa compacta — a nao ser que a tela
    * esteja minimizada, ai a grade volta ao normal e a tela flutua no canto.
    */
-  const sharing = shares.length > 0 || localSharing;
   const telaEmFoco = sharing && !telaMinimizada;
-
-  // Ninguem mais transmitindo: volta ao estado normal para a proxima vez.
-  useEffect(() => {
-    if (!sharing && telaMinimizada) setTelaMinimizada(false);
-  }, [sharing, telaMinimizada]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
