@@ -426,7 +426,7 @@ export function ControlBar({
         }}
         user={user}
         server={{ id: currentServerId, memberId, nickname }}
-        abaInicial={voltouDoSpotify ? "atividade" : undefined}
+        abaInicial={voltouDoSpotify ? "conexoes" : undefined}
       />
 
       <div className="mx-0.5 h-6 w-px bg-line" />

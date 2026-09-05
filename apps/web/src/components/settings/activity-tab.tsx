@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { SwitchVisual } from "@/components/ui/switch";
 import { AdicionarJogo } from "./adicionar-jogo";
-import { SpotifySection } from "./spotify-section";
 import {
   canDetectGames,
   currentGame,
@@ -156,9 +155,6 @@ export function ActivityTab() {
           </div>
         </>
       ) : null}
-
-      {/* Spotify funciona nos dois: navegador e desktop. Fica fora do gate. */}
-      <SpotifySection />
     </section>
   );
 }

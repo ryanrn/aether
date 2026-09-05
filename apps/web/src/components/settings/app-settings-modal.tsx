@@ -9,6 +9,7 @@ import { logoutAction } from "@/server/actions/auth";
 import { podeAtualizar } from "@/lib/desktop/update";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { ConexoesTab } from "./conexoes-tab";
 import { EsteComputadorTab } from "./este-computador-tab";
 import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
@@ -29,13 +30,19 @@ import { VoiceTab } from "./voice-tab";
  * ("Usuario" / "Assinatura") e um cabecalho que troca por aba.
  */
 
-type Tab = "conta" | "voz" | "atividade" | "computador" | "plano";
+type Tab =
+  | "conta"
+  | "voz"
+  | "atividade"
+  | "conexoes"
+  | "computador"
+  | "plano";
 
 const TABS: {
   id: Tab;
   label: string;
   icon: AetherIconName;
-  grupo: "Usuario" | "Aplicativo" | "Assinatura";
+  grupo: "Usuario" | "Apps conectados" | "Aplicativo" | "Assinatura";
   titulo: string;
   sub: string;
   /**
@@ -67,6 +74,14 @@ const TABS: {
     grupo: "Usuario",
     titulo: "Atividade",
     sub: "O que os amigos veem que voce esta fazendo.",
+  },
+  {
+    id: "conexoes",
+    label: "Conexoes",
+    icon: "link",
+    grupo: "Apps conectados",
+    titulo: "Apps conectados",
+    sub: "Contas de outros servicos ligadas a sua.",
   },
   {
     id: "computador",
@@ -129,7 +144,9 @@ export function AppSettingsModal({
 
   const atual = visiveis.find((t) => t.id === active) ?? visiveis[0]!;
   // Grupo sem nenhuma aba visivel nao rende cabecalho solto.
-  const grupos = (["Usuario", "Aplicativo", "Assinatura"] as const).filter(
+  const grupos = (
+    ["Usuario", "Apps conectados", "Aplicativo", "Assinatura"] as const
+  ).filter(
     (g) => visiveis.some((t) => t.grupo === g),
   );
 
@@ -220,6 +237,8 @@ export function AppSettingsModal({
               <AccountTab user={user} server={server} />
             ) : active === "voz" ? (
               <VoiceTab />
+            ) : active === "conexoes" ? (
+              <ConexoesTab />
             ) : active === "computador" ? (
               <EsteComputadorTab />
             ) : active === "plano" ? (
