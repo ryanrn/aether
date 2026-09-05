@@ -113,8 +113,12 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
           familiaDoCandidato.set(c.id, c.address.includes(":") ? "IPv6" : "IPv4");
           // Do REMOTO guardamos o endereco: e o servidor, nao a pessoa.
           if (s.type === "remote-candidate") {
+            // IPv6 vai entre colchetes: sem eles, "::1765:50006" nao deixa
+            // ver onde acaba o endereco e comeca a porta.
+            const ehV6 = c.address.includes(":");
+            const host = ehV6 ? `[${c.address}]` : c.address;
             const porta = typeof c.port === "number" ? `:${c.port}` : "";
-            enderecoRemoto.set(c.id, `${c.address}${porta}`);
+            enderecoRemoto.set(c.id, `${host}${porta}`);
           }
         }
         break;

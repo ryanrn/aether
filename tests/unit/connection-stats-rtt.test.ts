@@ -391,6 +391,32 @@ describe("enderecos no diagnostico", () => {
     expect(pares()[0]?.enderecoRemoto).toBe("147.15.30.223:50005");
   });
 
+  it("IPv6 sai entre colchetes, para a porta nao se confundir", () => {
+    const pares = paresDoRelatorio(
+      report({
+        L: { type: "local-candidate", candidateType: "host", address: "::1" },
+        R: {
+          type: "remote-candidate",
+          candidateType: "host",
+          // O caso real: SFU do LiveKit anunciando IPv6 alem do IPv4.
+          address: "2603:c021:c006:a500::d83e:8bba:1765",
+          port: 50006,
+        },
+        P: {
+          type: "candidate-pair",
+          state: "succeeded",
+          localCandidateId: "L",
+          remoteCandidateId: "R",
+          currentRoundTripTime: 0.117,
+        },
+      }),
+    );
+    expect(pares[0]?.enderecoRemoto).toBe(
+      "[2603:c021:c006:a500::d83e:8bba:1765]:50006",
+    );
+    expect(pares[0]?.familia).toBe("IPv6");
+  });
+
   it("NUNCA deixa o endereco local sair", () => {
     const texto = JSON.stringify(pares());
     expect(texto).not.toContain("192.168.15.9");
