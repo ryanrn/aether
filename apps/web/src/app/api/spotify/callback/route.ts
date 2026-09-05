@@ -95,13 +95,14 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const redirectUri = `${url.origin}/api/spotify/callback`;
     const tokens = await trocarCodigo(code, redirectUri);
-    const { displayName } = await buscarPerfil(tokens.accessToken).catch(() => ({
-      displayName: null,
-    }));
+    const { displayName, id } = await buscarPerfil(tokens.accessToken).catch(
+      () => ({ displayName: null, id: null }),
+    );
     await guardarConta({
       userId: sessao.user.id,
       tokens,
       spotifyName: displayName,
+      spotifyId: id,
     });
     return pagina(
       "Spotify conectado",

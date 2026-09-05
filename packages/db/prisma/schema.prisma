@@ -113,37 +113,73 @@ model User {
   bans               Ban[]               @relation("BannedUser")
   issuedBans         Ban[]               @relation("BanIssuer")
   jogosSugeridos     SugestaoDeJogo[]
-  spotify            SpotifyAccount?
+  conexoes           Connection[]
 
   @@index([status])
 }
 
-/// Conta do Spotify que a pessoa autorizou, para mostrar o que esta ouvindo.
+/// Um servico externo que pode ser ligado a uma conta do Aether.
 ///
-/// Uma linha por usuario (`userId` e a PK). Os tokens sao guardados CIFRADOS
-/// (AES-256-GCM, chave derivada do `AUTH_SECRET` — ver `secret-box.ts`): o
-/// refresh token da acesso continuo a leitura da Spotify da pessoa, entao nao
-/// pode ficar em claro no banco.
+/// Vira um TYPE no Postgres. Adicionar um valor aqui e uma migracao — de
+/// proposito: provedor novo exige cadastro de aplicativo, segredo em producao
+/// e codigo de login, entao nao pode ser algo que entre por engano numa
+/// string solta.
+enum ConnectionProvider {
+  SPOTIFY
+  STEAM
+  TWITCH
+  RIOT
+}
+
+/// Conta de outro servico ligada a um usuario do Aether.
 ///
-/// Quem CONSOME isto e o gateway (poller que consulta `currently-playing`); o
-/// app web so faz o OAuth e guarda. O `client_secret` do app Spotify vai para
-/// os dois lados (troca do code no web, refresh no gateway) e para NENHUM
-/// bundle — mesma regra do `TWITCH_CLIENT_SECRET`.
-model SpotifyAccount {
-  userId       String   @id
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// nome de exibicao na Spotify, so para a tela de configuracoes
-  spotifyName  String?
-  accessToken  String
-  refreshToken String
-  expiresAt    DateTime
-  scope        String
+/// SUBSTITUIU `SpotifyAccount`, que tinha `userId` como PK — formato de
+/// "Spotify", nao de "conexao". Para somar Steam, Twitch e Riot seriam mais
+/// tres tabelas quase iguais e mais tres copias de cada modulo (~970 linhas
+/// por servico, medido).
+///
+/// OS QUATRO NAO TEM O MESMO FORMATO, e o modelo precisa aguentar isso:
+///  - Spotify e Twitch: OAuth 2.0, com token e refresh;
+///  - Steam: OpenID 2.0 — autentica mas NAO devolve token de usuario, por
+///    isso os campos de token sao opcionais;
+///  - Riot: so identidade (nao ha API publica de presenca).
+///
+/// Os tokens ficam CIFRADOS pela aplicacao (AES-256-GCM, chave derivada do
+/// AUTH_SECRET — ver `secret-box.ts`) antes de chegarem aqui: refresh token
+/// da acesso continuo a conta da pessoa e nao pode ficar em claro no banco.
+model Connection {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider      ConnectionProvider
+  /// O id da pessoa NO SERVICO.
+  ///
+  /// Opcional porque as linhas migradas do `SpotifyAccount` nao tem — aquela
+  /// tabela so guardava o nome. As novas preenchem; as antigas preenchem na
+  /// proxima vez que a pessoa reconectar.
+  externalId    String?
+  /// nome de exibicao no servico, so para a tela de configuracoes
+  displayName   String?
+  /// nulos em provedor sem token de usuario (Steam)
+  accessToken   String?
+  refreshToken  String?
+  expiresAt     DateTime?
+  scope         String?
   /// aparece no cartao de atividade / painel "Ativo agora"
-  showOnProfile Boolean @default(true)
-  /// substitui o texto de status por "Ouvindo Spotify"
-  showAsStatus  Boolean @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  showOnProfile Boolean            @default(true)
+  /// substitui o texto de status (ex.: "Ouvindo Spotify")
+  showAsStatus  Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  /// uma conta por servico, por pessoa
+  @@unique([userId, provider])
+  /// IMPEDE DUAS CONTAS DO AETHER REIVINDICAREM O MESMO PERFIL EXTERNO.
+  /// Sem isto, alguem liga o Steam de outra pessoa e se passa por ela no
+  /// perfil. (`NULL` nao colide com `NULL` no Postgres, entao as linhas
+  /// migradas sem `externalId` convivem ate serem preenchidas.)
+  @@unique([provider, externalId])
+  @@index([provider])
 }
 
 /// Sessao persistida. O cookie carrega um JWT assinado contendo o id da sessao;

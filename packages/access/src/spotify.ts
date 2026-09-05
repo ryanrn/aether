@@ -177,18 +177,20 @@ export async function renovarToken(
   };
 }
 
-/** Nome de exibicao da pessoa na Spotify — so para a tela de configuracoes. */
+/** Quem e a pessoa na Spotify: nome para a tela, e o id para a conexao. */
 export async function buscarPerfil(
   accessToken: string,
-): Promise<{ displayName: string | null }> {
+): Promise<{ displayName: string | null; id: string | null }> {
   const r = await fetch(`${API}/me`, {
     headers: { authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (r.status === 401) throw new SpotifyAutorizacaoInvalida();
-  if (!r.ok) return { displayName: null };
-  const j = (await r.json()) as { display_name?: string };
-  return { displayName: j.display_name ?? null };
+  if (!r.ok) return { displayName: null, id: null };
+  // O `id` alimenta o `externalId` da conexao — e o que impede duas contas do
+  // Aether reivindicarem o mesmo perfil do Spotify.
+  const j = (await r.json()) as { display_name?: string; id?: string };
+  return { displayName: j.display_name ?? null, id: j.id ?? null };
 }
 
 /**
