@@ -27,12 +27,18 @@ const ICONE: Record<string, React.ReactNode> = {
       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.586 14.424a.623.623 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 1 1-.277-1.215c3.809-.871 7.077-.496 9.712 1.115a.623.623 0 0 1 .207.857zm1.223-2.722a.78.78 0 0 1-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.779.779 0 1 1-.452-1.491c3.632-1.102 8.147-.568 11.234 1.329a.78.78 0 0 1 .257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 1 1-.542-1.79c3.532-1.072 9.404-.865 13.115 1.338a.936.936 0 0 1-.958 1.607z" />
     </svg>
   ),
+  TWITCH: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden fill="#9146FF">
+      <path d="M4.265 0L1 3.265v13.47h4.735V20l3.265-3.265h2.735L18.735 10V0H4.265zm12.47 9.265l-2.735 2.735h-2.735l-2.397 2.397v-2.397H4.735V1.735h12v7.53z" />
+      <path d="M14.735 4.265h-1.735v4.735h1.735V4.265zM10 4.265H8.265v4.735H10V4.265z" />
+    </svg>
+  ),
 };
 
 /** Texto de cada provedor. O que a API nao sabe (e nao deve saber). */
 const TEXTO: Record<
   string,
-  { descricao: string; rotuloStatus: string }
+  { descricao: string; rotuloStatus?: string }
 > = {
   SPOTIFY: {
     descricao:
@@ -41,18 +47,15 @@ const TEXTO: Record<
   },
   TWITCH: {
     descricao:
-      "Vai mostrar quando voce estiver ao vivo, com o titulo e o jogo da transmissao.",
-    rotuloStatus: "Exibir a Twitch como seu status",
+      "Mostra seu canal da Twitch no perfil. Aparecer “ao vivo” automaticamente vem depois — por ora e so o link.",
   },
   STEAM: {
     descricao:
       "Vai mostrar o jogo que voce esta jogando. Depende do seu perfil da Steam estar publico.",
-    rotuloStatus: "Exibir a Steam como seu status",
   },
   RIOT: {
     descricao:
       "Vai mostrar seu Riot ID no perfil. A Riot nao abre uma forma de ver a partida em andamento, entao fica so a identidade.",
-    rotuloStatus: "Exibir a Riot como seu status",
   },
 };
 
@@ -79,6 +82,7 @@ interface ProvedorConhecido {
   nome: string;
   implementado: boolean;
   configurado: boolean;
+  temAtividade: boolean;
 }
 
 interface ConexaoVisivel {
@@ -159,15 +163,14 @@ export function ConexoesTab() {
   return (
     <section className="flex flex-col divide-y divide-line">
       {ativos.map((p) => {
-        const t = TEXTO[p.id] ?? {
-          descricao: "",
-          rotuloStatus: `Exibir ${p.nome} como seu status`,
-        };
+        const t = TEXTO[p.id] ?? { descricao: "" };
         const meta: ProviderMeta = {
           id: p.id,
           nome: p.nome,
           descricao: t.descricao,
-          rotuloStatus: t.rotuloStatus,
+          temAtividade: p.temAtividade,
+          rotuloStatus:
+            t.rotuloStatus ?? `Exibir ${p.nome} como seu status`,
           caminhoConectar: caminhoConectar(p.id),
           icone: iconeDe(p.id),
         };

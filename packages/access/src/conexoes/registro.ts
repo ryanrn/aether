@@ -6,6 +6,7 @@ import {
   segredos,
 } from "./armazenamento";
 import { spotifyProvedor } from "./spotify";
+import { twitchProvedor } from "./twitch";
 import { assinarStateDeConexao, verificarStateDeConexao } from "./state";
 import {
   AutorizacaoInvalida,
@@ -37,7 +38,7 @@ import {
 const PROVEDORES: Record<ConnectionProvider, Provedor | null> = {
   SPOTIFY: spotifyProvedor,
   STEAM: null,
-  TWITCH: null,
+  TWITCH: twitchProvedor,
   RIOT: null,
 };
 
@@ -74,6 +75,8 @@ export function provedoresConhecidos(): {
   nome: string;
   implementado: boolean;
   configurado: boolean;
+  /** o provedor produz atividade ao vivo (Spotify), ou e so um cracha (Riot)? */
+  temAtividade: boolean;
 }[] {
   return (
     Object.keys(PROVEDORES) as ConnectionProvider[]
@@ -84,6 +87,7 @@ export function provedoresConhecidos(): {
       nome: p?.nome ?? nomePadrao(id),
       implementado: p !== null,
       configurado: p?.configurado() ?? false,
+      temAtividade: p?.lerAtividade != null,
     };
   });
 }

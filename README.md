@@ -1056,11 +1056,22 @@ O IGDB autentica pela **Twitch**, com *client credentials* — a aplicacao pega
 um token para ela mesma. Nao ha login de usuario, nao ha redirect, nao ha nada
 para o navegador fazer.
 
-`TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` vao **so para o gateway** (Fly).
-Nao vao para a Vercel e nao vao para o Electron: o app desktop carrega conteudo
-remoto, e segredo la e segredo publicado. A consulta parte do nosso servidor,
-nao da maquina de quem joga — assim o IGDB ve o IP de um servidor, e nao "o IP
-do Ryan pediu Hollow Knight as 3 da manha".
+`TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` vao para o **gateway** (Fly) e, desde
+a conexao de Twitch (fase 4), tambem para a **Vercel** — a troca do `code` do
+OAuth roda no web. Nunca vao para o Electron: o app desktop carrega conteudo
+remoto, e segredo la e segredo publicado.
+
+A MESMA app da Twitch serve os dois fluxos. Para a conexao funcionar, adicione
+o **OAuth Redirect URL** no cadastro da app
+(https://dev.twitch.tv/console/apps):
+
+```
+https://<dominio-da-vercel>/api/conexoes/twitch/callback
+```
+
+Sem o par de vars na Vercel, a Twitch aparece em "ainda nao disponivel — falta
+configurar" e o Spotify segue intacto. O gateway nao precisa de nada novo: a
+conexao de Twitch e um cracha (fase 4), sem poller.
 
 O par e opcional. Sem ele tudo funciona, so nao ha capa.
 

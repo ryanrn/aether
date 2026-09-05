@@ -25,8 +25,14 @@ export interface ProviderMeta {
   nome: string;
   /** frase curta que explica o que a conexao mostra */
   descricao: string;
-  /** rotulo da segunda chave, ex.: "Exibir o Spotify como seu status" */
-  rotuloStatus: string;
+  /**
+   * O provedor produz atividade ao vivo (Spotify)? Se sim, mostra a segunda
+   * chave "exibir como status"; se e so um cracha (Twitch por ora, Riot),
+   * so a primeira chave faz sentido.
+   */
+  temAtividade: boolean;
+  /** rotulo da segunda chave, so usado quando `temAtividade` */
+  rotuloStatus?: string;
   /** para onde o "Conectar" aponta */
   caminhoConectar: string;
   icone: React.ReactNode;
@@ -167,12 +173,14 @@ export function ConexaoCard({
               disabled={salvando}
               onChange={(v) => void alternar({ showOnProfile: v })}
             />
-            <LinhaDeChave
-              rotulo={meta.rotuloStatus}
-              ligada={atual.showAsStatus}
-              disabled={salvando}
-              onChange={(v) => void alternar({ showAsStatus: v })}
-            />
+            {meta.temAtividade ? (
+              <LinhaDeChave
+                rotulo={meta.rotuloStatus ?? `Exibir ${meta.nome} como status`}
+                ligada={atual.showAsStatus}
+                disabled={salvando}
+                onChange={(v) => void alternar({ showAsStatus: v })}
+              />
+            ) : null}
           </div>
         </div>
       )}
