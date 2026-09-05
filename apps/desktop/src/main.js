@@ -695,12 +695,12 @@ if (!app.requestSingleInstanceLock()) {
     );
 
     /**
-     * OAuth do Spotify numa janela DEDICADA.
+     * OAuth de UMA CONEXAO numa janela DEDICADA.
      *
-     * Antes a pagina navegava a janela principal para `/api/spotify/connect` —
-     * a unica opcao possivel, porque o navegador do sistema nao tem o cookie
-     * de sessao e a janela-filha do renderer cai no `setWindowOpenHandler`
-     * (que manda tudo para fora). Navegar a janela principal recarrega o app
+     * Antes a pagina navegava a janela principal para a rota de conectar — a
+     * unica opcao possivel, porque o navegador do sistema nao tem o cookie de
+     * sessao e a janela-filha do renderer cai no `setWindowOpenHandler` (que
+     * manda tudo para fora). Navegar a janela principal recarrega o app
      * inteiro na volta, e isso derrubava a chamada de voz.
      *
      * Aqui a janela e criada pelo PROCESSO PRINCIPAL, entao nao passa pelo
@@ -708,10 +708,20 @@ if (!app.requestSingleInstanceLock()) {
      * da janela principal. A janela principal nao navega; a call nem pisca.
      *
      * Fecha sozinha quando o callback termina (a pagina de callback, sem
-     * `window.opener`, navega para `${APP_ORIGIN}/app?spotify=...`), ou por
-     * prazo, ou se a pessoa fechar na mao.
+     * `window.opener`, navega para `${APP_ORIGIN}/app?...`), ou por prazo, ou
+     * se a pessoa fechar na mao.
+     *
+     * `caminho` vem da pagina e SO PODE ser uma rota de conectar do proprio
+     * app — a checagem abaixo recusa qualquer outra coisa, para a pagina nao
+     * conseguir abrir uma janela com sessao compartilhada apontando para
+     * onde quiser.
      */
-    ipcMain.handle("desktop:spotify-connect", () => {
+    function abrirOAuthDeConexao(caminho) {
+      const rotaValida =
+        typeof caminho === "string" &&
+        /^\/api\/(spotify\/connect|conexoes\/[a-z]+\/connect)$/.test(caminho);
+      if (!rotaValida) return Promise.resolve();
+
       return new Promise((resolve) => {
         const parent =
           janelaPrincipal && !janelaPrincipal.isDestroyed()
@@ -722,7 +732,7 @@ if (!app.requestSingleInstanceLock()) {
           parent,
           width: 520,
           height: 760,
-          title: "Conectar Spotify",
+          title: "Conectar conta",
           autoHideMenuBar: true,
           webPreferences: {
             contextIsolation: true,
@@ -763,9 +773,20 @@ if (!app.requestSingleInstanceLock()) {
         // Rede travada ou pessoa que desiste sem fechar: nao deixa orfa.
         const prazo = setTimeout(terminar, 5 * 60 * 1000);
 
-        void oauth.loadURL(`${APP_ORIGIN}/api/spotify/connect`);
+        void oauth.loadURL(`${APP_ORIGIN}${caminho}`);
       });
-    });
+    }
+
+    ipcMain.handle("desktop:conexao-connect", (_e, caminho) =>
+      abrirOAuthDeConexao(caminho),
+    );
+    /**
+     * Canal antigo, para uma janela do app que ainda carregue bundle anterior
+     * a fase 3 nos minutos ao redor de um deploy. Mesmo handler, caminho fixo.
+     */
+    ipcMain.handle("desktop:spotify-connect", () =>
+      abrirOAuthDeConexao("/api/spotify/connect"),
+    );
 
     instalarDeteccaoDeJogo();
     instalarLoopback();

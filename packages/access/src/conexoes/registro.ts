@@ -62,6 +62,44 @@ export function provedoresDisponiveis(): {
 }
 
 /**
+ * TODOS os provedores previstos, com o estado de cada um.
+ *
+ * A tela de Conexoes usa isto para tres coisas: listar o que da para conectar
+ * agora, e dizer "ainda nao disponivel" para o resto SEM inventar um botao que
+ * nao responde. `implementado` sem `configurado` = codigo pronto, faltam os
+ * segredos no ambiente.
+ */
+export function provedoresConhecidos(): {
+  id: ConnectionProvider;
+  nome: string;
+  implementado: boolean;
+  configurado: boolean;
+}[] {
+  return (
+    Object.keys(PROVEDORES) as ConnectionProvider[]
+  ).map((id) => {
+    const p = PROVEDORES[id];
+    return {
+      id,
+      nome: p?.nome ?? nomePadrao(id),
+      implementado: p !== null,
+      configurado: p?.configurado() ?? false,
+    };
+  });
+}
+
+/** Nome de exibicao para um provedor ainda sem adaptador. */
+function nomePadrao(id: ConnectionProvider): string {
+  const mapa: Record<ConnectionProvider, string> = {
+    SPOTIFY: "Spotify",
+    STEAM: "Steam",
+    TWITCH: "Twitch",
+    RIOT: "Riot Games",
+  };
+  return mapa[id];
+}
+
+/**
  * Comeca um login: devolve para onde mandar o navegador.
  *
  * O `state` sai daqui ja amarrado ao par (usuario, provedor) — ver `state.ts`.

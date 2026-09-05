@@ -98,14 +98,22 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
   },
 
   /**
-   * OAuth do Spotify numa janela dedicada do processo principal.
+   * OAuth de uma conexao numa janela dedicada do processo principal.
    *
-   * A pagina so consegue PEDIR que abra; a janela, a sessao compartilhada e o
-   * fechamento automatico ficam no main. Resolve quando o fluxo termina — a
-   * seccao das configuracoes re-checa o estado ai.
+   * A pagina so consegue PEDIR que abra, passando o CAMINHO da rota de
+   * conectar (`/api/spotify/connect`, `/api/conexoes/twitch/connect`, ...). A
+   * janela, a sessao compartilhada e o fechamento automatico ficam no main.
+   * Resolve quando o fluxo termina — a aba de Conexoes re-checa o estado ai.
    */
+  conexoes: {
+    conectar: (caminho) =>
+      ipcRenderer.invoke("desktop:conexao-connect", caminho),
+  },
+
+  /** @deprecated use `conexoes.conectar("/api/spotify/connect")` */
   spotify: {
-    conectar: () => ipcRenderer.invoke("desktop:spotify-connect"),
+    conectar: () =>
+      ipcRenderer.invoke("desktop:conexao-connect", "/api/spotify/connect"),
   },
 
   gameDetection: {
