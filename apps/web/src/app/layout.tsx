@@ -3,6 +3,7 @@ import { Chakra_Petch, JetBrains_Mono, Rubik } from "next/font/google";
 import { BRAND } from "@aether/shared";
 import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
+import { NovidadesModal } from "@/components/layout/novidades-modal";
 import { AetherIconSprite } from "@/components/ui/aether-icon";
 
 /**
@@ -87,6 +88,13 @@ export default function RootLayout({
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
           {children}
         </div>
+        {/*
+          "Veja o que mudou", no primeiro boot depois de uma atualizacao.
+          Fica no layout raiz e nao dentro de /app porque a atualizacao pode
+          terminar com a pessoa na tela de entrar. So aparece no aplicativo de
+          desktop; no navegador nao ha versao instalada com que comparar.
+        */}
+        <NovidadesModal />
       </body>
     </html>
   );

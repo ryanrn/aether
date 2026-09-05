@@ -1,0 +1,32 @@
+{
+  "0.1.22": {
+    "data": "2026-09-05",
+    "resumo": "Chamadas mais rapidas em rede com IPv6, e um painel para ver a conexao por dentro.",
+    "itens": [
+      {
+        "categoria": "correcao",
+        "texto": "O ping das chamadas caiu de ~117 ms para ~7 ms em redes com IPv6. A voz estava saindo por um caminho que dava a volta pelos Estados Unidos antes de chegar ao servidor em Sao Paulo."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "Painel de Depuracao ao vivo: bitrate, jitter, perda de pacotes e o caminho exato que a sua voz esta usando. Abre pelo icone de sinal, ao lado do ping."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "Sair de um servidor deixou de ser privilegio de administrador — qualquer membro sai pelo menu do nome do servidor."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "Configuracoes e Sair da conta agora ficam no seu avatar, sempre. Antes so apareciam para quem estava dentro de algum servidor."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Copiar diagnostico e copiar link pararam de falhar calados no aplicativo de desktop — e, quando nao da, a tela diz que nao deu."
+      },
+      {
+        "categoria": "performance",
+        "texto": "Canais com muita mensagem ficaram mais leves: cada mensagem nova nao reordena mais o historico inteiro."
+      }
+    ]
+  }
+}

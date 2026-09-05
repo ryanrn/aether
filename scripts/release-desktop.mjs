@@ -68,7 +68,49 @@ const versao = JSON.parse(
 ).version;
 const tag = `v${versao}`;
 
-// 2. token — falha ANTES de buildar, nao depois
+/**
+ * 2. As notas da versao.
+ *
+ * MESMA FONTE da tela "Veja o que mudou" que o app abre no primeiro boot
+ * (`apps/web/src/lib/novidades.ts`). Se o corpo da release no GitHub fosse
+ * escrito a mao aqui, as duas divergiriam na primeira pressa — e a tela e o
+ * site diriam coisas diferentes sobre a mesma versao.
+ *
+ * Sem entrada, a release nao sai. Publicar sem nota nao "quase funciona":
+ * entrega uma tela de novidades vazia para todo mundo que atualizar.
+ */
+const ROTULOS = {
+  recurso: "Novo recurso",
+  performance: "Performance",
+  correcao: "Correcoes",
+  seguranca: "Seguranca",
+};
+
+function notasDaVersao(v) {
+  const caminho = "apps/web/src/lib/novidades.json";
+  let dados;
+  try {
+    dados = JSON.parse(readFileSync(caminho, "utf8"));
+  } catch (erro) {
+    morrer(`nao consegui ler ${caminho}.`, String(erro?.message ?? erro));
+  }
+  const entrada = dados[v];
+  if (!entrada || !entrada.itens?.length) {
+    morrer(
+      `nao ha entrada para ${v} em ${caminho}.`,
+      "Escreva o que mudou ANTES de publicar — e desse arquivo que sai tanto o " +
+        'corpo da release quanto a tela "Veja o que mudou" dentro do app.',
+    );
+  }
+  const linhas = entrada.itens.map(
+    (i) => `- **${ROTULOS[i.categoria] ?? "Novo recurso"}** — ${i.texto}`,
+  );
+  return [entrada.resumo, "", ...linhas].join("\n");
+}
+
+const notas = notasDaVersao(versao);
+
+// 3. token — falha ANTES de buildar, nao depois
 let token;
 try {
   token = execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
@@ -83,7 +125,7 @@ if (!token) morrer("`gh auth token` devolveu vazio.");
 console.log(`→ publicando ${tag} em ${NOME}`);
 
 /**
- * 3. Recusar sobrescrever uma versao ja publicada.
+ * 4. Recusar sobrescrever uma versao ja publicada.
  *
  * Republicar a mesma tag entrega um instalador diferente com o mesmo numero
  * de versao — quem ja atualizou nunca recebe a correcao, porque para o
@@ -104,7 +146,7 @@ if (jaExiste.ok) {
   }
   console.log(`  rascunho de ${tag} ja existe, reaproveitando`);
 } else {
-  // 4. O rascunho nasce AQUI. E isto que impede os dois publishers de criarem
+  // 5. O rascunho nasce AQUI. E isto que impede os dois publishers de criarem
   //    um cada. Ver "TROPECO 2" no topo.
   gh([
     "release",
@@ -116,12 +158,12 @@ if (jaExiste.ok) {
     "--title",
     versao,
     "--notes",
-    `${tag}\n\nRepositorio de downloads do AETHER`,
+    notas,
   ]);
   console.log(`  rascunho ${tag} criado (evita a corrida dos publishers)`);
 }
 
-// 5. build + upload
+// 6. build + upload
 const build = spawnSync(
   process.platform === "win32" ? "npm.cmd" : "npm",
   ["run", "release", "--workspace=@aether/desktop"],
@@ -136,7 +178,7 @@ if (build.status !== 0) {
 }
 
 /**
- * 6. Conferir que os TRES arquivos subiram antes de tirar do rascunho.
+ * 7. Conferir que os TRES arquivos subiram antes de tirar do rascunho.
  *
  * `latest.yml` e o que cada app baixa para saber que ha versao nova: sem ele
  * a release existe e ninguem atualiza. O `.blockmap` permite baixar so o
@@ -162,7 +204,7 @@ if (!nomes.includes("Aether-Setup.exe.blockmap")) {
 }
 console.log(`  assets: ${nomes.join(", ")}`);
 
-// 7. tirar do rascunho, POR ID (a tag pode ser ambigua se sobrou algum
+// 8. tirar do rascunho, POR ID (a tag pode ser ambigua se sobrou algum
 //    rascunho velho de uma tentativa anterior)
 if (manterRascunho) {
   console.log(`\n✓ ${tag} pronta em RASCUNHO: ${detalhe.url}`);

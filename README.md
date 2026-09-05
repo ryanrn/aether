@@ -534,8 +534,21 @@ recargas.
 
   ```bash
   # 1. sobe a versao em apps/desktop/package.json
-  # 2. npm run release:desktop            (ou -- --draft para conferir antes)
+  # 2. escreve o que mudou em apps/web/src/lib/novidades.json
+  # 3. npm run release:desktop            (ou -- --draft para conferir antes)
   ```
+
+  O passo 2 nao e opcional: o script RECUSA publicar uma versao sem entrada no
+  `novidades.json`. Esse arquivo e fonte unica de duas coisas — o corpo da
+  release no GitHub e a tela **"Veja o que mudou"** que o app abre no primeiro
+  boot depois de atualizar (`components/layout/novidades-modal.tsx`). Escrever
+  o texto em dois lugares faria os dois divergirem na primeira pressa.
+
+  A tela mora no layout raiz porque a atualizacao pode terminar com a pessoa
+  ainda na tela de entrar. Ela aparece DEPOIS do reinicio, e nao ao clicar em
+  Atualizar — clicar fecha o app para instalar, e uma tela mostrada ali
+  duraria o tempo do clique. Quem acabou de instalar pela primeira vez nao a
+  ve: a versao e anotada em silencio, e a proxima atualizacao ja mostra.
 
   Nao chame `electron-builder --publish always` na mao. Fazer isso custou uma
   tarde e dois erros que se parecem com "deu certo":
