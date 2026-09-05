@@ -5,7 +5,7 @@ import {
   guardarConexao,
   lerConexao,
   segredos,
-} from "./conexoes";
+} from "./conexoes/armazenamento";
 import {
   renovarToken,
   SpotifyAutorizacaoInvalida,

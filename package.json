@@ -17,6 +17,7 @@
     "build:ci": "prisma generate --schema packages/db/prisma/schema.prisma && npm run build --workspace=@aether/web",
     "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:esm": "tsx scripts/checa-esm.ts",
     "typecheck:tests": "tsc -p tsconfig.tests.json",
     "build:worklet": "node scripts/build-rnnoise-worklet.mjs",
     "test": "vitest run",
