@@ -165,15 +165,40 @@ if (jaExiste.ok) {
 
 // 6. build + upload
 const build = spawnSync(
-  process.platform === "win32" ? "npm.cmd" : "npm",
-  ["run", "release", "--workspace=@aether/desktop"],
-  { stdio: "inherit", env: { ...process.env, GH_TOKEN: token } },
+  /**
+   * Comando numa UNICA string, e nao `(programa, [args])`.
+   *
+   * Com `shell: true` o Node avisa (DEP0190) que argumentos em array sao
+   * concatenados sem escapar. Aqui nada vem de fora — a linha e literal —
+   * mas mandar a string pronta some com o aviso e deixa obvio que nao ha
+   * interpolacao nenhuma para escapar.
+   */
+  "npm run release --workspace=@aether/desktop",
+  {
+    stdio: "inherit",
+    /**
+     * `shell` no Windows porque o Node >= 20.12 RECUSA executar `.cmd`/`.bat`
+     * diretamente (correcao da CVE-2024-27980). Sem isto, `spawnSync` nem
+     * chega a rodar o npm: devolve `error` preenchido e `status` em `null`.
+     */
+    shell: true,
+    env: { ...process.env, GH_TOKEN: token },
+  },
 );
-if (build.status !== 0) {
+/**
+ * `error` E `status`, nao so o `status`.
+ *
+ * Quando o spawn falha antes de comecar, `status` vem `null` — e `null !== 0`
+ * e verdadeiro, entao a checagem antiga acusava a falha certa pelo motivo
+ * errado, sem UMA linha dizendo o que houve. Ficou dez minutos parecendo
+ * problema do electron-builder quando era o proprio spawn.
+ */
+if (build.error || build.status !== 0) {
   morrer(
     "o electron-builder falhou.",
-    `O rascunho ${tag} ficou em https://github.com/${NOME}/releases — ` +
-      "apague-o ou rode de novo depois de corrigir.",
+    (build.error ? `${build.error.message}\n  ` : "") +
+      `O rascunho ${tag} ficou em https://github.com/${NOME}/releases — ` +
+      "rode de novo depois de corrigir (ele e reaproveitado).",
   );
 }
 
@@ -207,6 +232,8 @@ console.log(`  assets: ${nomes.join(", ")}`);
 // 8. tirar do rascunho, POR ID (a tag pode ser ambigua se sobrou algum
 //    rascunho velho de uma tentativa anterior)
 if (manterRascunho) {
+  // Rascunho ainda NAO tem tag: aqui o endereco certo e mesmo o `detalhe.url`
+  // (`.../releases/untagged-8c9ff0...`), o unico que existe nesse estado.
   console.log(`\n✓ ${tag} pronta em RASCUNHO: ${detalhe.url}`);
   console.log("  Para publicar: rode de novo sem --draft.");
   process.exit(0);
@@ -229,5 +256,14 @@ if (id.length !== 1) {
 }
 gh(["api", "--method", "PATCH", `repos/${NOME}/releases/${id[0]}`, "-F", "draft=false"]);
 
-console.log(`\n✓ ${tag} publicada: ${detalhe.url}`);
+/**
+ * O endereco da TAG, e nao o `detalhe.url`.
+ *
+ * Enquanto e rascunho a release nao tem tag, e o GitHub devolve uma url
+ * `.../releases/untagged-8c9ff0...`. Como o `detalhe` foi lido ANTES de
+ * publicar, imprimir dali entregava um link que morria no instante seguinte.
+ */
+console.log(
+  `\n✓ ${tag} publicada: https://github.com/${NOME}/releases/tag/${tag}`,
+);
 console.log("  O auto-update dos apps instalados pega nas proximas horas.");
