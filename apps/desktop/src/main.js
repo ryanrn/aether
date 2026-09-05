@@ -9,6 +9,7 @@ const {
   shell,
 } = require("electron");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { pickSource, disableAudioPreference } = require("./picker");
 const { instalarLoopback, encerrarLoopback } = require("./loopback-ipc");
@@ -33,6 +34,63 @@ const { registrar } = require("./log");
  *    do getDisplayMedia do navegador (que falha em algumas maquinas Windows);
  *  - janela propria, com icone e atalho.
  */
+
+/**
+ * Tira o IPv6 do WebRTC — so deste processo, so enquanto o app roda.
+ *
+ * POR QUE: o no de midia do LiveKit em Sao Paulo anuncia IPv4 e IPv6 na mesma
+ * porta. Medido de uma rede residencial em SP (05/09/2026):
+ *
+ *   147.15.30.223                        ->   4 ms  (10 saltos, tudo no Brasil)
+ *   2603:c021:c006:a500::d83e:8bba:1765  -> 115 ms  (sai do pais na entrada
+ *                                                    da rede IPv6 da Oracle)
+ *
+ * O ICE escolhe par por PRIORIDADE DE TIPO, nao por latencia (RFC 8445:
+ * host=126 > prflx=110). O candidato IPv6 e `host` e o IPv4 chega como
+ * `prflx`, entao o Chromium fixa no de 115 ms com o de 7 ms parado ao lado —
+ * e a chamada inteira roda com ~117 ms de ping sem precisar.
+ *
+ * A correcao de verdade e do LiveKit (nao deveria anunciar um IPv6 com rota
+ * transcontinental) e vale tambem para quem usa pelo navegador, onde nao ha
+ * como fazer isto. Aqui, no desktop, a linha de comando e nossa.
+ *
+ * `WebRTC-IPv6Default/Disabled/` foi MEDIDO, nao suposto: uma sonda que junta
+ * candidatos ICE contra um STUN publico devolveu 4 candidatos IPv6 sem o
+ * switch e 0 com ele, mantendo os 3 IPv4 (inclusive o `srflx`).
+ *
+ * NAO mexe em nada do sistema — o IPv6 do Windows continua ligado, e so o
+ * WebRTC deste processo que para de juntar candidato IPv6.
+ *
+ * A TRAVA: quem esta numa rede SO IPv6 ficaria sem candidato nenhum e sem
+ * conseguir entrar em chamada. Por isso o switch so entra quando existe IPv4
+ * utilizavel. E `AETHER_WEBRTC_IPV6=1` desfaz tudo, para quando o LiveKit
+ * corrigir ou se aparecer rede em que isto atrapalhe.
+ */
+function desligarIpv6DoWebrtc() {
+  if (process.env.AETHER_WEBRTC_IPV6 === "1") {
+    registrar("webrtc:ipv6", { acao: "mantido", motivo: "AETHER_WEBRTC_IPV6=1" });
+    return;
+  }
+
+  const temIpv4 = Object.values(os.networkInterfaces())
+    .flat()
+    .some(
+      (i) => i && !i.internal && (i.family === "IPv4" || i.family === 4),
+    );
+
+  if (!temIpv4) {
+    registrar("webrtc:ipv6", { acao: "mantido", motivo: "rede sem IPv4" });
+    return;
+  }
+
+  app.commandLine.appendSwitch(
+    "force-fieldtrials",
+    "WebRTC-IPv6Default/Disabled/",
+  );
+  registrar("webrtc:ipv6", { acao: "desligado" });
+}
+
+desligarIpv6DoWebrtc();
 
 /** Origem oficial. Tudo fora daqui abre no navegador do sistema, nunca aqui. */
 const APP_ORIGIN =
