@@ -5,6 +5,7 @@ import type { MediaGrant } from "@aether/shared";
 import { useRealtimeStore, useSelfVoice } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { connectVoiceRoom, type VoiceRoomHandle } from "@/lib/voice/room";
+import { diagnosticoDeRedeLigado } from "@/lib/voice/network-diagnostics";
 
 /**
  * Liga e desliga a sessao de midia conforme voce entra e sai de canais de voz.
@@ -47,6 +48,8 @@ export function VoiceSession() {
     (selfVoice?.selfDeafened ?? false) || (selfVoice?.serverDeafened ?? false);
 
   const roomRef = useRef<VoiceRoomHandle | null>(null);
+  /** desliga a camada `[AETHER NETWORK]` junto com a sessao */
+  const pararDiagnosticoRef = useRef<(() => void) | null>(null);
 
   // 1. conexao com a sala — refeita quando o canal ou o token muda
   useEffect(() => {
@@ -117,6 +120,38 @@ export function VoiceSession() {
         }
         roomRef.current = handle;
         setVoiceError(null);
+
+        /**
+         * Comparacao das quatro latencias no console, so quando pedida.
+         *
+         * Fica atras de `localStorage.aether:netdebug` porque log de rede a
+         * cada 2s em producao e ruido — e porque a pergunta que ela responde
+         * ("qual desses numeros a interface chama de ping?") so aparece
+         * durante uma investigacao.
+         */
+        if (diagnosticoDeRedeLigado()) {
+          pararDiagnosticoRef.current = handle.iniciarDiagnosticoDeRede(
+            (aoResponder) => {
+              if (!socket.connected) {
+                aoResponder(null);
+                return;
+              }
+              const saiu = performance.now();
+              let respondido = false;
+              socket.emit("ping", () => {
+                if (respondido) return;
+                respondido = true;
+                aoResponder(Math.round(performance.now() - saiu));
+              });
+              // Ack que nunca chega nao pode virar um numero inventado.
+              setTimeout(() => {
+                if (respondido) return;
+                respondido = true;
+                aoResponder(null);
+              }, 5000);
+            },
+          );
+        }
 
         /**
          * Publica os comandos de tela enquanto a sessao existe. O indicador
@@ -192,6 +227,8 @@ export function VoiceSession() {
 
     return () => {
       cancelled = true;
+      pararDiagnosticoRef.current?.();
+      pararDiagnosticoRef.current = null;
       const handle = roomRef.current;
       roomRef.current = null;
       setMediaConnected(false);

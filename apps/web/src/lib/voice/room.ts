@@ -47,6 +47,7 @@ import { createMicAnalyser } from "./mic-analyser";
 import { createSpeechGate } from "./speech-gate";
 import { startConnectionStats, type ConnectionStats } from "./connection-stats";
 import { startMediaDebug, type MediaDebug } from "./media-debug";
+import { iniciarDiagnosticoDeRede } from "./network-diagnostics";
 
 /**
  * Conexao com a sala de midia (SFU).
@@ -179,6 +180,17 @@ export interface VoiceRoomHandle {
    * e por isso so roda enquanto a janela de depuracao esta aberta.
    */
   subscribeMediaDebug: (cb: (debug: MediaDebug) => void) => () => void;
+  /**
+   * Liga a camada de diagnostico que imprime as QUATRO latencias da chamada
+   * lado a lado no console (`[AETHER NETWORK]`). So roda com a chave
+   * `aether:netdebug` ligada; ver `network-diagnostics.ts`.
+   *
+   * `medirGateway` mede o ida-e-volta ate o NOSSO gateway — quem tem o socket
+   * e a camada de cima, entao ela injeta a funcao aqui.
+   */
+  iniciarDiagnosticoDeRede: (
+    medirGateway: ((aoResponder: (ida: number | null) => void) => void) | null,
+  ) => () => void;
   disconnect: () => Promise<void>;
 }
 
@@ -969,6 +981,10 @@ export async function connectVoiceRoom({
 
     subscribeMediaDebug(cb) {
       return startMediaDebug(room, cb);
+    },
+
+    iniciarDiagnosticoDeRede(medirGateway) {
+      return iniciarDiagnosticoDeRede(room, medirGateway);
     },
 
     /**

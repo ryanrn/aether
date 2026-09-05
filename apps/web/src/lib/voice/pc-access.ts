@@ -75,3 +75,20 @@ export async function relatoriosDaSessao(
   }
   return saida;
 }
+
+/**
+ * RTT da SINALIZACAO do LiveKit (o ping/pong do WebSocket de sinal).
+ *
+ * `SignalClient.rtt` — tambem interno, mesmo cuidado do `pcManager`.
+ *
+ * NAO e o ping da chamada e nunca alimentou o painel: a sinalizacao e um
+ * WebSocket (TCP/TLS) que so troca comandos de sala, enquanto a voz corre por
+ * UDP direto ao no de midia. Existe aqui APENAS para a camada de diagnostico
+ * poder mostrar os dois lado a lado e provar que sao numeros diferentes.
+ */
+export function rttDeSinalizacao(room: Room): number | null {
+  const rtt = (
+    room as unknown as { engine?: { client?: { rtt?: number } } }
+  ).engine?.client?.rtt;
+  return typeof rtt === "number" && rtt > 0 ? Math.round(rtt) : null;
+}
