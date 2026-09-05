@@ -101,10 +101,7 @@ export function startConnectionStats(
 
     // RTT: o round-trip real da rede ate o SFU, do par de candidatos ICE ativo.
     const rotas = await rotasDaConexao(room);
-    const medidas = rotas
-      .map((r) => r.rttMs)
-      .filter((v): v is number => v !== null);
-    const rttMs = medidas.length > 0 ? Math.min(...medidas) : null;
+    const rttMs = rttDaSessao(rotas);
 
     // Perda: do stream de audio, onde ela importa.
     let lossPct: number | null = null;
@@ -167,13 +164,31 @@ export function startConnectionStats(
 }
 
 /**
+ * O ping da sessao: o da conexao de ENVIO (publisher).
+ *
+ * POR QUE NAO O MENOR DAS DUAS: ate aqui isto era `Math.min(publisher,
+ * subscriber)`. As duas falam com o mesmo SFU, entao em regime normal os
+ * numeros batem — mas quando eles divergem, pegar o menor e escolher o
+ * numero mais bonito, nao medir o caminho certo. Se a conexao de envio esta
+ * a 119ms, e por 119ms que a SUA VOZ sai; mostrar o 5ms da outra esconderia
+ * exatamente o que a pessoa precisa ver.
+ *
+ * O `subscriber` so entra quando o publisher nao tem medicao — o que e um
+ * caso real, nao teorico: quem entra sem permissao de falar (ou com o mic
+ * mutado desde o inicio) pode nem ter conexao de publicacao. Nesses casos o
+ * ping do subscriber e a unica leitura possivel, e e melhor que "—".
+ */
+export function rttDaSessao(rotas: RotaDaConexao[]): number | null {
+  const publisher = rotas.find((r) => r.pc === "publisher");
+  if (publisher?.rttMs != null) return publisher.rttMs;
+  return rotas.find((r) => r.pc === "subscriber")?.rttMs ?? null;
+}
+
+/**
  * Os pares de candidatos de cada conexao, com o RTT que cada uma daria.
  *
- * As duas (publisher e subscriber) falam com o mesmo SFU pelo mesmo caminho,
- * entao em regime normal os numeros batem. Quando NAO batem — uma caiu num par
- * relay, ou esta com o valor congelado do aperto de mao inicial — quem decide
- * e o `Math.min` la em cima. O dump volta junto para o diagnostico poder
- * mostrar QUAL rota deu qual numero.
+ * O dump volta junto para o diagnostico poder mostrar QUAL rota deu qual
+ * numero — quem escolhe entre elas e o `rttDaSessao` acima.
  */
 async function rotasDaConexao(room: Room): Promise<RotaDaConexao[]> {
   const relatorios = await relatoriosDaSessao(room);

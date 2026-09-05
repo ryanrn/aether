@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { paresDoRelatorio, rttDoRelatorio } from "@/lib/voice/ice-rtt";
+import { rttDaSessao } from "@/lib/voice/connection-stats";
 
 /**
  * O ping do painel de Conexao.
@@ -305,5 +306,48 @@ describe("paresDoRelatorio — campos de diagnostico", () => {
     );
     expect(pares[0]?.rttMedioMs).toBeNull();
     expect(pares[0]?.familia).toBeUndefined();
+  });
+});
+
+/**
+ * Qual das duas conexoes define o ping da sessao.
+ *
+ * Era `Math.min(publisher, subscriber)`. O menor das duas e o numero mais
+ * bonito, nao a medicao certa: se o ENVIO esta a 119ms, e por 119ms que a voz
+ * de quem esta falando sai, e mostrar o 5ms da outra esconderia justamente
+ * isso. Agora manda o publisher; o subscriber so cobre quem nao publica.
+ */
+describe("rttDaSessao", () => {
+  const rota = (pc: "publisher" | "subscriber", rttMs: number | null) => ({
+    pc,
+    pares: [],
+    rttMs,
+  });
+
+  it("com as duas medindo, manda o PUBLISHER — mesmo sendo o maior", () => {
+    expect(
+      rttDaSessao([rota("publisher", 119), rota("subscriber", 5)]),
+    ).toBe(119);
+  });
+
+  it("nao inverte quando o publisher e o menor", () => {
+    expect(rttDaSessao([rota("publisher", 5), rota("subscriber", 119)])).toBe(5);
+  });
+
+  it("cai no subscriber quando o publisher nao tem medicao", () => {
+    expect(rttDaSessao([rota("publisher", null), rota("subscriber", 42)])).toBe(
+      42,
+    );
+  });
+
+  it("cai no subscriber quando nem existe conexao de envio", () => {
+    expect(rttDaSessao([rota("subscriber", 42)])).toBe(42);
+  });
+
+  it("sem nenhuma medicao, devolve null — nao 0 ms", () => {
+    expect(rttDaSessao([])).toBeNull();
+    expect(
+      rttDaSessao([rota("publisher", null), rota("subscriber", null)]),
+    ).toBeNull();
   });
 });
