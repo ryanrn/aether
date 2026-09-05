@@ -534,13 +534,33 @@ recargas.
 
   ```bash
   # 1. sobe a versao em apps/desktop/package.json
-  # 2. GH_TOKEN="$(gh auth token)" npm run release --workspace=@aether/desktop
-  # 3. o electron-builder cria a release como RASCUNHO; tirar do rascunho:
-  #    gh release edit v0.1.X --repo ryanrn/aether-releases --draft=false
+  # 2. npm run release:desktop            (ou -- --draft para conferir antes)
   ```
 
-  O passo 3 e facil de esquecer e falha em silencio: rascunho e invisivel para
-  o atualizador, e o app simplesmente nunca acha a versao nova.
+  Nao chame `electron-builder --publish always` na mao. Fazer isso custou uma
+  tarde e dois erros que se parecem com "deu certo":
+
+  - **"GitHub Personal Access Token is not set"**. O `git push` usa as
+    credenciais do Git; o electron-builder sobe por API e so enxerga
+    `GH_TOKEN`. Num terminal limpo ele builda 111 MB, assina tudo, e SO ENTAO
+    descobre que nao tem como enviar. O script tira o token do `gh auth token`
+    e falha ANTES de buildar se nao houver.
+
+  - **Dois rascunhos com a mesma tag**. O electron-builder agenda um publisher
+    POR ARTEFATO; o `.exe` e o `.blockmap` ficam prontos quase juntos, os dois
+    perguntam "a release existe?" ao mesmo tempo, os dois ouvem "nao", e os
+    dois criam. Sobra um rascunho com o instalador e outro com so o
+    `.blockmap` — e `gh release edit vX --draft=false` resolve POR TAG: se ele
+    pegar o errado, sai uma release SEM instalador e o auto-update de todo
+    mundo quebra. O script cria o rascunho ANTES do build (ai nao ha corrida)
+    e tira do rascunho POR ID.
+
+  O script ainda recusa republicar uma tag ja publicada — entregar um
+  instalador diferente com o mesmo numero de versao deixa quem ja atualizou
+  sem nunca receber a correcao — e so tira do rascunho depois de conferir que
+  `Aether-Setup.exe` e `latest.yml` subiram. Se faltar algum, ele para e
+  DEIXA em rascunho de proposito: rascunho e invisivel para o atualizador, e
+  o app simplesmente nunca acha a versao nova.
 
   **Link de download permanente**, para o site nao precisar ser editado a cada
   release:

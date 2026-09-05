@@ -12,6 +12,7 @@
     "dev:realtime": "dotenv -e .env -- npm run dev --workspace=@aether/realtime",
     "dev:desktop": "npm run dev --workspace=@aether/desktop",
     "build:desktop": "npm run build --workspace=@aether/desktop",
+    "release:desktop": "node scripts/release-desktop.mjs",
     "build": "npm run db:generate && dotenv -e .env -- npm run build --workspace=@aether/web",
     "build:ci": "prisma generate --schema packages/db/prisma/schema.prisma && npm run build --workspace=@aether/web",
     "start": "dotenv -e .env -- npm run start --workspace=@aether/web",
