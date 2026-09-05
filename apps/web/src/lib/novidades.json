@@ -42,5 +42,19 @@
         "texto": "A Depuracao ganhou a tabela de Rotas ICE: todos os caminhos que a chamada pode usar, com o ping atual e o medio de cada um, IPv4 ou IPv6, e o endereco do servidor de midia. E o que mostra quando a voz esta indo por um caminho pior do que precisava."
       }
     ]
+  },
+  "0.1.24": {
+    "data": "2026-09-05",
+    "resumo": "Conectar contas (Twitch e as proximas) volta a acontecer dentro do app, sem te jogar para o navegador.",
+    "itens": [
+      {
+        "categoria": "correcao",
+        "texto": "Conectar uma conta que nao seja o Spotify (Twitch, e as que vem depois) abria o navegador do sistema no meio do login e largava voce la. Agora o fluxo inteiro acontece numa janela do proprio Aether, igual ja era com o Spotify."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "A aba Apps conectados agora lista Twitch alem do Spotify. Por enquanto a Twitch so mostra seu canal no perfil — aparecer “ao vivo” automaticamente vem depois."
+      }
+    ]
   }
 }

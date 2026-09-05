@@ -62,6 +62,19 @@ export function ConexaoCard({
   // clicar e o `aoMudar` trazer o valor confirmado.
   const atual = otimista ?? conexao;
 
+  /**
+   * Shell de desktop velho demais para este provedor.
+   *
+   * A ponte generica (`conexoes.conectar`) chegou na fase 3, mas o shell so a
+   * ganha numa RELEASE. Sem ela, so o Spotify tem caminho seguro (canal
+   * `spotify.conectar`, hardcoded). Qualquer outro provedor cairia no
+   * `window.location.href` da janela principal — que o `will-navigate` do
+   * Electron intercepta e joga no NAVEGADOR do sistema. Melhor um aviso
+   * honesto do que um botao que expulsa a pessoa do app.
+   */
+  const precisaAtualizarDesktop =
+    !atual && ehDesktopSemPonteGenerica() && meta.id !== "SPOTIFY";
+
   function conectar() {
     const bridge = (
       window as {
@@ -130,7 +143,12 @@ export function ConexaoCard({
         {meta.descricao}
       </p>
 
-      {!atual ? (
+      {precisaAtualizarDesktop ? (
+        <p className="mt-3 rounded-md border border-line bg-base-900 p-3 text-[12px] leading-relaxed text-ink-400">
+          Atualize o aplicativo para conectar a {meta.nome}. Feche e reabra o
+          Aether — a versao nova baixa sozinha.
+        </p>
+      ) : !atual ? (
         <div className="mt-3 space-y-2">
           <button
             type="button"
@@ -210,4 +228,14 @@ function LinhaDeChave({
       />
     </div>
   );
+}
+
+/** Estamos num shell de desktop que ainda nao tem a ponte de conexoes generica? */
+function ehDesktopSemPonteGenerica(): boolean {
+  const d = (
+    window as {
+      aetherDesktop?: { conexoes?: { conectar?: unknown } };
+    }
+  ).aetherDesktop;
+  return d != null && d.conexoes?.conectar == null;
 }
