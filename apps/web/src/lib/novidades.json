@@ -28,5 +28,19 @@
         "texto": "Canais com muita mensagem ficaram mais leves: cada mensagem nova nao reordena mais o historico inteiro."
       }
     ]
+  },
+  "0.1.23": {
+    "data": "2026-09-05",
+    "resumo": "Agora o app conta o que mudou a cada atualizacao — e a Depuracao mostra por qual caminho a sua voz esta indo.",
+    "itens": [
+      {
+        "categoria": "recurso",
+        "texto": "Esta tela. De agora em diante, toda vez que o app atualizar ele diz o que mudou, na primeira vez que voce abrir a versao nova."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "A Depuracao ganhou a tabela de Rotas ICE: todos os caminhos que a chamada pode usar, com o ping atual e o medio de cada um, IPv4 ou IPv6, e o endereco do servidor de midia. E o que mostra quando a voz esta indo por um caminho pior do que precisava."
+      }
+    ]
   }
 }
