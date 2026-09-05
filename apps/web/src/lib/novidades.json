@@ -54,6 +54,10 @@
       {
         "categoria": "recurso",
         "texto": "A aba Apps conectados agora lista Twitch alem do Spotify. Por enquanto a Twitch so mostra seu canal no perfil — aparecer “ao vivo” automaticamente vem depois."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Jogo com Easy Anti-Cheat (GunZ, Fall Guys e a maioria dos que usam o EAC) sumia da sua atividade no instante em que o anti-cheat carregava. Agora ele continua aparecendo enquanto voce estiver jogando."
       }
     ]
   }

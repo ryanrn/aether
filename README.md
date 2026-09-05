@@ -1456,6 +1456,17 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   vazia, entao a loja inteira ficava sem jogo nenhum. Um teste de fixture
   escrito a mao, com `\n`, teria passado; quem pegou foi rodar contra o
   registro de verdade.
+- **Jogo com anti-cheat que esconde o caminho DEPOIS.** O Vanguard (VALORANT)
+  esconde o caminho desde o inicio, e o `entradaPorNomeDeProcesso` cobre isso
+  pelo catalogo da loja. Mas o Easy Anti-Cheat de um jogo do STEAM deixava um
+  buraco: o Steam nao tem catalogo (so a convencao de pasta), entao quando o
+  EAC relanca o jogo protegido e o caminho some, nao havia por onde reconhecer
+  — e o jogo sumia da tela no instante em que o anti-cheat carregava (visto com
+  GunZ: The Duel). A saida e `jogoFixado`: ao ver um jogo POR CAMINHO,
+  guardamos os NOMES dos processos dele (o nome o anti-cheat nao esconde) e o
+  mantemos na tela enquanto qualquer um seguir rodando. Processos genericos de
+  anti-cheat (`start_protected_game.exe` etc.) sao excluidos do que fixa —
+  senao "fechei o GunZ e abri o Fall Guys" continuaria mostrando GunZ.
 - **Um jogo instalado por DUAS lojas conta como Steam.** A regra da Steam e
   avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
 - **Um jogo instalado pelas DUAS lojas conta como Steam.** A regra da Steam e

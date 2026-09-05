@@ -981,6 +981,102 @@ async function nomesDeProcessos() {
   }
 }
 
+/* -------------------------------------------------------------------------
+ * Jogo FIXADO — sobreviver ao anti-cheat que esconde o caminho DEPOIS
+ *
+ * O caso: um jogo do Steam abre normal, o caminho casa
+ * `steamapps/common/<Jogo>/` e a atividade aparece. Segundos depois o Easy
+ * Anti-Cheat (ou BattlEye, ou Vanguard) relanca o jogo como processo
+ * protegido e o caminho para de ser legivel. O Steam nao tem catalogo (e
+ * reconhecido so pela pasta), entao a busca por nome nao tinha o que casar —
+ * e o jogo sumia da tela no instante em que o anti-cheat carregava.
+ *
+ * A saida: quando um jogo e visto POR CAMINHO, guardamos os NOMES dos
+ * executaveis dele. O nome o anti-cheat nao esconde (so o caminho). Enquanto
+ * qualquer um desses nomes seguir na lista de processos, o jogo continua na
+ * tela, com o mesmo icone que ja tinha. Some quando todos somem.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Processos de anti-cheat que NAO identificam um jogo — sao os mesmos para
+ * todo jogo que usa aquele anti-cheat. Fixar um jogo por eles faria "fechei o
+ * GunZ e abri o Fall Guys" continuar mostrando GunZ.
+ */
+const EXE_GENERICO_DE_ANTICHEAT = new Set([
+  // Easy Anti-Cheat
+  "start_protected_game.exe",
+  "easyanticheat.exe",
+  "easyanticheat_eos.exe",
+  "easyanticheat_eos_setup.exe",
+  "eaclauncher.exe",
+  // BattlEye
+  "beservice.exe",
+  "beservice_x64.exe",
+  "belauncher.exe",
+  "battleye.exe",
+  // Riot Vanguard
+  "vgc.exe",
+  "vgtray.exe",
+]);
+
+/** O jogo visto por caminho da ultima vez, e os nomes de processo dele. */
+let jogoFixado = null; // { nome, icone, exes: Set<string> }
+
+/** Base de um caminho de executavel, minuscula: `.../GunZ.exe` -> `gunz.exe`. */
+function nomeDeExecutavel(caminho) {
+  const base = String(caminho).replace(/\\/g, "/").split("/").pop();
+  return base ? base.toLowerCase() : "";
+}
+
+/**
+ * Fixa o jogo recem-detectado por caminho, guardando os nomes de processo
+ * dele que NAO sejam genericos de anti-cheat nem ruido de sistema.
+ *
+ * Sem nenhum nome proprio (so o `start_protected_game.exe` rodando, por
+ * exemplo), nao fixa — a proxima verificacao provavelmente ja pega o
+ * executavel do jogo.
+ */
+function fixarJogo(jogo, caminhos) {
+  const exes = new Set();
+  for (const c of caminhos || []) {
+    const base = nomeDeExecutavel(c);
+    const semExt = base.replace(/\.exe$/, "");
+    if (
+      base.endsWith(".exe") &&
+      !EXE_GENERICO_DE_ANTICHEAT.has(base) &&
+      !RUIDO_DO_SISTEMA.has(semExt)
+    ) {
+      exes.add(base);
+    }
+  }
+  jogoFixado =
+    exes.size > 0 ? { nome: jogo.nome, icone: jogo.icone ?? null, exes } : null;
+}
+
+/**
+ * O jogo fixado ainda esta rodando? Devolve `{ nome, icone }` ou `null`,
+ * limpando o estado quando todos os processos dele sumiram.
+ *
+ * `saidaDeNomes` e a lista crua de `wmic`/`Get-Process` — uma traz `.exe`, a
+ * outra nao, entao casamos as duas formas.
+ */
+function jogoFixadoAindaVivo(saidaDeNomes) {
+  if (!jogoFixado) return null;
+  const rodando = new Set();
+  for (const linha of String(saidaDeNomes).split(/\r?\n/)) {
+    const n = linha.trim().toLowerCase();
+    if (!n) continue;
+    rodando.add(n);
+    rodando.add(n.replace(/\.exe$/, ""));
+  }
+  const vivo = [...jogoFixado.exes].some(
+    (exe) => rodando.has(exe) || rodando.has(exe.replace(/\.exe$/, "")),
+  );
+  if (vivo) return { nome: jogoFixado.nome, icone: jogoFixado.icone };
+  jogoFixado = null;
+  return null;
+}
+
 /**
  * O jogo rodando agora como `{ nome, icone }`, ou `null`.
  *
@@ -1026,7 +1122,12 @@ async function jogoAtual() {
   );
 
   const achados = [...porCaminho, ...porNome, ...daComunidade];
-  if (achados.length === 0) return null;
+  if (achados.length === 0) {
+    // Nada agora. Mas se o anti-cheat acabou de esconder o caminho de um jogo
+    // que estava na tela, ele ainda esta rodando — so nao aparece mais na
+    // varredura. `jogoFixado` cobre essa janela.
+    return jogoFixadoAindaVivo(saidaDeNomes);
+  }
 
   /**
    * Mais de um jogo aberto e caso raro e sem resposta certa. Ordenar e pegar
@@ -1042,12 +1143,27 @@ async function jogoAtual() {
   const icone =
     iconeDeArquivo(escolhido.icone) ?? (await melhorIcone(escolhido.caminhos));
 
-  // Epic ja trouxe o nome pronto do manifesto; Steam precisa resolver.
-  if (escolhido.nome) return { nome: escolhido.nome, icone };
+  const resultado = escolhido.nome
+    ? { nome: escolhido.nome, icone } // Epic/Riot/comunidade ja trazem o nome
+    : resolverNomeSteam(escolhido, icone);
 
+  /**
+   * Fixa SO quando veio por CAMINHO. Nome e comunidade ja funcionam sem
+   * caminho legivel — e so o caminho que o anti-cheat quebra depois.
+   */
+  if (porCaminho.some((j) => j.chave === escolhido.chave)) {
+    fixarJogo(resultado, escolhido.caminhos);
+  }
+  return resultado;
+}
+
+/** Resolve o nome oficial de um jogo Steam achado por pasta. */
+function resolverNomeSteam(escolhido, icone) {
   const normalizada = escolhido.chave.replace(/\\/g, "/");
   for (const caminho of escolhido.caminhos) {
-    if (caminho.replace(/\\/g, "/").includes(`/steamapps/common/${normalizada}/`)) {
+    if (
+      caminho.replace(/\\/g, "/").includes(`/steamapps/common/${normalizada}/`)
+    ) {
       return { nome: nomeOficial(caminho, escolhido.chave), icone };
     }
   }
@@ -1151,6 +1267,10 @@ module.exports = {
   lerCatalogoDaComunidade,
   jogosDaComunidadeEm,
   candidatosParaSugerir,
+  fixarJogo,
+  jogoFixadoAindaVivo,
+  nomeDeExecutavel,
+  resolverNomeSteam,
   listarCandidatos,
   nomeNoManifesto,
   jogoDeCatalogoEm,

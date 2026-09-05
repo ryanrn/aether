@@ -593,3 +593,75 @@ describe("jogo com anti-cheat: casar pelo nome do processo", () => {
     expect(achados).toHaveLength(1);
   });
 });
+
+/**
+ * Jogo FIXADO — sobreviver ao Easy Anti-Cheat que esconde o caminho DEPOIS.
+ *
+ * O caso real (GunZ: The Duel, EAC): o jogo abre, o caminho casa
+ * `steamapps/common/`, a atividade aparece. Segundos depois o EAC relanca o
+ * jogo protegido, o caminho some da varredura — e como o Steam nao tem
+ * catalogo, o jogo sumia da tela. Agora o nome do processo (que o anti-cheat
+ * NAO esconde) segura o jogo enquanto ele estiver rodando.
+ */
+describe("jogo fixado (anti-cheat que esconde o caminho depois)", () => {
+  const { fixarJogo, jogoFixadoAindaVivo, nomeDeExecutavel } = detect as {
+    fixarJogo: (j: { nome: string; icone: unknown }, c: string[]) => void;
+    jogoFixadoAindaVivo: (
+      s: string,
+    ) => { nome: string; icone: unknown } | null;
+    nomeDeExecutavel: (c: string) => string;
+  };
+
+  it("nomeDeExecutavel tira pasta e caixa", () => {
+    expect(
+      nomeDeExecutavel(String.raw`E:\SteamLibrary\steamapps\common\GunZ\GunZ.exe`),
+    ).toBe("gunz.exe");
+  });
+
+  it("mantem o jogo enquanto o processo dele segue rodando", () => {
+    fixarJogo({ nome: "GunZ: The Duel", icone: "ICO" }, [
+      "D:/Steam/steamapps/common/GunZ The Duel/GunZ.exe",
+      "D:/Steam/steamapps/common/GunZ The Duel/start_protected_game.exe",
+    ]);
+    // EAC escondeu o caminho; `Get-Process` ainda lista o nome (sem .exe).
+    expect(jogoFixadoAindaVivo("chrome\nGunZ\nsvchost\n")).toEqual({
+      nome: "GunZ: The Duel",
+      icone: "ICO",
+    });
+    // wmic lista com .exe — as duas formas contam.
+    expect(jogoFixadoAindaVivo("chrome.exe\nGunZ.exe\n")).toEqual({
+      nome: "GunZ: The Duel",
+      icone: "ICO",
+    });
+  });
+
+  it("solta o jogo quando o processo dele some — e nao volta", () => {
+    fixarJogo({ nome: "GunZ: The Duel", icone: "ICO" }, [
+      "D:/Steam/steamapps/common/GunZ The Duel/GunZ.exe",
+    ]);
+    expect(jogoFixadoAindaVivo("chrome\nsvchost\n")).toBeNull();
+    // ja limpou: mesmo com o nome de volta, sem novo `fixarJogo` nao ressuscita
+    expect(jogoFixadoAindaVivo("GunZ\n")).toBeNull();
+  });
+
+  it("NAO fixa por processo generico de anti-cheat", () => {
+    // so o bootstrapper do EAC estava rodando na pasta
+    fixarJogo({ nome: "Fall Guys", icone: null }, [
+      "C:/Steam/steamapps/common/Fall Guys/start_protected_game.exe",
+      "C:/Steam/steamapps/common/Fall Guys/EasyAntiCheat.exe",
+    ]);
+    // nada proprio para fixar -> "fechei o GunZ e abri o Fall Guys" nao mostra
+    // GunZ so porque o EAC dos dois se chama igual
+    expect(jogoFixadoAindaVivo("start_protected_game.exe\n")).toBeNull();
+  });
+
+  it("troca de jogo: o fixado novo substitui o antigo", () => {
+    fixarJogo({ nome: "GunZ", icone: "A" }, ["x/GunZ.exe"]);
+    fixarJogo({ nome: "Deadlock", icone: "B" }, ["y/deadlock.exe"]);
+    expect(jogoFixadoAindaVivo("deadlock\n")).toEqual({
+      nome: "Deadlock",
+      icone: "B",
+    });
+    expect(jogoFixadoAindaVivo("gunz\n")).toBeNull();
+  });
+});
