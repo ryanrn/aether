@@ -6,8 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
+import { podeAtualizar } from "@/lib/desktop/update";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { EsteComputadorTab } from "./este-computador-tab";
 import { PlanoTab } from "./plano-tab";
 import { VoiceTab } from "./voice-tab";
 
@@ -27,15 +29,20 @@ import { VoiceTab } from "./voice-tab";
  * ("Usuario" / "Assinatura") e um cabecalho que troca por aba.
  */
 
-type Tab = "conta" | "voz" | "atividade" | "plano";
+type Tab = "conta" | "voz" | "atividade" | "computador" | "plano";
 
 const TABS: {
   id: Tab;
   label: string;
   icon: AetherIconName;
-  grupo: "Usuario" | "Assinatura";
+  grupo: "Usuario" | "Aplicativo" | "Assinatura";
   titulo: string;
   sub: string;
+  /**
+   * Aba que so existe no aplicativo de desktop. No navegador ela nem e
+   * montada — melhor nao existir do que existir vazia.
+   */
+  soNoDesktop?: boolean;
 }[] = [
   {
     id: "conta",
@@ -60,6 +67,15 @@ const TABS: {
     grupo: "Usuario",
     titulo: "Atividade",
     sub: "O que os amigos veem que voce esta fazendo.",
+  },
+  {
+    id: "computador",
+    label: "Este computador",
+    icon: "monitor",
+    grupo: "Aplicativo",
+    titulo: "Este computador",
+    sub: "O que vale so nesta maquina.",
+    soNoDesktop: true,
   },
   {
     id: "plano",
@@ -100,8 +116,22 @@ export function AppSettingsModal({
     if (open && abaInicial) setActive(abaInicial);
   }, [open, abaInicial]);
 
-  const atual = TABS.find((t) => t.id === active) ?? TABS[0]!;
-  const grupos = ["Usuario", "Assinatura"] as const;
+  /**
+   * Abas visiveis AQUI.
+   *
+   * `podeAtualizar()` toca `window.aetherDesktop`, que nao existe no
+   * servidor — por isso so depois de montar, senao a marcacao do servidor e a
+   * do cliente divergem e o React reclama de hidratacao.
+   */
+  const [noDesktop, setNoDesktop] = useState(false);
+  useEffect(() => setNoDesktop(podeAtualizar()), []);
+  const visiveis = TABS.filter((t) => !t.soNoDesktop || noDesktop);
+
+  const atual = visiveis.find((t) => t.id === active) ?? visiveis[0]!;
+  // Grupo sem nenhuma aba visivel nao rende cabecalho solto.
+  const grupos = (["Usuario", "Aplicativo", "Assinatura"] as const).filter(
+    (g) => visiveis.some((t) => t.grupo === g),
+  );
 
   return (
     <Modal
@@ -126,9 +156,9 @@ export function AppSettingsModal({
           {grupos.map((g) => (
             <div key={g} className="max-[900px]:contents">
               <p className="px-3 pb-2 pt-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-400 max-[900px]:hidden">
-                {g === "Usuario" ? "Usuario" : "Assinatura"}
+                {g}
               </p>
-              {TABS.filter((t) => t.grupo === g).map((tab) => (
+              {visiveis.filter((t) => t.grupo === g).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -190,6 +220,8 @@ export function AppSettingsModal({
               <AccountTab user={user} server={server} />
             ) : active === "voz" ? (
               <VoiceTab />
+            ) : active === "computador" ? (
+              <EsteComputadorTab />
             ) : active === "plano" ? (
               <PlanoTab />
             ) : (
