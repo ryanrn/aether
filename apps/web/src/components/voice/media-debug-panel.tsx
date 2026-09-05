@@ -266,11 +266,12 @@ function RotasIce({
         Rotas ICE ({pares.length})
       </h4>
       <div className="overflow-x-auto rounded-md border border-line">
-        <table className="w-full min-w-[560px] border-collapse text-[11px]">
+        <table className="w-full min-w-[720px] border-collapse text-[11px]">
           <thead>
             <tr className="bg-base-900 text-left font-mono text-[9px] uppercase tracking-[0.1em] text-ink-600">
               <th className="px-2 py-1.5 font-normal">Caminho</th>
               <th className="px-2 py-1.5 font-normal">Fam</th>
+              <th className="px-2 py-1.5 font-normal">Servidor</th>
               <th className="px-2 py-1.5 text-right font-normal">Atual</th>
               <th className="px-2 py-1.5 text-right font-normal">Medio</th>
               <th className="px-2 py-1.5 text-right font-normal">Resp/Req</th>
@@ -295,6 +296,9 @@ function RotasIce({
                     {p.tipoRemoto ?? "?"}
                   </td>
                   <td className="px-2 py-1.5">{p.familia ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    {p.enderecoRemoto ?? "—"}
+                  </td>
                   <td className="px-2 py-1.5 text-right">{ms(p.rttMs)}</td>
                   <td className="px-2 py-1.5 text-right">
                     {ms(p.rttMedioMs)}

@@ -351,3 +351,50 @@ describe("rttDaSessao", () => {
     ).toBeNull();
   });
 });
+
+/**
+ * A assimetria deliberada dos enderecos.
+ *
+ * O endereco LOCAL e a maquina de quem esta na chamada e nao pode vazar num
+ * texto colado em lugar nenhum — dele so a familia sobrevive. O REMOTO e o
+ * servidor de midia, infraestrutura publica, e sem ele nao da para responder
+ * "para onde essa midia esta indo?" quando o ping esta alto.
+ */
+describe("enderecos no diagnostico", () => {
+  const pares = () =>
+    paresDoRelatorio(
+      report({
+        L: {
+          type: "local-candidate",
+          candidateType: "host",
+          address: "192.168.15.9",
+          port: 54321,
+          protocol: "udp",
+        },
+        R: {
+          type: "remote-candidate",
+          candidateType: "host",
+          address: "147.15.30.223",
+          port: 50005,
+        },
+        P: {
+          type: "candidate-pair",
+          state: "succeeded",
+          localCandidateId: "L",
+          remoteCandidateId: "R",
+          currentRoundTripTime: 0.005,
+        },
+      }),
+    );
+
+  it("mostra o endereco do SERVIDOR, com porta", () => {
+    expect(pares()[0]?.enderecoRemoto).toBe("147.15.30.223:50005");
+  });
+
+  it("NUNCA deixa o endereco local sair", () => {
+    const texto = JSON.stringify(pares());
+    expect(texto).not.toContain("192.168.15.9");
+    expect(texto).not.toContain("54321");
+    expect(pares()[0]?.familia).toBe("IPv4");
+  });
+});

@@ -51,6 +51,20 @@ export interface ParDeCandidatos {
   rttMedioMs: number | null;
   /** quantas checagens de STUN ja foram ENVIADAS neste par */
   requisicoes?: number;
+  /**
+   * Endereco do candidato REMOTO — ou seja, do servidor de midia. `ip:porta`.
+   *
+   * POR QUE ESTE APARECE E O LOCAL NAO: o endereco local e a maquina de quem
+   * esta na chamada, e nao pode sair num texto que a pessoa cola em lugar
+   * nenhum. O remoto e o SFU, infraestrutura publica do servico — e sem ele
+   * nao da para responder a unica pergunta que sobra quando o ping esta alto:
+   * "para ONDE, exatamente, essa midia esta indo?".
+   *
+   * Foi preciso porque um mesmo SFU anuncia mais de um endereco: um par
+   * respondia em 5ms e outro em 116ms, e o tipo do candidato (`host`/`prflx`)
+   * nao distinguia os dois destinos.
+   */
+  enderecoRemoto?: string;
 }
 
 /**
@@ -65,6 +79,8 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
   const tipoDoCandidato = new Map<string, string>();
   const protocoloDoCandidato = new Map<string, string>();
   const familiaDoCandidato = new Map<string, "IPv4" | "IPv6">();
+  /** so de candidato REMOTO; o local nunca entra aqui (ver `enderecoRemoto`) */
+  const enderecoRemoto = new Map<string, string>();
 
   report.forEach((s) => {
     switch (s.type) {
@@ -83,6 +99,7 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
           candidateType?: string;
           protocol?: string;
           address?: string;
+          port?: number;
         };
         if (typeof c.id !== "string") break;
         if (typeof c.candidateType === "string") {
@@ -91,9 +108,14 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
         if (typeof c.protocol === "string") {
           protocoloDoCandidato.set(c.id, c.protocol);
         }
-        // So a FAMILIA fica guardada; o endereco morre aqui dentro.
+        // Do candidato LOCAL so a FAMILIA sobrevive; o endereco morre aqui.
         if (typeof c.address === "string" && c.address.length > 0) {
           familiaDoCandidato.set(c.id, c.address.includes(":") ? "IPv6" : "IPv4");
+          // Do REMOTO guardamos o endereco: e o servidor, nao a pessoa.
+          if (s.type === "remote-candidate") {
+            const porta = typeof c.port === "number" ? `:${c.port}` : "";
+            enderecoRemoto.set(c.id, `${c.address}${porta}`);
+          }
         }
         break;
       }
@@ -130,6 +152,7 @@ export function paresDoRelatorio(report: RTCStatsReport): ParDeCandidatos[] {
       familia: familiaDoCandidato.get(par.localCandidateId ?? ""),
       rttMedioMs: medio,
       requisicoes: p.requestsSent,
+      enderecoRemoto: enderecoRemoto.get(par.remoteCandidateId ?? ""),
     };
   });
 }
