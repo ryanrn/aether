@@ -1073,6 +1073,19 @@ Sem o par de vars na Vercel, a Twitch aparece em "ainda nao disponivel — falta
 configurar" e o Spotify segue intacto. O gateway nao precisa de nada novo: a
 conexao de Twitch e um cracha (fase 4), sem poller.
 
+### Steam (conexao, fase 5)
+
+A Steam NAO usa OAuth — usa OpenID 2.0. Nao ha app para cadastrar, nao ha
+`client_secret`, nao ha redirect URL para registrar. A autenticacao e so um
+redirect para `steamcommunity.com/openid/login` e uma verificacao de volta.
+
+O unico segredo e `STEAM_WEB_API_KEY` (https://steamcommunity.com/dev/apikey),
+**so na Vercel**. A autenticacao em si nao precisa dele; ele serve para pegar
+o nome de exibicao da pessoa (`GetPlayerSummaries`) e para a futura atividade
+"jogando X". Sem a chave, a Steam aparece em "ainda nao disponivel".
+
+O gateway nao precisa de nada: cracha, sem poller.
+
 O par e opcional. Sem ele tudo funciona, so nao ha capa.
 
 ### Nunca uma imagem quebrada

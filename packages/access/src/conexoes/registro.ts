@@ -6,6 +6,7 @@ import {
   segredos,
 } from "./armazenamento";
 import { spotifyProvedor } from "./spotify";
+import { steamProvedor } from "./steam";
 import { twitchProvedor } from "./twitch";
 import { assinarStateDeConexao, verificarStateDeConexao } from "./state";
 import {
@@ -37,7 +38,7 @@ import {
  */
 const PROVEDORES: Record<ConnectionProvider, Provedor | null> = {
   SPOTIFY: spotifyProvedor,
-  STEAM: null,
+  STEAM: steamProvedor,
   TWITCH: twitchProvedor,
   RIOT: null,
 };

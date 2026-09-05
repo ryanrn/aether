@@ -33,6 +33,11 @@ const ICONE: Record<string, React.ReactNode> = {
       <path d="M14.735 4.265h-1.735v4.735h1.735V4.265zM10 4.265H8.265v4.735H10V4.265z" />
     </svg>
   ),
+  STEAM: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden fill="#c7d5e0">
+      <path d="M11.98 0C5.67 0 .5 4.87.05 11.06l6.44 2.66a3.4 3.4 0 0 1 1.92-.59l2.87-4.15v-.06a4.53 4.53 0 1 1 4.53 4.53h-.1l-4.1 2.92c0 .05.01.1.01.15a3.4 3.4 0 0 1-6.75.55L.32 15.4A11.99 11.99 0 1 0 11.98 0zM7.53 18.21l-1.48-.61a2.56 2.56 0 0 0 4.7-1.02 2.56 2.56 0 0 0-2.56-2.56c-.35 0-.7.07-1 .2l1.53.63a1.88 1.88 0 1 1-1.19 3.36zm11.5-9.65a3.02 3.02 0 1 0-6.04 0 3.02 3.02 0 0 0 6.04 0zm-5.28 0a2.27 2.27 0 1 1 4.54 0 2.27 2.27 0 0 1-4.54 0z" />
+    </svg>
+  ),
 };
 
 /** Texto de cada provedor. O que a API nao sabe (e nao deve saber). */
@@ -51,7 +56,7 @@ const TEXTO: Record<
   },
   STEAM: {
     descricao:
-      "Vai mostrar o jogo que voce esta jogando. Depende do seu perfil da Steam estar publico.",
+      "Mostra sua conta da Steam no perfil. Aparecer “jogando X” automaticamente vem depois — e vai depender do seu perfil estar publico.",
   },
   RIOT: {
     descricao:

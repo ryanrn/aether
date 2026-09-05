@@ -31,6 +31,17 @@ vi.mock("../../packages/access/src/conexoes/twitch", () => ({
     // sem lerAtividade
   },
 }));
+// STEAM: implementado mas SEM chave neste teste -> configurado:false
+vi.mock("../../packages/access/src/conexoes/steam", () => ({
+  steamProvedor: {
+    id: "STEAM",
+    nome: "Steam",
+    configurado: () => false,
+    urlDeLogin: () => "",
+    concluirLogin: async () => ({}),
+    // sem renovar, sem lerAtividade
+  },
+}));
 
 const { provedoresConhecidos, provedoresDisponiveis } = await import(
   "../../packages/access/src/conexoes/registro"
@@ -48,7 +59,8 @@ describe("provedoresConhecidos", () => {
     );
     expect(porId.SPOTIFY!.implementado).toBe(true);
     expect(porId.TWITCH!.implementado).toBe(true);
-    expect(porId.STEAM!.implementado).toBe(false);
+    expect(porId.STEAM!.implementado).toBe(true);
+    expect(porId.STEAM!.configurado).toBe(false); // sem a chave
     expect(porId.RIOT!.implementado).toBe(false);
   });
 
