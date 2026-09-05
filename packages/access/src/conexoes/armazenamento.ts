@@ -32,9 +32,17 @@ export interface ConexaoVisivel {
   showAsStatus: boolean;
 }
 
-/** Os segredos de uma conexao, ja decifrados. */
+/**
+ * O que um PROVEDOR precisa da conexao guardada — tokens ja decifrados.
+ *
+ * `accessToken` e opcional porque o Steam nao tem nenhum: ele autentica por
+ * OpenID 2.0 e a atividade e lida com a chave do APLICATIVO mais o
+ * `externalId`. Exigir token aqui deixaria o Steam de fora do modelo.
+ */
 export interface SegredosDaConexao {
-  accessToken: string;
+  /** o id da pessoa no servico — e o que o Steam usa no lugar do token */
+  externalId: string | null;
+  accessToken: string | null;
   refreshToken: string | null;
   expiresAt: Date | null;
   scope: string | null;
@@ -132,12 +140,15 @@ export async function desconectar(
 }
 
 /**
- * Os segredos decifrados, ou `null`.
+ * Os segredos decifrados, ou `null` quando NAO HA CONEXAO.
  *
- * `null` tambem quando o segredo esta ILEGIVEL — o caso real e o
+ * Tambem `null` quando o segredo esta ILEGIVEL — o caso real e o
  * `AUTH_SECRET` ter mudado, e ai nenhuma linha antiga abre. Devolver `null`
  * faz quem chama tratar como "desconectado" e mandar reconectar, em vez de
  * estourar uma excecao de decifra num laco de fundo.
+ *
+ * Conexao SEM token nao e ausencia de conexao: o Steam existe assim. Por isso
+ * a checagem e "existe a linha?", e nao "existe accessToken?".
  */
 export async function segredos(
   userId: string,
@@ -146,10 +157,11 @@ export async function segredos(
   const c = await prisma.connection.findUnique({
     where: { userId_provider: { userId, provider } },
   });
-  if (!c?.accessToken) return null;
+  if (!c) return null;
   try {
     return {
-      accessToken: decifrar(c.accessToken),
+      externalId: c.externalId,
+      accessToken: c.accessToken ? decifrar(c.accessToken) : null,
       refreshToken: c.refreshToken ? decifrar(c.refreshToken) : null,
       expiresAt: c.expiresAt,
       scope: c.scope,

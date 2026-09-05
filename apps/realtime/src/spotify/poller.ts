@@ -1,9 +1,7 @@
 import {
-  buscarTocandoAgora,
+  atividadeDaConexao,
   estadoSpotify,
   spotifyConfigurado,
-  SpotifyAutorizacaoInvalida,
-  tokenDeAcesso,
 } from "@aether/access";
 import { setListening } from "../state";
 import { anunciarMudancaDePresenca } from "../handlers/presence";
@@ -63,32 +61,27 @@ export function iniciarSpotifyPoller(io: AetherServer): SpotifyPoller {
       return;
     }
 
-    let token: string | null;
-    try {
-      token = await tokenDeAcesso(userId);
-    } catch {
-      return; // erro de rede na renovacao: tenta de novo no proximo ciclo
-    }
-    if (!token) {
-      // Revogou o acesso no Spotify (a linha ja foi apagada).
-      observados.delete(userId);
-      await limpar(userId);
-      return;
-    }
-
+    /**
+     * UMA CHAMADA. Renovar o token, distinguir "revogou o acesso" de "a rede
+     * caiu", apagar a linha morta e ler a atividade sao trabalho do REGISTRO
+     * (`@aether/access`), igual para todo provedor — o poller so pergunta.
+     *
+     * `null` cobre os dois desfechos que interessam aqui: nada tocando, ou a
+     * conexao deixou de existir. A diferenca entre eles esta em `estadoSpotify`
+     * no proximo ciclo, e ate la limpar a musica e a resposta certa nos dois.
+     */
     let atividade;
     try {
-      atividade = await buscarTocandoAgora(token);
-    } catch (erro) {
-      if (erro instanceof SpotifyAutorizacaoInvalida) {
-        // `tokenDeAcesso` ja apaga a linha nesse caso; para de observar.
-        observados.delete(userId);
-        await limpar(userId);
-      }
+      atividade = await atividadeDaConexao(userId, "SPOTIFY");
+    } catch {
+      // Erro de rede: tenta de novo no proximo ciclo, sem mexer no estado.
       return;
     }
 
-    const mudou = await setListening(userId, atividade);
+    const mudou = await setListening(
+      userId,
+      atividade?.tipo === "musica" ? atividade.musica : null,
+    );
     if (mudou) await anunciarMudancaDePresenca(io, userId, mudou.servers);
   }
 

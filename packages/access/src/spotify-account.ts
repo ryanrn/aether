@@ -1,16 +1,11 @@
 import {
-  atualizarTokens,
   definirVisibilidadeDaConexao,
   desconectar,
   guardarConexao,
   lerConexao,
-  segredos,
 } from "./conexoes/armazenamento";
-import {
-  renovarToken,
-  SpotifyAutorizacaoInvalida,
-  type TokensSpotify,
-} from "./spotify";
+import { tokenValido } from "./conexoes/registro";
+import type { TokensSpotify } from "./spotify";
 
 /**
  * A conta do Spotify ligada a um usuario — guardar, ler um token valido,
@@ -87,42 +82,13 @@ export async function desconectarSpotify(userId: string): Promise<void> {
 }
 
 /**
- * Um access token valido para este usuario, renovando e persistindo se
- * preciso. `null` quando:
- *  - a pessoa nunca conectou;
- *  - o segredo esta ilegivel (o `AUTH_SECRET` mudou) — trata como desconectado;
- *  - o Spotify recusou o refresh (revogou o acesso) — a linha e apagada.
+ * Um access token valido para este usuario, renovando se preciso.
+ *
+ * UMA LINHA hoje: renovar, decidir entre "a pessoa revogou" e "a rede caiu",
+ * e apagar a linha morta e trabalho do REGISTRO — igual para todo provedor.
+ * O que sobra aqui e so amarrar o nome antigo, para os quatro consumidores
+ * (poller, callback, rota de estado, actions) nao precisarem mudar.
  */
 export async function tokenDeAcesso(userId: string): Promise<string | null> {
-  const s = await segredos(userId, "SPOTIFY");
-  // `null` aqui e "nunca conectou" ou "segredo ilegivel" — no segundo caso a
-  // propria `segredos` ja apagou a linha morta. Nada a fazer nos dois.
-  if (!s) return null;
-
-  if (s.expiresAt && s.expiresAt.getTime() - MARGEM_MS > Date.now()) {
-    return s.accessToken;
-  }
-
-  // Expirado (ou quase): renova. Sem refresh token nao ha o que renovar.
-  if (!s.refreshToken) {
-    await desconectar(userId, "SPOTIFY");
-    return null;
-  }
-
-  try {
-    const novo = await renovarToken(s.refreshToken);
-    await atualizarTokens(userId, "SPOTIFY", {
-      accessToken: novo.accessToken,
-      refreshToken: novo.refreshToken ?? null,
-      expiresAt: new Date(novo.expiresAt),
-      scope: novo.scope,
-    });
-    return novo.accessToken;
-  } catch (erro) {
-    if (erro instanceof SpotifyAutorizacaoInvalida) {
-      await desconectarSpotify(userId);
-      return null;
-    }
-    throw erro; // erro de rede: quem chama tenta de novo depois
-  }
+  return tokenValido(userId, "SPOTIFY");
 }

@@ -530,6 +530,28 @@ recargas.
   estiver em versao anterior precisa instalar a 0.1.3 na mao UMA vez — nao da
   para atualizar quem nao tem o atualizador.
 
+  **O AETHER TEM DOIS SERVICOS QUE COMPARTILHAM `packages/`.** Mexeu em
+  `packages/access`, `packages/db` ou `packages/shared`, a ordem e:
+
+  ```bash
+  npm run backup                 # se houver migracao
+  npx dotenv -e .env -- npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+  fly deploy --ha=false          # gateway PRIMEIRO — o poller e quem le a tabela
+  npx vercel --prod              # web depois
+  fly status                     # confere: `stopped` depois de um deploy que
+                                 # "deu certo" quer dizer que a maquina bateu o
+                                 # limite de reinicios. Ai e `fly machine start`.
+  ```
+
+  Esquecer o gateway ja custou uma tarde: a migracao derrubou `SpotifyAccount`,
+  a Vercel subiu com o codigo novo, e o gateway ficou consultando uma tabela que
+  nao existia mais — a cada 15s, num log que ninguem olha. Nada quebrou na tela;
+  so a musica parou de aparecer no cartao.
+
+  E rode `npm run check:esm` antes: os dois apps resolvem modulo de jeitos
+  DIFERENTES (Next bundler x `tsx` em ESM puro), e `import` de pasta passa no
+  typecheck e no build e derruba o gateway em producao.
+
   Publicar versao nova:
 
   ```bash

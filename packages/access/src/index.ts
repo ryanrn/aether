@@ -7,6 +7,8 @@ export * from "./channels";
 // dentro. O Next resolve, entao `export * from "./conexoes"` passava no
 // typecheck e no build e derrubava o gateway em producao.
 export * from "./conexoes/armazenamento";
+export * from "./conexoes/registro";
+export * from "./conexoes/state";
 export * from "./conexoes/tipos";
 export * from "./dm";
 export * from "./equipe";
