@@ -258,22 +258,21 @@ Os estagios 1–8 da fase "prontidao para beta" (ver README) acumulam na branch
 
 ### 1. Migracoes (uma vez, antes do deploy)
 
-Tres migracoes novas, todas escritas a mao no estilo das outras:
-`20260905160000_flags`, `20260906120000_verificacao_email`,
-`20260906130000_denuncia`. `prisma migrate deploy` aplica as pendentes em
-ordem, numa transacao por arquivo:
-
 ```bash
-npx dotenv -e .env -- npm run db:deploy
+npm run db:deploy
 ```
 
-Confira depois:
+`db:deploy` agora passa por `scripts/deploy-migracoes.mjs`: mostra o que esta
+pendente e **espera voce digitar `APLICAR`**. Num processo automatizado (sem
+terminal, ou `CI=1`) ele NAO aplica e sai com erro — de proposito. Migracao em
+producao e irreversivel (o Prisma nao tem "down"), entao e decisao de gente.
 
-```bash
-npx dotenv -e .env -- npx prisma migrate status --schema packages/db/prisma/schema.prisma
-```
-
-Deve dizer "Database schema is up to date".
+> **Uma sessao/pessoa por vez toca producao.** Durante a fase pre-beta, uma
+> segunda sessao Claude rodou `db:deploy` sozinha, minutos depois de cada
+> commit — as migracoes entraram antes de qualquer revisao. Antes de deployar,
+> confira quem mais tem acesso e coordene. `git log origin/master` e
+> `npm run db:deploy` (que so mostra, sem aplicar, quando esta tudo em dia)
+> dizem o estado real.
 
 ### 2. Variaveis novas (todas opcionais; o beta quer as 3 primeiras)
 
