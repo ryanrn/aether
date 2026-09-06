@@ -687,20 +687,34 @@ describe("jogo fixado pelo Settings.json do Easy Anti-Cheat", () => {
     ) => { nome: string; icone: unknown } | null;
   };
 
-  function pastaDeJogoFalsa(exeProtegido: string): string {
+  /** EAC classico: `EasyAntiCheat/Launcher/Settings.json`. */
+  function pastaEacClassico(exeProtegido: string): string {
     const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-eac-"));
     const launcher = path.join(raiz, "EasyAntiCheat", "Launcher");
     fs.mkdirSync(launcher, { recursive: true });
     fs.writeFileSync(
       path.join(launcher, "Settings.json"),
-      JSON.stringify({
-        title: "GunZ: The Duel",
-        executable: `Binaries/Win64/${exeProtegido}`,
-        working_directory: ".",
-      }),
+      JSON.stringify({ executable: `Binaries/Win64/${exeProtegido}` }),
     );
     return raiz;
   }
+
+  /** EAC EOS: `EasyAntiCheat/Settings.json` — o do GunZ, verificado real. */
+  function pastaEacEos(exeProtegido: string): string {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-eos-"));
+    fs.mkdirSync(path.join(raiz, "EasyAntiCheat"), { recursive: true });
+    // formato REAL do GunZ: indentacao com tabs, campo so o basename
+    fs.writeFileSync(
+      path.join(raiz, "EasyAntiCheat", "Settings.json"),
+      `{
+	"title"	: "GunZ: The Duel",
+	"executable"	: "${exeProtegido}"
+}`,
+    );
+    return raiz;
+  }
+
+  const pastaDeJogoFalsa = pastaEacClassico;
 
   it("le o executavel protegido e segura o jogo por ele", () => {
     const raiz = pastaDeJogoFalsa("GunZ_x64.exe");
@@ -724,6 +738,21 @@ describe("jogo fixado pelo Settings.json do Easy Anti-Cheat", () => {
     expect(jogoFixadoAindaVivo("Game.exe\n")).toEqual({
       nome: "Jogo",
       icone: null,
+    });
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+
+  it("EAC EOS (GunZ): le `EasyAntiCheat/Settings.json`, so o bootstrapper visto", () => {
+    const raiz = pastaEacEos("Gunz.exe");
+    // `start_protected_game.exe` sai depois de lancar (wait_for_game_process_exit
+    // false), entao no primeiro poll era o unico processo da pasta.
+    fixarJogo({ nome: "GunZ: The Duel", icone: "IGDB" }, [
+      path.join(raiz, "start_protected_game.exe"),
+    ]);
+    // EAC EOS escondeu o caminho; `Get-Process` lista `Gunz`.
+    expect(jogoFixadoAindaVivo("Gunz\nchrome\n")).toEqual({
+      nome: "GunZ: The Duel",
+      icone: "IGDB",
     });
     fs.rmSync(raiz, { recursive: true, force: true });
   });

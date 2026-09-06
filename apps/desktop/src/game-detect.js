@@ -4,6 +4,24 @@ const { app, nativeImage } = require("electron");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { registrar } = require("./log");
+
+/**
+ * Log de DIAGNOSTICO da deteccao.
+ *
+ * Chega ao `aether.log` como qualquer outra linha. So os momentos que
+ * importam quando um jogo "some sozinho": o que foi fixado, quando o processo
+ * anti-cheat segurou o jogo, quando soltou. Nao loga a cada verificacao — so
+ * quando o estado muda. Nunca inclui caminho (carrega o nome de usuario do
+ * Windows): so nome de executavel e de jogo.
+ */
+function diag(assunto, dados) {
+  try {
+    registrar(`deteccao:${assunto}`, dados);
+  } catch {
+    // Log que quebra a deteccao seria pior que nao ter log.
+  }
+}
 
 /**
  * Deteccao de jogo em execucao.
@@ -1048,6 +1066,23 @@ function nomeDeExecutavel(caminho) {
  */
 const exeDeEacResolvido = new Map();
 
+/**
+ * DUAS localizacoes, porque ha duas geracoes do Easy Anti-Cheat:
+ *
+ *  - `EasyAntiCheat/Launcher/Settings.json` — EAC classico (Rocket League,
+ *    Fall Guys). E o que o Playnite documenta.
+ *  - `EasyAntiCheat/Settings.json` — EAC EOS (Epic Online Services), a versao
+ *    nova. E onde o GunZ: The Duel poe o arquivo — verificado na instalacao
+ *    real, e o motivo de a primeira tentativa nao pegar Steam + EAC.
+ *
+ * O campo `executable` pode vir so o nome (`"Gunz.exe"`) ou com subpasta
+ * (`"Binaries/Win64/Game.exe"`); `.split("/").pop()` cobre os dois.
+ */
+const CAMINHOS_DE_SETTINGS_EAC = [
+  ["EasyAntiCheat", "Launcher", "Settings.json"],
+  ["EasyAntiCheat", "Settings.json"],
+];
+
 function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
   let dir;
   try {
@@ -1060,27 +1095,27 @@ function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
     const emCache = exeDeEacResolvido.get(dir);
     if (emCache !== undefined) return emCache || null;
 
-    const settings = path.join(
-      dir,
-      "EasyAntiCheat",
-      "Launcher",
-      "Settings.json",
-    );
-    try {
-      const dados = JSON.parse(fs.readFileSync(settings, "utf8"));
-      const rel = dados && typeof dados.executable === "string"
-        ? dados.executable
-        : "";
-      const nome = rel
-        ? String(rel).replace(/\\/g, "/").split("/").pop().toLowerCase()
-        : null;
-      // Guarda em TODOS os niveis ja visitados, para a proxima chamada parar no
-      // primeiro. String vazia = "olhei aqui e nao ha EAC".
-      exeDeEacResolvido.set(dir, nome || "");
-      if (nome) return nome;
-    } catch {
-      exeDeEacResolvido.set(dir, exeDeEacResolvido.get(dir) ?? "");
+    let nome = null;
+    for (const partes of CAMINHOS_DE_SETTINGS_EAC) {
+      try {
+        const dados = JSON.parse(
+          fs.readFileSync(path.join(dir, ...partes), "utf8"),
+        );
+        const rel =
+          dados && typeof dados.executable === "string" ? dados.executable : "";
+        if (rel) {
+          nome = String(rel).replace(/\\/g, "/").split("/").pop().toLowerCase();
+          break;
+        }
+      } catch {
+        // Este caminho nao existe aqui — tenta o proximo.
+      }
     }
+
+    // String vazia = "olhei nesta pasta e nao ha EAC" — para a proxima chamada
+    // parar aqui em vez de subir os 5 niveis de novo.
+    exeDeEacResolvido.set(dir, nome || "");
+    if (nome) return nome;
 
     const pai = path.dirname(dir);
     if (pai === dir) break;
@@ -1104,6 +1139,7 @@ function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
  */
 function fixarJogo(jogo, caminhos) {
   const exes = new Set();
+  let achouEac = false;
 
   for (const c of caminhos || []) {
     const base = nomeDeExecutavel(c);
@@ -1118,11 +1154,26 @@ function fixarJogo(jogo, caminhos) {
 
     // O `Settings.json` do EAC mora na raiz do jogo; `c` esta dentro dela.
     const eac = nomeProtegidoPorEac(c);
-    if (eac) exes.add(eac);
+    if (eac) {
+      exes.add(eac);
+      achouEac = true;
+    }
   }
 
+  const antes = jogoFixado?.nome ?? null;
   jogoFixado =
     exes.size > 0 ? { nome: jogo.nome, icone: jogo.icone ?? null, exes } : null;
+
+  if ((jogoFixado?.nome ?? null) !== antes) {
+    diag("fixado", {
+      jogo: jogo.nome,
+      exes: [...exes],
+      eacSettings: achouEac,
+      // basename dos caminhos vistos — sem o caminho, so o nome do arquivo
+      processosVistos: (caminhos || []).map(nomeDeExecutavel),
+      fixou: jogoFixado !== null,
+    });
+  }
 }
 
 /**
@@ -1132,6 +1183,8 @@ function fixarJogo(jogo, caminhos) {
  * `saidaDeNomes` e a lista crua de `wmic`/`Get-Process` — uma traz `.exe`, a
  * outra nao, entao casamos as duas formas.
  */
+let jogoFixadoJaLogado = null;
+
 function jogoFixadoAindaVivo(saidaDeNomes) {
   if (!jogoFixado) return null;
   const rodando = new Set();
@@ -1144,8 +1197,24 @@ function jogoFixadoAindaVivo(saidaDeNomes) {
   const vivo = [...jogoFixado.exes].some(
     (exe) => rodando.has(exe) || rodando.has(exe.replace(/\.exe$/, "")),
   );
-  if (vivo) return { nome: jogoFixado.nome, icone: jogoFixado.icone };
+  if (vivo) {
+    if (jogoFixadoJaLogado !== jogoFixado.nome) {
+      jogoFixadoJaLogado = jogoFixado.nome;
+      diag("segurou-pelo-nome", {
+        jogo: jogoFixado.nome,
+        exes: [...jogoFixado.exes],
+      });
+    }
+    return { nome: jogoFixado.nome, icone: jogoFixado.icone };
+  }
+  diag("soltou", {
+    jogo: jogoFixado.nome,
+    exes: [...jogoFixado.exes],
+    // por que soltou: nenhum dos nomes esperados estava rodando
+    motivo: "processos sumiram",
+  });
   jogoFixado = null;
+  jogoFixadoJaLogado = null;
   return null;
 }
 
@@ -1287,6 +1356,36 @@ function criarVigia(aoMudar) {
       ) {
         return;
       }
+      diag("mudou", {
+        de: ultimo?.nome ?? null,
+        para: jogo?.nome ?? null,
+      });
+
+      /**
+       * Um jogo que vira `null` e o sintoma que estamos cacando. Nesse
+       * instante — e SO nesse — releaos os nomes de processo e listamos o que
+       * NAO e ruido de sistema. E o que mostra o nome real do processo do jogo
+       * quando o anti-cheat escondeu o caminho e a fixacao nao pegou.
+       */
+      if (ultimo?.nome && !jogo) {
+        try {
+          const nomes = String(await nomesDeProcessos())
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .filter((n) => {
+              const c = normalizarNomeDeJogo(n);
+              return c.length >= 3 && !RUIDO_DO_SISTEMA.has(c);
+            });
+          diag("sumiu-processos-suspeitos", {
+            jogo: ultimo.nome,
+            candidatos: [...new Set(nomes)].sort(),
+          });
+        } catch {
+          // Diagnostico e melhor-esforco.
+        }
+      }
+
       ultimo = jogo;
       aoMudar(jogo);
     } catch {

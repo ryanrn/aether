@@ -76,5 +76,15 @@
         "texto": "Jogo com Easy Anti-Cheat (GunZ e a maioria dos que usam EAC) ainda sumia da atividade quando o anti-cheat terminava de carregar. A causa: o EAC bloqueia a leitura do processo do jogo. Agora o app le do proprio jogo qual e o executavel protegido e o segue por ai — o que o EAC nao consegue esconder e o NOME do processo."
       }
     ]
+  },
+  "0.1.27": {
+    "data": "2026-09-06",
+    "resumo": "Agora sim: jogo do Steam com Easy Anti-Cheat para de sumir da atividade.",
+    "itens": [
+      {
+        "categoria": "correcao",
+        "texto": "GunZ: The Duel (e outros jogos do Steam com a versao nova do Easy Anti-Cheat) sumia da atividade quando o anti-cheat carregava. A causa era boba: essa versao do EAC guarda a configuracao num lugar diferente da versao antiga, e o app so olhava no lugar antigo. Testado contra a instalacao de verdade."
+      }
+    ]
   }
 }

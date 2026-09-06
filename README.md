@@ -1465,9 +1465,13 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   1. `jogoFixado`: ao ver um jogo POR CAMINHO, guardamos os nomes dos
      processos dele e o mantemos na tela enquanto qualquer um seguir rodando.
   2. `nomeProtegidoPorEac`: o proprio jogo diz qual e o executavel protegido,
-     no `<pasta>/EasyAntiCheat/Launcher/Settings.json` (campo `executable`) —
-     o mesmo arquivo que o EAC usa para lancar e que o Playnite le para
-     detectar. Esse nome entra no `jogoFixado` mesmo quando so o
+     no `Settings.json` do EAC (campo `executable`). DOIS locais, porque ha
+     duas geracoes: `EasyAntiCheat/Launcher/Settings.json` (EAC classico —
+     Rocket League, Fall Guys) e `EasyAntiCheat/Settings.json` (EAC EOS, a
+     versao nova — GunZ: The Duel). A primeira tentativa so olhava o local
+     classico, e por isso jogo do Steam com EAC EOS seguia sumindo. Verificado
+     contra a instalacao real do GunZ: `Settings.json` em `EasyAntiCheat/`,
+     `executable: "Gunz.exe"`. Esse nome entra no `jogoFixado` mesmo quando so o
      `start_protected_game.exe` (generico, excluido sozinho) estava rodando
      quando a pasta foi vista. Foi o buraco real do GunZ: The Duel.
 
