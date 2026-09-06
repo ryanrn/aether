@@ -373,6 +373,45 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+
+  /* Texto longo das paginas legais (/termos, /privacidade, /conteudo). */
+  .prose-legal {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-ink-300);
+  }
+  .prose-legal h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-ink-100);
+    margin: 0 0 0.25rem;
+  }
+  .prose-legal h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-ink-100);
+    margin: 2rem 0 0.5rem;
+  }
+  .prose-legal p,
+  .prose-legal li {
+    margin: 0.6rem 0;
+  }
+  .prose-legal ul {
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+  .prose-legal strong {
+    color: var(--color-ink-100);
+    font-weight: 600;
+  }
+  .prose-legal a {
+    color: var(--color-accent-300);
+    text-decoration: underline;
+  }
+  .prose-legal .lede {
+    font-size: 15px;
+    color: var(--color-ink-400);
+  }
 }
 
 @keyframes aether-fade-in {

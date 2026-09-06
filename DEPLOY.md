@@ -251,6 +251,152 @@ fly scale count 1
 
 ---
 
+## Fase pre-beta — como mandar este lote
+
+Os estagios 1–8 da fase "prontidao para beta" (ver README) acumulam na branch
+`fase-1/pre-beta`. Nada foi para producao ainda. Para mandar:
+
+### 1. Migracoes (uma vez, antes do deploy)
+
+Tres migracoes novas, todas escritas a mao no estilo das outras:
+`20260905160000_flags`, `20260906120000_verificacao_email`,
+`20260906130000_denuncia`. `prisma migrate deploy` aplica as pendentes em
+ordem, numa transacao por arquivo:
+
+```bash
+npx dotenv -e .env -- npm run db:deploy
+```
+
+Confira depois:
+
+```bash
+npx dotenv -e .env -- npx prisma migrate status --schema packages/db/prisma/schema.prisma
+```
+
+Deve dizer "Database schema is up to date".
+
+### 2. Variaveis novas (todas opcionais, mas o beta quer 3 delas)
+
+| variavel | onde | para que |
+| --- | --- | --- |
+| `SENTRY_DSN` | Vercel **e** Fly | erros agrupados. Ja esta no `.env` local. |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Vercel (build) | widget do CAPTCHA no cadastro |
+| `TURNSTILE_SECRET_KEY` | Vercel | verificacao do CAPTCHA no servidor |
+| `LOG_LEVEL` | opcional, os dois | padrao: `info` em prod |
+| `MAX_SOCKETS_POR_USUARIO` | opcional, Fly | padrao 8 |
+
+Turnstile e `NEXT_PUBLIC_*` — **entra antes do build** (ver a secao do app web).
+`SENTRY_DSN` e lido em runtime, entao pode entrar depois, mas ai precisa de um
+redeploy para valer.
+
+```bash
+fly secrets set SENTRY_DSN="$(grep ^SENTRY_DSN .env | cut -d'"' -f2)"
+```
+
+### 3. Deploy
+
+```bash
+git checkout master && git merge fase-1/pre-beta
+```
+
+```bash
+fly deploy
+```
+
+```bash
+fly status && fly scale count 1
+```
+
+```bash
+npx vercel --prod
+```
+
+### 4. Conferir
+
+- forcar um erro e ver chegar no Sentry (projeto `aether`, tag `evento`);
+- `/app/equipe` › Kill switches abre; virar `registro_aberto` off e o cadastro
+  fecha em ~5s;
+- criar uma conta de teste → cai na parede "confirme seu e-mail" → o e-mail
+  chega → o link libera;
+- `/termos`, `/privacidade`, `/conteudo` renderizam; o rodape de `/login`
+  linka para elas;
+- rodar os `verify-phase*` contra producao (a secao "Verificacao" acima).
+
+---
+
+## Runbook — quando algo quebra
+
+### Rollback do app web (Vercel)
+
+O jeito mais rapido: painel da Vercel → Deployments → o deploy anterior que
+funcionava → **"Promote to Production"** (ou "Instant Rollback"). Nao rebuilda
+— so troca o alias. Segundos.
+
+Pelo CLI, redeploya um deploy conhecido:
+
+```bash
+npx vercel promote <URL-do-deploy-bom> --scope <seu-time>
+```
+
+### Rollback do gateway (Fly)
+
+O Fly guarda as imagens. Liste e volte:
+
+```bash
+fly releases
+```
+
+```bash
+fly deploy --image registry.fly.io/<app>:<versao-anterior>
+```
+
+Se a maquina ficou parada por bater no limite de restart:
+
+```bash
+fly machine list
+fly machine start <id>
+```
+
+### Rollback de migracao
+
+`prisma migrate` **nao tem "down"**. Se uma migracao quebrou producao:
+
+1. Reverta o codigo primeiro (rollback acima) — o app velho nao usa as colunas
+   novas, entao ele volta a funcionar mesmo com o schema ja migrado.
+2. Se a migracao em si corrompeu dado, restaure do backup (abaixo). As
+   migracoes desta fase so **adicionam** coluna e tabela nullable — nenhuma
+   apaga ou reescreve dado —, entao o passo 1 sozinho resolve o caso comum.
+
+### Restaurar do backup
+
+```bash
+npm run backup            # tira um agora, antes de qualquer coisa arriscada
+npm run backup:verify     # confere que o ultimo backup abre
+```
+
+Para restaurar de verdade, aponte para um banco **descartavel** primeiro
+(nunca direto em producao):
+
+```bash
+DATABASE_URL="postgres://...banco-de-teste" npx dotenv -e .env -- node scripts/restore.mjs backups/<arquivo>
+```
+
+Valide o banco de teste, e so entao promova (troca a `DATABASE_URL` de
+producao para ele, ou re-importa).
+
+### Drill obrigatorio antes do beta
+
+Fazer os tres **de verdade**, uma vez, e cronometrar:
+
+1. rollback da web (promote de um deploy anterior);
+2. rollback do gateway (`fly deploy --image` de uma release anterior);
+3. restore (`restore.mjs` contra um Postgres local vazio, conferir que os dados
+   voltam).
+
+Anotar o tempo de cada um aqui depois do primeiro drill: _(a preencher)_.
+
+---
+
 ## Limitacoes conhecidas deste deploy
 
 - **Uma instancia de gateway, sem hibernar.** Presenca, ocupacao de voz e rate

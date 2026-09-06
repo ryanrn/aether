@@ -41,6 +41,9 @@ export interface AuthenticatedSession {
     /** null = nao silenciado globalmente. `silenciadoAte` no futuro = temporario. */
     silenciadoEm: Date | null;
     silenciadoAte: Date | null;
+    /** aceite dos Termos: nulo ou `termosVersao` antiga dispara o modal em /app */
+    aceitouTermosEm: Date | null;
+    termosVersao: string | null;
   };
 }
 
@@ -79,6 +82,8 @@ export async function loadSession(
           emailVerificadoEm: true,
           silenciadoEm: true,
           silenciadoAte: true,
+          aceitouTermosEm: true,
+          termosVersao: true,
           // Preferencia de contato: quem pode abrir conversa comigo sem ser
           // amigo. Vem na sessao para a tela de configuracoes nao precisar de
           // uma ida ao banco so para desenhar uma chave.
@@ -111,6 +116,8 @@ export async function loadSession(
       emailVerificadoEm: session.user.emailVerificadoEm,
       silenciadoEm: session.user.silenciadoEm,
       silenciadoAte: session.user.silenciadoAte,
+      aceitouTermosEm: session.user.aceitouTermosEm,
+      termosVersao: session.user.termosVersao,
     },
   };
 }

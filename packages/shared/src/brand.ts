@@ -12,4 +12,6 @@ export const BRAND = {
   /** Descricao usada em metadata/SEO. */
   description:
     "Plataforma de voz, compartilhamento de tela e texto com canais persistentes.",
+  /** Pagina de releases do app de desktop (o instalador vive la). */
+  downloadUrl: "https://github.com/ryanrn/aether-releases/releases/latest",
 } as const;

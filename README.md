@@ -152,28 +152,30 @@ permissoes de cargo (`roles-tab`).
 
 ---
 
-## Fase 1 — prontidao para beta (em andamento)
+## Fase 1 — prontidao para beta (codigo pronto, aguardando deploy)
 
 Antes de por o AETHER na mao de gente de fora, o que falta nao e produto — e
-operacao: hoje o gateway fica cego quando algo quebra, nao ha como uma vitima
-denunciar abuso, e nao ha Termos/Privacidade. Esta fase fecha esses buracos.
-Nada aqui vai para o app oficial ate a fase inteira estar verde.
+operacao: o gateway ficava cego quando algo quebrava, nao havia como uma
+vitima denunciar abuso, e nao havia Termos/Privacidade. Esta fase fecha esses
+buracos. **Os 8 estagios estao commitados na branch `fase-1/pre-beta`; nada
+foi para producao ainda** — `DEPLOY.md` › "Fase pre-beta" tem o passo a passo
+(3 migracoes num `db:deploy`, envs, ordem).
 
-A ordem segue a estrutura, nao a lista: primeiro o que nao precisa de
+A ordem seguiu a estrutura, nao a lista: primeiro o que nao precisa de
 migracao nem de dependencia nova (log, teto de socket), depois o que exige
 schema. As mudancas de banco viram migracoes separadas (convencao do repo),
-mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
+todas aplicadas num `db:deploy` so.
 
 | Estagio | O que muda | Estado |
 | --- | --- | --- |
-| 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel (Sentry depois). Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
+| 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel. Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
 | 2 | **Teto de sockets por usuario** + limite de bytes por evento no gateway | ✅ |
-| 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
-| 4 | **Sentry** (sink do log, por `fetch` cru) no gateway e no web + varredura dos ~50 `console.error` para o log estruturado | ✅ |
+| 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz, e-mail) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
+| 4 | **Sentry** (sink do log, por `fetch` cru) no gateway e no web + varredura dos ~50 `console.error` | ✅ |
 | 5 | **Verificacao de e-mail** (parede em `/app`) + **CAPTCHA Turnstile** no cadastro — *migracao `20260906120000_verificacao_email`* | ✅ |
-| 6 | **Fila de denuncia** + acao de moderacao global (silenciar) — *migracao `20260906130000_denuncia`* | ✅ |
-| 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *usa colunas da migracao do estagio 5* | ⬜ |
-| 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
+| 6 | **Fila de denuncia** + moderacao global (silenciar) — *migracao `20260906130000_denuncia`* | ✅ |
+| 7 | **Termos / Privacidade / Conteudo** + aceite no cadastro e modal de re-aceite — *colunas da migracao do estagio 5* | ✅ |
+| 8 | **Landing de download** (`/`) + **runbook** de rollback/restore no `DEPLOY.md` | ✅ |
 
 ### O que fechou no estagio 1
 
@@ -327,7 +329,27 @@ mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
   tipos e motivos moram em `@aether/shared/denuncia` para a tela de cliente
   nao importar de `server-only`.
 
-### Limitacoes que ficaram (estagios 1–6)
+### O que fechou nos estagios 7–8
+
+- **`/termos`, `/privacidade`, `/conteudo`** — paginas publicas, grupo de rota
+  `(legal)` com layout de leitura proprio. Conteudo enxuto de produto em beta,
+  com aviso de que sera revisado por jurista antes do publico. `VERSAO_DOS_TERMOS`
+  (uma data) mora em `@aether/shared/legal` — quando os termos mudam de
+  verdade, a versao sobe e o modal de re-aceite reaparece.
+- **Aceite no cadastro** — checkbox obrigatorio (`aceitaTermos`); `registerAction`
+  grava `aceitouTermosEm` + `termosVersao`. Conta que ja existe (ou com versao
+  antiga) ve o `<AceiteDeTermos>` SOBRE o app em `/app` — bloqueia, so aceita
+  ou sai. `precisaAceitarTermos` na sessao.
+- **Landing em `/`** — antes era `redirect` puro. Agora: logado vai pro `/app`,
+  deslogado ve o que e o AETHER, "Baixar para Windows"
+  (`BRAND.downloadUrl` → `ryanrn/aether-releases/releases/latest`), "Usar no
+  navegador", e o rodape legal.
+- **`DEPLOY.md` › "Fase pre-beta"** — o passo a passo do lote (migracoes, envs,
+  ordem, conferencia) + runbook de rollback (Vercel promote, `fly deploy
+  --image`, migracao sem "down") + restore + o **drill obrigatorio** antes do
+  beta (fazer os tres de verdade, uma vez, e cronometrar).
+
+### Limitacoes que ficaram (estagios 1–8, pre-beta)
 
 - **Tres migracoes ainda NAO aplicadas:** `20260905160000_flags`,
   `20260906120000_verificacao_email`, `20260906130000_denuncia`. Escritas a
@@ -341,17 +363,22 @@ mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
   em call (mas o SFU nega publicar sem SPEAK, que e permissao de servidor). Um
   `voz_habilitada`-equivalente por usuario fica para depois.
 - **Sem `verify-phase*` / `next build` nesta entrega.** `typecheck`, `vitest`
-  (569) e `check:esm` passam. O resto precisa de banco + servicos no ar e do
+  (573) e `check:esm` passam. O resto precisa de banco + servicos no ar e do
   `.env` de producao — deploy da fase. Inclui: primeiro evento real no Sentry,
-  teto de socket cross-instancia, o fluxo de e-mail de ponta a ponta, e uma
-  denuncia real chegando na fila.
+  teto de socket cross-instancia, o fluxo de e-mail de ponta a ponta, uma
+  denuncia real na fila, e o modal de re-aceite de termos com conta antiga.
+- **Termos sao um rascunho de produto**, com aviso na propria pagina: revisao
+  juridica antes do beta PUBLICO. E-mail de contato (`suporte@`, `privacidade@`,
+  `seguranca@`) marcado "a definir" — falta registrar.
 - **Turnstile so no cadastro, nao no login.** O padrao (widget so apos N
   falhas de login) fica para depois; hoje o login se apoia so no rate limit
   fail-closed que ja existia.
+- **A landing e minima.** Um heroi, tres features, download. Sem screenshots
+  (o app ainda muda muito), sem changelog publico, sem status page.
 - **Envs novas, todas opcionais:** `SENTRY_DSN` (+ `SENTRY_RELEASE`),
   `LOG_LEVEL`, `MAX_SOCKETS_POR_USUARIO`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` +
   `TURNSTILE_SECRET_KEY`. `SENTRY_DSN` ja esta no `.env` local; as outras
-  documentadas no `.env.example`.
+  documentadas no `.env.example`. Ver `DEPLOY.md` › "Fase pre-beta".
 - **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
   e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
   abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND } from "@aether/shared";
+import { BRAND, DOCUMENTOS_LEGAIS } from "@aether/shared";
 
 export default function AuthLayout({
   children,
@@ -46,6 +46,17 @@ export default function AuthLayout({
 
         <p className="mt-6 text-center text-xs text-ink-500">
           {BRAND.tagline} · voz, tela e texto
+        </p>
+        <p className="mt-2 flex justify-center gap-3 text-[11px] text-ink-500">
+          {DOCUMENTOS_LEGAIS.map((d) => (
+            <Link
+              key={d.slug}
+              href={`/${d.slug}`}
+              className="transition-colors hover:text-ink-300"
+            >
+              {d.titulo}
+            </Link>
+          ))}
         </p>
       </div>
     </div>

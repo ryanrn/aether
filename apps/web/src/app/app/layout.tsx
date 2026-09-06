@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { precisaVerificarEmail } from "@aether/access";
+import { precisaAceitarTermos } from "@aether/shared";
 import { getSession } from "@/server/auth/session";
 import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
@@ -9,6 +10,7 @@ import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
 import { ParedeDeVerificacao } from "@/components/auth/parede-de-verificacao";
+import { AceiteDeTermos } from "@/components/auth/aceite-de-termos";
 
 /**
  * Casca do aplicativo. Roda no servidor: a lista de servidores ja chega
@@ -32,6 +34,14 @@ export default async function AppLayout({
     return <ParedeDeVerificacao email={session.user.email} />;
   }
 
+  /**
+   * (Re)aceite dos Termos. Renderizado SOBRE o app (nao no lugar dele) — a
+   * pessoa ja confirmou o e-mail e a diferenca aqui costuma ser so uma versao
+   * nova de texto, entao carregar a casca por baixo e ok. Ainda bloqueia: o
+   * modal cobre a tela e so aceita ou sai.
+   */
+  const precisaTermos = precisaAceitarTermos(session.user);
+
   // As duas em paralelo: sao independentes, e em serie a casca do app
   // esperaria duas idas ao banco antes de renderizar qualquer coisa.
   const [servers, pendingRequests] = await Promise.all([
@@ -54,6 +64,9 @@ export default async function AppLayout({
      */
     <RealtimeProvider>
       <div className="flex h-full w-full overflow-hidden bg-base-950">
+        {precisaTermos ? (
+          <AceiteDeTermos atualizados={session.user.aceitouTermosEm !== null} />
+        ) : null}
         <VoiceSession />
         {/*
           No layout do /app, e nao dentro de um servidor: o atalho tem de

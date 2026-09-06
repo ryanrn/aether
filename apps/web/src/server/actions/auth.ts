@@ -3,7 +3,12 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@aether/db";
-import { loginSchema, registerSchema, type ActionResult } from "@aether/shared";
+import {
+  loginSchema,
+  registerSchema,
+  VERSAO_DOS_TERMOS,
+  type ActionResult,
+} from "@aether/shared";
 import { flagLigada, criarTokenDeVerificacao } from "@aether/access";
 import { log } from "@aether/shared/log";
 import { hashPassword, verifyPassword } from "../auth/password";
@@ -103,6 +108,10 @@ export async function registerAction(
       return fail("Falha na verificacao anti-robo. Recarregue a pagina e tente de novo.");
     }
 
+    if (formData.get("aceitaTermos") == null) {
+      return fail("É preciso aceitar os Termos e a Política de Privacidade.");
+    }
+
     const parsed = registerSchema.safeParse({
       username: formData.get("username"),
       displayName: formData.get("displayName"),
@@ -136,6 +145,8 @@ export async function registerAction(
         displayName,
         email,
         passwordHash: await hashPassword(password),
+        aceitouTermosEm: new Date(),
+        termosVersao: VERSAO_DOS_TERMOS,
       },
       select: { id: true, email: true, displayName: true },
     });

@@ -80,6 +80,34 @@ export function RegisterForm() {
 
       <Turnstile />
 
+      <label className="flex items-start gap-2 text-[12px] leading-snug text-ink-400">
+        <input
+          type="checkbox"
+          name="aceitaTermos"
+          required
+          className="mt-0.5 accent-accent-500"
+        />
+        <span>
+          Li e aceito os{" "}
+          <a
+            href="/termos"
+            target="_blank"
+            className="text-accent-300 underline"
+          >
+            Termos de Uso
+          </a>{" "}
+          e a{" "}
+          <a
+            href="/privacidade"
+            target="_blank"
+            className="text-accent-300 underline"
+          >
+            Política de Privacidade
+          </a>
+          .
+        </span>
+      </label>
+
       <FieldError>{error?.error}</FieldError>
 
       <SubmitButton />

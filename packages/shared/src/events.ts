@@ -594,6 +594,8 @@ export interface SocketData {
     emailVerificadoEm: Date | null;
     silenciadoEm: Date | null;
     silenciadoAte: Date | null;
+    aceitouTermosEm: Date | null;
+    termosVersao: string | null;
   };
 }
 
