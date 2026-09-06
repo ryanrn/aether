@@ -6,25 +6,27 @@ export const metadata: Metadata = { title: "Esqueci minha senha" };
 
 export default function ForgotPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold text-ink-100">Esqueceu a senha?</h1>
-        <p className="mt-1 text-[13px] text-ink-400">
-          Diga o e-mail do cadastro e enviamos um link para escolher outra.
-        </p>
+    <>
+      <h1 className="font-brand text-2xl font-semibold tracking-[-0.005em] text-ink-100">
+        Esqueceu a senha?
+      </h1>
+      <p className="mt-1.5 text-sm text-ink-400">
+        Diga o e-mail do cadastro e enviamos um link para escolher outra.
+      </p>
+
+      <div className="mt-7">
+        <ForgotPasswordForm />
       </div>
 
-      <ForgotPasswordForm />
-
-      <p className="text-center text-[13px] text-ink-400">
+      <p className="mt-5 text-center text-[13px] text-ink-400">
         Lembrou?{" "}
         <Link
           href="/login"
-          className="text-accent-400 transition-colors hover:text-accent-300"
+          className="text-accent-300 transition-colors hover:text-accent-400"
         >
           Voltar para o login
         </Link>
       </p>
-    </div>
+    </>
   );
 }

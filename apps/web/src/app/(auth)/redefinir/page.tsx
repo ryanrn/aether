@@ -18,15 +18,17 @@ export default async function ResetPage({
   const { token } = await searchParams;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold text-ink-100">Nova senha</h1>
-        <p className="mt-1 text-[13px] text-ink-400">
-          Escolha uma senha que voce nao use em outro lugar.
-        </p>
-      </div>
+    <>
+      <h1 className="font-brand text-2xl font-semibold tracking-[-0.005em] text-ink-100">
+        Nova senha
+      </h1>
+      <p className="mt-1.5 text-sm text-ink-400">
+        Escolha uma senha que você não use em outro lugar.
+      </p>
 
-      <ResetPasswordForm token={token ?? ""} />
-    </div>
+      <div className="mt-7">
+        <ResetPasswordForm token={token ?? ""} />
+      </div>
+    </>
   );
 }
