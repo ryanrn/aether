@@ -14,6 +14,7 @@ import {
   type PermissionKey,
   type PublicMessage,
 } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 
@@ -319,7 +320,11 @@ export function registerMessageHandlers(
         });
         return;
       }
-      console.error("[gateway] message:send falhou:", error);
+      log.error("gateway.message.send", "message:send falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao enviar" });
     }
   });
@@ -386,7 +391,11 @@ export function registerMessageHandlers(
         hasMore,
       });
     } catch (error) {
-      console.error("[gateway] message:history falhou:", error);
+      log.error("gateway.message.history", "message:history falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao carregar historico" });
     }
   });

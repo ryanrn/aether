@@ -8,6 +8,7 @@ import {
   limiteDoAvatar,
   type AvatarMimeType,
 } from "@aether/shared";
+import { log } from "@aether/shared/log";
 
 /**
  * Upload de icone de servidor no Supabase Storage.
@@ -170,7 +171,10 @@ async function uploadImage(
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
-    console.error("[storage] SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausente");
+    log.error(
+      "web.storage.sem_config",
+      "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausente",
+    );
     return { ok: false, error: notConfiguredMessage };
   }
 
@@ -239,7 +243,7 @@ async function uploadImage(
 
     return { ok: true, url };
   } catch (error) {
-    console.error("[storage] upload falhou:", error);
+    log.error("web.storage.upload", "upload de ícone falhou", { err: error });
     return { ok: false, error: "Falha ao enviar a imagem" };
   }
 }
@@ -276,11 +280,10 @@ async function enviarObjeto(
   );
 
   if (!response.ok) {
-    console.error(
-      "[storage] upload recusado:",
-      response.status,
-      await response.text().catch(() => ""),
-    );
+    log.error("web.storage.upload_recusado", "Supabase Storage recusou o upload", {
+      status: response.status,
+      corpo: await response.text().catch(() => ""),
+    });
     return null;
   }
 
@@ -310,7 +313,9 @@ async function versaoParada(
      */
     return new Uint8Array(png);
   } catch (error) {
-    console.error("[storage] nao consegui gerar a versao parada:", error);
+    log.warn("web.storage.versao_parada", "não gerei a versão estática do ícone", {
+      err: error,
+    });
     return null;
   }
 }

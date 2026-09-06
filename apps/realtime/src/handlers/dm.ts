@@ -5,6 +5,7 @@ import {
   toPublicUser,
   type DmResumo,
 } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import type { AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 
@@ -125,7 +126,11 @@ export function registerDmHandlers(socket: AetherSocket): void {
       const id = await encontrarOuCriar(userId, outroId);
       respond({ ok: true, dm: { id, outro: toPublicUser(outro) } });
     } catch (error) {
-      console.error("[gateway] dm:open falhou:", error);
+      log.error("gateway.dm.open", "dm:open falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao abrir conversa" });
     }
   });
@@ -159,7 +164,11 @@ export function registerDmHandlers(socket: AetherSocket): void {
 
       respond({ ok: true, conversas });
     } catch (error) {
-      console.error("[gateway] dm:list falhou:", error);
+      log.error("gateway.dm.list", "dm:list falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao listar conversas" });
     }
   });

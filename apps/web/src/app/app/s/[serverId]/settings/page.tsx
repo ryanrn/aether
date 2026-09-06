@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import type { ViewerContext } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
 import { listActiveBans } from "@/server/services/moderation";
@@ -40,10 +41,10 @@ export default async function ServerSettingsPage({
      * e foi o que fez perder tempo procurando um defeito de permissao quando o
      * dado estava correto o tempo todo.
      */
-    console.error(
-      `[settings] requireMember falhou para o servidor ${serverId}:`,
-      erro,
-    );
+    log.error("web.settings.require_member", "requireMember falhou", {
+      err: erro,
+      serverId,
+    });
     notFound();
   }
 

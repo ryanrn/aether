@@ -3,6 +3,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@aether/db";
 import { emailSchema, passwordSchema, type ActionResult } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { hashPassword } from "@/server/auth/password";
 import { clientKey, rateLimit } from "@/server/auth/rate-limit";
 import { emailDeRedefinicao, enviarEmail } from "@/server/email";
@@ -112,7 +113,9 @@ export async function requestPasswordResetAction(
      * desenvolvimento o link vai junto para dar para testar o fluxo inteiro
      * sem provedor de e-mail nenhum.
      */
-    console.error("[reset] envio falhou:", envio.motivo);
+    log.error("web.password_reset.envio", "envio do e-mail de redefinição falhou", {
+      motivo: envio.motivo,
+    });
     if (process.env.NODE_ENV !== "production") {
       console.log("[reset] link (so em desenvolvimento):", link);
     }

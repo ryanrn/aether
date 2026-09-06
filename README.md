@@ -169,9 +169,9 @@ termos) entram numa migracao so, junto do deploy da fase.
 | 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel (Sentry depois). Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
 | 2 | **Teto de sockets por usuario** + limite de bytes por evento no gateway | ✅ |
 | 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
-| 4 | Sentry nos 3 apps, enganchado no `sink` do log + varredura mecanica dos `console.error` restantes | ⬜ |
-| 5 | Fila de denuncia + acao de moderacao global — *precisa de migracao* | ⬜ |
-| 6 | Registro por codigo de convite (usa a flag `registro_exige_codigo`) — *precisa de migracao* | ⬜ |
+| 4 | **Sentry** (sink do log, por `fetch` cru) no gateway e no web + varredura dos ~50 `console.error` para o log estruturado | ✅ |
+| 5 | Verificacao de e-mail + CAPTCHA (Turnstile) no cadastro — *precisa de migracao* | ⬜ |
+| 6 | Fila de denuncia + acao de moderacao global — *precisa de migracao* | ⬜ |
 | 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *precisa de migracao* | ⬜ |
 | 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
 
@@ -250,7 +250,32 @@ termos) entram numa migracao so, junto do deploy da fase.
   quem virou o que fica no `log.info("flag.alterada")` ate haver log de
   auditoria global (estagio da denuncia).
 
-### Limitacoes que ficaram (estagios 1–3)
+### O que fechou no estagio 4
+
+- **Sentry por `fetch` cru — sem o SDK.** `@aether/shared/sentry` monta o
+  "envelope" de ingestao e faz um POST fire-and-forget. Mesma escolha do
+  `redis.ts` e do `email.ts` (Resend por REST): o SDK do Sentry arrasta
+  auto-instrumentacao de OpenTelemetry, que e peso e atrito com o runtime do
+  Next. Subpath separado (`@aether/shared/sentry`), coberto pelo `check:esm`.
+- **So `error` e `warn` sobem.** `info`/`debug` ficam no stdout — mandar tudo
+  gasta cota e afoga o que importa. Dedupe: no maximo um evento por
+  (evento+mensagem) a cada 10s, para um laco nao estourar a cota sozinho.
+- **Stack de V8 -> frames do Sentry**, best-effort, com `in_app` marcado por
+  "nao esta em node_modules". Campos de contexto do log viram tag (escalares)
+  ou `extra` (o resto).
+- **Liga com `SENTRY_DSN`.** Ausente = `criarSinkSentry` devolve `null` e nada
+  acontece (dev, e producao antes de a conta existir). Web: `instrumentation.ts`
+  (`register()`, runtime Node). Gateway: no topo do `index.ts`, antes da
+  captura de falhas, para uma excecao no boot ja chegar la.
+- **Varredura dos `console.error`.** Os ~50 pontos nos handlers do gateway
+  (`voice`, `presence`, `messages`, `dm`, `reactions`, `internal`, `livekit`,
+  `auth`, `session-guard`, `redis-client`, `games/*`) e no `apps/web/src/server`
+  (`storage`, `realtime-notify`, `auth/rate-limit`, `password-reset`, os dois
+  `layout.tsx`/`page.tsx` de servidor) agora sao `log.error`/`log.warn` com
+  `evento` estavel e contexto (`userId`, `socketId`, `canalId`). Sobram so os
+  dois `console.log` de dev do `index.ts` (gated por `!isProduction`).
+
+### Limitacoes que ficaram (estagios 1–4)
 
 - **A migracao `20260905160000_flags` ainda NAO foi aplicada.** Foi escrita a
   mao no estilo das outras (as migracoes do projeto sao comentadas, nao
@@ -260,22 +285,25 @@ termos) entram numa migracao so, junto do deploy da fase.
   correto, so mais barulhento no log.
 
 - **Sem `verify-phase*` nesta entrega.** `typecheck` (todos os workspaces),
-  `vitest` (529, +43 de log, socket-cap e flags) e `npm run check:esm` passam.
-  Os `scripts/verify-phase*.mjs` precisam de banco + gateway + LiveKit no ar e
-  do `.env` de producao; ficam para o momento do deploy da fase — inclusive o
-  teste real do teto de socket com o adapter de Redis (a parte pura esta
-  coberta; a chamada `io.in(id).disconnectSockets` cross-instancia nao).
-- **`LOG_LEVEL` e `MAX_SOCKETS_POR_USUARIO`** sao envs novas, as duas
-  opcionais. `LOG_LEVEL` ausente = `info` em producao, `debug` em dev.
-  `MAX_SOCKETS_POR_USUARIO` ausente = 8; `0` desliga. Nenhuma configurada
-  ainda em lugar nenhum.
+  `vitest` (543, +57 de log, socket-cap, flags e sentry) e `npm run check:esm`
+  passam. Os `scripts/verify-phase*.mjs` e o `next build` precisam de banco +
+  gateway + LiveKit no ar e do `.env` de producao; ficam para o momento do
+  deploy da fase — inclusive o teste real do teto de socket com o adapter de
+  Redis (a parte pura esta coberta; a chamada `io.in(id).disconnectSockets`
+  cross-instancia nao) e o primeiro evento chegando de verdade no Sentry.
+- **Envs novas, todas opcionais:** `SENTRY_DSN` (+ `SENTRY_RELEASE`),
+  `LOG_LEVEL` (ausente = `info` em prod, `debug` em dev),
+  `MAX_SOCKETS_POR_USUARIO` (ausente = 8, `0` desliga). Nenhuma configurada
+  ainda — documentadas no `.env.example`.
 - **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
   e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
   abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)
-  entra no estagio 4, junto do Sentry.
-- **Ainda ~50 `console.error` diretos** nos handlers do gateway e no
-  `apps/web/src/server` (storage, realtime-notify, rate-limit, password-reset).
-  Migracao mecanica no estagio 4.
+  fica para um estagio proprio — mexe em 19 arquivos de action e tem risco de
+  regressao maior que o resto da fase.
+- **O `@sentry/*` NAO entra no `package.json`.** O sink e `fetch` cru; sem SDK
+  nao ha auto-instrumentacao (nomes de rota, spans). Para um beta, "erro
+  agrupado com stack, contado" e o que importa, e isso o POST de envelope
+  entrega.
 
 ---
 

@@ -1,5 +1,6 @@
 import { Prisma, prisma } from "@aether/db";
 import { emojiSchema, room, type PublicReaction } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 import { autorizarConversa } from "./messages";
@@ -140,7 +141,11 @@ export function registerReactionHandlers(
       await emitirReacoes(io, messageId, userId, conversa);
       respond({ ok: true });
     } catch (error) {
-      console.error("[gateway] reaction:toggle falhou:", error);
+      log.error("gateway.reaction.toggle", "reaction:toggle falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao reagir" });
     }
   });

@@ -2,6 +2,7 @@ import "server-only";
 
 import { headers } from "next/headers";
 import { limitarJanelaDeslizante, readRedisConfig } from "@aether/shared";
+import { log } from "@aether/shared/log";
 
 /**
  * Rate limit de janela deslizante, com dois armazenamentos.
@@ -94,13 +95,18 @@ export async function rateLimit(
     return await limitarJanelaDeslizante(config, key, limit, windowMs);
   } catch (error) {
     if (opts?.failClosed) {
-      console.error(
-        "[rate-limit] Redis indisponivel — caindo para contador em memoria:",
-        error,
+      log.warn(
+        "web.rate_limit.redis_indisponivel",
+        "Redis fora — caindo para contador em memória (fail-closed)",
+        { err: error },
       );
       return rateLimitInMemory(key, limit, windowMs);
     }
-    console.error("[rate-limit] Redis indisponivel, liberando:", error);
+    log.warn(
+      "web.rate_limit.redis_indisponivel",
+      "Redis fora — liberando (fail-open)",
+      { err: error },
+    );
     return { ok: true, retryAfter: 0 };
   }
 }

@@ -83,8 +83,17 @@ export interface DadosDeLog {
 
 /** Para onde a linha final vai. Trocavel em teste; padrao escreve no console. */
 export type DestinoDeLog = (registro: RegistroDeLog) => void;
-/** Efeito colateral por registro — o Sentry se anexa aqui. Nunca deve lancar. */
-export type SinkDeLog = (registro: RegistroDeLog) => void;
+/**
+ * Efeito colateral por registro — o Sentry se anexa aqui. Nunca deve lancar.
+ *
+ * O segundo argumento e o erro ORIGINAL, antes de `serializarErro`: o sink do
+ * Sentry quer o `Error` de verdade (com o stack navegavel), nao a copia
+ * achatada que vai na linha de log.
+ */
+export type SinkDeLog = (
+  registro: RegistroDeLog,
+  erroOriginal?: unknown,
+) => void;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Redacao
@@ -261,7 +270,7 @@ function emitir(
   }
   for (const sink of estado.sinks) {
     try {
-      sink(registro);
+      sink(registro, err);
     } catch {
       // idem: o Sentry fora do ar nao pode propagar para o caminho de erro.
     }

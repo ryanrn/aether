@@ -4,7 +4,8 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
 import { room } from "@aether/shared";
-import { capturarFalhasDoProcesso, log } from "@aether/shared/log";
+import { capturarFalhasDoProcesso, configurarLog, log } from "@aether/shared/log";
+import { criarSinkSentry } from "@aether/shared/sentry";
 import { env } from "./env";
 import { authenticateHandshake } from "./auth";
 import { registerPresenceHandlers } from "./handlers/presence";
@@ -39,13 +40,26 @@ import type { AetherServer, AetherSocket } from "./types";
  */
 
 /**
- * ANTES de qualquer outra coisa: uma Promise rejeitada sem `catch` ou uma
- * excecao que escapou de todo `try` sumiam aqui sem deixar linha nenhuma —
- * o processo morria e so o `fly logs` de "exited" contava a historia. Agora
- * viram um `error` estruturado; `uncaughtException` ainda encerra (estado
+ * Sink do Sentry ANTES da captura de falhas: assim uma excecao no boot ja
+ * chega la. `null` sem `SENTRY_DSN` — em dev e no primeiro deploy nada
+ * acontece, so o stdout.
+ */
+const sinkSentry = criarSinkSentry({ servico: "gateway" });
+if (sinkSentry) configurarLog({ sink: sinkSentry });
+
+/**
+ * Uma Promise rejeitada sem `catch` ou uma excecao que escapou de todo `try`
+ * sumiam aqui sem deixar linha nenhuma — o processo morria e so o `fly logs`
+ * de "exited" contava a historia. Agora viram um `error` estruturado (e vao ao
+ * Sentry pelo sink acima); `uncaughtException` ainda encerra (estado
  * indefinido), e o Fly reinicia a maquina limpa.
  */
 capturarFalhasDoProcesso();
+
+log.info("gateway.observabilidade", "log estruturado ativo", {
+  sentry: Boolean(sinkSentry),
+  nivel: process.env.LOG_LEVEL ?? "(padrão)",
+});
 
 const httpServer = createServer((request, response) => {
   /**

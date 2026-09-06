@@ -1,3 +1,4 @@
+import { log } from "@aether/shared/log";
 import type { CandidatoIgdb } from "./normalize";
 
 /**
@@ -83,7 +84,9 @@ async function obterToken(forcarNovo = false): Promise<string | null> {
        * O status entra no log; o corpo NAO. A resposta de erro da Twitch pode
        * repetir o que foi enviado, e o que foi enviado inclui o secret.
        */
-      console.error(`[igdb] token recusado pela Twitch: ${resposta.status}`);
+      log.warn("gateway.igdb.token_recusado", "Twitch recusou o token do IGDB", {
+        status: resposta.status,
+      });
       return null;
     }
 
@@ -98,10 +101,9 @@ async function obterToken(forcarNovo = false): Promise<string | null> {
     tokenAtual = { valor: dados.access_token, expiraEm: Date.now() + duracao };
     return tokenAtual.valor;
   } catch (erro) {
-    console.error(
-      "[igdb] nao consegui token:",
-      erro instanceof Error ? erro.message : "erro desconhecido",
-    );
+    log.warn("gateway.igdb.token_falhou", "não consegui token do IGDB", {
+      err: erro,
+    });
     return null;
   }
 }
@@ -151,10 +153,7 @@ export async function buscarJogos(nome: string): Promise<CandidatoIgdb[]> {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (erro) {
-      console.error(
-        "[igdb] busca falhou:",
-        erro instanceof Error ? erro.message : "erro desconhecido",
-      );
+      log.warn("gateway.igdb.busca_falhou", "busca no IGDB falhou", { err: erro });
       return null;
     }
   }
@@ -173,7 +172,9 @@ export async function buscarJogos(nome: string): Promise<CandidatoIgdb[]> {
 
   if (!resposta) return [];
   if (!resposta.ok) {
-    console.error(`[igdb] busca respondeu ${resposta.status}`);
+    log.warn("gateway.igdb.busca_status", "busca no IGDB respondeu erro", {
+      status: resposta.status,
+    });
     return [];
   }
 

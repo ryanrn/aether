@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { ViewerContext } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
 import { ChannelSidebar } from "@/components/layout/channel-sidebar";
@@ -35,10 +36,10 @@ export default async function ServerLayout({
   } catch (erro) {
     // Mesmo motivo do catch da pagina de configuracoes: o 404 continua para
     // quem visita, mas o motivo para de sumir para quem mantem.
-    console.error(
-      `[servidor] requireMember falhou para o servidor ${serverId}:`,
-      erro,
-    );
+    log.error("web.servidor.require_member", "requireMember falhou", {
+      err: erro,
+      serverId,
+    });
     notFound();
   }
 

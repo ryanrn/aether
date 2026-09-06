@@ -5,6 +5,7 @@ import {
   TrackType,
 } from "livekit-server-sdk";
 import { alturaExcedeOPlano, has, type PermissionBits } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { env } from "./env";
 
 /**
@@ -179,7 +180,7 @@ export async function applyServerMute(params: {
     }
     return true;
   } catch (error) {
-    console.error("[gateway] falha ao aplicar mudo no SFU:", error);
+    log.error("gateway.livekit.mudo", "falha ao aplicar mudo no SFU", { err: error });
     return false;
   }
 }
@@ -261,15 +262,20 @@ export async function conferirQualidadeDaTela(params: {
       await client.mutePublishedTrack(room, params.userId, tela.sid, true);
       silenciada = true;
     } catch (error) {
-      console.error(
-        "[gateway] nao consegui silenciar a tela acima do plano:",
-        error,
+      log.error(
+        "gateway.livekit.silenciar_tela",
+        "não silenciei a tela acima do plano",
+        { err: error },
       );
     }
 
     return { alturaPublicada: altura, alturaMax: params.alturaMax, silenciada };
   } catch (error) {
-    console.error("[gateway] falha ao conferir a qualidade da tela:", error);
+    log.error(
+      "gateway.livekit.conferir_qualidade",
+      "falha ao conferir a qualidade da tela",
+      { err: error },
+    );
     return null;
   }
 }

@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
 import { room, SELECT_USUARIO_PUBLICO, toPublicUser } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { env } from "./env";
 import { resyncServerRooms } from "./rooms";
 import type { AetherServer } from "./types";
@@ -171,7 +172,7 @@ export async function handleInternalRequest(
       const affected = await evict(io, body.serverId, body.userId);
       json(response, 200, { ok: true, sockets: affected });
     } catch (error) {
-      console.error("[gateway] /internal/evict falhou:", error);
+      log.error("gateway.internal.evict", "/internal/evict falhou", { err: error });
       json(response, 500, { ok: false });
     }
     return true;
@@ -214,7 +215,9 @@ export async function handleInternalRequest(
 
       json(response, 200, { ok: true, sockets: affected });
     } catch (error) {
-      console.error("[gateway] /internal/server-deleted falhou:", error);
+      log.error("gateway.internal.server_deleted", "/internal/server-deleted falhou", {
+        err: error,
+      });
       json(response, 500, { ok: false });
     }
     return true;
@@ -243,7 +246,9 @@ export async function handleInternalRequest(
 
       json(response, 200, { ok: true });
     } catch (error) {
-      console.error("[gateway] /internal/resync-rooms falhou:", error);
+      log.error("gateway.internal.resync_rooms", "/internal/resync-rooms falhou", {
+        err: error,
+      });
       json(response, 500, { ok: false });
     }
     return true;
@@ -279,9 +284,10 @@ export async function handleInternalRequest(
       }
       json(response, 200, { ok: true, online });
     } catch (error) {
-      console.error(
-        "[gateway] /internal/presenca-de-servidores falhou:",
-        error,
+      log.error(
+        "gateway.internal.presenca_de_servidores",
+        "/internal/presenca-de-servidores falhou",
+        { err: error },
       );
       json(response, 500, { ok: false });
     }
@@ -323,7 +329,9 @@ export async function handleInternalRequest(
 
       json(response, 200, { ok: true, atualizados });
     } catch (error) {
-      console.error("[gateway] /internal/friends-changed falhou:", error);
+      log.error("gateway.internal.friends_changed", "/internal/friends-changed falhou", {
+        err: error,
+      });
       json(response, 500, { ok: false });
     }
     return true;
@@ -394,7 +402,9 @@ export async function handleInternalRequest(
 
       json(response, 200, { ok: true, atualizado: true });
     } catch (error) {
-      console.error("[gateway] /internal/profile-changed falhou:", error);
+      log.error("gateway.internal.profile_changed", "/internal/profile-changed falhou", {
+        err: error,
+      });
       json(response, 500, { ok: false });
     }
     return true;

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { log } from "@aether/shared/log";
+
 /**
  * Avisos do app web para o gateway.
  *
@@ -43,17 +45,17 @@ async function callInternal(
       signal: AbortSignal.timeout(4000),
     });
     if (!response.ok) {
-      console.error(
-        `[realtime] gateway recusou ${errorLabel}:`,
-        response.status,
-        await response.text().catch(() => ""),
-      );
+      log.warn("web.gateway_notify.recusado", "gateway recusou o aviso", {
+        aviso: errorLabel,
+        status: response.status,
+        corpo: await response.text().catch(() => ""),
+      });
     }
   } catch (error) {
-    console.error(
-      `[realtime] nao consegui avisar o gateway (${errorLabel}):`,
-      error,
-    );
+    log.warn("web.gateway_notify.falhou", "não avisei o gateway", {
+      err: error,
+      aviso: errorLabel,
+    });
   }
 }
 

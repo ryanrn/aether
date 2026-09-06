@@ -10,6 +10,7 @@ import {
   readRedisConfig,
   type SocketData,
 } from "@aether/shared";
+import { log } from "@aether/shared/log";
 
 /**
  * Autenticacao do handshake WebSocket.
@@ -128,9 +129,10 @@ function logarRedisIndisponivel(error: unknown): void {
   const agora = Date.now();
   if (agora - ultimoAvisoRedis < 60_000) return;
   ultimoAvisoRedis = agora;
-  console.error(
-    "[gateway] Redis indisponivel ao consumir ticket — caindo para memoria local (uso unico so vale por instancia ate o Redis voltar):",
-    error,
+  log.warn(
+    "gateway.ticket.redis_indisponivel",
+    "Redis fora ao consumir ticket — caindo para memória local (uso único só vale por instância até o Redis voltar)",
+    { err: error },
   );
 }
 

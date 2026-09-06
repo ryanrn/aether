@@ -26,6 +26,7 @@
 import * as access from "@aether/access";
 import * as shared from "@aether/shared";
 import * as sharedLog from "@aether/shared/log";
+import * as sharedSentry from "@aether/shared/sentry";
 import * as db from "@aether/db";
 
 /** Exports que o gateway usa de verdade — some um, quebra em producao. */
@@ -44,6 +45,7 @@ const OBRIGATORIOS: Record<string, string[]> = {
   // o gateway o importa como `@aether/shared/log`, e o loader ESM tem que
   // resolver esse subpath tanto quanto o pacote raiz.
   "@aether/shared/log": ["log", "capturarFalhasDoProcesso", "comContexto"],
+  "@aether/shared/sentry": ["criarSinkSentry", "parseDsn"],
   "@aether/db": ["prisma", "cifrar", "decifrar"],
 };
 
@@ -51,6 +53,7 @@ const modulos: Record<string, object> = {
   "@aether/access": access,
   "@aether/shared": shared,
   "@aether/shared/log": sharedLog,
+  "@aether/shared/sentry": sharedSentry,
   "@aether/db": db,
 };
 

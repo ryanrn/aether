@@ -6,6 +6,7 @@ import {
   loadMemberAccess,
 } from "@aether/access";
 import { has, room } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { loadPlan } from "@aether/access";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
@@ -202,7 +203,12 @@ export function registerVoiceHandlers(
         media,
       });
     } catch (error) {
-      console.error("[gateway] voice:join falhou:", error);
+      log.error("gateway.voice.join", "voice:join falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+        canalId: channelId,
+      });
       // Erro de banco/rede e passageiro — o cliente pode tentar de novo.
       respond({ ok: false, error: "Falha ao conectar", retriable: true });
     }
@@ -266,7 +272,11 @@ export function registerVoiceHandlers(
 
       respond({ ok: true, media });
     } catch (error) {
-      console.error("[gateway] voice:refresh-token falhou:", error);
+      log.error("gateway.voice.refresh_token", "voice:refresh-token falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao renovar" });
     }
   });
@@ -321,10 +331,14 @@ export function registerVoiceHandlers(
       });
       if (!excedeu) continue;
 
-      console.warn(
-        `[gateway] tela de ${quem} em ${excedeu.alturaPublicada}p excede o plano ` +
-          `${plano.tier} (${excedeu.alturaMax}p) — silenciada: ${excedeu.silenciada}`,
-      );
+      log.warn("gateway.voice.qualidade_excedida", "tela acima do plano", {
+        userId: quem,
+        canalId: canal,
+        alturaPublicada: excedeu.alturaPublicada,
+        alturaMax: excedeu.alturaMax,
+        plano: plano.tier,
+        silenciada: excedeu.silenciada,
+      });
       socket.emit("voice:qualidade-excedida", {
         alturaPublicada: excedeu.alturaPublicada,
         alturaMax: excedeu.alturaMax,
@@ -360,7 +374,11 @@ export function registerVoiceHandlers(
           : null;
         if (bits === null || !has(bits, "SCREEN_SHARE")) return;
       } catch (error) {
-        console.error("[gateway] voice:streaming falhou:", error);
+        log.error("gateway.voice.streaming", "voice:streaming falhou", {
+          err: error,
+          userId,
+          socketId: socket.id,
+        });
         return;
       }
     }
@@ -411,7 +429,11 @@ export function registerVoiceHandlers(
           : null;
         if (bits === null || !has(bits, "CAMERA")) return;
       } catch (error) {
-        console.error("[gateway] voice:camera falhou:", error);
+        log.error("gateway.voice.camera", "voice:camera falhou", {
+          err: error,
+          userId,
+          socketId: socket.id,
+        });
         return;
       }
     }
@@ -501,7 +523,11 @@ export function registerVoiceHandlers(
       broadcast(updated.serverId, updated.participant);
       respond({ ok: true });
     } catch (error) {
-      console.error("[gateway] voice:moderate falhou:", error);
+      log.error("gateway.voice.moderate", "voice:moderate falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao moderar" });
     }
   });
@@ -612,7 +638,11 @@ export function registerVoiceHandlers(
       if (participant) broadcast(target.serverId, participant);
       respond({ ok: true });
     } catch (error) {
-      console.error("[gateway] voice:move falhou:", error);
+      log.error("gateway.voice.move", "voice:move falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "Falha ao mover" });
     }
   });
@@ -624,7 +654,11 @@ export function registerVoiceHandlers(
       const left = await leaveVoice(userId, socket.id);
       if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
     })().catch((erro) => {
-      console.error("[gateway] disconnect (voice) falhou:", erro);
+      log.error("gateway.voice.disconnect", "disconnect (voice) falhou", {
+        err: erro,
+        userId,
+        socketId: socket.id,
+      });
     });
   });
 }

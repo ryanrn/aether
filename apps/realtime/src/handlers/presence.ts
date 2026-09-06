@@ -9,6 +9,7 @@ import {
   type PresenceEntry,
   type UserStatus,
 } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
 import { visibleChannelRooms } from "../rooms";
 import { createRateLimiter } from "../rate-limit";
@@ -134,10 +135,10 @@ async function enriquecer(
     }
     await announceToFriends(io, userId, meuStatus, await friendsOf(userId));
   } catch (erro) {
-    console.error(
-      "[presence] nao consegui enriquecer o jogo:",
-      erro instanceof Error ? erro.message : "erro desconhecido",
-    );
+    log.warn("gateway.presence.enriquecer_jogo", "não enriqueci o jogo", {
+      err: erro,
+      userId,
+    });
   }
 }
 
@@ -239,7 +240,11 @@ export function registerPresenceHandlers(
         await announce(io, serverId, userId, await statusOf(userId));
       }
     } catch (error) {
-      console.error("[gateway] server:join falhou:", error);
+      log.error("gateway.server.join", "server:join falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
       respond({ ok: false, error: "falha ao entrar no servidor" });
     }
   });
@@ -278,7 +283,12 @@ export function registerPresenceHandlers(
     // Escrita so em mudanca deliberada — nao ha volume aqui.
     await prisma.user
       .update({ where: { id: userId }, data: { status } })
-      .catch((error) => console.error("[gateway] presence:set nao persistiu:", error));
+      .catch((error) =>
+        log.warn("gateway.presence.set", "presence:set não persistiu", {
+          err: error,
+          userId,
+        }),
+      );
   });
 
   /**
@@ -361,7 +371,11 @@ export function registerPresenceHandlers(
         spotify?.esquecer(userId);
       }
     })().catch((erro) => {
-      console.error("[gateway] disconnect (presence) falhou:", erro);
+      log.error("gateway.presence.disconnect", "disconnect (presence) falhou", {
+        err: erro,
+        userId,
+        socketId: socket.id,
+      });
     });
   });
 }

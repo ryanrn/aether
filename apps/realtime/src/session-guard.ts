@@ -1,4 +1,5 @@
 import { loadSession } from "@aether/access";
+import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "./types";
 
 /**
@@ -33,7 +34,9 @@ const REVALIDATE_INTERVAL_MS = Number(
 export function startSessionGuard(io: AetherServer): () => void {
   const timer = setInterval(() => {
     void revalidateAll(io).catch((error) => {
-      console.error("[gateway] revalidacao de sessao falhou:", error);
+      log.error("gateway.sessao.revalidacao", "revalidação de sessão falhou", {
+        err: error,
+      });
     });
   }, REVALIDATE_INTERVAL_MS);
 

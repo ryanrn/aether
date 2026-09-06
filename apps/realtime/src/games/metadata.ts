@@ -1,4 +1,5 @@
 import { prisma } from "@aether/db";
+import { log } from "@aether/shared/log";
 import { buscarJogos, igdbConfigurado } from "./igdb";
 import {
   CONFIANCA_PARA_RENOMEAR,
@@ -97,10 +98,10 @@ async function resolver(
     linha = await prisma.gameMetadata.findUnique({ where: { lookupKey: chave } });
   } catch (erro) {
     // Banco fora: seguimos com o que o detector deu. Nunca derruba a atividade.
-    console.error(
-      "[metadata] leitura do cache falhou:",
-      erro instanceof Error ? erro.message : "erro desconhecido",
-    );
+    log.warn("gateway.metadata.cache_leitura", "leitura do cache de metadados falhou", {
+      err: erro,
+      chave,
+    });
     return semNada;
   }
 
@@ -190,10 +191,10 @@ async function resolver(
     });
   } catch (erro) {
     // Nao conseguir gravar o cache nao pode custar o resultado ja obtido.
-    console.error(
-      "[metadata] gravacao do cache falhou:",
-      erro instanceof Error ? erro.message : "erro desconhecido",
-    );
+    log.warn("gateway.metadata.cache_gravacao", "gravação do cache de metadados falhou", {
+      err: erro,
+      chave,
+    });
   }
 
   return resultado;

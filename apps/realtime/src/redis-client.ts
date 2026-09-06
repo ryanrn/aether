@@ -1,4 +1,5 @@
 import { Redis } from "ioredis";
+import { log } from "@aether/shared/log";
 
 /**
  * Clientes Redis do gateway (fase 7c-2) — TCP de verdade via `ioredis`, e nao
@@ -48,7 +49,10 @@ function createClients(): { main: Redis; pub: Redis; sub: Redis } | null {
     ["sub", sub],
   ] as const) {
     cliente.on("error", (erro) => {
-      console.error(`[gateway] redis(${nome}) erro:`, erro.message);
+      log.warn("gateway.redis.erro", `redis(${nome}) erro`, {
+        err: erro,
+        cliente: nome,
+      });
     });
   }
 
