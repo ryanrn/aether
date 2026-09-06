@@ -391,6 +391,42 @@ todas aplicadas num `db:deploy` so.
 
 ---
 
+## Fase 2 — deteccao de jogo social (em andamento)
+
+O diferencial nº1 do relatorio: o AETHER ja sabe o que voce joga melhor que
+ninguem (motor store-based + config de anti-cheat). Falta transformar isso em
+coisa social.
+
+| Estagio | O que muda | Estado |
+| --- | --- | --- |
+| 1 | **"Jogando agora" no painel de membros** — agrupa quem esta online por jogo (com a capa do IGDB). So UI, sem migracao. | ✅ |
+| 2 | Cargo automatico por jogo — **opt-in por servidor** — *precisa de migracao* | ⬜ |
+| 3 | Salas de voz efemeras + "Procurar grupo" (LFG) — *migracao pequena* | ⬜ |
+| 4 | LFG cross-servidor (matchmaking global) | ⬜ |
+
+### O que fechou no estagio 1
+
+- **Secao "Jogando agora"** no topo do `member-panel.tsx`, acima de "Na
+  chamada". Corte transversal: agrupa os membros ONLINE que tem `activity`
+  (jogo) pelo nome do jogo, do grupo maior para o menor. A pessoa continua no
+  grupo do cargo dela embaixo — isto e o atalho para "quem topa jogar X".
+- **Zero peça nova.** O `activity[userId] = { game, icon, cover }` ja existia no
+  store (`realtime-store.ts`), populado pelo `presence:update` que o gateway ja
+  manda. Reusa `MemberRow`. Capa do IGDB quando o enriquecimento ja resolveu,
+  senao o icone do executavel, senao um placeholder.
+
+### Limitacoes conhecidas (estagio 1)
+
+- **So verifica com gente jogando de verdade.** `typecheck` e `next build`
+  passam; a secao so aparece quando ha ≥1 membro online num jogo, o que exige
+  o app de desktop mandando `presence:game`.
+- **Sem acao ainda.** E so uma lista. "Entrar na voz com quem joga o mesmo" e
+  o estagio 3 (LFG).
+- **O jogo nao persiste** (ja era assim) — reiniciar o gateway limpa o
+  `activity`, entao a secao some ate cada um mandar `presence:game` de novo.
+
+---
+
 ## Estabilidade da call (correcoes v2)
 
 Lote de correcao dos relatos de "a call cai sozinha". A causa-raiz comum: a

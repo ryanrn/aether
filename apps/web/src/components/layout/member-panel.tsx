@@ -66,7 +66,40 @@ export function MemberPanel({
    * deste servidor (troca de servidor troca o mapa). Chave = userId.
    */
   const voice = useRealtimeStore((state) => state.voice);
+  /** Jogo por usuario (fase 2): `activity[userId] = { game, since, icon, cover }`. */
+  const activity = useRealtimeStore((state) => state.activity);
   const canManageMembers = viewerCan(viewer, "MANAGE_ROLES");
+
+  /**
+   * "Jogando agora" — corte transversal: agrupa quem esta ONLINE e num jogo
+   * pelo nome do jogo. A pessoa continua aparecendo no grupo do cargo dela
+   * embaixo; isto e o atalho para "quem topa jogar X junto".
+   *
+   * A ordem dentro de cada grupo segue `members` (ja ordenado), e os grupos
+   * saem do maior para o menor — o jogo com mais gente primeiro.
+   */
+  const porJogo = new Map<
+    string,
+    { icon: string | null; cover: string | null; members: PublicMember[] }
+  >();
+  for (const member of members) {
+    if ((presence[member.user.id] ?? "OFFLINE") === "OFFLINE") continue;
+    const act = activity[member.user.id];
+    if (!act?.game) continue;
+    const grupo = porJogo.get(act.game) ?? {
+      icon: act.icon,
+      cover: act.cover,
+      members: [],
+    };
+    // capa/icone: a primeira nao-nula que aparecer serve para o grupo todo
+    grupo.cover ??= act.cover;
+    grupo.icon ??= act.icon;
+    grupo.members.push(member);
+    porJogo.set(act.game, grupo);
+  }
+  const jogos = [...porJogo.entries()].sort(
+    (a, b) => b[1].members.length - a[1].members.length,
+  );
 
   const groups = new Map<string, { color: string; members: PublicMember[] }>();
   for (const member of members) {
@@ -100,6 +133,63 @@ export function MemberPanel({
     <>
       <aside className="hidden w-[224px] shrink-0 flex-col border-l border-line bg-base-900 lg:flex">
         <div className="flex-1 overflow-y-auto px-2 py-3">
+          {jogos.length > 0 ? (
+            <section className="mb-4">
+              <h3 className="flex items-center gap-1.5 px-1.5 pb-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.08em] text-ink-400">
+                <AetherIcon name="gamepad" size="sm" className="h-3.5 w-3.5" />
+                Jogando agora
+              </h3>
+              <div className="flex flex-col gap-2.5">
+                {jogos.map(([game, grupo]) => (
+                  <div key={game}>
+                    <div className="flex items-center gap-2 px-1.5 pb-1">
+                      {grupo.cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={grupo.cover}
+                          alt=""
+                          className="h-6 w-[18px] shrink-0 rounded-[3px] object-cover"
+                        />
+                      ) : grupo.icon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={grupo.icon}
+                          alt=""
+                          className="h-4 w-4 shrink-0 rounded-[3px] object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-4 w-4 shrink-0 place-items-center rounded-[3px] bg-base-750 text-ink-500">
+                          <AetherIcon name="gamepad" size="sm" className="h-2.5 w-2.5" />
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-ink-200">
+                        {game}
+                      </span>
+                      <span className="font-mono text-[11px] tabular-nums text-ink-500">
+                        {grupo.members.length}
+                      </span>
+                    </div>
+                    <ul className="flex flex-col gap-0.5">
+                      {grupo.members.map((member) => (
+                        <MemberRow
+                          key={`jogo-${member.id}`}
+                          member={member}
+                          color={undefined}
+                          isOwner={member.user.id === ownerId}
+                          editable={false}
+                          presence={presence[member.user.id] ?? "OFFLINE"}
+                          voiceState={voice[member.user.id]}
+                          onOpenCard={abrirCartao}
+                          onEditRoles={() => setEditing(member)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {naChamada.length > 0 ? (
             <section className="mb-4">
               <h3 className="flex items-center gap-1.5 px-1.5 pb-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.08em] text-accent-300">
