@@ -1456,17 +1456,25 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   vazia, entao a loja inteira ficava sem jogo nenhum. Um teste de fixture
   escrito a mao, com `\n`, teria passado; quem pegou foi rodar contra o
   registro de verdade.
-- **Jogo com anti-cheat que esconde o caminho DEPOIS.** O Vanguard (VALORANT)
-  esconde o caminho desde o inicio, e o `entradaPorNomeDeProcesso` cobre isso
-  pelo catalogo da loja. Mas o Easy Anti-Cheat de um jogo do STEAM deixava um
-  buraco: o Steam nao tem catalogo (so a convencao de pasta), entao quando o
-  EAC relanca o jogo protegido e o caminho some, nao havia por onde reconhecer
-  — e o jogo sumia da tela no instante em que o anti-cheat carregava (visto com
-  GunZ: The Duel). A saida e `jogoFixado`: ao ver um jogo POR CAMINHO,
-  guardamos os NOMES dos processos dele (o nome o anti-cheat nao esconde) e o
-  mantemos na tela enquanto qualquer um seguir rodando. Processos genericos de
-  anti-cheat (`start_protected_game.exe` etc.) sao excluidos do que fixa —
-  senao "fechei o GunZ e abri o Fall Guys" continuaria mostrando GunZ.
+- **Jogo com Easy Anti-Cheat que esconde o processo DEPOIS.** O EAC nega
+  `OpenProcess` ao processo do jogo assim que carrega — entao `wmic` e
+  `Get-Process` devolvem CAMINHO vazio, e o jogo do Steam sumia da tela (o
+  Steam nao tem catalogo, so a convencao de pasta). O que o EAC NAO esconde e
+  o NOME do processo (`EnumProcesses` nao depende de `OpenProcess`). Duas
+  camadas resolvem:
+  1. `jogoFixado`: ao ver um jogo POR CAMINHO, guardamos os nomes dos
+     processos dele e o mantemos na tela enquanto qualquer um seguir rodando.
+  2. `nomeProtegidoPorEac`: o proprio jogo diz qual e o executavel protegido,
+     no `<pasta>/EasyAntiCheat/Launcher/Settings.json` (campo `executable`) —
+     o mesmo arquivo que o EAC usa para lancar e que o Playnite le para
+     detectar. Esse nome entra no `jogoFixado` mesmo quando so o
+     `start_protected_game.exe` (generico, excluido sozinho) estava rodando
+     quando a pasta foi vista. Foi o buraco real do GunZ: The Duel.
+
+  RESIDUAL: se a deteccao so ligar DEPOIS de o jogo ja estar protegido (app
+  aberto depois do jogo, ou deteccao ligada no meio da partida), nao ha a
+  janela inicial para fixar. Ai so um catalogo do Steam resolveria — anotado
+  para quando aparecer.
 - **Um jogo instalado por DUAS lojas conta como Steam.** A regra da Steam e
   avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
 - **Um jogo instalado pelas DUAS lojas conta como Steam.** A regra da Steam e

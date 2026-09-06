@@ -1029,15 +1029,82 @@ function nomeDeExecutavel(caminho) {
 }
 
 /**
- * Fixa o jogo recem-detectado por caminho, guardando os nomes de processo
- * dele que NAO sejam genericos de anti-cheat nem ruido de sistema.
+ * O NOME do executavel que o Easy Anti-Cheat protege, lido do proprio jogo.
  *
- * Sem nenhum nome proprio (so o `start_protected_game.exe` rodando, por
- * exemplo), nao fixa — a proxima verificacao provavelmente ja pega o
- * executavel do jogo.
+ * POR QUE ISTO E A PECA QUE FALTAVA: quando o EAC sobe, ele NEGA `OpenProcess`
+ * ao processo do jogo — entao `wmic`/`Get-Process` devolvem CAMINHO vazio e o
+ * jogo do Steam some da varredura (o Steam nao tem catalogo, so a pasta). Mas
+ * o NOME do processo continua visivel (`EnumProcesses` nao depende de
+ * `OpenProcess`). Falta so saber QUAL nome — e o proprio jogo diz, no
+ * `EasyAntiCheat/Launcher/Settings.json`, campo `executable`. E o mesmo
+ * arquivo que o EAC usa para lancar o jogo, e o mesmo que o Playnite le para
+ * detectar jogo protegido.
+ *
+ * Recebe um caminho de executavel visto na pasta do jogo e sobe ate 5 niveis
+ * procurando o `Settings.json` — o exe costuma estar em `Binaries/Win64/`, e o
+ * arquivo do EAC fica na raiz do jogo.
+ *
+ * Cacheado por pasta: o alvo nao muda enquanto o jogo esta instalado.
+ */
+const exeDeEacResolvido = new Map();
+
+function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
+  let dir;
+  try {
+    dir = path.dirname(String(caminhoNaPastaDoJogo).replace(/\//g, path.sep));
+  } catch {
+    return null;
+  }
+
+  for (let nivel = 0; nivel < 5; nivel += 1) {
+    const emCache = exeDeEacResolvido.get(dir);
+    if (emCache !== undefined) return emCache || null;
+
+    const settings = path.join(
+      dir,
+      "EasyAntiCheat",
+      "Launcher",
+      "Settings.json",
+    );
+    try {
+      const dados = JSON.parse(fs.readFileSync(settings, "utf8"));
+      const rel = dados && typeof dados.executable === "string"
+        ? dados.executable
+        : "";
+      const nome = rel
+        ? String(rel).replace(/\\/g, "/").split("/").pop().toLowerCase()
+        : null;
+      // Guarda em TODOS os niveis ja visitados, para a proxima chamada parar no
+      // primeiro. String vazia = "olhei aqui e nao ha EAC".
+      exeDeEacResolvido.set(dir, nome || "");
+      if (nome) return nome;
+    } catch {
+      exeDeEacResolvido.set(dir, exeDeEacResolvido.get(dir) ?? "");
+    }
+
+    const pai = path.dirname(dir);
+    if (pai === dir) break;
+    dir = pai;
+  }
+  return null;
+}
+
+/**
+ * Fixa o jogo recem-detectado por caminho, guardando os nomes de processo
+ * dele — para segura-lo na tela quando o anti-cheat esconder o caminho DEPOIS.
+ *
+ * Duas fontes:
+ *  1. os executaveis vistos rodando na pasta (menos os genericos de anti-cheat
+ *     e ruido de sistema);
+ *  2. o `executable` do `Settings.json` do Easy Anti-Cheat, se houver — este e
+ *     o mais confiavel, porque e EXATAMENTE o processo que o EAC vai proteger,
+ *     dito pelo proprio jogo.
+ *
+ * Sem nenhum dos dois, nao fixa.
  */
 function fixarJogo(jogo, caminhos) {
   const exes = new Set();
+
   for (const c of caminhos || []) {
     const base = nomeDeExecutavel(c);
     const semExt = base.replace(/\.exe$/, "");
@@ -1048,7 +1115,12 @@ function fixarJogo(jogo, caminhos) {
     ) {
       exes.add(base);
     }
+
+    // O `Settings.json` do EAC mora na raiz do jogo; `c` esta dentro dela.
+    const eac = nomeProtegidoPorEac(c);
+    if (eac) exes.add(eac);
   }
+
   jogoFixado =
     exes.size > 0 ? { nome: jogo.nome, icone: jogo.icone ?? null, exes } : null;
 }

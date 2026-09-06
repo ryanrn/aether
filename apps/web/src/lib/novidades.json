@@ -66,5 +66,15 @@
         "texto": "Jogo com Easy Anti-Cheat (GunZ, Fall Guys e a maioria dos que usam o EAC) sumia da sua atividade no instante em que o anti-cheat carregava. Agora ele continua aparecendo enquanto voce estiver jogando."
       }
     ]
+  },
+  "0.1.26": {
+    "data": "2026-09-06",
+    "resumo": "A correcao do anti-cheat da 0.1.25 nao pegava todos os casos. Esta pega.",
+    "itens": [
+      {
+        "categoria": "correcao",
+        "texto": "Jogo com Easy Anti-Cheat (GunZ e a maioria dos que usam EAC) ainda sumia da atividade quando o anti-cheat terminava de carregar. A causa: o EAC bloqueia a leitura do processo do jogo. Agora o app le do proprio jogo qual e o executavel protegido e o segue por ai — o que o EAC nao consegue esconder e o NOME do processo."
+      }
+    ]
   }
 }

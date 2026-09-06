@@ -665,3 +665,75 @@ describe("jogo fixado (anti-cheat que esconde o caminho depois)", () => {
     expect(jogoFixadoAindaVivo("gunz\n")).toBeNull();
   });
 });
+
+/**
+ * Jogo do Steam com Easy Anti-Cheat que so mostra `start_protected_game.exe`
+ * antes de esconder tudo.
+ *
+ * Foi o buraco real (GunZ): a pasta era detectada so pelo bootstrapper do EAC,
+ * e como o `start_protected_game.exe` e generico ele nao servia de ancora.
+ * Agora o proprio jogo diz qual e o processo protegido, no
+ * `EasyAntiCheat/Launcher/Settings.json` — e ESSE nome segura o jogo na tela
+ * quando o EAC nega o caminho.
+ */
+describe("jogo fixado pelo Settings.json do Easy Anti-Cheat", () => {
+  const os = require("node:os") as typeof import("node:os");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+  const { fixarJogo, jogoFixadoAindaVivo } = detect as {
+    fixarJogo: (j: { nome: string; icone: unknown }, c: string[]) => void;
+    jogoFixadoAindaVivo: (
+      s: string,
+    ) => { nome: string; icone: unknown } | null;
+  };
+
+  function pastaDeJogoFalsa(exeProtegido: string): string {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-eac-"));
+    const launcher = path.join(raiz, "EasyAntiCheat", "Launcher");
+    fs.mkdirSync(launcher, { recursive: true });
+    fs.writeFileSync(
+      path.join(launcher, "Settings.json"),
+      JSON.stringify({
+        title: "GunZ: The Duel",
+        executable: `Binaries/Win64/${exeProtegido}`,
+        working_directory: ".",
+      }),
+    );
+    return raiz;
+  }
+
+  it("le o executavel protegido e segura o jogo por ele", () => {
+    const raiz = pastaDeJogoFalsa("GunZ_x64.exe");
+    // So o bootstrapper do EAC estava rodando quando a pasta foi vista.
+    fixarJogo({ nome: "GunZ: The Duel", icone: "IGDB" }, [
+      path.join(raiz, "start_protected_game.exe"),
+    ]);
+    // EAC ja escondeu o caminho; `Get-Process` ainda lista o nome protegido.
+    expect(jogoFixadoAindaVivo("chrome\nGunZ_x64\nsvchost\n")).toEqual({
+      nome: "GunZ: The Duel",
+      icone: "IGDB",
+    });
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+
+  it("acha o Settings.json subindo da pasta Binaries/Win64", () => {
+    const raiz = pastaDeJogoFalsa("Game.exe");
+    fixarJogo({ nome: "Jogo", icone: null }, [
+      path.join(raiz, "Binaries", "Win64", "Game.exe"),
+    ]);
+    expect(jogoFixadoAindaVivo("Game.exe\n")).toEqual({
+      nome: "Jogo",
+      icone: null,
+    });
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+
+  it("pasta sem EAC: fixa so pelos exes proprios vistos", () => {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-noeac-"));
+    fixarJogo({ nome: "Solo", icone: null }, [
+      path.join(raiz, "solo.exe"),
+    ]);
+    expect(jogoFixadoAindaVivo("solo\n")).toEqual({ nome: "Solo", icone: null });
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+});
