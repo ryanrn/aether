@@ -14,6 +14,7 @@ import {
   presenceOfFriends,
   setFriends,
   setVoiceUser,
+  socketIdsOf,
   voiceDeparture,
 } from "./state";
 
@@ -255,6 +256,35 @@ export async function handleInternalRequest(
   }
 
   /**
+   * Derruba todos os sockets de um usuario — usado ao silenciar globalmente.
+   *
+   * As sessoes ja foram revogadas pelo lado do web; isto so garante que os
+   * sockets JA ABERTOS caiam agora, em vez de continuarem valendo com o
+   * `socket.data` congelado do handshake ate a proxima queda. `io.in(id)` usa
+   * o adapter, entao alcanca sockets de outras instancias.
+   */
+  if (request.url === "/internal/desconectar-usuario") {
+    try {
+      const body = (await readJsonBody(request)) as { userId?: unknown };
+      if (typeof body.userId !== "string") {
+        json(response, 400, { ok: false, error: "userId e obrigatorio" });
+        return true;
+      }
+      const sockets = await socketIdsOf(body.userId);
+      for (const id of sockets) io.in(id).disconnectSockets(true);
+      json(response, 200, { ok: true, sockets: sockets.length });
+    } catch (error) {
+      log.error(
+        "gateway.internal.desconectar_usuario",
+        "/internal/desconectar-usuario falhou",
+        { err: error },
+      );
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /**
    * Quantos estao online agora em cada servidor pedido.
    *
    * A UNICA rota interna que existe para RESPONDER algo, e nao para receber um
@@ -386,7 +416,11 @@ export async function handleInternalRequest(
        * que segura o socket pode ser outra — anotado nas limitacoes.
        */
       for (const s of io.sockets.sockets.values()) {
-        if (s.data.userId === userId) s.data.user = publicUser;
+        // Merge: o perfil muda so os campos publicos; `equipe`/`silenciado*`
+        // continuam os do handshake.
+        if (s.data.userId === userId) {
+          s.data.user = { ...s.data.user, ...publicUser };
+        }
       }
 
       /**

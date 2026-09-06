@@ -15,6 +15,8 @@ export interface RevisoesPendentes {
   jogos: number;
   /** Pedidos de vitrine em PENDENTE. */
   comunidades: number;
+  /** Denuncias de abuso em ABERTA. */
+  denuncias: number;
 }
 
 /**
@@ -28,7 +30,11 @@ export function totalDeRevisoes(
   pendentes: RevisoesPendentes | null | undefined,
 ): number {
   if (!pendentes) return 0;
-  return pendentes.jogos + pendentes.comunidades;
+  return (
+    (pendentes.jogos ?? 0) +
+    (pendentes.comunidades ?? 0) +
+    (pendentes.denuncias ?? 0)
+  );
 }
 
 /**

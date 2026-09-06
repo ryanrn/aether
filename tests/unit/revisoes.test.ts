@@ -11,17 +11,17 @@ import { rotuloDeRevisoes, totalDeRevisoes } from "@aether/shared";
  */
 
 describe("totalDeRevisoes", () => {
-  it("soma as DUAS filas", () => {
-    expect(totalDeRevisoes({ jogos: 2, comunidades: 3 })).toBe(5);
+  it("soma as TRÊS filas (jogos, comunidades, denúncias)", () => {
+    expect(totalDeRevisoes({ jogos: 2, comunidades: 3, denuncias: 4 })).toBe(9);
   });
 
   it("conta a fila de comunidades mesmo sem jogo nenhum", () => {
     // O caso que motivou tudo: um pedido de vitrine esperando, zero jogos.
-    expect(totalDeRevisoes({ jogos: 0, comunidades: 1 })).toBe(1);
+    expect(totalDeRevisoes({ jogos: 0, comunidades: 1, denuncias: 0 })).toBe(1);
   });
 
-  it("conta a fila de jogos mesmo sem pedido de vitrine", () => {
-    expect(totalDeRevisoes({ jogos: 1, comunidades: 0 })).toBe(1);
+  it("conta a fila de denúncias mesmo sem jogo nem pedido de vitrine", () => {
+    expect(totalDeRevisoes({ jogos: 0, comunidades: 0, denuncias: 1 })).toBe(1);
   });
 
   it("trata 'ainda nao sei' como zero, e nao como erro", () => {
@@ -30,8 +30,13 @@ describe("totalDeRevisoes", () => {
     expect(totalDeRevisoes(undefined)).toBe(0);
   });
 
-  it("da zero com as duas filas vazias", () => {
-    expect(totalDeRevisoes({ jogos: 0, comunidades: 0 })).toBe(0);
+  it("uma fila ausente conta como zero, não vira NaN", () => {
+    // @ts-expect-error — de propósito: objeto sem `denuncias`
+    expect(totalDeRevisoes({ jogos: 1, comunidades: 0 })).toBe(1);
+  });
+
+  it("da zero com as filas vazias", () => {
+    expect(totalDeRevisoes({ jogos: 0, comunidades: 0, denuncias: 0 })).toBe(0);
   });
 });
 

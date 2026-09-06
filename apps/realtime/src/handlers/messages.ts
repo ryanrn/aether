@@ -1,5 +1,6 @@
 import { prisma } from "@aether/db";
 import {
+  estaSilenciado,
   getChannelPermissions,
   loadDmAccess,
   loadMemberAccess,
@@ -163,6 +164,21 @@ export function registerMessageHandlers(
 
   socket.on("message:send", async (payload, ack) => {
     const respond = typeof ack === "function" ? ack : () => undefined;
+
+    /**
+     * Silenciamento GLOBAL. Lido de `socket.data.user`, que congela no
+     * handshake — ok, porque silenciar tambem revoga a sessao e derruba o
+     * socket (`/internal/desconectar-usuario`), entao um socket que ainda
+     * chega aqui e de antes da acao. Cobre canal e DM: os dois passam por
+     * `message:send`.
+     */
+    if (estaSilenciado(socket.data.user)) {
+      respond({
+        ok: false,
+        error: "Sua conta está silenciada e não pode enviar mensagens.",
+      });
+      return;
+    }
 
     if (!payload || typeof payload !== "object") {
       respond({ ok: false, error: "payload invalido" });

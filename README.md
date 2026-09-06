@@ -171,7 +171,7 @@ mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
 | 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
 | 4 | **Sentry** (sink do log, por `fetch` cru) no gateway e no web + varredura dos ~50 `console.error` para o log estruturado | ✅ |
 | 5 | **Verificacao de e-mail** (parede em `/app`) + **CAPTCHA Turnstile** no cadastro — *migracao `20260906120000_verificacao_email`* | ✅ |
-| 6 | Fila de denuncia + acao de moderacao global — *migracao `20260906130000_denuncia`* | ⬜ |
+| 6 | **Fila de denuncia** + acao de moderacao global (silenciar) — *migracao `20260906130000_denuncia`* | ✅ |
 | 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *usa colunas da migracao do estagio 5* | ⬜ |
 | 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
 
@@ -300,19 +300,51 @@ mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
   `true`) — a decisao de beta mudou de "codigo de convite" para "aberto com
   e-mail verificado".
 
-### Limitacoes que ficaram (estagios 1–5)
+### O que fechou no estagio 6
 
-- **As migracoes `20260905160000_flags` e `20260906120000_verificacao_email`
-  ainda NAO foram aplicadas.** Escritas a mao no estilo das outras (as do
-  projeto sao comentadas, nao geradas). `npm run db:generate` ja rodou (o
-  cliente tem `prisma.flag`, `prisma.verificacaoEmail`, `prisma.denuncia`),
-  mas `prisma migrate deploy` roda no deploy da fase. Ate la, leitura de flag
-  cai no `catch` (devolve o padrao — correto, so barulhento) e a parede de
-  e-mail nao aparece porque `emailVerificadoEm` nao existe na coluna ainda.
+- **`Denuncia`.** Qualquer conta logada abre uma (rate limit por IP);
+  `alvoId` e polimorfico (mensagem / usuario / servidor) e sem FK — o alvo
+  pode ser apagado e a denuncia sobrevive para historico e reincidencia. O
+  `snapshot` (texto da mensagem, nome do servidor) e capturado NA HORA pelo
+  mesmo motivo. Denuncia duplicada do mesmo reporter sobre o mesmo alvo aberto
+  nao cria linha nova.
+- **Fila da equipe** (`/app/equipe` › Denuncias) — lista as ABERTAS, com
+  destaque para alvo reincidente ("N denuncias sobre este alvo"). Acoes
+  separadas: resolver / descartar fecham a denuncia; "apagar mensagem" e
+  "silenciar autor" sao decisoes proprias, cada uma com rastro no log
+  (`moderacao.*`). O contador entra na engrenagem junto com jogos e vitrine
+  (`RevisoesPendentes` ganhou `denuncias`).
+- **Silenciamento GLOBAL** (`@aether/access/moderacao-global`) — distinto de
+  ban (que e por servidor). `estaSilenciado(user)` respeita `silenciadoAte`
+  (prazo vencido nao conta, como ban vencido). O gateway barra `message:send`
+  (canal e DM passam os dois por ali) lendo `socket.data.user`, que congela no
+  handshake — ok porque silenciar tambem `revokeAllSessions` + derruba os
+  sockets (`/internal/desconectar-usuario`, alcanca outra instancia pelo
+  adapter). `SocketData.user` foi alargado para carregar `equipe`/`silenciado*`
+  alem do `PublicUser`.
+- **Denunciar** aparece no menu de contexto de mensagem (so de outra pessoa,
+  so mensagem ja no banco). Dialogo reutilizavel (`DenunciarDialog`) — os
+  tipos e motivos moram em `@aether/shared/denuncia` para a tela de cliente
+  nao importar de `server-only`.
+
+### Limitacoes que ficaram (estagios 1–6)
+
+- **Tres migracoes ainda NAO aplicadas:** `20260905160000_flags`,
+  `20260906120000_verificacao_email`, `20260906130000_denuncia`. Escritas a
+  mao no estilo das outras (as do projeto sao comentadas, nao geradas).
+  `npm run db:generate` ja rodou (o cliente tem `prisma.flag`,
+  `prisma.verificacaoEmail`, `prisma.denuncia`), mas `prisma migrate deploy`
+  roda no deploy da fase. Ate la, leitura de flag cai no `catch` (devolve o
+  padrao — correto, so barulhento), a parede de e-mail nao aparece
+  (`emailVerificadoEm` nao existe) e denunciar da erro (`Denuncia` nao existe).
+- **Silenciamento so barra texto**, nao voz — quem esta silenciado ainda entra
+  em call (mas o SFU nega publicar sem SPEAK, que e permissao de servidor). Um
+  `voz_habilitada`-equivalente por usuario fica para depois.
 - **Sem `verify-phase*` / `next build` nesta entrega.** `typecheck`, `vitest`
-  (559) e `check:esm` passam. O resto precisa de banco + servicos no ar e do
+  (569) e `check:esm` passam. O resto precisa de banco + servicos no ar e do
   `.env` de producao — deploy da fase. Inclui: primeiro evento real no Sentry,
-  teto de socket cross-instancia, e o fluxo de e-mail de ponta a ponta.
+  teto de socket cross-instancia, o fluxo de e-mail de ponta a ponta, e uma
+  denuncia real chegando na fila.
 - **Turnstile so no cadastro, nao no login.** O padrao (widget so apos N
   falhas de login) fica para depois; hoje o login se apoia so no rate limit
   fail-closed que ja existia.

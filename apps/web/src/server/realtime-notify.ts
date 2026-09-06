@@ -145,6 +145,25 @@ export async function notifyProfileChanged(params: {
 }
 
 /**
+ * Derruba TODOS os sockets de um usuario no gateway.
+ *
+ * Usado ao silenciar globalmente: as sessoes ja foram revogadas, mas o
+ * `socket.data` do gateway congela no handshake — sem isto a pessoa continuaria
+ * mandando mensagem pelo socket ja aberto ate ele cair sozinho. Depois de
+ * desconectar, a proxima conexao refaz o handshake e ja pega o silenciamento
+ * (a sessao revogada tambem impede reconectar sem novo login).
+ */
+export async function desconectarUsuarioDoGateway(
+  userId: string,
+): Promise<void> {
+  await callInternal(
+    "/internal/desconectar-usuario",
+    { userId },
+    "a desconexao do usuario",
+  );
+}
+
+/**
  * Quantos estao online agora em cada servidor.
  *
  * A UNICA chamada interna que LE resposta — as outras avisam e esquecem. A

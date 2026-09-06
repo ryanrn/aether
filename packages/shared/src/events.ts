@@ -581,7 +581,20 @@ export interface ClientToServerEvents {
 export interface SocketData {
   userId: string;
   sessionId: string;
-  user: PublicUser;
+  /**
+   * O `PublicUser` mais o que o gateway precisa decidir sem ir ao banco a cada
+   * evento. Congela no handshake: `equipe` e as flags de contato quase nunca
+   * mudam numa sessao, e `silenciado*` e coberto pelo `/internal/desconectar-usuario`
+   * que derruba o socket quando a moderacao age.
+   */
+  user: PublicUser & {
+    equipe: boolean;
+    allowServerDms: boolean;
+    allowServerFriendRequests: boolean;
+    emailVerificadoEm: Date | null;
+    silenciadoEm: Date | null;
+    silenciadoAte: Date | null;
+  };
 }
 
 /**

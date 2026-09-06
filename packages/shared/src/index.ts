@@ -6,6 +6,7 @@
 export * from "./brand";
 export * from "./comunidades";
 export * from "./cosmeticos";
+export * from "./denuncia";
 export * from "./events";
 export * from "./flags";
 export * from "./jogos";

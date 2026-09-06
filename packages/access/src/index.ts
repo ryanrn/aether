@@ -15,6 +15,7 @@ export * from "./equipe";
 export * from "./flags";
 export * from "./friends";
 export * from "./member";
+export * from "./moderacao-global";
 export * from "./plan";
 export * from "./session";
 export * from "./spotify";

@@ -4,6 +4,7 @@ import type { ActionResult, RevisoesPendentes } from "@aether/shared";
 import { sessaoDaEquipe } from "../guards";
 import { contarPedidosPendentes } from "../services/descoberta";
 import { contarJogosPendentes } from "../services/jogos";
+import { contarDenunciasAbertas } from "../services/denuncia";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -30,11 +31,12 @@ export async function contarRevisoesAction(): Promise<
     const sessao = await sessaoDaEquipe();
     if (!sessao) return fail("Nao encontrado");
 
-    const [jogos, comunidades] = await Promise.all([
+    const [jogos, comunidades, denuncias] = await Promise.all([
       contarJogosPendentes(),
       contarPedidosPendentes(),
+      contarDenunciasAbertas(),
     ]);
-    return ok({ jogos, comunidades });
+    return ok({ jogos, comunidades, denuncias });
   } catch (error) {
     return toActionError(error);
   }

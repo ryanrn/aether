@@ -9,10 +9,12 @@ import { JogosTab } from "./jogos-tab";
 import { ComunidadesTab } from "./comunidades-tab";
 import { ChavesTab } from "./chaves-tab";
 import { FlagsTab } from "./flags-tab";
+import { DenunciasTab } from "./denuncias-tab";
 
-type Aba = "jogos" | "comunidades" | "chaves" | "flags";
+type Aba = "denuncias" | "jogos" | "comunidades" | "chaves" | "flags";
 
 const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
+  { id: "denuncias", rotulo: "Denúncias", icone: "shield-check" },
   { id: "jogos", rotulo: "Biblioteca de jogos", icone: "library" },
   { id: "comunidades", rotulo: "Comunidades", icone: "compass" },
   { id: "chaves", rotulo: "Chaves de plano", icone: "key" },
@@ -35,8 +37,15 @@ const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
  * responde 404, como qualquer outro recurso que nao revelamos existir. Isto
  * aqui e so o desenho de dentro.
  */
+/** Quantas dessas abas tem contador de pendencia. */
+const COM_CONTADOR: Record<string, keyof RevisoesPendentes> = {
+  denuncias: "denuncias",
+  jogos: "jogos",
+  comunidades: "comunidades",
+};
+
 export function EquipePanel() {
-  const [aba, setAba] = useState<Aba>("jogos");
+  const [aba, setAba] = useState<Aba>("denuncias");
   const [revisoes, setRevisoes] = useState<RevisoesPendentes | null>(null);
 
   const buscarContagem = useCallback(() => {
@@ -48,6 +57,19 @@ export function EquipePanel() {
   useEffect(() => {
     buscarContagem();
   }, [buscarContagem]);
+
+  /** Atualiza uma das contagens sem apagar as outras. */
+  const setContagem = useCallback(
+    (chave: keyof RevisoesPendentes, n: number) =>
+      setRevisoes((r) => ({
+        jogos: 0,
+        comunidades: 0,
+        denuncias: 0,
+        ...r,
+        [chave]: n,
+      })),
+    [],
+  );
 
   return (
     <div className="mx-auto flex h-full w-full max-w-[720px] flex-col gap-6 overflow-y-auto px-6 py-8">
@@ -62,12 +84,8 @@ export function EquipePanel() {
         {ABAS.map((item) => {
           const nomeIcone = item.icone;
           const selected = aba === item.id;
-          const esperando =
-            item.id === "jogos"
-              ? (revisoes?.jogos ?? 0)
-              : item.id === "comunidades"
-                ? (revisoes?.comunidades ?? 0)
-                : 0;
+          const chave = COM_CONTADOR[item.id];
+          const esperando = chave ? (revisoes?.[chave] ?? 0) : 0;
           return (
             <button
               key={item.id}
@@ -93,21 +111,12 @@ export function EquipePanel() {
       </div>
 
       <div className="min-h-0 flex-1">
-        {aba === "jogos" ? (
-          <JogosTab
-            onPendentes={(n) =>
-              setRevisoes((r) => ({
-                jogos: n,
-                comunidades: r?.comunidades ?? 0,
-              }))
-            }
-          />
+        {aba === "denuncias" ? (
+          <DenunciasTab onAbertas={(n) => setContagem("denuncias", n)} />
+        ) : aba === "jogos" ? (
+          <JogosTab onPendentes={(n) => setContagem("jogos", n)} />
         ) : aba === "comunidades" ? (
-          <ComunidadesTab
-            onPendentes={(n) =>
-              setRevisoes((r) => ({ jogos: r?.jogos ?? 0, comunidades: n }))
-            }
-          />
+          <ComunidadesTab onPendentes={(n) => setContagem("comunidades", n)} />
         ) : aba === "chaves" ? (
           <ChavesTab />
         ) : (

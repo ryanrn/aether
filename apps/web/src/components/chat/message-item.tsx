@@ -6,7 +6,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
 import { AnexosDaMensagem } from "@/components/chat/anexos-pendentes";
+import { DenunciarDialog } from "@/components/chat/denunciar-dialog";
 import { useSocket } from "@/components/realtime/realtime-provider";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import {
   ContextMenu,
   ItemDoMenu,
@@ -36,7 +38,9 @@ export function MessageItem({
 }) {
   const time = new Date(message.createdAt);
   const socket = useSocket();
+  const selfUserId = useRealtimeStore((s) => s.selfUserId);
   const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
+  const [denunciarAberto, setDenunciarAberto] = useState(false);
 
   /**
    * Alterna a reacao. O servidor decide se e para ligar ou desligar — o
@@ -294,7 +298,31 @@ export function MessageItem({
             >
               Reagir
             </ItemDoMenu>
+
+            {/*
+              Denunciar so aparece em mensagem de OUTRA pessoa e que ja existe
+              no banco — nao se denuncia a propria fala nem um envio no meio.
+            */}
+            {!message.pending && !message.failed && message.author.id !== selfUserId ? (
+              <ItemDoMenu
+                icone={<AetherIcon name="shield" className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  menu.fechar();
+                  setDenunciarAberto(true);
+                }}
+              >
+                Denunciar
+              </ItemDoMenu>
+            ) : null}
           </ContextMenu>
+
+          <DenunciarDialog
+            open={denunciarAberto}
+            onClose={() => setDenunciarAberto(false)}
+            tipo="MENSAGEM"
+            alvoId={message.id}
+            oQue={`mensagem de ${message.author.displayName}`}
+          />
         </div>
       </div>
     </li>
