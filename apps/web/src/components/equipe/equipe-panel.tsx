@@ -8,13 +8,15 @@ import { cn } from "@/lib/utils";
 import { JogosTab } from "./jogos-tab";
 import { ComunidadesTab } from "./comunidades-tab";
 import { ChavesTab } from "./chaves-tab";
+import { FlagsTab } from "./flags-tab";
 
-type Aba = "jogos" | "comunidades" | "chaves";
+type Aba = "jogos" | "comunidades" | "chaves" | "flags";
 
 const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
   { id: "jogos", rotulo: "Biblioteca de jogos", icone: "library" },
   { id: "comunidades", rotulo: "Comunidades", icone: "compass" },
   { id: "chaves", rotulo: "Chaves de plano", icone: "key" },
+  { id: "flags", rotulo: "Kill switches", icone: "shield" },
 ];
 
 /**
@@ -106,8 +108,10 @@ export function EquipePanel() {
               setRevisoes((r) => ({ jogos: r?.jogos ?? 0, comunidades: n }))
             }
           />
-        ) : (
+        ) : aba === "chaves" ? (
           <ChavesTab />
+        ) : (
+          <FlagsTab />
         )}
       </div>
     </div>

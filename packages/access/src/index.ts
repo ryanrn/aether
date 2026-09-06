@@ -12,6 +12,7 @@ export * from "./conexoes/state";
 export * from "./conexoes/tipos";
 export * from "./dm";
 export * from "./equipe";
+export * from "./flags";
 export * from "./friends";
 export * from "./member";
 export * from "./plan";

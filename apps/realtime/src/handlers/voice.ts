@@ -1,6 +1,7 @@
 import { prisma } from "@aether/db";
 import {
   canActOnUser,
+  flagLigada,
   getChannelPermissions,
   loadMemberAccess,
 } from "@aether/access";
@@ -104,6 +105,16 @@ export function registerVoiceHandlers(
         error: "Espere um instante para entrar de novo.",
         retriable: true,
       });
+      return;
+    }
+
+    /**
+     * Kill switch de voz. NAO e `retriable`: e um estado deliberado, tentar de
+     * novo em laco nao ajuda. Quem ja esta na call nao e derrubado — so novos
+     * `voice:join` sao recusados.
+     */
+    if (!(await flagLigada("voz_habilitada"))) {
+      respond({ ok: false, error: "A voz esta temporariamente indisponivel." });
       return;
     }
 

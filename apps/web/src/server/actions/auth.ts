@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@aether/db";
 import { loginSchema, registerSchema, type ActionResult } from "@aether/shared";
+import { flagLigada } from "@aether/access";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { createSession, destroySession } from "../auth/session";
@@ -27,6 +28,15 @@ export async function registerAction(
       return fail(
         `Muitas tentativas. Aguarde ${limit.retryAfter}s antes de tentar de novo.`,
       );
+    }
+
+    /**
+     * Kill switch de cadastro. Checado depois do rate limit — quem esta
+     * martelando a rota continua sendo barrado por ritmo antes de a gente
+     * consultar a flag.
+     */
+    if (!(await flagLigada("registro_aberto"))) {
+      return fail("O cadastro de novas contas esta fechado no momento.");
     }
 
     const parsed = registerSchema.safeParse({

@@ -168,10 +168,10 @@ termos) entram numa migracao so, junto do deploy da fase.
 | --- | --- | --- |
 | 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel (Sentry depois). Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
 | 2 | **Teto de sockets por usuario** + limite de bytes por evento no gateway | ✅ |
-| 3 | Sentry nos 3 apps, enganchado no `sink` do log + varredura mecanica dos `console.error` restantes | ⬜ |
-| 4 | Feature flags / kill switch (registro, upload, voz) — *precisa de migracao* | ⬜ |
+| 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
+| 4 | Sentry nos 3 apps, enganchado no `sink` do log + varredura mecanica dos `console.error` restantes | ⬜ |
 | 5 | Fila de denuncia + acao de moderacao global — *precisa de migracao* | ⬜ |
-| 6 | Registro por codigo de convite — *precisa de migracao* | ⬜ |
+| 6 | Registro por codigo de convite (usa a flag `registro_exige_codigo`) — *precisa de migracao* | ⬜ |
 | 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *precisa de migracao* | ⬜ |
 | 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
 
@@ -204,7 +204,7 @@ termos) entram numa migracao so, junto do deploy da fase.
 - **Consumidores no estagio 1:** o `index.ts` do gateway (6 pontos de erro de
   topo + boot/shutdown), `toActionError` (o funil de TODO erro inesperado de
   server action) e `writeAudit`. Os ~50 `console.error` restantes nos handlers
-  do gateway e no `apps/web/src/server` migram no estagio 3, junto do Sentry.
+  do gateway e no `apps/web/src/server` migram no estagio 4, junto do Sentry.
 
 ### O que fechou no estagio 2
 
@@ -225,12 +225,44 @@ termos) entram numa migracao so, junto do deploy da fase.
 - **Parte pura em `socket-cap.ts`**, testada isolada (7 casos): a funcao nunca
   devolve o socket atual e devolve exatamente o excedente.
 
-### Limitacoes que ficaram (estagios 1–2)
+### O que fechou no estagio 3
+
+- **`Flag` (kill switch).** Uma linha por chave, e so das chaves que a equipe
+  mexeu — a ausencia de linha significa "use o padrao do codigo". O registro
+  das chaves e seus padroes vive em `@aether/shared/flags` (isomorfico, o
+  cliente importa para esconder botao); o acesso ao banco em
+  `@aether/access/flags`. Migracao `20260905160000_flags` — **ainda nao
+  aplicada** (ver limitacoes).
+- **`flagLigada(chave)` falha para o PADRAO, nunca para "desligado".** Um banco
+  fora do ar nao pode, ele proprio, fechar o cadastro ou derrubar a voz — a
+  flag e resposta deliberada a incidente, nao dependencia de disponibilidade.
+  Cache de 5s por processo (no gateway pega de verdade; no web serverless so
+  dentro de uma lambda quente).
+- **Tres pontos ligados:** `registro_aberto` no `registerAction`,
+  `upload_de_imagem` no servico de anexos (bloqueia `image/*` e `video/*`;
+  PDF e audio seguem), `voz_habilitada` no `voice:join` do gateway. As duas de
+  padrao `true` sao freio de emergencia; as duas de padrao `false`
+  (`registro_exige_codigo`, `upload_de_imagem`) ligam o beta fechado.
+- **Tela da equipe** (`/app/equipe` › Kill switches) — `sessaoDaEquipe()`, 404
+  para o resto. Uma chave desviada do padrao ganha destaque ("freio puxado").
+  `scripts/definir-flag.mjs` para o caso do web fora do ar.
+- **Sem `writeAudit`** (aquele exige `serverId`, e flag e global). O rastro de
+  quem virou o que fica no `log.info("flag.alterada")` ate haver log de
+  auditoria global (estagio da denuncia).
+
+### Limitacoes que ficaram (estagios 1–3)
+
+- **A migracao `20260905160000_flags` ainda NAO foi aplicada.** Foi escrita a
+  mao no estilo das outras (as migracoes do projeto sao comentadas, nao
+  geradas). `npm run db:generate` ja rodou (o cliente tem `prisma.flag`), mas
+  `prisma migrate deploy` roda no deploy da fase. Ate la, qualquer leitura de
+  flag em producao cai no `catch` e devolve o padrao — que e o comportamento
+  correto, so mais barulhento no log.
 
 - **Sem `verify-phase*` nesta entrega.** `typecheck` (todos os workspaces),
-  `vitest` (517, +31 de log e socket-cap) e `npm run check:esm` passam. Os
-  `scripts/verify-phase*.mjs` precisam de banco + gateway + LiveKit no ar e do
-  `.env` de producao; ficam para o momento do deploy da fase — inclusive o
+  `vitest` (529, +43 de log, socket-cap e flags) e `npm run check:esm` passam.
+  Os `scripts/verify-phase*.mjs` precisam de banco + gateway + LiveKit no ar e
+  do `.env` de producao; ficam para o momento do deploy da fase — inclusive o
   teste real do teto de socket com o adapter de Redis (a parte pura esta
   coberta; a chamada `io.in(id).disconnectSockets` cross-instancia nao).
 - **`LOG_LEVEL` e `MAX_SOCKETS_POR_USUARIO`** sao envs novas, as duas
@@ -240,10 +272,10 @@ termos) entram numa migracao so, junto do deploy da fase.
 - **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
   e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
   abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)
-  entra no estagio 3.
+  entra no estagio 4, junto do Sentry.
 - **Ainda ~50 `console.error` diretos** nos handlers do gateway e no
   `apps/web/src/server` (storage, realtime-notify, rate-limit, password-reset).
-  Migracao mecanica no estagio 3.
+  Migracao mecanica no estagio 4.
 
 ---
 

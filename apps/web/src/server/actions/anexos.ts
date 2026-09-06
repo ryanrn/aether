@@ -6,6 +6,7 @@ import { requireUser } from "../guards";
 import {
   AnexoInvalido,
   ArmazenamentoIndisponivel,
+  MidiaVisualDesligada,
   SemPlanoParaTamanho,
   autorizarAnexo,
   confirmarAnexo,
@@ -59,6 +60,12 @@ export async function autorizarAnexoAction(params: {
     }
     if (error instanceof ArmazenamentoIndisponivel) {
       return fail("O armazenamento de arquivos nao esta configurado.");
+    }
+    if (error instanceof MidiaVisualDesligada) {
+      return fail(
+        "Envio de imagem e video esta desativado no momento. Texto, link, PDF e audio funcionam.",
+        "tamanho",
+      );
     }
     if (error instanceof AnexoInvalido) {
       return fail("Arquivo invalido.");

@@ -892,3 +892,30 @@ enum VitrineStatus {
   /// reaparecer na fila toda vez que o dono mexer no interruptor.
   RECUSADO
 }
+
+/// Feature flag / kill switch.
+///
+/// UMA LINHA POR CHAVE, e so das chaves que a equipe MEXEU. A ausencia de
+/// linha nao e erro: significa "use o padrao do codigo"
+/// (`@aether/shared/flags`). Isso mantem a tabela pequena e deixa o padrao
+/// versionado junto do codigo que o consome.
+///
+/// NAO E CONFIG DE PRODUTO nem experimento A/B — e o freio de emergencia:
+/// durante uma enxurrada de cadastro, a equipe vira `registro_aberto` para
+/// `false` sem deploy. A propagacao nao e instantanea (cache de segundos no
+/// processo que le), e isso esta documentado no ponto de leitura.
+///
+/// A chave e o `@id`: o conjunto e conhecido e pequeno, e um id sintetico so
+/// somaria uma coluna sem uso.
+model Flag {
+  chave  String  @id
+  ligado Boolean @default(true)
+
+  /// Quem virou por ultimo, e quando. Um kill switch mexido as 3h da manha
+  /// precisa ter dono — mesmo raciocinio do log de auditoria.
+  //
+  /// RLS fica ligada na migracao, como em todo o resto: quem le e escreve e a
+  /// aplicacao, nunca as roles publicas do Supabase.
+  atualizadoPor String?
+  atualizadoEm  DateTime @updatedAt
+}
