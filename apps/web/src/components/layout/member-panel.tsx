@@ -163,10 +163,19 @@ export function MemberPanel({
                 <AetherIcon name="gamepad" size="sm" className="h-3.5 w-3.5" />
                 Jogando agora
               </h3>
-              <div className="flex flex-col gap-2.5">
+              {/*
+                Tira COMPACTA, de proposito: nao repete a lista de membros (que
+                ja aparece nos grupos por cargo abaixo). Capa + nome + contagem +
+                os avatares, so pra bater o olho em "quem topa jogar X". Clicar
+                num avatar abre o cartao da pessoa.
+              */}
+              <div className="flex flex-col gap-1">
                 {jogos.map(([game, grupo]) => (
-                  <div key={game}>
-                    <div className="flex items-center gap-2 px-1.5 pb-1">
+                  <div
+                    key={game}
+                    className="rounded-md px-1.5 py-1.5 transition-colors hover:bg-base-850/40"
+                  >
+                    <div className="flex items-center gap-2">
                       {grupo.cover ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -183,16 +192,55 @@ export function MemberPanel({
                         />
                       ) : (
                         <span className="grid h-4 w-4 shrink-0 place-items-center rounded-[3px] bg-base-750 text-ink-500">
-                          <AetherIcon name="gamepad" size="sm" className="h-2.5 w-2.5" />
+                          <AetherIcon
+                            name="gamepad"
+                            size="sm"
+                            className="h-2.5 w-2.5"
+                          />
                         </span>
                       )}
                       <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-ink-200">
                         {game}
                       </span>
-                      <span className="font-mono text-[11px] tabular-nums text-ink-500">
-                        {grupo.members.length}
-                      </span>
+                      {grupo.members.length > 0 ? (
+                        <span className="font-mono text-[11px] tabular-nums text-ink-500">
+                          {grupo.members.length}
+                        </span>
+                      ) : null}
                     </div>
+
+                    {grupo.members.length > 0 ? (
+                      <div className="mt-1.5 flex flex-wrap gap-1 pl-0.5">
+                        {grupo.members.slice(0, 8).map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            title={member.nickname ?? member.user.displayName}
+                            onClick={(event) => abrirCartao(member, event)}
+                            className="rounded-full transition-transform hover:scale-110"
+                          >
+                            <Avatar
+                              userId={member.user.id}
+                              name={member.user.displayName}
+                              src={member.user.avatarUrl}
+                              status={presence[member.user.id] ?? "OFFLINE"}
+                              size="xs"
+                              round
+                              speaking={
+                                Boolean(voice[member.user.id]?.speaking) &&
+                                !voice[member.user.id]?.selfMuted
+                              }
+                            />
+                          </button>
+                        ))}
+                        {grupo.members.length > 8 ? (
+                          <span className="self-center text-[10px] text-ink-500">
+                            +{grupo.members.length - 8}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <SalasDeGrupoDoJogo
                       serverId={serverId}
                       jogo={game}
@@ -204,21 +252,6 @@ export function MemberPanel({
                       }
                       jaTenhoSala={jaTenhoSala}
                     />
-                    <ul className="flex flex-col gap-0.5">
-                      {grupo.members.map((member) => (
-                        <MemberRow
-                          key={`jogo-${member.id}`}
-                          member={member}
-                          color={undefined}
-                          isOwner={member.user.id === ownerId}
-                          editable={false}
-                          presence={presence[member.user.id] ?? "OFFLINE"}
-                          voiceState={voice[member.user.id]}
-                          onOpenCard={abrirCartao}
-                          onEditRoles={() => setEditing(member)}
-                        />
-                      ))}
-                    </ul>
                   </div>
                 ))}
               </div>
