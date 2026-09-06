@@ -4,6 +4,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
 import { room } from "@aether/shared";
+import { capturarFalhasDoProcesso, log } from "@aether/shared/log";
 import { env } from "./env";
 import { authenticateHandshake } from "./auth";
 import { registerPresenceHandlers } from "./handlers/presence";
@@ -35,6 +36,15 @@ import type { AetherServer, AetherSocket } from "./types";
  * @aether/access.
  */
 
+/**
+ * ANTES de qualquer outra coisa: uma Promise rejeitada sem `catch` ou uma
+ * excecao que escapou de todo `try` sumiam aqui sem deixar linha nenhuma —
+ * o processo morria e so o `fly logs` de "exited" contava a historia. Agora
+ * viram um `error` estruturado; `uncaughtException` ainda encerra (estado
+ * indefinido), e o Fly reinicia a maquina limpa.
+ */
+capturarFalhasDoProcesso();
+
 const httpServer = createServer((request, response) => {
   /**
    * Porta de servico do app web (expulsar/banir precisam tirar o socket das
@@ -42,7 +52,10 @@ const httpServer = createServer((request, response) => {
    */
   if (request.url?.startsWith("/internal/")) {
     void handleInternalRequest(io, request, response).catch((error) => {
-      console.error("[gateway] rota interna falhou:", error);
+      log.error("gateway.rota_interna.falhou", "rota interna falhou", {
+        err: error,
+        rota: request.url,
+      });
       response.writeHead(500);
       response.end();
     });
@@ -59,7 +72,7 @@ const httpServer = createServer((request, response) => {
         );
       })
       .catch((erro) => {
-        console.error("[gateway] /health falhou:", erro);
+        log.error("gateway.health.falhou", "/health falhou", { err: erro });
         response.writeHead(500);
         response.end();
       });
@@ -113,7 +126,10 @@ io.use(async (socket, next) => {
     socket.data = data;
     next();
   } catch (error) {
-    console.error("[gateway] falha ao autenticar handshake:", error);
+    log.error("gateway.handshake.erro", "falha ao autenticar handshake", {
+      err: error,
+      socketId: socket.id,
+    });
     next(new Error("unauthorized"));
   }
 });
@@ -158,7 +174,11 @@ io.on("connection", (socket) => {
   }
 
   void iniciarConexao(socket).catch((erro) => {
-    console.error("[gateway] falha ao iniciar conexao:", erro);
+    log.error("gateway.conexao.falhou", "falha ao iniciar conexão", {
+      err: erro,
+      socketId: socket.id,
+      userId: user.id,
+    });
   });
 });
 
@@ -202,10 +222,11 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
    * `ready` de todo mundo.
    */
   void joinAllServerRooms(socket).catch((erro) => {
-    console.error(
-      "[gateway] nao consegui entrar nas salas dos servidores:",
-      erro,
-    );
+    log.error("gateway.salas.falhou", "não entrei nas salas dos servidores", {
+      err: erro,
+      socketId: socket.id,
+      userId: user.id,
+    });
   });
 
   /**
@@ -252,15 +273,22 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
       }
     })
     .catch((error) =>
-      console.error("[gateway] nao consegui carregar amizades:", error),
+      log.error("gateway.amizades.falhou", "não carreguei amizades", {
+        err: error,
+        userId: user.id,
+      }),
     );
 }
 
 const stopSessionGuard = startSessionGuard(io);
 
 httpServer.listen(env.port, () => {
-  console.log(`[gateway] ouvindo em http://localhost:${env.port}/ws`);
-  console.log(`[gateway] origens liberadas: ${env.corsOrigin.join(", ")}`);
+  log.info("gateway.boot", `gateway ouvindo na porta ${env.port}`, {
+    porta: env.port,
+    origens: env.corsOrigin,
+    comRedis: Boolean(redisClients),
+    comSfu: Boolean(env.livekit),
+  });
 });
 
 /**
@@ -275,7 +303,7 @@ async function shutdown(signal: string) {
   // o processo velho segurando a porta e o novo morria com EADDRINUSE.
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[gateway] ${signal} recebido, encerrando...`);
+  log.info("gateway.encerrando", `${signal} recebido, encerrando`, { signal });
 
   stopSessionGuard();
   spotifyPoller.parar();

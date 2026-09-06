@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@aether/db";
+import { log } from "@aether/shared/log";
 
 /**
  * Registro de auditoria. Alimentado desde a fase 1 para que o painel
@@ -54,6 +55,10 @@ export async function writeAudit(params: {
     });
   } catch (error) {
     // Auditoria nunca pode derrubar a acao principal.
-    console.error("[audit] falha ao registrar", params.action, error);
+    log.error("audit.falhou", "falha ao gravar linha de auditoria", {
+      err: error,
+      acao: params.action,
+      serverId: params.serverId,
+    });
   }
 }

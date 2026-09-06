@@ -152,6 +152,73 @@ permissoes de cargo (`roles-tab`).
 
 ---
 
+## Fase 1 — prontidao para beta (em andamento)
+
+Antes de por o AETHER na mao de gente de fora, o que falta nao e produto — e
+operacao: hoje o gateway fica cego quando algo quebra, nao ha como uma vitima
+denunciar abuso, e nao ha Termos/Privacidade. Esta fase fecha esses buracos.
+Nada aqui vai para o app oficial ate a fase inteira estar verde.
+
+| Estagio | O que muda | Estado |
+| --- | --- | --- |
+| 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel (Sentry depois). Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
+| 2 | Sentry nos 3 apps, enganchado no `sink` do log | ⬜ |
+| 3 | Feature flags / kill switch (registro, upload, voz) | ⬜ |
+| 4 | Fila de denuncia + acao de moderacao global | ⬜ |
+| 5 | Registro por codigo de convite | ⬜ |
+| 6 | Teto de sockets por usuario no gateway | ⬜ |
+| 7 | Paginas de Termos / Privacidade / Conteudo + aceite | ⬜ |
+| 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
+
+### O que fechou no estagio 1
+
+- **`@aether/shared/log`.** Emite `{ ts, nivel, evento, msg, ...contexto, err }`
+  como uma linha JSON. `evento` e uma chave estavel de maquina
+  (`gateway.voice.join`, `action.erro`) para o runbook de incidente poder
+  `grep`. Mora em `@aether/shared` pela mesma razao do `redis.ts` — web e
+  gateway precisam da MESMA forma —, mas **fora do barrel `index.ts`**: usa
+  `node:async_hooks`, que o bundler do Next recusa em codigo de cliente. Acesso
+  so pelo subpath `@aether/shared/log`, do lado servidor. `npm run check:esm`
+  agora cobre esse subpath.
+- **Redacao nao depende de quem chama.** `senha`, `token`, `authorization`,
+  `cookie`, `email`, `content` (e variantes PT/EN) viram `[redigido]` em
+  qualquer profundidade, inclusive dentro de array. String absurda e cortada,
+  ciclo e quebrado — um objeto inteiro do Prisma jogado no log nao estoura a
+  linha nem a pilha.
+- **Contexto por `AsyncLocalStorage`.** `comContexto({ requisicaoId, userId },
+  fn)` faz toda linha emitida dentro de `fn` — inclusive em funcao chamada em
+  profundidade, atravessando `await` — carregar esses campos, sem passar o
+  logger como parametro. `log.filho(bindings)` para o caso do gateway, onde o
+  socket ja da `socketId`/`userId`.
+- **Falha de processo deixou de sumir.** O gateway nao tinha
+  `unhandledRejection` nem `uncaughtException` em lugar nenhum — uma Promise
+  sem `catch` matava o processo e so o "exited" do `fly logs` contava.
+  `capturarFalhasDoProcesso()` (chamado no topo do `index.ts`) as transforma em
+  `error` estruturado; `uncaughtException` ainda encerra (estado indefinido) e
+  o Fly reinicia limpo.
+- **Consumidores no estagio 1:** o `index.ts` do gateway (6 pontos de erro de
+  topo + boot/shutdown), `toActionError` (o funil de TODO erro inesperado de
+  server action) e `writeAudit`. Os ~50 `console.error` restantes nos handlers
+  do gateway e no `apps/web/src/server` migram no estagio 2, junto do Sentry.
+
+### Limitacoes que ficaram (estagio 1)
+
+- **Sem `verify-phase*` nesta entrega.** `typecheck` (todos os workspaces),
+  `vitest` (510, +24 do log) e `npm run check:esm` passam. Os
+  `scripts/verify-phase*.mjs` precisam de banco + gateway + LiveKit no ar e do
+  `.env` de producao; ficam para o momento do deploy da fase.
+- **`LOG_LEVEL`** e uma env nova, opcional. Ausente = `info` em producao,
+  `debug` em dev. Sem ela configurada em lugar nenhum ainda.
+- **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
+  e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
+  abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)
+  entra no estagio 2.
+- **Ainda ~50 `console.error` diretos** nos handlers do gateway e no
+  `apps/web/src/server` (storage, realtime-notify, rate-limit, password-reset).
+  Migracao mecanica no estagio 2.
+
+---
+
 ## Estabilidade da call (correcoes v2)
 
 Lote de correcao dos relatos de "a call cai sozinha". A causa-raiz comum: a

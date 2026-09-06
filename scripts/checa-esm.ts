@@ -25,6 +25,7 @@
  */
 import * as access from "@aether/access";
 import * as shared from "@aether/shared";
+import * as sharedLog from "@aether/shared/log";
 import * as db from "@aether/db";
 
 /** Exports que o gateway usa de verdade — some um, quebra em producao. */
@@ -39,12 +40,17 @@ const OBRIGATORIOS: Record<string, string[]> = {
     "spotifyConfigurado",
   ],
   "@aether/shared": ["safeMusicActivity"],
+  // Subpath separado: usa `node:async_hooks`, entao NAO entra no barrel — mas
+  // o gateway o importa como `@aether/shared/log`, e o loader ESM tem que
+  // resolver esse subpath tanto quanto o pacote raiz.
+  "@aether/shared/log": ["log", "capturarFalhasDoProcesso", "comContexto"],
   "@aether/db": ["prisma", "cifrar", "decifrar"],
 };
 
 const modulos: Record<string, object> = {
   "@aether/access": access,
   "@aether/shared": shared,
+  "@aether/shared/log": sharedLog,
   "@aether/db": db,
 };
 

@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./permissions": "./src/permissions.ts",
-    "./brand": "./src/brand.ts"
+    "./brand": "./src/brand.ts",
+    "./log": "./src/log.ts"
   },
   "scripts": {
     "build": "echo \"@aether/shared e consumido como fonte TS pelos apps\"",
