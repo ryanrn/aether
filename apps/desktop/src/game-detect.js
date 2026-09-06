@@ -462,6 +462,90 @@ function jogosXbox() {
   return jogos;
 }
 
+/* -------------------------------------------------------------------------
+ * EA app (ex-Origin)
+ *
+ * Segue o modelo da Steam: instala tudo numa pasta so, dita por
+ * `machine.downloadinplacedir` no `C:/ProgramData/EA Desktop/machine.ini`
+ * (o padrao e `C:/Program Files/EA Games/`). Cada subpasta e um jogo.
+ *
+ * O nome da pasta ja serve ("EA SPORTS FC 26"), mas o
+ * `<pasta>/__Installer/installerdata.xml` traz um `<gameTitle>` mais confiavel
+ * — e e onde estaria um nome com pontuacao que a pasta perde.
+ *
+ * Jogo com EA AntiCheat (`EAAntiCheat.GameServiceLauncher.exe`) esconde o
+ * caminho do processo como o EAC faz — coberto pelo `jogoFixado` +
+ * `nomesProtegidosPorAntiCheat` (le o `EAAntiCheat.cfg`).
+ * ------------------------------------------------------------------------- */
+
+const EA_MACHINE_INI = "C:/ProgramData/EA Desktop/machine.ini";
+
+/** A pasta-mae das instalacoes do EA app, ou o padrao. */
+function pastaBaseDoEa() {
+  try {
+    const ini = fs.readFileSync(EA_MACHINE_INI, "utf8");
+    const m = ini.match(/^machine\.downloadinplacedir\s*=\s*(.+?)\s*$/m);
+    if (m && m[1]) return m[1];
+  } catch {
+    // Sem o arquivo, o EA app nao esta instalado — ou esta num lugar atipico.
+  }
+  return "C:\\Program Files\\EA Games\\";
+}
+
+/** `<gameTitle locale="en_US">` do installerdata.xml, ou `null`. */
+function nomeNoInstallerData(pastaDoJogo) {
+  try {
+    const xml = fs.readFileSync(
+      path.join(pastaDoJogo, "__Installer", "installerdata.xml"),
+      "utf8",
+    );
+    const enUs = xml.match(
+      /<gameTitle[^>]*locale="en_US"[^>]*>([^<]+)<\/gameTitle>/i,
+    );
+    if (enUs && enUs[1].trim()) return enUs[1].trim();
+    const qualquer = xml.match(/<gameTitle[^>]*>([^<]+)<\/gameTitle>/i);
+    return qualquer ? qualquer[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+let eaCache = { assinatura: null, jogos: [] };
+
+function jogosEa() {
+  const base = pastaBaseDoEa();
+  let assinatura = null;
+  try {
+    assinatura = String(fs.statSync(base).mtimeMs);
+  } catch {
+    return [];
+  }
+  if (eaCache.assinatura === assinatura) return eaCache.jogos;
+
+  const jogos = [];
+  try {
+    for (const pasta of fs.readdirSync(base)) {
+      const raiz = path.join(base, pasta);
+      try {
+        if (!fs.statSync(raiz).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      jogos.push({
+        pasta: comoPasta(raiz),
+        nome: nomeNoInstallerData(raiz) ?? pasta,
+        launch: null,
+        icone: null,
+      });
+    }
+  } catch {
+    return [];
+  }
+  // Vazio nao vira cache, pelo mesmo motivo da Epic.
+  if (jogos.length > 0) eaCache = { assinatura, jogos };
+  return jogos;
+}
+
 /**
  * O catalogo de TODAS as lojas que dizem o que instalaram.
  *
@@ -478,6 +562,7 @@ async function catalogoDeLojas() {
     ...jogosEpic(),
     ...jogosRiot(),
     ...jogosXbox(),
+    ...jogosEa(),
     ...doRegistro.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
   ];
 }
@@ -1035,6 +1120,9 @@ const EXE_GENERICO_DE_ANTICHEAT = new Set([
   // Riot Vanguard
   "vgc.exe",
   "vgtray.exe",
+  // EA AntiCheat
+  "eaanticheat.gameservicelauncher.exe",
+  "eaanticheat.installer.exe",
 ]);
 
 /** O jogo visto por caminho da ultima vez, e os nomes de processo dele. */
@@ -1064,26 +1152,41 @@ function nomeDeExecutavel(caminho) {
  *
  * Cacheado por pasta: o alvo nao muda enquanto o jogo esta instalado.
  */
-const exeDeEacResolvido = new Map();
+const antiCheatResolvido = new Map();
 
 /**
- * DUAS localizacoes, porque ha duas geracoes do Easy Anti-Cheat:
+ * DOIS locais do `Settings.json` do Easy Anti-Cheat, porque ha duas geracoes:
  *
  *  - `EasyAntiCheat/Launcher/Settings.json` — EAC classico (Rocket League,
  *    Fall Guys). E o que o Playnite documenta.
  *  - `EasyAntiCheat/Settings.json` — EAC EOS (Epic Online Services), a versao
  *    nova. E onde o GunZ: The Duel poe o arquivo — verificado na instalacao
  *    real, e o motivo de a primeira tentativa nao pegar Steam + EAC.
- *
- * O campo `executable` pode vir so o nome (`"Gunz.exe"`) ou com subpasta
- * (`"Binaries/Win64/Game.exe"`); `.split("/").pop()` cobre os dois.
  */
 const CAMINHOS_DE_SETTINGS_EAC = [
   ["EasyAntiCheat", "Launcher", "Settings.json"],
   ["EasyAntiCheat", "Settings.json"],
 ];
 
-function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
+const RE_EXE = /([A-Za-z0-9_.-]+\.exe)/g;
+
+/**
+ * Os NOMES dos executaveis que o anti-cheat do jogo protege — lidos do
+ * proprio jogo. E a peca que salva jogo do Steam / EA app quando o anti-cheat
+ * nega `OpenProcess` e o caminho some da varredura: o NOME o anti-cheat nao
+ * esconde (`EnumProcesses`), so falta saber qual, e o config diz.
+ *
+ * Cobre:
+ *  - Easy Anti-Cheat: campo `executable` no `Settings.json` (ver acima);
+ *  - EA AntiCheat: o `EAAntiCheat.cfg` e binario, mas os nomes de executavel
+ *    ficam em texto claro (`default  FC26.exe  fc26`).
+ *
+ * Sobe ate 5 niveis a partir do exe visto (o exe pode estar em
+ * `Binaries/Win64/`, o config fica na raiz). Cacheado por pasta.
+ *
+ * Devolve `string[]` ou `null`.
+ */
+function nomesProtegidosPorAntiCheat(caminhoNaPastaDoJogo) {
   let dir;
   try {
     dir = path.dirname(String(caminhoNaPastaDoJogo).replace(/\//g, path.sep));
@@ -1092,10 +1195,11 @@ function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
   }
 
   for (let nivel = 0; nivel < 5; nivel += 1) {
-    const emCache = exeDeEacResolvido.get(dir);
-    if (emCache !== undefined) return emCache || null;
+    const emCache = antiCheatResolvido.get(dir);
+    if (emCache !== undefined) return emCache ? emCache.split(",") : null;
 
-    let nome = null;
+    const nomes = new Set();
+
     for (const partes of CAMINHOS_DE_SETTINGS_EAC) {
       try {
         const dados = JSON.parse(
@@ -1104,18 +1208,30 @@ function nomeProtegidoPorEac(caminhoNaPastaDoJogo) {
         const rel =
           dados && typeof dados.executable === "string" ? dados.executable : "";
         if (rel) {
-          nome = String(rel).replace(/\\/g, "/").split("/").pop().toLowerCase();
-          break;
+          nomes.add(
+            String(rel).replace(/\\/g, "/").split("/").pop().toLowerCase(),
+          );
         }
       } catch {
-        // Este caminho nao existe aqui — tenta o proximo.
+        // Este local nao existe aqui — tenta o proximo.
       }
     }
 
-    // String vazia = "olhei nesta pasta e nao ha EAC" — para a proxima chamada
-    // parar aqui em vez de subir os 5 niveis de novo.
-    exeDeEacResolvido.set(dir, nome || "");
-    if (nome) return nome;
+    try {
+      const cfg = fs.readFileSync(path.join(dir, "EAAntiCheat.cfg"), "latin1");
+      for (const m of cfg.matchAll(RE_EXE)) {
+        const nome = m[1].toLowerCase();
+        if (!EXE_GENERICO_DE_ANTICHEAT.has(nome)) nomes.add(nome);
+      }
+    } catch {
+      // Sem EA AntiCheat nesta pasta.
+    }
+
+    const lista = [...nomes];
+    // String vazia = "olhei aqui, nenhum anti-cheat conhecido" — para a
+    // proxima chamada parar em vez de subir os 5 niveis de novo.
+    antiCheatResolvido.set(dir, lista.join(","));
+    if (lista.length > 0) return lista;
 
     const pai = path.dirname(dir);
     if (pai === dir) break;
@@ -1152,10 +1268,12 @@ function fixarJogo(jogo, caminhos) {
       exes.add(base);
     }
 
-    // O `Settings.json` do EAC mora na raiz do jogo; `c` esta dentro dela.
-    const eac = nomeProtegidoPorEac(c);
-    if (eac) {
-      exes.add(eac);
+    // O config do anti-cheat (EAC ou EA AntiCheat) mora na raiz do jogo;
+    // `c` esta dentro dela. Devolve os exes protegidos, que o anti-cheat
+    // esconde o caminho mas nao o nome.
+    const protegidos = nomesProtegidosPorAntiCheat(c);
+    if (protegidos) {
+      for (const p of protegidos) exes.add(p);
       achouEac = true;
     }
   }
@@ -1449,6 +1567,8 @@ module.exports = {
   podeDarIcone,
   jogosEpic,
   jogosRiot,
+  jogosEa,
+  nomesProtegidosPorAntiCheat,
   catalogoDeLojas,
   nomeRiot,
   blocosDoRegistro,

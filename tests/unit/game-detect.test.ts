@@ -766,3 +766,55 @@ describe("jogo fixado pelo Settings.json do Easy Anti-Cheat", () => {
     fs.rmSync(raiz, { recursive: true, force: true });
   });
 });
+
+/**
+ * EA app (ex-Origin) — mesmo modelo da Steam: uma pasta-mae, uma subpasta por
+ * jogo. Verificado contra a instalacao real do EA SPORTS FC 26.
+ */
+describe("EA app", () => {
+  const os = require("node:os") as typeof import("node:os");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+  const { nomesProtegidosPorAntiCheat, fixarJogo, jogoFixadoAindaVivo } =
+    detect as {
+      nomesProtegidosPorAntiCheat: (c: string) => string[] | null;
+      fixarJogo: (j: { nome: string; icone: unknown }, c: string[]) => void;
+      jogoFixadoAindaVivo: (
+        s: string,
+      ) => { nome: string; icone: unknown } | null;
+    };
+
+  it("le os exes protegidos do EAAntiCheat.cfg (formato REAL do FC 26)", () => {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-ea-"));
+    // O `.cfg` e binario; os nomes ficam em texto claro entre lixo. Este e o
+    // recorte exato do FC 26, com os bytes nao-texto trocados por espaco.
+    fs.writeFileSync(
+      path.join(raiz, "EAAntiCheat.cfg"),
+      "  default  FC26.exe  fc26  trial  FC26_Trial.exe  fc26  showcase  FC26_Showcase.exe  fc26 " +
+        "EAAntiCheat.GameServiceLauncher.exe ",
+    );
+    const nomes = nomesProtegidosPorAntiCheat(path.join(raiz, "FC26.exe"));
+    expect(new Set(nomes)).toEqual(
+      new Set(["fc26.exe", "fc26_trial.exe", "fc26_showcase.exe"]),
+    );
+    // o launcher do proprio anti-cheat NAO entra
+    expect(nomes).not.toContain("eaanticheat.gameservicelauncher.exe");
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+
+  it("segura o FC 26 pelo nome do processo quando o EA AntiCheat esconde o caminho", () => {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-ea2-"));
+    fs.writeFileSync(
+      path.join(raiz, "EAAntiCheat.cfg"),
+      "  default  FC26.exe  fc26 ",
+    );
+    fixarJogo({ nome: "EA SPORTS FC 26", icone: "IGDB" }, [
+      path.join(raiz, "EAAntiCheat.GameServiceLauncher.exe"),
+    ]);
+    expect(jogoFixadoAindaVivo("chrome\nFC26\nsvchost\n")).toEqual({
+      nome: "EA SPORTS FC 26",
+      icone: "IGDB",
+    });
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+});

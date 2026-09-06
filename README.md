@@ -1436,13 +1436,19 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
 - **O casamento por nome depende de o jogo estar no catalogo de uma loja.**
   Jogo com anti-cheat instalado fora de loja continua invisivel: sem caminho
   legivel e sem entrada de catalogo, nao ha o que cruzar.
-- **Battle.net, EA e jogos avulsos ainda nao sao detectados.** A Battle.net
-  guarda o catalogo num `product.db` BINARIO (protobuf), que e trabalho de
-  outra ordem — nao um YAML de dois campos. A EA nao foi feita porque nao ha
-  instalacao dela nesta maquina para verificar contra, e escrever o parser as
-  cegas seria demonstracao, nao codigo de producao. Jogo avulso, fora de
-  qualquer loja, nao tem quem responda "onde voce instalou": a saida ali seria
-  uma tela de "adicionar jogo" manual.
+- **EA app** segue o modelo da Steam: instala tudo sob
+  `machine.downloadinplacedir` (o padrao e `C:/Program Files/EA Games/`), uma
+  subpasta por jogo. O nome sai do `<pasta>/__Installer/installerdata.xml`
+  (`<gameTitle>`), com a pasta de reserva. Verificado contra o EA SPORTS FC 26.
+  Jogo com **EA AntiCheat** (`EAAntiCheat.GameServiceLauncher.exe`) esconde o
+  caminho do processo como o EAC faz — coberto por `jogoFixado` +
+  `nomesProtegidosPorAntiCheat`, que le os exes protegidos do `EAAntiCheat.cfg`
+  (binario, mas os nomes ficam em texto claro).
+- **Battle.net e jogos avulsos ainda nao sao detectados.** A Battle.net guarda
+  o catalogo num `product.db` BINARIO (protobuf), que e trabalho de outra
+  ordem — nao um XML de dois campos. Jogo avulso, fora de qualquer loja, nao
+  tem quem responda "onde voce instalou": a saida ali e a tela de sugerir jogo
+  para a biblioteca da comunidade.
 - **GOG e Xbox foram escritos, mas NAO verificados contra uma instalacao
   real.** Nenhum dos dois esta instalado na maquina de teste: o que existe e
   teste de unidade sobre a saida do `reg query` e sobre o formato de pasta.
