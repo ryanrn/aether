@@ -51,6 +51,24 @@ describe("forma do registro", () => {
     expect(new Date(r.ts).toISOString()).toBe(r.ts);
   });
 
+  it("um campo `nivel`/`ts`/`evento`/`msg` em `dados` NAO sobrescreve a linha", () => {
+    // Regressao: `{ nivel: process.env.LOG_LEVEL }` saiu como
+    // `"nivel":"(padrão)"` no lugar de `"info"` num log real de producao.
+    log.info("evento.real", "mensagem real", {
+      nivel: "hackeado",
+      ts: "falso",
+      evento: "falso",
+      msg: "falso",
+      err: "nao e erro de verdade aqui",
+      campoLegitimo: 42,
+    });
+    const r = capturado[0]! as unknown as Record<string, unknown>;
+    expect(r.nivel).toBe("info");
+    expect(r.evento).toBe("evento.real");
+    expect(r.msg).toBe("mensagem real");
+    expect(r.campoLegitimo).toBe(42);
+  });
+
   it("os quatro niveis chamam o destino", () => {
     log.debug("e", "d");
     log.info("e", "i");

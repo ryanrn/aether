@@ -252,14 +252,18 @@ function emitir(
   const { err, ...extra } = dados ?? {};
 
   const registro: RegistroDeLog = {
-    ts: new Date().toISOString(),
-    nivel,
-    evento,
-    msg,
     // ambiente < binding do filho < campos da chamada: o mais especifico ganha
     ...(sanear(armazenamentoDeContexto.getStore() ?? {}) as ContextoDeLog),
     ...(sanear(bindings) as ContextoDeLog),
     ...(sanear(extra) as ContextoDeLog),
+    // Os campos do PROPRIO registro vem por ULTIMO: um `dados` com uma chave
+    // `nivel` (ou `ts`, `evento`, `msg`, `err`) nao pode sobrescrever a
+    // identidade da linha. Ja aconteceu — `{ nivel: process.env.LOG_LEVEL }`
+    // saiu como `"nivel":"(padrão)"` no lugar de `"info"`.
+    ts: new Date().toISOString(),
+    nivel,
+    evento,
+    msg,
     ...(err !== undefined ? { err: serializarErro(err) } : {}),
   };
 

@@ -58,7 +58,7 @@ capturarFalhasDoProcesso();
 
 log.info("gateway.observabilidade", "log estruturado ativo", {
   sentry: Boolean(sinkSentry),
-  nivel: process.env.LOG_LEVEL ?? "(padrão)",
+  nivelMinimo: process.env.LOG_LEVEL ?? "(padrão)",
 });
 
 const httpServer = createServer((request, response) => {
