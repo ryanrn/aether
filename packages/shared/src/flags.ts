@@ -19,7 +19,7 @@
 
 export type ChaveDeFlag =
   | "registro_aberto"
-  | "registro_exige_codigo"
+  | "exige_email_verificado"
   | "upload_de_imagem"
   | "voz_habilitada";
 
@@ -43,11 +43,11 @@ export const FLAGS_CONHECIDAS: Record<ChaveDeFlag, DefinicaoDeFlag> = {
       "Criação de novas contas. Desligar bloqueia toda a rota de registro no servidor.",
     padrao: true,
   },
-  registro_exige_codigo: {
-    rotulo: "Cadastro só por convite",
+  exige_email_verificado: {
+    rotulo: "Exigir e-mail confirmado",
     descricao:
-      "Exige um código de convite válido para criar conta. Liga o beta fechado.",
-    padrao: false,
+      "Sem confirmar o e-mail, a conta loga mas bate numa parede até confirmar. Desligar libera todo mundo — use se o envio de e-mail estiver fora do ar.",
+    padrao: true,
   },
   upload_de_imagem: {
     rotulo: "Envio de imagem e vídeo",

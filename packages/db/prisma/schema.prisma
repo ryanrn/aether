@@ -40,6 +40,24 @@ model User {
   displayName               String
   email                     String     @unique
   passwordHash              String
+  /// Quando o e-mail foi confirmado. Nulo = nao confirmado — a conta existe e
+  /// loga, mas bate numa parede ("confirme seu e-mail") enquanto a flag
+  /// `exige_email_verificado` estiver ligada. Ver `@aether/access/verificacao`.
+  emailVerificadoEm         DateTime?
+  /// Aceite dos Termos/Privacidade. `aceitouTermosEm` nulo, ou `termosVersao`
+  /// diferente da versao atual em `@aether/shared/legal`, dispara o modal de
+  /// aceite em `/app`. Guardar a VERSAO permite pedir re-aceite quando os
+  /// termos mudam de verdade, sem forcar todo mundo a cada ajuste de texto.
+  aceitouTermosEm           DateTime?
+  termosVersao              String?
+  /// Silenciamento GLOBAL (nao e por servidor — isso e `Ban`). Nulo = solto.
+  /// Quem esta silenciado nao manda mensagem em lugar nenhum (gateway e web
+  /// revalidam), mas continua lendo. Decidido pela equipe a partir de uma
+  /// denuncia. `silenciadoAte` nulo com `silenciadoEm` preenchido = indefinido.
+  silenciadoEm              DateTime?
+  silenciadoAte             DateTime?
+  silenciadoPor             String?
+  silenciadoMotivo          String?
   /// Administracao GLOBAL do produto — nao tem nada a ver com dono de
   /// servidor, que e por servidor e ja existe.
   ///
@@ -95,6 +113,8 @@ model User {
 
   sessions           Session[]
   passwordResets     PasswordReset[]
+  verificacoesEmail  VerificacaoEmail[]
+  denunciasFeitas    Denuncia[]         @relation("DenunciaReporter")
   friendsAsRequester Friendship[]        @relation("FriendshipRequester")
   friendsAsAddressee Friendship[]        @relation("FriendshipAddressee")
   dmsComoA           DmChannel[]         @relation("DmUserA")
@@ -527,6 +547,23 @@ model PasswordReset {
   @@index([expiresAt])
 }
 
+/// Confirmacao de e-mail. Mesma forma do `PasswordReset` de proposito: token
+/// que vai para a caixa NUNCA e gravado — so o sha256 —, uso unico (`usedAt`),
+/// validade curta. Um dump de backup com token legivel deixaria qualquer um
+/// confirmar a conta de qualquer um.
+model VerificacaoEmail {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 enum FriendshipStatus {
   PENDING
   ACCEPTED
@@ -918,4 +955,59 @@ model Flag {
   /// aplicacao, nunca as roles publicas do Supabase.
   atualizadoPor String?
   atualizadoEm  DateTime @updatedAt
+}
+
+/// O que uma denuncia aponta.
+enum AlvoDeDenuncia {
+  MENSAGEM
+  USUARIO
+  SERVIDOR
+}
+
+enum StatusDeDenuncia {
+  ABERTA
+  EM_ANALISE
+  RESOLVIDA
+  /// Analisada e sem acao — fica na tabela em vez de sumir, para a mesma
+  /// pessoa reincidente nao chegar "limpa" na proxima.
+  DESCARTADA
+}
+
+/// Denuncia de abuso — a unica ferramenta de moderacao ALEM de kick/ban por
+/// dono de servidor. Qualquer conta autenticada abre uma; a fila e revisada
+/// pela equipe global (`ehEquipe`), que pode silenciar globalmente, apagar a
+/// mensagem ou revogar sessoes.
+///
+/// `alvoId` e polimorfico (id de mensagem, usuario ou servidor conforme
+/// `tipo`) — sem FK, porque o alvo pode ser apagado e a denuncia precisa
+/// sobreviver a isso para o historico. O contexto (`snapshot`) e capturado no
+/// momento da denuncia justamente porque o original pode sumir.
+model Denuncia {
+  id         String           @id @default(cuid())
+  tipo       AlvoDeDenuncia
+  alvoId     String
+  /// categoria curta: "spam", "assedio", "conteudo", "outro"
+  motivo     String
+  detalhe    String?          @db.Text
+  /// o que o alvo dizia na hora — texto da mensagem, nome do servidor, etc.
+  /// O alvo pode ser apagado; sem isto a equipe revisaria no escuro.
+  snapshot   String?          @db.Text
+
+  reporterId String
+  reporter   User             @relation("DenunciaReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  status       StatusDeDenuncia @default(ABERTA)
+  notaEquipe   String?          @db.Text
+  /// userId de quem resolveu (equipe). Sem FK: e registro, nao relacao viva.
+  resolvidaPor String?
+  resolvidaEm  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// a fila e sempre "abertas, mais antigas primeiro"
+  @@index([status, createdAt])
+  /// "quantas denuncias sobre este alvo" — reincidencia
+  @@index([tipo, alvoId])
+  @@index([reporterId])
 }

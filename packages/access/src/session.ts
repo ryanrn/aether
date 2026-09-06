@@ -36,6 +36,11 @@ export interface AuthenticatedSession {
     equipe: boolean;
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
+    /** null = e-mail nao confirmado. A parede em /app olha isto. */
+    emailVerificadoEm: Date | null;
+    /** null = nao silenciado globalmente. `silenciadoAte` no futuro = temporario. */
+    silenciadoEm: Date | null;
+    silenciadoAte: Date | null;
   };
 }
 
@@ -71,6 +76,9 @@ export async function loadSession(
           ...SELECT_USUARIO_PUBLICO,
           email: true,
           equipe: true,
+          emailVerificadoEm: true,
+          silenciadoEm: true,
+          silenciadoAte: true,
           // Preferencia de contato: quem pode abrir conversa comigo sem ser
           // amigo. Vem na sessao para a tela de configuracoes nao precisar de
           // uma ida ao banco so para desenhar uma chave.
@@ -100,6 +108,9 @@ export async function loadSession(
       equipe: session.user.equipe,
       allowServerDms: session.user.allowServerDms,
       allowServerFriendRequests: session.user.allowServerFriendRequests,
+      emailVerificadoEm: session.user.emailVerificadoEm,
+      silenciadoEm: session.user.silenciadoEm,
+      silenciadoAte: session.user.silenciadoAte,
     },
   };
 }

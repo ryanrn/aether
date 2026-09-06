@@ -21,3 +21,4 @@ export * from "./spotify";
 export * from "./spotify-account";
 export * from "./tickets";
 export * from "./tokens";
+export * from "./verificacao";

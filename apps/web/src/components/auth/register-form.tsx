@@ -7,6 +7,7 @@ import type { ActionResult } from "@aether/shared";
 import { registerAction } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
+import { Turnstile } from "./turnstile";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -76,6 +77,8 @@ export function RegisterForm() {
           aria-invalid={error?.field === "password"}
         />
       </Field>
+
+      <Turnstile />
 
       <FieldError>{error?.error}</FieldError>
 

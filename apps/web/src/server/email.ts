@@ -122,6 +122,43 @@ export function emailDeRedefinicao(link: string, nome: string) {
   return { html, texto };
 }
 
+/** O e-mail de confirmacao de conta, em HTML e em texto. */
+export function emailDeVerificacao(link: string, nome: string) {
+  const texto = [
+    `Ola, ${nome}.`,
+    "",
+    "Sua conta no AETHER foi criada. Confirme o e-mail abrindo o endereco",
+    "abaixo — ele vale por 24 horas:",
+    "",
+    link,
+    "",
+    "Se nao foi voce que se cadastrou, ignore este e-mail.",
+  ].join("\n");
+
+  const html = `
+<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0B0D10;padding:32px;color:#C5CAD3">
+  <div style="max-width:480px;margin:0 auto;background:#111318;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:28px">
+    <p style="margin:0 0 6px;font-size:12px;letter-spacing:.22em;color:#6A6F79">AETHER</p>
+    <h1 style="margin:0 0 18px;font-size:18px;color:#F0F1F5">Confirme seu e-mail</h1>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">
+      Ola, <strong style="color:#F0F1F5">${escaparHtml(nome)}</strong>. Sua conta
+      foi criada — falta so confirmar este endereco.
+    </p>
+    <p style="margin:0 0 22px;font-size:14px;line-height:1.6">
+      O botao abaixo vale por <strong>24 horas</strong>.
+    </p>
+    <a href="${link}" style="display:inline-block;background:#3B82A0;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px">
+      Confirmar e-mail
+    </a>
+    <p style="margin:22px 0 0;font-size:12.5px;line-height:1.6;color:#6A6F79">
+      Se nao foi voce que se cadastrou, ignore este e-mail.
+    </p>
+  </div>
+</div>`.trim();
+
+  return { html, texto };
+}
+
 /**
  * O nome vem do banco, mas foi escolhido pelo usuario — e vai para dentro de
  * HTML que outra pessoa le. Escapar aqui e o que impede alguem se cadastrar

@@ -161,8 +161,8 @@ Nada aqui vai para o app oficial ate a fase inteira estar verde.
 
 A ordem segue a estrutura, nao a lista: primeiro o que nao precisa de
 migracao nem de dependencia nova (log, teto de socket), depois o que exige
-schema — as mudancas de banco (flags, denuncia, codigo de convite, aceite de
-termos) entram numa migracao so, junto do deploy da fase.
+schema. As mudancas de banco viram migracoes separadas (convencao do repo),
+mas TODAS sao aplicadas num `db:deploy` so, junto do deploy da fase.
 
 | Estagio | O que muda | Estado |
 | --- | --- | --- |
@@ -170,9 +170,9 @@ termos) entram numa migracao so, junto do deploy da fase.
 | 2 | **Teto de sockets por usuario** + limite de bytes por evento no gateway | ✅ |
 | 3 | **Feature flags / kill switch** (cadastro, imagem/vídeo, voz) + tela da equipe — *migracao `20260905160000_flags`* | ✅ |
 | 4 | **Sentry** (sink do log, por `fetch` cru) no gateway e no web + varredura dos ~50 `console.error` para o log estruturado | ✅ |
-| 5 | Verificacao de e-mail + CAPTCHA (Turnstile) no cadastro — *precisa de migracao* | ⬜ |
-| 6 | Fila de denuncia + acao de moderacao global — *precisa de migracao* | ⬜ |
-| 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *precisa de migracao* | ⬜ |
+| 5 | **Verificacao de e-mail** (parede em `/app`) + **CAPTCHA Turnstile** no cadastro — *migracao `20260906120000_verificacao_email`* | ✅ |
+| 6 | Fila de denuncia + acao de moderacao global — *migracao `20260906130000_denuncia`* | ⬜ |
+| 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *usa colunas da migracao do estagio 5* | ⬜ |
 | 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
 
 ### O que fechou no estagio 1
@@ -238,11 +238,12 @@ termos) entram numa migracao so, junto do deploy da fase.
   flag e resposta deliberada a incidente, nao dependencia de disponibilidade.
   Cache de 5s por processo (no gateway pega de verdade; no web serverless so
   dentro de uma lambda quente).
-- **Tres pontos ligados:** `registro_aberto` no `registerAction`,
+- **Quatro chaves:** `registro_aberto` no `registerAction`,
   `upload_de_imagem` no servico de anexos (bloqueia `image/*` e `video/*`;
-  PDF e audio seguem), `voz_habilitada` no `voice:join` do gateway. As duas de
-  padrao `true` sao freio de emergencia; as duas de padrao `false`
-  (`registro_exige_codigo`, `upload_de_imagem`) ligam o beta fechado.
+  PDF e audio seguem), `voz_habilitada` no `voice:join` do gateway,
+  `exige_email_verificado` (estagio 5) na parede de `/app`. `registro_aberto`,
+  `voz_habilitada` e `exige_email_verificado` sao `true` por padrao (freio de
+  emergencia); `upload_de_imagem` e `false` (liga so quando houver varredura).
 - **Tela da equipe** (`/app/equipe` › Kill switches) — `sessaoDaEquipe()`, 404
   para o resto. Uma chave desviada do padrao ganha destaque ("freio puxado").
   `scripts/definir-flag.mjs` para o caso do web fora do ar.
@@ -275,26 +276,50 @@ termos) entram numa migracao so, junto do deploy da fase.
   `evento` estavel e contexto (`userId`, `socketId`, `canalId`). Sobram so os
   dois `console.log` de dev do `index.ts` (gated por `!isProduction`).
 
-### Limitacoes que ficaram (estagios 1–4)
+### O que fechou no estagio 5
 
-- **A migracao `20260905160000_flags` ainda NAO foi aplicada.** Foi escrita a
-  mao no estilo das outras (as migracoes do projeto sao comentadas, nao
-  geradas). `npm run db:generate` ja rodou (o cliente tem `prisma.flag`), mas
-  `prisma migrate deploy` roda no deploy da fase. Ate la, qualquer leitura de
-  flag em producao cai no `catch` e devolve o padrao — que e o comportamento
-  correto, so mais barulhento no log.
+- **Verificacao de e-mail.** `VerificacaoEmail` — mesma forma do
+  `PasswordReset`: so o sha256, uso unico, validade de 24h. `registerAction`
+  dispara o envio (Resend) e cria a conta ja logada; o layout de `/app`
+  renderiza `<ParedeDeVerificacao>` no lugar do app enquanto
+  `precisaVerificarEmail` — que so e `true` com a flag `exige_email_verificado`
+  ligada, e nunca para a equipe. Pagina `/verificar?token=` consome no
+  servidor; `reenviarVerificacaoAction` so serve a conta LOGADA (nao vira
+  email-bombing de terceiros), com rate limit.
+- **CAPTCHA (Turnstile) no cadastro.** `apps/web/src/server/turnstile.ts` — um
+  POST ao `siteverify`, sem SDK. FECHA para token ausente/recusado, ABRE num
+  erro de infra da propria Cloudflare (um humano que passou pelo widget nao
+  pode ser barrado por um soluco do siteverify). Widget explicito em
+  `components/auth/turnstile.tsx`; sem `NEXT_PUBLIC_TURNSTILE_SITE_KEY` nao
+  renderiza nada e o servidor pula a checagem. CSP ganhou
+  `challenges.cloudflare.com` em `script-src` e um `frame-src` novo.
+- **A sessao carrega `emailVerificadoEm`, `silenciadoEm`, `silenciadoAte`** —
+  as duas ultimas ja para o estagio da denuncia. Uma coluna a mais no `select`
+  memoizado por request.
+- **A flag `registro_exige_codigo` virou `exige_email_verificado`** (padrao
+  `true`) — a decisao de beta mudou de "codigo de convite" para "aberto com
+  e-mail verificado".
 
-- **Sem `verify-phase*` nesta entrega.** `typecheck` (todos os workspaces),
-  `vitest` (543, +57 de log, socket-cap, flags e sentry) e `npm run check:esm`
-  passam. Os `scripts/verify-phase*.mjs` e o `next build` precisam de banco +
-  gateway + LiveKit no ar e do `.env` de producao; ficam para o momento do
-  deploy da fase — inclusive o teste real do teto de socket com o adapter de
-  Redis (a parte pura esta coberta; a chamada `io.in(id).disconnectSockets`
-  cross-instancia nao) e o primeiro evento chegando de verdade no Sentry.
+### Limitacoes que ficaram (estagios 1–5)
+
+- **As migracoes `20260905160000_flags` e `20260906120000_verificacao_email`
+  ainda NAO foram aplicadas.** Escritas a mao no estilo das outras (as do
+  projeto sao comentadas, nao geradas). `npm run db:generate` ja rodou (o
+  cliente tem `prisma.flag`, `prisma.verificacaoEmail`, `prisma.denuncia`),
+  mas `prisma migrate deploy` roda no deploy da fase. Ate la, leitura de flag
+  cai no `catch` (devolve o padrao — correto, so barulhento) e a parede de
+  e-mail nao aparece porque `emailVerificadoEm` nao existe na coluna ainda.
+- **Sem `verify-phase*` / `next build` nesta entrega.** `typecheck`, `vitest`
+  (559) e `check:esm` passam. O resto precisa de banco + servicos no ar e do
+  `.env` de producao — deploy da fase. Inclui: primeiro evento real no Sentry,
+  teto de socket cross-instancia, e o fluxo de e-mail de ponta a ponta.
+- **Turnstile so no cadastro, nao no login.** O padrao (widget so apos N
+  falhas de login) fica para depois; hoje o login se apoia so no rate limit
+  fail-closed que ja existia.
 - **Envs novas, todas opcionais:** `SENTRY_DSN` (+ `SENTRY_RELEASE`),
-  `LOG_LEVEL` (ausente = `info` em prod, `debug` em dev),
-  `MAX_SOCKETS_POR_USUARIO` (ausente = 8, `0` desliga). Nenhuma configurada
-  ainda — documentadas no `.env.example`.
+  `LOG_LEVEL`, `MAX_SOCKETS_POR_USUARIO`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` +
+  `TURNSTILE_SECRET_KEY`. `SENTRY_DSN` ja esta no `.env` local; as outras
+  documentadas no `.env.example`.
 - **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
   e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
   abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)

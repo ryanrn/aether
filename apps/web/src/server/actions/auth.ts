@@ -1,13 +1,64 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@aether/db";
 import { loginSchema, registerSchema, type ActionResult } from "@aether/shared";
-import { flagLigada } from "@aether/access";
+import { flagLigada, criarTokenDeVerificacao } from "@aether/access";
+import { log } from "@aether/shared/log";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { createSession, destroySession } from "../auth/session";
+import { verificarTurnstile } from "../turnstile";
+import { emailDeVerificacao, enviarEmail } from "../email";
 import { fail, toActionError } from "./action-result";
+
+/** IP do cliente, para passar ao siteverify do Turnstile. */
+async function ipDoCliente(): Promise<string | null> {
+  const h = await headers();
+  return (
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    h.get("x-real-ip") ??
+    null
+  );
+}
+
+/**
+ * Dispara a confirmacao de e-mail — token novo + envio. Nunca lanca: se o
+ * envio falhar, a conta ja existe e a pessoa pede reenvio na tela da parede.
+ */
+async function iniciarVerificacaoDeEmail(user: {
+  id: string;
+  email: string;
+  displayName: string;
+}): Promise<void> {
+  try {
+    const token = await criarTokenDeVerificacao(user.id);
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const link = `${base}/verificar?token=${token}`;
+    const { html, texto } = emailDeVerificacao(link, user.displayName);
+    const envio = await enviarEmail({
+      para: user.email,
+      assunto: "Confirme seu e-mail — AETHER",
+      html,
+      texto,
+    });
+    if (!envio.ok) {
+      log.warn("web.verificacao.envio", "envio da confirmação de e-mail falhou", {
+        motivo: envio.motivo,
+        userId: user.id,
+      });
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[verificacao] link (so em desenvolvimento):", link);
+      }
+    }
+  } catch (erro) {
+    log.error("web.verificacao.iniciar", "não iniciei a verificação de e-mail", {
+      err: erro,
+      userId: user.id,
+    });
+  }
+}
 
 /**
  * Actions de autenticacao.
@@ -37,6 +88,19 @@ export async function registerAction(
      */
     if (!(await flagLigada("registro_aberto"))) {
       return fail("O cadastro de novas contas esta fechado no momento.");
+    }
+
+    /**
+     * CAPTCHA (Turnstile). Antes de qualquer escrita. Pulado quando
+     * `TURNSTILE_SECRET_KEY` nao esta configurada (dev); em producao, um
+     * cadastro sem token e um bot que nem tentou o widget.
+     */
+    const captchaOk = await verificarTurnstile(
+      formData.get("turnstileToken")?.toString(),
+      await ipDoCliente(),
+    );
+    if (!captchaOk) {
+      return fail("Falha na verificacao anti-robo. Recarregue a pagina e tente de novo.");
     }
 
     const parsed = registerSchema.safeParse({
@@ -73,15 +137,17 @@ export async function registerAction(
         email,
         passwordHash: await hashPassword(password),
       },
-      select: { id: true },
+      select: { id: true, email: true, displayName: true },
     });
 
+    await iniciarVerificacaoDeEmail(user);
     await createSession(user.id);
   } catch (error) {
     return toActionError(error);
   }
 
   // redirect() lanca internamente — precisa ficar fora do try/catch.
+  // A conta entra logada mas cai na parede de "confirme seu e-mail" em /app.
   redirect("/app");
 }
 

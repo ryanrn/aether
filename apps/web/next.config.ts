@@ -131,6 +131,15 @@ const livekit = ["https://*.livekit.cloud", "wss://*.livekit.cloud"];
 const supabase = origem(process.env.SUPABASE_URL);
 
 /**
+ * Cloudflare Turnstile (CAPTCHA no cadastro). Host FIXO — e o unico endereco
+ * de onde o widget carrega, documentado pela Cloudflare, nao vem de variavel.
+ * Entra em `script-src` (o `api.js`) e em `frame-src` (o desafio roda num
+ * iframe). So e util quando `NEXT_PUBLIC_TURNSTILE_SITE_KEY` esta configurada,
+ * mas listar o host sempre nao abre nada — sem a chave o script nem carrega.
+ */
+const turnstile = "https://challenges.cloudflare.com";
+
+/**
  * O R2 aparece em DOIS lugares da politica, por dois motivos diferentes.
  *
  *  - `r2Envio` e o endpoint S3, para onde o navegador faz PUT do anexo. Vai em
@@ -192,7 +201,7 @@ const csp = [
    * empacotamos nos mesmos, do proprio bundle — nao ha origem externa em
    * `script-src` por onde entrar outro.
    */
-  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${emDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${turnstile}${emDev ? " 'unsafe-eval'" : ""}`,
 
   // Tailwind e o Next emitem style inline; sem isto a pagina vem sem estilo.
   "style-src 'self' 'unsafe-inline'",
@@ -233,6 +242,8 @@ const csp = [
     .filter(Boolean)
     .join(" "),
 
+  // O desafio do Turnstile roda dentro de um iframe servido por este host.
+  `frame-src ${turnstile}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",

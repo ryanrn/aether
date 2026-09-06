@@ -67,8 +67,8 @@ describe("registro das chaves (@aether/shared/flags)", () => {
     expect(padraoDaFlag("voz_habilitada")).toBe(true);
   });
 
-  it("o que liga o beta fechado nasce desligado", () => {
-    expect(padraoDaFlag("registro_exige_codigo")).toBe(false);
+  it("e-mail confirmado é exigido por padrão; upload de imagem não", () => {
+    expect(padraoDaFlag("exige_email_verificado")).toBe(true);
     expect(padraoDaFlag("upload_de_imagem")).toBe(false);
   });
 

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { precisaVerificarEmail } from "@aether/access";
 import { getSession } from "@/server/auth/session";
 import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
@@ -7,6 +8,7 @@ import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
+import { ParedeDeVerificacao } from "@/components/auth/parede-de-verificacao";
 
 /**
  * Casca do aplicativo. Roda no servidor: a lista de servidores ja chega
@@ -19,6 +21,16 @@ export default async function AppLayout({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+
+  /**
+   * Parede de confirmacao de e-mail. Vem ANTES de carregar servidores/amigos —
+   * quem nao confirmou nao ve nada do app, entao nem gastamos as consultas.
+   * `precisaVerificarEmail` ja considera a flag `exige_email_verificado` e
+   * isenta a equipe.
+   */
+  if (await precisaVerificarEmail(session.user)) {
+    return <ParedeDeVerificacao email={session.user.email} />;
+  }
 
   // As duas em paralelo: sao independentes, e em serie a casca do app
   // esperaria duas idas ao banco antes de renderizar qualquer coisa.
