@@ -197,6 +197,16 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
       socketInstance.on("ready", ({ user }) => {
         useRealtimeStore.getState().setSelfUserId(user.id);
+
+        /**
+         * Puxa as conversas diretas uma vez por conexao. E o que da rosto e
+         * destino ao contador de nao-lidas de DM no trilho — sem isto o
+         * `unread` teria a chave da conversa mas nada saberia dizer de quem.
+         * As DMs em si chegam pela sala pessoal (`message:new`), como sempre.
+         */
+        socketInstance.emit("dm:list", (r) => {
+          if (r.ok) useRealtimeStore.getState().hidratarConversasDm(r.conversas);
+        });
       });
 
       socketInstance.on("presence:sync", ({ serverId: incoming, entries }) => {

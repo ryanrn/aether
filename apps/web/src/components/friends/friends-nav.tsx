@@ -2,6 +2,7 @@
 
 import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
+import { ConversasDm } from "./conversas-dm";
 
 export type SecaoAmigos = "amigos" | "solicitacoes" | "bloqueados";
 
@@ -70,11 +71,11 @@ export function FriendsNav({
       <div className="mx-3 my-2 h-px bg-base-800" />
 
       {/*
-        O espaco que sobra e das mensagens diretas, quando elas existirem.
-        Deixado vazio de proposito, em vez de preenchido com algo que nao
-        funciona.
+        As mensagens diretas moram aqui — a lista se preenche sozinha conforme
+        as conversas existem. Vazio, `ConversasDm` nao renderiza nada e os
+        itens de cima ficam encostados no topo, como antes.
       */}
-      <div className="flex-1" />
+      <ConversasDm />
     </nav>
   );
 }

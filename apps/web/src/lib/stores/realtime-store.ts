@@ -9,6 +9,7 @@ import type {
   PresenceEntry,
   PublicMessage,
   PublicReaction,
+  PublicUser,
   UserStatus,
   VoiceParticipant,
 } from "@aether/shared";
@@ -234,6 +235,17 @@ interface RealtimeState {
    */
   serverDoCanal: Record<string, string>;
 
+  /**
+   * As conversas diretas conhecidas, `dmId -> a outra pessoa`.
+   *
+   * Existe para dar rosto e destino ao contador de nao-lidas de DM: sem isto o
+   * `unread` teria a chave da conversa mas nada saberia dizer de quem e nem
+   * para onde ir. Alimentado pelo `dm:list` na conexao e por cada DM que
+   * chega. Sobrevive a troca de servidor, ao contrario do resto de `unread` —
+   * conversa direta nao e de servidor nenhum.
+   */
+  conversasDm: Record<string, PublicUser>;
+
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSelfUserId: (userId: string) => void;
   setError: (error: string | null) => void;
@@ -276,6 +288,10 @@ interface RealtimeState {
     nonce: string | null,
     serverId: string | null,
   ) => void;
+  /** substitui a lista de conversas diretas conhecidas (vem do `dm:list`) */
+  hidratarConversasDm: (conversas: { id: string; outro: PublicUser }[]) => void;
+  /** garante que uma conversa direta esta no mapa (uma DM acabou de chegar) */
+  registrarConversaDm: (dmId: string, outro: PublicUser) => void;
   addPending: (message: ChatMessage) => void;
   failPending: (channelId: string, nonce: string, error: string) => void;
   prependHistory: (
@@ -413,6 +429,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   activeChannelId: null,
   unread: {},
   serverDoCanal: {},
+  conversasDm: {},
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSelfUserId: (selfUserId) => set({ selfUserId }),
@@ -425,7 +442,17 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       state.serverId === serverId
         ? { serverId }
         : {
-            unread: {},
+            /**
+             * `unread` zera porque o cliente so conhece a arvore do servidor
+             * aberto — mas as nao-lidas de DM ficam: conversa direta nao e de
+             * servidor nenhum, e o contador dela nao pode piscar e sumir toda
+             * vez que voce entra num servidor.
+             */
+            unread: Object.fromEntries(
+              Object.keys(state.conversasDm)
+                .filter((id) => state.unread[id])
+                .map((id) => [id, state.unread[id]!]),
+            ),
             serverDoCanal: {},
             activeChannelId: null,
             serverId,
@@ -772,12 +799,27 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             }
           : state.unread;
 
+      /**
+       * Conversa direta (`serverId` nulo) de outra pessoa: registra a conversa
+       * pelo autor. E o que da rosto ao contador de nao-lidas — e, se a
+       * primeira DM chegou antes do `dm:list`, e por aqui que a conversa
+       * aparece. A minha propria mensagem nao serve: o "outro" dela sou eu.
+       */
+      const conversasDm =
+        serverId === null && isFromSomeoneElse && !state.conversasDm[message.conversationId]
+          ? {
+              ...state.conversasDm,
+              [message.conversationId]: message.author,
+            }
+          : state.conversasDm;
+
       return {
         messages: {
           ...state.messages,
           [message.conversationId]: mergeById(withoutPending, [message]),
         },
         unread,
+        conversasDm,
         /**
          * O mapa e alimentado SEMPRE, mesmo quando a mensagem nao conta como
          * nao lida. Aprender a origem do canal enquanto voce olha para ele e o
@@ -788,6 +830,20 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
           : state.serverDoCanal,
       };
     }),
+
+  hidratarConversasDm: (conversas) =>
+    set((state) => {
+      const proximo = { ...state.conversasDm };
+      for (const conversa of conversas) proximo[conversa.id] = conversa.outro;
+      return { conversasDm: proximo };
+    }),
+
+  registrarConversaDm: (dmId, outro) =>
+    set((state) =>
+      state.conversasDm[dmId]
+        ? {}
+        : { conversasDm: { ...state.conversasDm, [dmId]: outro } },
+    ),
 
   addPending: (message) =>
     set((state) => ({
@@ -914,6 +970,58 @@ export function useUnreadByServer(): Record<string, number> {
       return total;
     }),
   );
+}
+
+/** Uma conversa direta como as telas de notificacao a consomem. */
+export interface ConversaDmNaoLida {
+  dmId: string;
+  outro: PublicUser;
+  naoLidas: number;
+}
+
+/**
+ * As conversas diretas conhecidas, com a contagem de nao-lidas de cada uma,
+ * as com pendencia no topo.
+ *
+ * DERIVADO de `unread` + `conversasDm`, pelo mesmo motivo do `useUnreadByServer`:
+ * um segundo contador em paralelo acabaria discordando do que zera quando a
+ * conversa abre (`setActiveChannel`).
+ */
+export function useConversasDm(): ConversaDmNaoLida[] {
+  return useRealtimeStore(
+    useShallow((state) =>
+      Object.entries(state.conversasDm)
+        .map(([dmId, outro]) => ({
+          dmId,
+          outro,
+          naoLidas: state.unread[dmId] ?? 0,
+        }))
+        .sort((a, b) => b.naoLidas - a.naoLidas),
+    ),
+  );
+}
+
+/** Quantas CONVERSAS diretas tem mensagem nao lida — o numero do badge. */
+export function useTotalDmNaoLido(): number {
+  return useRealtimeStore(
+    (state) =>
+      Object.keys(state.conversasDm).filter((id) => (state.unread[id] ?? 0) > 0)
+        .length,
+  );
+}
+
+/**
+ * O `dmId` para abrir direto quando ha EXATAMENTE uma conversa nao lida — o
+ * clique no trilho leva na mensagem em vez de na lista. `null` quando ha zero
+ * ou mais de uma (ai o destino e a tela de Amigos).
+ */
+export function useDmParaAbrir(): string | null {
+  return useRealtimeStore((state) => {
+    const comNaoLida = Object.keys(state.conversasDm).filter(
+      (id) => (state.unread[id] ?? 0) > 0,
+    );
+    return comNaoLida.length === 1 ? comNaoLida[0]! : null;
+  });
 }
 
 export function useScreenShares(): RemoteScreenShare[] {

@@ -39,7 +39,11 @@ import {
 } from "@/components/layout/nav-mobile";
 import { reorderServersAction } from "@/server/actions/servers";
 import { contarRevisoesAction } from "@/server/actions/revisao";
-import { useUnreadByServer } from "@/lib/stores/realtime-store";
+import {
+  useDmParaAbrir,
+  useTotalDmNaoLido,
+  useUnreadByServer,
+} from "@/lib/stores/realtime-store";
 
 /**
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
@@ -103,6 +107,8 @@ export function ServerRail({
   const emEquipe = pathname === "/app/equipe";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
+  const dmNaoLidas = useTotalDmNaoLido();
+  const dmParaAbrir = useDmParaAbrir();
   const [revisoes, setRevisoes] = useState<RevisoesPendentes | null>(null);
   const esperandoRevisao = totalDeRevisoes(revisoes);
 
@@ -211,17 +217,30 @@ export function ServerRail({
         {/**
          * Amigos primeiro, e separado dos servidores por uma linha: nao e um
          * servidor, e ficar no meio deles sugeriria que fosse.
+         *
+         * O clique e ESPERTO: com exatamente uma conversa nao lida, vai direto
+         * nela; com zero ou varias, cai na tela de Amigos (que tem a lista de
+         * conversas). Dois avisos, um em cada canto: pedido de amizade (espera
+         * decisao, vermelho) em cima; mensagem nao lida (azul) embaixo.
          */}
         <Link
-          href="/app/amigos"
-          title="Amigos"
+          href={dmParaAbrir ? `/app/dm/${dmParaAbrir}` : "/app/amigos"}
+          title={
+            dmNaoLidas > 0
+              ? `Amigos — ${dmNaoLidas} conversa(s) com mensagem nova`
+              : "Amigos"
+          }
           draggable={false}
           className="group relative flex w-full justify-center"
         >
           <span
             className={cn(
-              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emAmigos ? "h-7" : "group-hover:h-3.5",
+              "absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+              emAmigos
+                ? "h-7"
+                : dmNaoLidas > 0
+                  ? "h-3.5"
+                  : "h-0 group-hover:h-3.5",
             )}
           />
           <span
@@ -241,6 +260,15 @@ export function ServerRail({
               style={{ right: "0.6rem" }}
             >
               {pendingRequests > 9 ? "9+" : pendingRequests}
+            </span>
+          ) : null}
+          {dmNaoLidas > 0 ? (
+            <span
+              aria-label={`${dmNaoLidas} conversa(s) com mensagem nao lida`}
+              className="pointer-events-none absolute bottom-0 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-signal-dnd px-1 text-[10px] font-bold leading-none text-white ring-2 ring-base-900"
+              style={{ right: "0.4rem" }}
+            >
+              {dmNaoLidas > 9 ? "9+" : dmNaoLidas}
             </span>
           ) : null}
         </Link>
