@@ -67,6 +67,24 @@ const corsOrigin = (
   .map((o) => o.trim().replace(/\/+$/, ""))
   .filter((o) => o.length > 0);
 
+/**
+ * Teto de conexoes simultaneas por usuario.
+ *
+ * Sem ele, um cookie valido abre milhares de sockets — cada um consome
+ * handshake, memoria e uma entrada no estado. Nao fura mais rate limit (a
+ * chave e o userId desde a fase 7c-1), mas ainda e negacao de servico barata.
+ *
+ * 8 e folgado de proposito: app de desktop + duas ou tres abas + a folga de
+ * uma reconexao antes do socket velho expirar (pingTimeout de 8s). Quem passa
+ * disso nao e uso legitimo. `MAX_SOCKETS_POR_USUARIO=0` desliga a checagem.
+ */
+const maxSocketsPorUsuario = Number(
+  process.env.MAX_SOCKETS_POR_USUARIO ?? 8,
+);
+if (Number.isNaN(maxSocketsPorUsuario) || maxSocketsPorUsuario < 0) {
+  throw new Error("MAX_SOCKETS_POR_USUARIO precisa ser um numero >= 0.");
+}
+
 export const env = {
   /** null = sem SFU configurado; a voz funciona sem audio */
   livekit,
@@ -74,6 +92,8 @@ export const env = {
   authSecret,
   databaseUrl: required("DATABASE_URL"),
   port: Number(process.env.REALTIME_PORT ?? 4000),
+  /** 0 = sem teto; ver o comentario acima da constante */
+  maxSocketsPorUsuario,
   /**
    * O navegador so envia o cookie de sessao no handshake se a origem estiver
    * explicitamente liberada e credentials estiver ligado. Sem isso o gateway

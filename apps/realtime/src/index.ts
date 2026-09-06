@@ -18,9 +18,11 @@ import {
   isConnected,
   presenceOfFriends,
   setFriends,
+  socketIdsOf,
   stats,
   statusOf,
 } from "./state";
+import { socketsAcimaDoTeto } from "./socket-cap";
 import { redisClients } from "./redis-client";
 import { handleInternalRequest } from "./internal";
 import { startSessionGuard } from "./session-guard";
@@ -96,6 +98,14 @@ const io: AetherServer = new Server(httpServer, {
    */
   pingInterval: 10_000,
   pingTimeout: 8_000,
+  /**
+   * Teto de bytes por mensagem. O default do Engine.IO e 1 MB; nada que os
+   * handlers aceitam chega perto — a maior carga legitima e uma mensagem de
+   * chat, e o texto ja e cortado bem abaixo disso. 256 KB deixa folga para
+   * qualquer payload real e corta o cliente que tenta empurrar um blob pelo
+   * canal de eventos.
+   */
+  maxHttpBufferSize: 256 * 1024,
 });
 
 /**
@@ -198,6 +208,29 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
    */
   const primeiraConexao = !(await isConnected(user.id));
   await attachSocket(socket.id, user.id, user.status);
+
+  /**
+   * Teto de conexoes por usuario. Lido DEPOIS de anexar — a lista ja inclui o
+   * socket novo — e derruba os excedentes mais antigos, nunca o recem-chegado
+   * (ver `socket-cap.ts`). `io.in(id).disconnectSockets` usa o adapter, entao
+   * alcanca o socket mesmo numa outra instancia do gateway.
+   */
+  const meusSockets = await socketIdsOf(user.id);
+  const aExpulsar = socketsAcimaDoTeto(
+    meusSockets,
+    socket.id,
+    env.maxSocketsPorUsuario,
+  );
+  if (aExpulsar.length > 0) {
+    log.warn("gateway.socket.teto", "usuário acima do teto de conexões", {
+      userId: user.id,
+      socketId: socket.id,
+      ativos: meusSockets.length,
+      teto: env.maxSocketsPorUsuario,
+      expulsando: aExpulsar.length,
+    });
+    for (const id of aExpulsar) io.in(id).disconnectSockets(true);
+  }
 
   socket.emit("ready", { user, serverTime: Date.now() });
 

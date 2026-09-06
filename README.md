@@ -159,15 +159,20 @@ operacao: hoje o gateway fica cego quando algo quebra, nao ha como uma vitima
 denunciar abuso, e nao ha Termos/Privacidade. Esta fase fecha esses buracos.
 Nada aqui vai para o app oficial ate a fase inteira estar verde.
 
+A ordem segue a estrutura, nao a lista: primeiro o que nao precisa de
+migracao nem de dependencia nova (log, teto de socket), depois o que exige
+schema — as mudancas de banco (flags, denuncia, codigo de convite, aceite de
+termos) entram numa migracao so, junto do deploy da fase.
+
 | Estagio | O que muda | Estado |
 | --- | --- | --- |
 | 1 | **Log estruturado** (`@aether/shared/log`): uma linha JSON por evento para stdout, redacao de campo sensivel, contexto por request/socket, `sink` plugavel (Sentry depois). Captura de `unhandledRejection`/`uncaughtException` no gateway. | ✅ |
-| 2 | Sentry nos 3 apps, enganchado no `sink` do log | ⬜ |
-| 3 | Feature flags / kill switch (registro, upload, voz) | ⬜ |
-| 4 | Fila de denuncia + acao de moderacao global | ⬜ |
-| 5 | Registro por codigo de convite | ⬜ |
-| 6 | Teto de sockets por usuario no gateway | ⬜ |
-| 7 | Paginas de Termos / Privacidade / Conteudo + aceite | ⬜ |
+| 2 | **Teto de sockets por usuario** + limite de bytes por evento no gateway | ✅ |
+| 3 | Sentry nos 3 apps, enganchado no `sink` do log + varredura mecanica dos `console.error` restantes | ⬜ |
+| 4 | Feature flags / kill switch (registro, upload, voz) — *precisa de migracao* | ⬜ |
+| 5 | Fila de denuncia + acao de moderacao global — *precisa de migracao* | ⬜ |
+| 6 | Registro por codigo de convite — *precisa de migracao* | ⬜ |
+| 7 | Paginas de Termos / Privacidade / Conteudo + aceite — *precisa de migracao* | ⬜ |
 | 8 | Runbook de rollback/restore testado + landing de download | ⬜ |
 
 ### O que fechou no estagio 1
@@ -199,23 +204,46 @@ Nada aqui vai para o app oficial ate a fase inteira estar verde.
 - **Consumidores no estagio 1:** o `index.ts` do gateway (6 pontos de erro de
   topo + boot/shutdown), `toActionError` (o funil de TODO erro inesperado de
   server action) e `writeAudit`. Os ~50 `console.error` restantes nos handlers
-  do gateway e no `apps/web/src/server` migram no estagio 2, junto do Sentry.
+  do gateway e no `apps/web/src/server` migram no estagio 3, junto do Sentry.
 
-### Limitacoes que ficaram (estagio 1)
+### O que fechou no estagio 2
+
+- **Teto de conexoes por usuario** (`MAX_SOCKETS_POR_USUARIO`, padrao 8). Um
+  cookie valido abria milhares de sockets — cada um consome handshake, memoria
+  e uma entrada no estado. Nao furava mais rate limit (a chave e o userId
+  desde a 7c-1), mas ainda era DoS barato. Ao passar do teto, o gateway
+  derruba os sockets mais **antigos**, nunca o recem-chegado — recusar o novo
+  penalizaria a reconexao (socket zumbi por ate 8s de `pingTimeout`), a mesma
+  licao que tirou o rate limit da chave por conexao. `io.in(id).disconnectSockets`
+  usa o adapter, entao alcanca o socket numa outra instancia. A escolha da
+  vitima e "os primeiros da lista" porque a ordem de `SMEMBERS` do Redis nao
+  promete nada — e o alvo exato nao importa com 8+ sockets vivos.
+- **`maxHttpBufferSize` explicito: 256 KB.** O default do Engine.IO e 1 MB;
+  nenhuma carga legitima de evento chega perto (a maior e uma mensagem de
+  chat, ja cortada bem abaixo). Declarado com comentario, como o `pingInterval`
+  — padrao implicito e o que muda numa bump de dependencia sem ninguem ver.
+- **Parte pura em `socket-cap.ts`**, testada isolada (7 casos): a funcao nunca
+  devolve o socket atual e devolve exatamente o excedente.
+
+### Limitacoes que ficaram (estagios 1–2)
 
 - **Sem `verify-phase*` nesta entrega.** `typecheck` (todos os workspaces),
-  `vitest` (510, +24 do log) e `npm run check:esm` passam. Os
+  `vitest` (517, +31 de log e socket-cap) e `npm run check:esm` passam. Os
   `scripts/verify-phase*.mjs` precisam de banco + gateway + LiveKit no ar e do
-  `.env` de producao; ficam para o momento do deploy da fase.
-- **`LOG_LEVEL`** e uma env nova, opcional. Ausente = `info` em producao,
-  `debug` em dev. Sem ela configurada em lugar nenhum ainda.
+  `.env` de producao; ficam para o momento do deploy da fase — inclusive o
+  teste real do teto de socket com o adapter de Redis (a parte pura esta
+  coberta; a chamada `io.in(id).disconnectSockets` cross-instancia nao).
+- **`LOG_LEVEL` e `MAX_SOCKETS_POR_USUARIO`** sao envs novas, as duas
+  opcionais. `LOG_LEVEL` ausente = `info` em producao, `debug` em dev.
+  `MAX_SOCKETS_POR_USUARIO` ausente = 8; `0` desliga. Nenhuma configurada
+  ainda em lugar nenhum.
 - **O contexto de request no web ainda nao e preenchido.** `comContexto` existe
   e `action.erro` ja o consome se estiver dentro de um escopo; o wrapper que
   abre esse escopo em toda server action (com `requisicaoId`/`rota`/`userId`)
-  entra no estagio 2.
+  entra no estagio 3.
 - **Ainda ~50 `console.error` diretos** nos handlers do gateway e no
   `apps/web/src/server` (storage, realtime-notify, rate-limit, password-reset).
-  Migracao mecanica no estagio 2.
+  Migracao mecanica no estagio 3.
 
 ---
 
