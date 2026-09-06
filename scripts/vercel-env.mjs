@@ -77,6 +77,31 @@ const OPTIONAL_R2 = [
   "R2_BUCKET",
   "R2_PUBLIC_URL",
 ];
+
+/**
+ * Sentry (fase pre-beta). OPCIONAL e sozinha: sem ela o log estruturado so vai
+ * para o stdout (que a Vercel captura de qualquer jeito), com ela erros e
+ * avisos tambem sobem para o Sentry. Lida em RUNTIME, entao definir depois do
+ * deploy so exige um redeploy — nao um novo build.
+ */
+const OPTIONAL_SENTRY = ["SENTRY_DSN"];
+
+/**
+ * Cloudflare Turnstile (CAPTCHA no cadastro). OPCIONAIS e em PAR.
+ *
+ * `NEXT_PUBLIC_TURNSTILE_SITE_KEY` e embutida no bundle EM TEMPO DE BUILD —
+ * como este script roda ANTES do `vercel --prod`, ela entra a tempo. Sem o
+ * par, o widget nao aparece e o servidor pula a verificacao (os dois lados
+ * degradam juntos).
+ */
+const OPTIONAL_TURNSTILE = [
+  "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+  "TURNSTILE_SECRET_KEY",
+];
+
+/** Nivel minimo de log. OPCIONAL: ausente = `info` em producao. */
+const OPTIONAL_LOG = ["LOG_LEVEL"];
+
 const TARGETS = ["production", "preview", "development"];
 
 const gatewayUrl = process.argv[2];
@@ -176,6 +201,20 @@ if (cronMissing.length === 0) {
     "aviso: CRON_SECRET ausente no .env — a faxina diaria de anexos orfaos\n" +
       "       (/api/cron/limpar-anexos) vai responder 503 ate ela existir.\n" +
       "       Pode repetir o valor do AUTH_SECRET.",
+  );
+}
+
+// Sentry, Turnstile e LOG_LEVEL: cada um entra se estiver no .env. Turnstile
+// so entra se os DOIS estiverem (meia config falharia na hora do cadastro).
+for (const key of OPTIONAL_SENTRY) if (env[key]) payload[key] = env[key];
+for (const key of OPTIONAL_LOG) if (env[key]) payload[key] = env[key];
+const turnstileMissing = OPTIONAL_TURNSTILE.filter((key) => !env[key]);
+if (turnstileMissing.length === 0) {
+  for (const key of OPTIONAL_TURNSTILE) payload[key] = env[key];
+} else if (turnstileMissing.length === 1) {
+  console.log(
+    `aviso: ${turnstileMissing[0]} ausente no .env — o Turnstile precisa das`
+      + "\n       DUAS chaves; com so uma, o CAPTCHA do cadastro fica desligado.",
   );
 }
 

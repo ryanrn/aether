@@ -171,6 +171,16 @@ if (env.R2_PUBLIC_URL) {
   );
 }
 
+/**
+ * Fase pre-beta. Todas OPCIONAIS e sozinhas:
+ *  - SENTRY_DSN: erros do gateway vao para o Sentry (sem ela, so stdout);
+ *  - LOG_LEVEL: ausente = `info` em producao;
+ *  - MAX_SOCKETS_POR_USUARIO: ausente = 8; `0` desliga o teto.
+ */
+for (const key of ["SENTRY_DSN", "LOG_LEVEL", "MAX_SOCKETS_POR_USUARIO"]) {
+  if (env[key]) payload[key] = env[key];
+}
+
 console.log(`App Fly:  ${flyApp}`);
 console.log(`Origem liberada no CORS:  ${payload.NEXT_PUBLIC_APP_URL}`);
 if (bumped) console.log("connection_limit ajustado para 5 na URL de producao.");

@@ -275,7 +275,7 @@ npx dotenv -e .env -- npx prisma migrate status --schema packages/db/prisma/sche
 
 Deve dizer "Database schema is up to date".
 
-### 2. Variaveis novas (todas opcionais, mas o beta quer 3 delas)
+### 2. Variaveis novas (todas opcionais; o beta quer as 3 primeiras)
 
 | variavel | onde | para que |
 | --- | --- | --- |
@@ -285,13 +285,17 @@ Deve dizer "Database schema is up to date".
 | `LOG_LEVEL` | opcional, os dois | padrao: `info` em prod |
 | `MAX_SOCKETS_POR_USUARIO` | opcional, Fly | padrao 8 |
 
-Turnstile e `NEXT_PUBLIC_*` — **entra antes do build** (ver a secao do app web).
-`SENTRY_DSN` e lido em runtime, entao pode entrar depois, mas ai precisa de um
-redeploy para valer.
+**Coloque as chaves do Turnstile no `.env` local** (crie o widget em
+dash.cloudflare.com › Turnstile, modo "Managed", hostnames = seu dominio de
+producao + `localhost`):
 
-```bash
-fly secrets set SENTRY_DSN="$(grep ^SENTRY_DSN .env | cut -d'"' -f2)"
 ```
+NEXT_PUBLIC_TURNSTILE_SITE_KEY="0x4AAA..."
+TURNSTILE_SECRET_KEY="0x4AAA..."
+```
+
+Os `scripts/vercel-env.mjs` e `scripts/fly-secrets.mjs` ja mandam essas
+variaveis junto com o resto — nao ha comando separado.
 
 ### 3. Deploy
 
@@ -299,12 +303,22 @@ fly secrets set SENTRY_DSN="$(grep ^SENTRY_DSN .env | cut -d'"' -f2)"
 git checkout master && git merge fase-1/pre-beta
 ```
 
+Gateway (o `fly-secrets.mjs` agora inclui `SENTRY_DSN`, `LOG_LEVEL`,
+`MAX_SOCKETS_POR_USUARIO`):
+
 ```bash
-fly deploy
+node scripts/fly-secrets.mjs https://SEU-APP.vercel.app
 ```
 
 ```bash
-fly status && fly scale count 1
+fly deploy && fly status && fly scale count 1
+```
+
+Web (o `vercel-env.mjs` agora inclui `SENTRY_DSN`, o par do Turnstile,
+`LOG_LEVEL` — e `NEXT_PUBLIC_*` **tem** que ir antes do `--prod`):
+
+```bash
+node scripts/vercel-env.mjs https://SEU-GATEWAY.fly.dev
 ```
 
 ```bash
