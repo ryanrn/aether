@@ -293,6 +293,17 @@ export const updateRoleSchema = z.object({
   name: roleNameSchema,
   color: roleColorSchema,
   permissions: permissionKeysSchema,
+  /**
+   * Jogo a vincular ao cargo (fase 2, estagio 2). Ausente = telas antigas que
+   * nao mexem no vinculo; string vazia = desvincula; string = vincula.
+   * `updateRole` normaliza e clampa as permissoes.
+   */
+  jogoVinculado: z.string().trim().max(64).optional(),
+});
+
+export const definirCargoPorJogoSchema = z.object({
+  serverId: z.string().min(1),
+  ligado: z.boolean(),
 });
 
 export const assignRoleSchema = z.object({

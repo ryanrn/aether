@@ -188,6 +188,38 @@ export const ALL_PERMISSIONS: PermissionBits = Object.values(Permission).reduce(
   0n,
 );
 
+/**
+ * O que um cargo vinculado a um jogo pode conceder (fase 2, estagio 2).
+ *
+ * O nome do jogo chega ao gateway como TEXTO DE CLIENTE nao verificado — o
+ * app de desktop anuncia `presence:game` e nao ha lista de jogos validos para
+ * conferir contra (ver `apps/realtime/src/handlers/presence.ts`). Qualquer um
+ * pode dizer que joga X sem ter o jogo.
+ *
+ * Um cargo que se pega assim so pode dar acesso a ESTAR na sala: ver canal,
+ * entrar em voz, falar, mostrar tela/camera, mandar mensagem. Nada de
+ * moderacao, gerencia ou convite — senao "abrir um jogo" viraria um caminho
+ * para poder banir gente. `updateRole` aplica esta mascara sobre o bitfield
+ * sempre que o cargo tem jogo vinculado.
+ */
+export const PERMISSOES_DE_CARGO_DE_JOGO: PermissionBits = combine(
+  "VIEW_CHANNEL",
+  "CONNECT",
+  "SPEAK",
+  "SCREEN_SHARE",
+  "CAMERA",
+  "SEND_MESSAGES",
+);
+
+/**
+ * Corta de um bitfield tudo que um cargo-por-jogo nao pode conceder. Aplicado
+ * em `updateRole` sempre que o cargo tem jogo vinculado — o teto e este,
+ * inclusive para o dono do servidor.
+ */
+export function permissoesDeCargoDeJogo(bits: PermissionBits): PermissionBits {
+  return bits & PERMISSOES_DE_CARGO_DE_JOGO;
+}
+
 /** Combina uma lista de flags em um bitfield. */
 export function combine(...keys: PermissionKey[]): PermissionBits {
   return keys.reduce<PermissionBits>((acc, key) => acc | Permission[key], 0n);

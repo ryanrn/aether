@@ -259,6 +259,14 @@ model Server {
   /// primeiro dia em que alguem descobrisse a chave.
   oficial   Boolean  @default(false)
 
+  /// Liga o cargo automatico por jogo (fase 2, estagio 2).
+  ///
+  /// DESLIGADO por padrao, e por escolha do dono: o recurso mexe no cargo de
+  /// terceiro sozinho, entao so entra em servidor que pediu. Ligado, quem
+  /// esta com um jogo aberto recebe — enquanto joga — o cargo que o dono
+  /// vinculou aquele jogo (ver `Role.jogoNormalizado`).
+  cargoPorJogo Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -315,6 +323,15 @@ model Role {
   isDefault   Boolean  @default(false)
   /// cargo intocavel do dono
   isOwner     Boolean  @default(false)
+
+  /// Nome do jogo que da este cargo automaticamente, como o dono digitou.
+  /// Nulo = cargo comum. So surte efeito com `Server.cargoPorJogo` ligado.
+  jogoVinculado   String?
+  /// A forma canonica de `jogoVinculado` (`normalizarNome` de @aether/shared).
+  /// E por ela que o gateway casa o nome que chega do detector, sem depender
+  /// de grafia. Indexada porque o gateway consulta a cada troca de jogo.
+  jogoNormalizado String?
+
   createdAt   DateTime @default(now())
 
   members    MemberRole[]
@@ -322,6 +339,7 @@ model Role {
 
   @@unique([serverId, name])
   @@index([serverId, position])
+  @@index([serverId, jogoNormalizado])
 }
 
 model MemberRole {

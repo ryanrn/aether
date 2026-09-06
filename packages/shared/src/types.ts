@@ -161,6 +161,12 @@ export interface PublicRole {
   isOwner: boolean;
   /** bitfield serializado como string — bigint nao sobrevive a JSON.stringify */
   permissions: string;
+  /**
+   * Nome do jogo que da este cargo automaticamente, ou `null` (fase 2). So
+   * atribuido de fato com `cargoPorJogo` ligado no servidor. A tela de cargos
+   * usa para mostrar o vinculo; o painel de membros nao precisa disto.
+   */
+  jogoVinculado?: string | null;
 }
 
 export interface PublicMember {

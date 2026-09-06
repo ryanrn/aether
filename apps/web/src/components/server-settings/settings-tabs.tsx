@@ -24,6 +24,7 @@ export function SettingsTabs({
   viewer,
   bans,
   audit,
+  cargoPorJogo,
 }: {
   serverId: string;
   serverName: string;
@@ -34,6 +35,7 @@ export function SettingsTabs({
   viewer: ViewerContext;
   bans: ServerBan[];
   audit: { entries: AuditEntry[]; hasMore: boolean };
+  cargoPorJogo: boolean;
 }) {
   const canManageServer = viewerCan(viewer, "MANAGE_SERVER");
   const canManageRoles = viewerCan(viewer, "MANAGE_ROLES");
@@ -87,7 +89,12 @@ export function SettingsTabs({
       ) : null}
 
       {active === "cargos" && canManageRoles ? (
-        <RolesTab serverId={serverId} roles={roles} viewer={viewer} />
+        <RolesTab
+          serverId={serverId}
+          roles={roles}
+          viewer={viewer}
+          cargoPorJogo={cargoPorJogo}
+        />
       ) : null}
 
       {active === "membros" && canManageRoles ? (

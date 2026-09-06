@@ -114,6 +114,7 @@ export default async function ServerSettingsPage({
             viewer={viewer}
             bans={bans}
             audit={audit}
+            cargoPorJogo={data.cargoPorJogo}
           />
         </div>
       </div>

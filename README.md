@@ -400,7 +400,7 @@ coisa social.
 | Estagio | O que muda | Estado |
 | --- | --- | --- |
 | 1 | **"Jogando agora" no painel de membros** — agrupa quem esta online por jogo (com a capa do IGDB). So UI, sem migracao. | ✅ |
-| 2 | Cargo automatico por jogo — **opt-in por servidor** — *precisa de migracao* | ⬜ |
+| 2 | **Cargo automatico por jogo** — opt-in por servidor. Migracao `20260906140000_cargo_por_jogo`. | ✅ |
 | 3 | Salas de voz efemeras + "Procurar grupo" (LFG) — *migracao pequena* | ⬜ |
 | 4 | LFG cross-servidor (matchmaking global) | ⬜ |
 
@@ -424,6 +424,59 @@ coisa social.
   o estagio 3 (LFG).
 - **O jogo nao persiste** (ja era assim) — reiniciar o gateway limpa o
   `activity`, entao a secao some ate cada um mandar `presence:game` de novo.
+
+### O que fechou no estagio 2 — cargo automatico por jogo
+
+**Opt-in por servidor.** `Server.cargoPorJogo` (default `false`). O toggle fica
+no topo da aba **Cargos** das configuracoes, so para quem tem `MANAGE_SERVER`.
+Desligado, nenhum `Role.jogoVinculado` surte efeito.
+
+**Quem atribui e o gateway.** "Esta jogando X" so existe no estado em memoria
+do gateway (`presence:game` do app de desktop). Entao e o handler de presenca
+que grava/remove o `MemberRole` — do mesmo jeito que ja gravava `User.status`.
+O web nunca decide isto.
+
+- **Vinculo:** `Role.jogoVinculado` (texto do dono) + `Role.jogoNormalizado`
+  (forma canonica, `@@index([serverId, jogoNormalizado])`). A normalizacao
+  (`normalizarNome`) **saiu** de `apps/realtime/src/games/normalize.ts` para
+  `@aether/shared/jogos` — web e gateway usam a MESMA, senao o casamento
+  divergiria em silencio. `normalize.ts` re-exporta.
+- **Seguranca — o clamp:** nome de jogo em `presence:game` e texto de cliente
+  nao verificado. Um cargo que se pega dizendo "jogo X" so pode conceder
+  participacao: `VIEW_CHANNEL, CONNECT, SPEAK, SCREEN_SHARE, CAMERA,
+  SEND_MESSAGES`. `PERMISSOES_DE_CARGO_DE_JOGO` + `permissoesDeCargoDeJogo()`
+  em `@aether/shared`; `updateRole` aplica a mascara **depois** da guarda de
+  escalada, inclusive contra o dono. A UI trava os toggles fora dessa lista.
+- **Ciclo de vida:** entra no `presence:game` (jogo abriu), sai no
+  `presence:game` com outro jogo / `null` (fechou), no `presence:set` OFFLINE
+  (ficou invisivel — o cargo revelaria o jogo escondido) e no `disconnect`
+  (ultimo socket do servidor). Toda troca que mexe em `MemberRole` chama
+  `resyncEavisarServidor` (recalcula salas + `server:changed`).
+- **Gateway reinicia:** o `MemberRole` fica no banco mas o "jogando" era so
+  memoria. `limparCargosDeJogoNaConexao` roda no handshake: sem jogo no estado,
+  tira os cargos-de-jogo do usuario (so nos servidores que usam o recurso).
+- **Atribuir na mao:** bloqueado — `assignRole` recusa cargo com jogo vinculado
+  e a aba de Membros nao o lista. Mudar o vinculo zera os membros do cargo (o
+  gateway devolve para quem estiver jogando).
+- **Desligar o recurso** limpa os `MemberRole` de todos os cargos-de-jogo do
+  servidor; o vinculo do cargo fica, religar volta a valer sem reconfigurar.
+
+Migracao: `20260906140000_cargo_por_jogo` (à mão — `Server.cargoPorJogo`,
+`Role.jogoVinculado`/`jogoNormalizado`, indice). Testes: `cargo-por-jogo` (diff
++ clamp), `roles-cargo-por-jogo` (vinculo/clamp/wipe no `updateRole`).
+
+### Limitacoes conhecidas (estagio 2)
+
+- **Casamento por forma canonica exata** (`normalizarNome`), sem fuzzy. "CS2" e
+  "Counter-Strike 2" sao jogos diferentes para o vinculo — o dono poe o nome
+  como aparece na biblioteca (Steam/Epic), que e o que o detector reporta.
+- **Janela curta apos restart do gateway:** ate `limparCargosDeJogoNaConexao`
+  rodar (no handshake) ou o cliente reenviar `presence:game`, o cargo pode
+  aparecer "a mais" por segundos.
+- **Sem auditoria da atribuicao automatica** — seria uma linha de `AuditLog`
+  por troca de jogo. So a config (ligar/desligar, vincular) entra no log.
+- **`verify-phase2`/`verify-phase3` nao exercitam isto** — precisam do app de
+  desktop mandando `presence:game`. Coberto por teste unitario e pelo build.
 
 ---
 

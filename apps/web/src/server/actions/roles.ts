@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   assignRoleSchema,
   createRoleSchema,
+  definirCargoPorJogoSchema,
   updateRoleSchema,
   type ActionResult,
 } from "@aether/shared";
@@ -17,6 +18,7 @@ import { resyncGatewayRooms } from "../realtime-notify";
 import {
   assignRole,
   createRole,
+  definirCargoPorJogo,
   deleteRole,
   unassignRole,
   updateRole,
@@ -93,11 +95,13 @@ export async function updateRoleAction(
       name: parsed.data.name,
       color: parsed.data.color,
       permissions: parsed.data.permissions,
+      jogoVinculado: parsed.data.jogoVinculado,
       actorPermissions: context.permissions,
       actorIsOwner: context.isOwner,
     });
     // Quem tem este cargo pode ter ganhado ou perdido VIEW_CHANNEL de algum
     // canal — recalcula quem ja esta conectado, nao so quem entrar depois.
+    // Tambem cobre o cargo por jogo: mudar o vinculo zera os membros.
     await resyncGatewayRooms({ serverId });
 
     await writeAudit({
@@ -106,10 +110,55 @@ export async function updateRoleAction(
       action: "role.update",
       targetType: "role",
       targetId: parsed.data.roleId,
-      metadata: { name: parsed.data.name, permissions: parsed.data.permissions },
+      metadata: {
+        name: parsed.data.name,
+        permissions: parsed.data.permissions,
+        ...(parsed.data.jogoVinculado !== undefined
+          ? { jogoVinculado: parsed.data.jogoVinculado || null }
+          : {}),
+      },
     });
 
     refresh(serverId);
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Liga/desliga o cargo automatico por jogo no servidor (fase 2, estagio 2).
+ *
+ * Exige MANAGE_SERVER — e configuracao do servidor, nao gestao de um cargo. O
+ * dono do servidor pediu explicitamente que o recurso so valha "se o servidor
+ * de quem criou permitir".
+ */
+export async function definirCargoPorJogoAction(
+  input: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const parsed = definirCargoPorJogoSchema.safeParse(input);
+    if (!parsed.success) return fail("Dados invalidos");
+
+    const context = await requirePermission(
+      parsed.data.serverId,
+      "MANAGE_SERVER",
+    );
+
+    await definirCargoPorJogo(parsed.data.serverId, parsed.data.ligado);
+    // Desligar tira cargos de gente — pode fechar canal que so o cargo via.
+    await resyncGatewayRooms({ serverId: parsed.data.serverId });
+
+    await writeAudit({
+      serverId: parsed.data.serverId,
+      actorId: context.session.user.id,
+      action: "server.update",
+      targetType: "server",
+      targetId: parsed.data.serverId,
+      metadata: { cargoPorJogo: parsed.data.ligado },
+    });
+
+    refresh(parsed.data.serverId);
     return ok();
   } catch (error) {
     return toActionError(error);

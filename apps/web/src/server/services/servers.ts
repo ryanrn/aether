@@ -165,6 +165,11 @@ export interface ServerContext {
   channelPermissions: Record<string, string>;
   /** todos os cargos do servidor, do mais alto para o mais baixo */
   roles: PublicRole[];
+  /**
+   * O cargo automatico por jogo esta ligado neste servidor? (fase 2, estagio
+   * 2). Governa se `Role.jogoVinculado` surte efeito. So a aba de cargos usa.
+   */
+  cargoPorJogo: boolean;
 }
 
 function toPublicChannel(channel: {
@@ -211,6 +216,7 @@ export async function getServerContext(
       name: true,
       iconUrl: true,
       ownerId: true,
+      cargoPorJogo: true,
       _count: { select: { members: true } },
       categories: {
         orderBy: { position: "asc" },
@@ -240,6 +246,7 @@ export async function getServerContext(
           isDefault: true,
           isOwner: true,
           permissions: true,
+          jogoVinculado: true,
         },
       },
       members: {
@@ -339,7 +346,9 @@ export async function getServerContext(
       isDefault: role.isDefault,
       isOwner: role.isOwner,
       permissions: role.permissions.toString(),
+      jogoVinculado: role.jogoVinculado,
     })),
+    cargoPorJogo: server.cargoPorJogo,
   };
 }
 

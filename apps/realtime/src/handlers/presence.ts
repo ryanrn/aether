@@ -11,9 +11,10 @@ import {
 } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
-import { visibleChannelRooms } from "../rooms";
+import { resyncEavisarServidor, visibleChannelRooms } from "../rooms";
 import { createRateLimiter } from "../rate-limit";
 import { metadadosDe } from "../games/metadata";
+import { sincronizarCargoPorJogo } from "../games/cargos-por-jogo";
 import {
   detachSocket,
   friendsOf,
@@ -164,6 +165,36 @@ export async function anunciarMudancaDePresenca(
 }
 
 /**
+ * Cargo automatico por jogo (fase 2, estagio 2): poe/tira o cargo de quem esta
+ * jogando, um servidor de cada vez, e re-sincroniza as salas SO onde algo
+ * mudou.
+ *
+ * Best-effort e isolado por servidor: falha num servidor nao trava os outros,
+ * e nada aqui segura o anuncio de presenca que ja saiu (por isso quem chama
+ * usa `void`).
+ */
+async function sincronizarCargosDeJogo(
+  io: AetherServer,
+  userId: string,
+  serverIds: string[],
+  jogo: string | null,
+): Promise<void> {
+  for (const serverId of serverIds) {
+    try {
+      if (await sincronizarCargoPorJogo(userId, serverId, jogo)) {
+        await resyncEavisarServidor(io, serverId);
+      }
+    } catch (erro) {
+      log.warn(
+        "gateway.cargo_por_jogo.falhou",
+        "não sincronizei o cargo por jogo",
+        { err: erro, userId, serverId },
+      );
+    }
+  }
+}
+
+/**
  * Limite dos eventos de presenca.
  *
  * O que torna estes eventos caros nao e o custo de UM, e a AMPLIFICACAO: cada
@@ -267,6 +298,17 @@ export function registerPresenceHandlers(
     await announceToFriends(io, userId, status, await friendsOf(userId));
 
     /**
+     * Cargo por jogo acompanha a visibilidade: ficar invisivel tira o cargo
+     * (ele revelaria o jogo escondido), voltar a aparecer devolve conforme o
+     * jogo do momento.
+     */
+    const jogoAgora =
+      status === "OFFLINE"
+        ? null
+        : (await presenceEntryOf(userId))?.game ?? null;
+    void sincronizarCargosDeJogo(io, userId, affected, jogoAgora);
+
+    /**
      * OFFLINE aqui e INVISIVEL: a pessoa segue conectada e recebendo tudo, mas
      * aparece apagada para os outros. Antes era recusado — dava para ficar
      * ausente, nunca invisivel.
@@ -334,6 +376,19 @@ export function registerPresenceHandlers(
     await announceToFriends(io, userId, meuStatus, await friendsOf(userId));
 
     /**
+     * Cargo automatico por jogo. `nome` e o cru (podado) — `sincronizarCargo
+     * PorJogo` normaliza e casa. `null` (jogo fechado) tira o cargo. Invisivel
+     * conta como sem jogo: quando `meuStatus` e OFFLINE, o cargo revelaria o
+     * jogo que a pessoa escolheu esconder.
+     */
+    void sincronizarCargosDeJogo(
+      io,
+      userId,
+      mudou.servers,
+      meuStatus === "OFFLINE" ? null : nome,
+    );
+
+    /**
      * A capa vem DEPOIS, e de proposito.
      *
      * O anuncio acima ja saiu com o nome e o icone do executavel — a atividade
@@ -359,6 +414,14 @@ export function registerPresenceHandlers(
       const { vacatedServers } = await detachSocket(socket.id);
       for (const serverId of vacatedServers) {
         await announce(io, serverId, userId, "OFFLINE");
+      }
+      /**
+       * Saiu de vez de um servidor (ultimo socket) — tira o cargo por jogo.
+       * `vacatedServers` ja e "sem mais socket aqui": fechar uma aba de tres
+       * nao mexe, a pessoa continua jogando pelas outras.
+       */
+      if (vacatedServers.length > 0) {
+        await sincronizarCargosDeJogo(io, userId, vacatedServers, null);
       }
       /**
        * So avisa os amigos quando o ULTIMO socket caiu. Fechar uma das tres

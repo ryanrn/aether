@@ -16,6 +16,8 @@
  * na tela de outras pessoas.
  */
 
+import { normalizarNome } from "@aether/shared";
+
 /** Palavras que distinguem edicao, nao jogo. Usadas so no casamento afrouxado. */
 const SUFIXOS_DE_EDICAO = [
   "remastered",
@@ -39,29 +41,14 @@ const SUFIXOS_DE_EDICAO = [
 /**
  * A forma canonica de um nome, para servir de chave de cache e de comparacao.
  *
- * O que sai:
- *  - minusculas;
- *  - `.exe` no fim (o detector nao manda, mas o cadastro manual da fase 3 vai);
- *  - simbolos de marca (™ ® ©), que aparecem em nome de manifesto;
- *  - pontuacao vira espaco, e espacos colapsam.
- *
- * O que **fica**, de proposito: DIGITOS. "Portal 2", "Cyberpunk 2077" e
- * "Grand Theft Auto V" viram jogos diferentes se os numeros sumirem — e
- * remover numero e o tipo de "limpeza" que parece esperta ate juntar duas
- * sequencias na mesma linha do cache.
+ * MORA em `@aether/shared` (`normalizarNome`), e nao aqui, porque o app web
+ * precisa da MESMA funcao para calcular `Role.jogoNormalizado` ao vincular um
+ * jogo a um cargo — o gateway casa contra esse valor a cada `presence:game`.
+ * Duas copias divergiriam e o cargo por jogo pararia de casar em silencio.
+ * Re-exportado para quem ja importava daqui (`game-metadata.test.ts`) nao
+ * precisar mudar de origem.
  */
-export function normalizarNome(bruto: string): string {
-  return String(bruto)
-    .toLowerCase()
-    .replace(/\.exe$/i, "")
-    .replace(/[™®©]/g, "")
-    // Apostrofo some SEM virar espaco: "marvel's" e "marvels" sao a mesma
-    // palavra, e trocar por espaco criaria "marvel s".
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
+export { normalizarNome };
 
 /** O nome sem a parte que so diz qual EDICAO e. */
 export function semEdicao(normalizado: string): string {

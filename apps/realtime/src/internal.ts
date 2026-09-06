@@ -5,7 +5,7 @@ import { loadFriendIds } from "@aether/access";
 import { room, SELECT_USUARIO_PUBLICO, toPublicUser } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { env } from "./env";
-import { resyncServerRooms } from "./rooms";
+import { resyncEavisarServidor } from "./rooms";
 import type { AetherServer } from "./types";
 import {
   isConnected,
@@ -232,18 +232,7 @@ export async function handleInternalRequest(
         return true;
       }
 
-      await resyncServerRooms(io, body.serverId);
-
-      /**
-       * Avisa a interface DEPOIS de recalcular as salas, nunca antes: o
-       * cliente vai pedir a arvore nova ao Next, e ela precisa concordar com
-       * as salas em que o socket de fato esta. Na ordem inversa, alguem
-       * poderia ver um canal na lista um instante antes de entrar na sala
-       * dele — e clicar num canal que ainda nao entrega mensagem.
-       */
-      io.to(room.server(body.serverId)).emit("server:changed", {
-        serverId: body.serverId,
-      });
+      await resyncEavisarServidor(io, body.serverId);
 
       json(response, 200, { ok: true });
     } catch (error) {

@@ -3,7 +3,9 @@
 import { useMemo, useState, useTransition } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import {
+  has,
   PERMISSION_METADATA,
+  PERMISSOES_DE_CARGO_DE_JOGO,
   Permission,
   toKeys,
   type PermissionKey,
@@ -12,6 +14,7 @@ import {
 } from "@aether/shared";
 import {
   createRoleAction,
+  definirCargoPorJogoAction,
   deleteRoleAction,
   updateRoleAction,
 } from "@/server/actions/roles";
@@ -19,7 +22,7 @@ import { canManageRole, viewerCan } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
-import { SwitchVisual } from "@/components/ui/switch";
+import { SwitchVisual, ToggleRow } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 const GROUP_LABEL: Record<string, string> = {
@@ -41,10 +44,12 @@ export function RolesTab({
   serverId,
   roles,
   viewer,
+  cargoPorJogo,
 }: {
   serverId: string;
   roles: PublicRole[];
   viewer: ViewerContext;
+  cargoPorJogo: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     roles[0]?.id ?? null,
@@ -53,7 +58,12 @@ export function RolesTab({
     roles.find((role) => role.id === selectedId) ?? roles[0] ?? null;
 
   return (
-    <section className="grid gap-6 md:grid-cols-[220px_1fr]">
+    <div className="flex flex-col gap-6">
+      {viewerCan(viewer, "MANAGE_SERVER") ? (
+        <CargoPorJogoToggle serverId={serverId} ligado={cargoPorJogo} />
+      ) : null}
+
+      <section className="grid gap-6 md:grid-cols-[220px_1fr]">
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-0.5 rounded-md border border-line bg-base-900 p-1">
           {roles.map((role) => (
@@ -93,9 +103,57 @@ export function RolesTab({
           serverId={serverId}
           role={selected}
           viewer={viewer}
+          cargoPorJogoLigado={cargoPorJogo}
         />
       ) : null}
-    </section>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Liga/desliga o cargo automatico por jogo no servidor inteiro.
+ *
+ * Fica no topo da aba de cargos, e nao em "Geral", porque o que ele governa e
+ * o comportamento dos cargos. Desligado, nenhum `Role.jogoVinculado` surte
+ * efeito — e a decisao e do dono do servidor, de proposito.
+ */
+function CargoPorJogoToggle({
+  serverId,
+  ligado,
+}: {
+  serverId: string;
+  ligado: boolean;
+}) {
+  const [otimista, setOtimista] = useState(ligado);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function alternar(proximo: boolean) {
+    setErro(null);
+    setOtimista(proximo);
+    startTransition(async () => {
+      const r = await definirCargoPorJogoAction({ serverId, ligado: proximo });
+      if (!r.ok) {
+        setOtimista(!proximo);
+        setErro(r.error);
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-line bg-base-900 px-3.5 py-1">
+      <ToggleRow
+        title="Cargos automaticos por jogo"
+        description="Quando ligado, quem esta com um jogo aberto recebe — enquanto joga — o cargo que voce vincular aquele jogo na lista abaixo. O cargo sai sozinho quando a pessoa fecha o jogo, fica invisivel ou desconecta."
+        checked={otimista}
+        onCheckedChange={alternar}
+        disabled={pending}
+      />
+      {erro ? (
+        <p className="pb-2 text-[12px] text-signal-dnd">{erro}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -146,14 +204,25 @@ function RoleEditor({
   serverId,
   role,
   viewer,
+  cargoPorJogoLigado,
 }: {
   serverId: string;
   role: PublicRole;
   viewer: ViewerContext;
+  cargoPorJogoLigado: boolean;
 }) {
   const editable = canManageRole(viewer, role);
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color);
+  const [jogoVinculado, setJogoVinculado] = useState(role.jogoVinculado ?? "");
+  /**
+   * O campo de jogo so aparece em cargo comum de servidor que ligou o recurso.
+   * Cargo do dono e cargo padrao ("Membro", que todo mundo tem) nao entram —
+   * o servidor recusa, mas nem oferecemos.
+   */
+  const podeVincularJogo =
+    cargoPorJogoLigado && editable && !role.isOwner && !role.isDefault;
+  const temJogo = podeVincularJogo && jogoVinculado.trim() !== "";
   /**
    * toKeys() vem do shared e le o bitfield pela tabela canonica de flags.
    * Nunca derive o bit a partir da ordem de um objeto de metadados — as duas
@@ -192,6 +261,11 @@ function RoleEditor({
         name,
         color,
         permissions,
+        // Manda o vinculo so quando o campo esta em jogo; assim uma tela sem o
+        // recurso ligado nao mexe no que ja estava gravado.
+        ...(podeVincularJogo || role.jogoVinculado
+          ? { jogoVinculado: jogoVinculado.trim() }
+          : {}),
       });
       if (result.ok) setSaved(true);
       else setError(result.error);
@@ -237,6 +311,34 @@ function RoleEditor({
         </Field>
       </div>
 
+      {podeVincularJogo ? (
+        <Field label="Vincular a um jogo">
+          <Input
+            value={jogoVinculado}
+            onChange={(event) => {
+              setJogoVinculado(event.target.value);
+              setSaved(false);
+            }}
+            placeholder="Ex.: Counter-Strike 2"
+            maxLength={64}
+          />
+          <p className="mt-1.5 text-[12px] leading-snug text-ink-500">
+            Escreva o nome como o jogo aparece na sua biblioteca (Steam, Epic).
+            Deixe em branco para desvincular. Ao mudar o vinculo, quem tinha o
+            cargo perde na hora — o gateway devolve para quem estiver jogando.
+          </p>
+        </Field>
+      ) : null}
+
+      {temJogo ? (
+        <p className="rounded-md border border-accent-500/25 bg-accent-500/5 px-3 py-2.5 text-[12px] leading-snug text-ink-300">
+          Cargo automatico por jogo. O nome do jogo chega sem verificacao — quem
+          quiser pode dizer que joga qualquer coisa —, entao ele so concede
+          permissoes de participacao (ver canais, voz, camera, tela, mensagens).
+          Moderacao, gerencia e convite ficam desligados.
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-4">
         <Label>Permissoes</Label>
         {[...grouped.entries()].map(([group, keys]) => (
@@ -251,9 +353,13 @@ function RoleEditor({
               {keys.map((key) => {
                 const meta = PERMISSION_METADATA[key];
                 const viewerHas = viewerCan(viewer, key);
-                const locked = !editable || !viewerHas;
+                // Cargo com jogo vinculado nao pode conceder o que nao for
+                // participacao — o servidor clampa, aqui a UI acompanha.
+                const travadoPorJogo =
+                  temJogo && !has(PERMISSOES_DE_CARGO_DE_JOGO, key);
+                const locked = !editable || !viewerHas || travadoPorJogo;
 
-                const ativo = permissions.includes(key);
+                const ativo = permissions.includes(key) && !travadoPorJogo;
                 return (
                   <button
                     key={key}
@@ -275,9 +381,11 @@ function RoleEditor({
                       </span>
                       <span className="block text-[11px] text-ink-500">
                         {meta.description}
-                        {!viewerHas && editable
-                          ? " · voce nao possui esta permissao"
-                          : ""}
+                        {travadoPorJogo
+                          ? " · travado: cargo por jogo"
+                          : !viewerHas && editable
+                            ? " · voce nao possui esta permissao"
+                            : ""}
                       </span>
                     </span>
                     <span className="pt-0.5">

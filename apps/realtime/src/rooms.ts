@@ -96,6 +96,25 @@ export async function resyncServerRooms(
 }
 
 /**
+ * Recalcula as salas do servidor e SO DEPOIS avisa a interface.
+ *
+ * A ordem importa: o `server:changed` faz o cliente pedir a arvore nova ao
+ * Next, e ela precisa concordar com as salas em que o socket de fato esta. Na
+ * ordem inversa, alguem poderia ver um canal na lista um instante antes de
+ * entrar na sala dele — e clicar num canal que ainda nao entrega mensagem.
+ *
+ * Usado pela rota `/internal/resync-rooms` (mudanca vinda do web) e pelo
+ * handler de presenca quando o cargo por jogo abre/fecha um canal.
+ */
+export async function resyncEavisarServidor(
+  io: AetherServer,
+  serverId: string,
+): Promise<void> {
+  await resyncServerRooms(io, serverId);
+  io.to(room.server(serverId)).emit("server:changed", { serverId });
+}
+
+/**
  * Coloca o socket nas salas de TODOS os servidores da pessoa, logo na conexao.
  *
  * POR QUE ISTO EXISTE: ate aqui, so o servidor ABERTO entrava em sala — o

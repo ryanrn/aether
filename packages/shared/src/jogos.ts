@@ -34,6 +34,38 @@ export function normalizarExecutavel(texto: string): string {
 }
 
 /**
+ * A forma canonica de um NOME DE JOGO (nao de executavel), para servir de
+ * chave de comparacao.
+ *
+ * Diferente de `normalizarExecutavel`: aqui espacos e digitos FICAM. "Portal
+ * 2", "Cyberpunk 2077" e "Grand Theft Auto V" viram jogos diferentes se os
+ * numeros sumirem, e colar as palavras ("grandtheftautov") tira a unica forma
+ * legivel de o dono conferir o que digitou.
+ *
+ * O que sai:
+ *  - minusculas;
+ *  - `.exe` no fim (o cadastro manual as vezes cola o executavel);
+ *  - simbolos de marca (™ ® ©), comuns em nome de manifesto de loja;
+ *  - apostrofo some SEM virar espaco ("marvel's" = "marvels");
+ *  - qualquer outra pontuacao vira espaco, e espacos colapsam.
+ *
+ * MESMA REGRA nos dois lados: o app web calcula isto ao vincular um jogo a um
+ * cargo (`Role.jogoNormalizado`) e o gateway calcula ao receber `presence:game`
+ * para casar. Se divergirem, o cargo por jogo para de casar em silencio.
+ * `apps/realtime/src/games/normalize.ts` re-exporta esta funcao.
+ */
+export function normalizarNome(bruto: string): string {
+  return String(bruto ?? "")
+    .toLowerCase()
+    .replace(/\.exe$/i, "")
+    .replace(/[™®©]/g, "")
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
  * Nome de executavel que aceitamos receber.
  *
  * O limite de tamanho e a lista de caracteres NAO sao decoracao: isto vem do

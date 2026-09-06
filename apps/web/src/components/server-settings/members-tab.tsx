@@ -27,7 +27,13 @@ export function MembersTab({
     member: PublicMember;
     mode: "kick" | "ban";
   } | null>(null);
-  const manageable = roles.filter((role) => canManageRole(viewer, role));
+  const manageable = roles.filter(
+    (role) =>
+      canManageRole(viewer, role) &&
+      // Cargo vinculado a jogo e gerido pelo gateway (entra e sai conforme
+      // quem esta jogando) — atribuir na mao so seria desfeito.
+      !role.jogoVinculado,
+  );
 
   const canKick = viewerCan(viewer, "KICK_MEMBERS");
   const canBan = viewerCan(viewer, "BAN_MEMBERS");

@@ -14,6 +14,7 @@ import { registerVoiceHandlers } from "./handlers/voice";
 import { registerDmHandlers } from "./handlers/dm";
 import { registerReactionHandlers } from "./handlers/reactions";
 import { joinAllServerRooms } from "./rooms";
+import { limparCargosDeJogoNaConexao } from "./games/cargos-por-jogo";
 import {
   attachSocket,
   isConnected,
@@ -272,6 +273,18 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
     log.error("gateway.salas.falhou", "não entrei nas salas dos servidores", {
       err: erro,
       socketId: socket.id,
+      userId: user.id,
+    });
+  });
+
+  /**
+   * Cargo por jogo: apaga o que sobrou de um restart do gateway (o estado de
+   * "jogando" e so memoria; o `MemberRole` nao). Sem `await` — o handshake nao
+   * depende, e a limpeza toca apenas servidores que usam o recurso.
+   */
+  void limparCargosDeJogoNaConexao(io, user.id).catch((erro) => {
+    log.warn("gateway.cargo_por_jogo.conexao", "limpeza na conexão falhou", {
+      err: erro,
       userId: user.id,
     });
   });
