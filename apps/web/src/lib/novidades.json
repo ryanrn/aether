@@ -84,10 +84,16 @@
       {
         "categoria": "correcao",
         "texto": "GunZ: The Duel (e outros jogos do Steam com a versao nova do Easy Anti-Cheat) sumia da atividade quando o anti-cheat carregava. A causa era boba: essa versao do EAC guarda a configuracao num lugar diferente da versao antiga, e o app so olhava no lugar antigo. Testado contra a instalacao de verdade."
-      },
+      }
+    ]
+  },
+  "0.1.28": {
+    "data": "2026-09-06",
+    "resumo": "Jogos do EA app (FIFA/EA SPORTS FC, Battlefield, The Sims) aparecem na atividade — de verdade desta vez.",
+    "itens": [
       {
         "categoria": "recurso",
-        "texto": "Jogos do EA app agora aparecem na atividade (FIFA/EA SPORTS FC, Battlefield, The Sims, etc.), inclusive os que usam o EA AntiCheat. So faltava a EA app; Battle.net ainda nao."
+        "texto": "Jogos do EA app agora aparecem na atividade, inclusive os com EA AntiCheat, que escondia o jogo por completo. O app le do proprio jogo quais executaveis o anti-cheat protege e casa por eles. Verificado com o EA SPORTS FC 26 rodando."
       }
     ]
   }

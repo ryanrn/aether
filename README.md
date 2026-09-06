@@ -1440,10 +1440,14 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   `machine.downloadinplacedir` (o padrao e `C:/Program Files/EA Games/`), uma
   subpasta por jogo. O nome sai do `<pasta>/__Installer/installerdata.xml`
   (`<gameTitle>`), com a pasta de reserva. Verificado contra o EA SPORTS FC 26.
-  Jogo com **EA AntiCheat** (`EAAntiCheat.GameServiceLauncher.exe`) esconde o
-  caminho do processo como o EAC faz — coberto por `jogoFixado` +
-  `nomesProtegidosPorAntiCheat`, que le os exes protegidos do `EAAntiCheat.cfg`
-  (binario, mas os nomes ficam em texto claro).
+  Jogo com **EA AntiCheat** esconde o caminho DESDE O INICIO (o EABackgroundService
+  ja lanca protegido — nao ha janela de caminho legivel como no GunZ). E o
+  processo se chama `FC26.exe` enquanto o jogo se chama "EA SPORTS FC 26", entao
+  casar por pasta ou por nome-de-jogo nao funciona. A saida: a entrada do
+  catalogo carrega os `exes` conhecidos, lidos do `EAAntiCheat.cfg` (binario,
+  mas os nomes ficam em texto claro) no momento em que o catalogo e montado; o
+  `entradaPorNomeDeProcesso` casa o processo contra ESSA lista, exata. Verificado
+  contra o EA SPORTS FC 26 rodando.
 - **Battle.net e jogos avulsos ainda nao sao detectados.** A Battle.net guarda
   o catalogo num `product.db` BINARIO (protobuf), que e trabalho de outra
   ordem — nao um XML de dois campos. Jogo avulso, fora de qualquer loja, nao

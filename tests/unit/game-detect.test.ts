@@ -818,3 +818,42 @@ describe("EA app", () => {
     fs.rmSync(raiz, { recursive: true, force: true });
   });
 });
+
+/**
+ * O que fecha o EA app + EA AntiCheat: o processo se chama `FC26.exe` mas o
+ * jogo "EA SPORTS FC 26", e o anti-cheat esconde o caminho DESDE O INICIO —
+ * nao ha janela para casar por pasta nem para fixar. So resta o nome do
+ * processo, e o catalogo carrega os exes conhecidos (lidos do anti-cheat).
+ */
+describe("entradaPorNomeDeProcesso por exe conhecido", () => {
+  const catalogo = [
+    {
+      nome: "EA SPORTS FC 26",
+      exes: ["fc26.exe", "fc26_trial.exe", "fc26_showcase.exe"],
+    },
+    { nome: "Hollow Knight" }, // sem exes — o caso comum
+  ];
+
+  it("casa `FC26.exe` com o jogo cujo nome nao tem nada a ver", () => {
+    expect(entradaPorNomeDeProcesso("FC26.exe", catalogo)?.nome).toBe(
+      "EA SPORTS FC 26",
+    );
+    // `Get-Process` traz sem extensao
+    expect(entradaPorNomeDeProcesso("FC26", catalogo)?.nome).toBe(
+      "EA SPORTS FC 26",
+    );
+  });
+
+  it("casamento e EXATO — `fc26x.exe` nao vira FC 26", () => {
+    expect(entradaPorNomeDeProcesso("fc26x.exe", catalogo)).toBeNull();
+    expect(entradaPorNomeDeProcesso("fc.exe", catalogo)).toBeNull();
+  });
+
+  it("jogo sem `exes` continua casando pela regra antiga (nome == processo)", () => {
+    // "hollow_knight" normaliza igual a "Hollow Knight"
+    expect(entradaPorNomeDeProcesso("hollow_knight.exe", catalogo)?.nome).toBe(
+      "Hollow Knight",
+    );
+    expect(entradaPorNomeDeProcesso("algo_aleatorio.exe", catalogo)).toBeNull();
+  });
+});

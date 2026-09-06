@@ -531,11 +531,19 @@ function jogosEa() {
       } catch {
         continue;
       }
+      /**
+       * Os exes protegidos, lidos do config do anti-cheat na raiz da pasta.
+       * E o que o `entradaPorNomeDeProcesso` casa quando o EA AntiCheat
+       * esconde o caminho — o que ele faz desde o primeiro instante.
+       */
+      const exes = nomesProtegidosPorAntiCheat(path.join(raiz, "_.exe")) ?? [];
+
       jogos.push({
         pasta: comoPasta(raiz),
         nome: nomeNoInstallerData(raiz) ?? pasta,
         launch: null,
         icone: null,
+        exes,
       });
     }
   } catch {
@@ -638,6 +646,21 @@ function entradaPorNomeDeProcesso(nomeProcesso, catalogo) {
   if (alvo.length === 0) return null;
 
   for (const jogo of catalogo) {
+    /**
+     * EXE CONHECIDO primeiro. O `jogosEa` (e futuramente o Steam) le do
+     * anti-cheat do jogo quais executaveis ele protege — `["fc26.exe", ...]`.
+     * Casar por AI e o que resolve EA app + EA AntiCheat: o processo se chama
+     * `FC26.exe` mas o jogo se chama "EA SPORTS FC 26", e o anti-cheat esconde
+     * o caminho DESDE O INICIO — nao ha janela para casar por pasta nem para
+     * fixar. Casamento EXATO, sem prefixo: os nomes vem de config, nao de
+     * palpite.
+     */
+    if (Array.isArray(jogo.exes)) {
+      for (const exe of jogo.exes) {
+        if (normalizarNomeDeJogo(exe) === alvo) return jogo;
+      }
+    }
+
     const nome = normalizarNomeDeJogo(jogo.nome);
     if (nome.length === 0) continue;
     if (alvo === nome) return jogo;
@@ -1121,8 +1144,10 @@ const EXE_GENERICO_DE_ANTICHEAT = new Set([
   "vgc.exe",
   "vgtray.exe",
   // EA AntiCheat
+  "eaanticheat.gameservice.exe",
   "eaanticheat.gameservicelauncher.exe",
   "eaanticheat.installer.exe",
+  "eabackgroundservice.exe",
 ]);
 
 /** O jogo visto por caminho da ultima vez, e os nomes de processo dele. */
