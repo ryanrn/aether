@@ -402,7 +402,8 @@ coisa social.
 | 1 | **"Jogando agora" no painel de membros** — agrupa quem esta online por jogo (com a capa do IGDB). So UI, sem migracao. | ✅ |
 | 2 | **Cargo automatico por jogo** — opt-in por servidor. Migracao `20260906140000_cargo_por_jogo`. | ✅ |
 | 3 | **Salas de voz efemeras + "Procurar grupo" (LFG)** — opt-in por servidor. Migracao `20260906150000_salas_de_grupo`. | ✅ |
-| 4 | LFG cross-servidor (matchmaking global) | ⬜ |
+| 4a | **Grupos: LFG pelos seus servidores** — pagina `/app/grupos` que cruza os servidores onde voce e membro. Sem migracao. | ✅ |
+| 4b | Hub global "AETHER · Grupos" (matchmaking pra qualquer conta) | ⬜ adiado |
 
 ### O que fechou no estagio 1
 
@@ -539,6 +540,47 @@ check:esm + next build ok.
   esvaziam — uma sala cheia sobrevive ao restart (o que e o certo).
 - **`verify-phase*` nao exercitam** — precisa de 2 clientes numa call. Coberto
   por unitario + build.
+
+### O que fechou no estagio 4a — Grupos (LFG pelos seus servidores)
+
+**Sem migracao.** Reusa as salas de grupo do estagio 3 — so adiciona uma visao
+que cruza servidores e uma consulta de ocupacao.
+
+- **Pagina `/app/grupos`** (irma de `/app/amigos`, fora de `/app/s/[serverId]`,
+  botao proprio no trilho). Lista as salas de grupo abertas em TODOS os
+  servidores onde voce e membro, agrupadas por jogo (`normalizarNome` como
+  chave), jogo com mais salas primeiro, sala mais cheia primeiro.
+  `apps/web/src/server/services/grupos.ts`.
+
+- **Ocupacao ("quantos estao na sala agora") vem do gateway** — nova rota
+  `/internal/ocupacao-de-canais` (POST `{ channelIds }` -> `{ [id]: count }`,
+  via `countInChannel`), helper `ocupacaoDeCanais()` no molde do
+  `presencaDeServidores`. Devolve `null` se o gateway nao responde: a sala
+  aparece com "—" em vez de "vazia".
+
+- **Criar grupo de qualquer lugar:** campo de jogo pre-preenchido com o que
+  voce esta jogando (`activity[selfUserId]`), seletor entre os seus servidores
+  que ligaram `salasDeGrupo`, `criarSalaDeGrupoAction` (o mesmo do estagio 3) ->
+  navega e entra com `useEntrarNaVoz`.
+
+- **Sem socket ao vivo:** a tela nao esta nas salas desses servidores, entao a
+  ocupacao e um snapshot + auto-refresh de 20s (`listarGruposAction`) + botao
+  Atualizar.
+
+Testes: `grupos` (agrupamento, ordenacao, ocupacao nula, nome do criador). 604
+passando, typecheck + check:esm + next build ok.
+
+### Limitacoes conhecidas (estagio 4a)
+
+- **So servidores onde voce ja e membro.** Achar gente em qualquer conta do
+  AETHER e o 4b (hub global "AETHER · Grupos"), adiado — precisa de modelo de
+  membership, contexto leve pro hub e moderacao de espaco publico.
+- **Ocupacao e snapshot + polling de 20s**, nao ao vivo. Entrar numa sala que
+  acabou de esvaziar so falha na hora do `voice:join` (o gateway recusa /
+  a sala ja foi apagada e vira 404).
+- **Nao mostra avatares de quem esta na sala** — so a contagem. A rota interna
+  devolve numero, nao participantes.
+- **`verify-phase*` nao exercitam** — coberto por unitario + build.
 
 ---
 

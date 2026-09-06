@@ -210,3 +210,39 @@ export async function presencaDeServidores(
     return null;
   }
 }
+
+/**
+ * Quantas pessoas ocupam agora cada canal de voz da lista.
+ *
+ * Mesma forma do `presencaDeServidores` e pelo mesmo motivo: a tela de Grupos
+ * monta a lista de salas pelo banco, mas quem esta dentro de cada uma so o
+ * gateway sabe. Devolve `null` (nao um mapa de zeros) quando o gateway nao
+ * responde — a tela mostra as salas sem o contador em vez de dizer "vazia".
+ */
+export async function ocupacaoDeCanais(
+  channelIds: string[],
+): Promise<Record<string, number> | null> {
+  if (channelIds.length === 0) return {};
+
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+
+  try {
+    const response = await fetch(`${GATEWAY_URL}/internal/ocupacao-de-canais`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-aether-internal": secret,
+      },
+      body: JSON.stringify({ channelIds }),
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!response.ok) return null;
+    const corpo = (await response.json()) as {
+      ocupacao?: Record<string, number>;
+    };
+    return corpo.ocupacao ?? null;
+  } catch {
+    return null;
+  }
+}

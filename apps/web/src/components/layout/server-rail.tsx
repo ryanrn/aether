@@ -97,6 +97,7 @@ export function ServerRail({
   const activeId = params?.serverId;
   const pathname = usePathname();
   const emAmigos = pathname === "/app/amigos";
+  const emGrupos = pathname === "/app/grupos";
   const emOlimpo = pathname === "/app/olimpo";
   const emExplorar = pathname === "/app/explorar";
   const emEquipe = pathname === "/app/equipe";
@@ -242,6 +243,34 @@ export function ServerRail({
               {pendingRequests > 9 ? "9+" : pendingRequests}
             </span>
           ) : null}
+        </Link>
+
+        {/**
+         * Grupos (LFG). Junto de Amigos porque tambem e "do app" e atravessa
+         * servidores — achar gente pra jogar em qualquer um dos seus.
+         */}
+        <Link
+          href="/app/grupos"
+          title="Grupos"
+          draggable={false}
+          className="group relative flex w-full justify-center"
+        >
+          <span
+            className={cn(
+              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
+              emGrupos ? "h-7" : "group-hover:h-3.5",
+            )}
+          />
+          <span
+            className={cn(
+              "grid h-12 w-12 place-items-center transition-all duration-150",
+              emGrupos
+                ? `${ICONE_ATIVO} bg-base-800 text-ink-100`
+                : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
+            )}
+          >
+            <AetherIcon name="gamepad" size="lg" className="h-[22px] w-[22px]" />
+          </span>
         </Link>
 
         {/**

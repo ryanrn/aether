@@ -8,6 +8,7 @@ import { env } from "./env";
 import { resyncEavisarServidor } from "./rooms";
 import type { AetherServer } from "./types";
 import {
+  countInChannel,
   isConnected,
   leaveVoice,
   presenceOf,
@@ -306,6 +307,38 @@ export async function handleInternalRequest(
       log.error(
         "gateway.internal.presenca_de_servidores",
         "/internal/presenca-de-servidores falhou",
+        { err: error },
+      );
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /**
+   * Quantas pessoas ocupam agora cada canal de voz pedido.
+   *
+   * Mesma natureza do `/internal/presenca-de-servidores`: RESPONDE algo que so
+   * vive na memoria do gateway. A tela de Grupos (fase 2, estagio 4) monta a
+   * lista de salas pelo BANCO, mas quem esta dentro de cada uma so o gateway
+   * sabe. Zero e afirmacao ("sala vazia"), nao "nao sei" — o lado do web e que
+   * devolve nulo quando a chamada inteira falha.
+   */
+  if (request.url === "/internal/ocupacao-de-canais") {
+    try {
+      const body = (await readJsonBody(request)) as { channelIds?: unknown };
+      const ids = Array.isArray(body.channelIds)
+        ? body.channelIds.filter((id): id is string => typeof id === "string")
+        : [];
+
+      const ocupacao: Record<string, number> = {};
+      for (const channelId of ids.slice(0, 300)) {
+        ocupacao[channelId] = await countInChannel(channelId);
+      }
+      json(response, 200, { ok: true, ocupacao });
+    } catch (error) {
+      log.error(
+        "gateway.internal.ocupacao_de_canais",
+        "/internal/ocupacao-de-canais falhou",
         { err: error },
       );
       json(response, 500, { ok: false });
