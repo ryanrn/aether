@@ -23,13 +23,21 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   delete process.env.TURNSTILE_SECRET_KEY;
+  delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("sem configuração", () => {
-  it("turnstileConfigurado é false e verificarTurnstile libera", async () => {
+describe("configuração incompleta", () => {
+  it("nenhuma chave: libera", async () => {
     expect(turnstileConfigurado()).toBe(false);
     expect(await verificarTurnstile("qualquer-coisa")).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("só o segredo (site key faltando no build): LIBERA, não tranca o cadastro", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "secret-abc";
+    expect(turnstileConfigurado()).toBe(false);
+    expect(await verificarTurnstile(undefined)).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -37,6 +45,7 @@ describe("sem configuração", () => {
 describe("configurado", () => {
   beforeEach(() => {
     process.env.TURNSTILE_SECRET_KEY = "secret-abc";
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAA-site";
   });
 
   it("token ausente -> recusa, sem nem chamar o siteverify", async () => {

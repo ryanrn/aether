@@ -18,8 +18,18 @@ import { log } from "@aether/shared/log";
 
 const ENDPOINT = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
+/**
+ * Turnstile so conta como "ligado" com as DUAS chaves. Meia configuracao — o
+ * segredo no servidor mas a site key ausente do bundle — trancaria todo mundo
+ * para fora do cadastro: o widget nao renderiza, o cliente nao manda token, e
+ * `verificarTurnstile(undefined)` recusaria. Exigir as duas transforma esse
+ * erro de deploy num no-op seguro.
+ */
 export function turnstileConfigurado(): boolean {
-  return Boolean(process.env.TURNSTILE_SECRET_KEY);
+  return Boolean(
+    process.env.TURNSTILE_SECRET_KEY &&
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+  );
 }
 
 /**
@@ -35,7 +45,8 @@ export async function verificarTurnstile(
   ip?: string | null,
 ): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) return true; // nao configurado: pula
+  // Precisa das DUAS: sem a site key, o cliente nunca vai mandar token.
+  if (!secret || !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) return true;
 
   if (!token || typeof token !== "string") return false;
 
