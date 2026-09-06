@@ -258,6 +258,17 @@ export const createCategorySchema = z.object({
   name: categoryNameSchema,
 });
 
+/** Criar uma sala de grupo (LFG) para um jogo (fase 2, estagio 3). */
+export const criarSalaDeGrupoSchema = z.object({
+  serverId: z.string().min(1),
+  jogo: z.string().trim().min(2, "Nome muito curto").max(64, "Nome muito longo"),
+});
+
+export const definirSalasDeGrupoSchema = z.object({
+  serverId: z.string().min(1),
+  ligado: z.boolean(),
+});
+
 export const renameCategorySchema = z.object({
   categoryId: z.string().min(1),
   name: categoryNameSchema,

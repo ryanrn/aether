@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import type { PublicMember, ViewerContext } from "@aether/shared";
 import { updateServerAction } from "@/server/actions/servers";
+import { definirSalasDeGrupoAction } from "@/server/actions/salas-de-grupo";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
+import { ToggleRow } from "@/components/ui/switch";
 import { ServerIconField } from "./server-icon-field";
 import { VitrineSection } from "./vitrine-section";
 import { TransferOwnershipModal } from "./transfer-ownership-modal";
@@ -16,12 +18,14 @@ export function GeneralTab({
   serverIconUrl,
   members,
   viewer,
+  salasDeGrupo,
 }: {
   serverId: string;
   serverName: string;
   serverIconUrl: string | null;
   members: PublicMember[];
   viewer: ViewerContext;
+  salasDeGrupo: boolean;
 }) {
   const [name, setName] = useState(serverName);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +33,22 @@ export function GeneralTab({
   const [pending, startTransition] = useTransition();
   const [transferring, setTransferring] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [salasLigadas, setSalasLigadas] = useState(salasDeGrupo);
+  const [salasErro, setSalasErro] = useState<string | null>(null);
+  const [salasPending, iniciarSalas] = useTransition();
+
+  function alternarSalas(proximo: boolean) {
+    setSalasErro(null);
+    setSalasLigadas(proximo);
+    iniciarSalas(async () => {
+      const r = await definirSalasDeGrupoAction({ serverId, ligado: proximo });
+      if (!r.ok) {
+        setSalasLigadas(!proximo);
+        setSalasErro(r.error);
+      }
+    });
+  }
 
   function save() {
     setError(null);
@@ -109,6 +129,19 @@ export function GeneralTab({
           </div>
         </div>
       ) : null}
+
+      <div className="mt-2 rounded-md border border-line bg-base-900 px-3.5 py-1">
+        <ToggleRow
+          title="Salas de grupo por jogo"
+          description="Deixa qualquer membro abrir uma sala de voz temporaria marcada com o jogo que esta jogando. A sala aparece no painel de membros, em 'Jogando agora', e some sozinha quando esvazia."
+          checked={salasLigadas}
+          onCheckedChange={alternarSalas}
+          disabled={salasPending}
+        />
+        {salasErro ? (
+          <p className="pb-2 text-[12px] text-signal-dnd">{salasErro}</p>
+        ) : null}
+      </div>
 
       <VitrineSection serverId={serverId} />
 

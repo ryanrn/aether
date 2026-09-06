@@ -267,6 +267,13 @@ model Server {
   /// vinculou aquele jogo (ver `Role.jogoNormalizado`).
   cargoPorJogo Boolean @default(false)
 
+  /// Permite membros criarem salas de grupo (LFG) por jogo (fase 2, estagio 3).
+  ///
+  /// DESLIGADO por padrao: sala de grupo e canal de voz que qualquer membro
+  /// cria, e sem limite isso e vetor de bagunca. Ligado, o membro cria uma
+  /// sala `isTemporary` marcada com o jogo; ela some quando esvazia.
+  salasDeGrupo Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -377,8 +384,12 @@ model Channel {
   position    Int         @default(0)
   /// canal privado: so quem tem overwrite de allow enxerga
   isPrivate   Boolean     @default(false)
-  /// canal temporario: removido quando esvazia (fase 2/3)
+  /// canal temporario: o gateway remove quando esvazia (fase 2, estagio 3)
   isTemporary Boolean     @default(false)
+  /// sala de grupo (LFG): o jogo que ela junta. null = canal comum.
+  jogo        String?
+  /// quem criou a sala de grupo — janela de carencia criar->entrar e "sua sala"
+  criadaPor   String?
   /// limite de usuarios simultaneos em voz (null = ilimitado)
   userLimit   Int?
   createdAt   DateTime    @default(now())
@@ -389,6 +400,8 @@ model Channel {
 
   @@index([serverId, position])
   @@index([categoryId])
+  /// a varredura de salas efemeras filtra por (servidor, temporario)
+  @@index([serverId, isTemporary])
 }
 
 /// Excecoes de permissao por canal — base dos canais privados (fase 2).

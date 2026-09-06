@@ -670,9 +670,13 @@ function ChannelRow({
           {channel.isTemporary ? (
             <span
               className="ml-1 shrink-0 rounded-[3px] border border-line-strong px-1 font-mono text-[9px] uppercase text-ink-500"
-              title="Canal temporario: some quando esvazia (fase 3)"
+              title={
+                channel.jogo
+                  ? `Sala de grupo de ${channel.jogo} — some quando esvazia`
+                  : "Canal temporario: some quando esvazia"
+              }
             >
-              tmp
+              {channel.jogo ? "grupo" : "tmp"}
             </span>
           ) : null}
           {unread > 0 ? (

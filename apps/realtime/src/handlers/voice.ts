@@ -10,6 +10,7 @@ import { log } from "@aether/shared/log";
 import { loadPlan } from "@aether/access";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
+import { talvezRemoverSalaEfemera } from "../voz/salas-efemeras";
 import {
   applyServerMute,
   conferirQualidadeDaTela,
@@ -149,6 +150,7 @@ export function registerVoiceHandlers(
       // O limite so vale para quem esta entrando de fora: trocar de aba dentro
       // do mesmo canal nao pode ser bloqueado pelo proprio ocupante.
       const current = await voiceParticipant(userId);
+      const canalAnterior = current?.channelId ?? null;
       if (
         channel.userLimit !== null &&
         current?.channelId !== channelId &&
@@ -186,6 +188,14 @@ export function registerVoiceHandlers(
       if (participant) broadcast(channel.serverId, participant);
 
       /**
+       * Saiu de uma sala de grupo para entrar aqui — ela pode ter esvaziado.
+       * `void`: nada no `voice:join` depende disto.
+       */
+      if (canalAnterior && canalAnterior !== channelId) {
+        void talvezRemoverSalaEfemera(io, canalAnterior);
+      }
+
+      /**
        * O token sai daqui, depois da checagem de permissao que ja foi feita
        * acima. As permissoes viram grants assinados: sem SPEAK o token nao
        * permite publicar microfone, e quem impoe isso passa a ser o SFU.
@@ -216,7 +226,10 @@ export function registerVoiceHandlers(
 
   socket.on("voice:leave", async () => {
     const left = await leaveVoice(userId);
-    if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
+    if (left) {
+      broadcast(left.serverId, voiceDeparture(userId, left.user));
+      void talvezRemoverSalaEfemera(io, left.channelId);
+    }
   });
 
   /**
@@ -636,6 +649,10 @@ export function registerVoiceHandlers(
 
       const participant = await voiceParticipant(targetId);
       if (participant) broadcast(target.serverId, participant);
+
+      // Tiraram a pessoa de uma sala de grupo — ela pode ter esvaziado.
+      void talvezRemoverSalaEfemera(io, target.channelId);
+
       respond({ ok: true });
     } catch (error) {
       log.error("gateway.voice.move", "voice:move falhou", {
@@ -652,7 +669,10 @@ export function registerVoiceHandlers(
       // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
       // mesma pessoa nao devem tirar ninguem da call.
       const left = await leaveVoice(userId, socket.id);
-      if (left) broadcast(left.serverId, voiceDeparture(userId, left.user));
+      if (left) {
+        broadcast(left.serverId, voiceDeparture(userId, left.user));
+        void talvezRemoverSalaEfemera(io, left.channelId);
+      }
     })().catch((erro) => {
       log.error("gateway.voice.disconnect", "disconnect (voice) falhou", {
         err: erro,

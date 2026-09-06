@@ -115,6 +115,7 @@ export default async function ServerSettingsPage({
             bans={bans}
             audit={audit}
             cargoPorJogo={data.cargoPorJogo}
+            salasDeGrupo={data.salasDeGrupo}
           />
         </div>
       </div>

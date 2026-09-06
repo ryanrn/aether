@@ -401,7 +401,7 @@ coisa social.
 | --- | --- | --- |
 | 1 | **"Jogando agora" no painel de membros** — agrupa quem esta online por jogo (com a capa do IGDB). So UI, sem migracao. | ✅ |
 | 2 | **Cargo automatico por jogo** — opt-in por servidor. Migracao `20260906140000_cargo_por_jogo`. | ✅ |
-| 3 | Salas de voz efemeras + "Procurar grupo" (LFG) — *migracao pequena* | ⬜ |
+| 3 | **Salas de voz efemeras + "Procurar grupo" (LFG)** — opt-in por servidor. Migracao `20260906150000_salas_de_grupo`. | ✅ |
 | 4 | LFG cross-servidor (matchmaking global) | ⬜ |
 
 ### O que fechou no estagio 1
@@ -477,6 +477,68 @@ Migracao: `20260906140000_cargo_por_jogo` (à mão — `Server.cargoPorJogo`,
   por troca de jogo. So a config (ligar/desligar, vincular) entra no log.
 - **`verify-phase2`/`verify-phase3` nao exercitam isto** — precisam do app de
   desktop mandando `presence:game`. Coberto por teste unitario e pelo build.
+
+### O que fechou no estagio 3 — salas efemeras + Procurar grupo
+
+**Duas metades de uma coisa.** `Channel.isTemporary` ja existia como flag SEM
+comportamento (o selo "tmp" na sidebar prometia "some quando esvazia (fase 3)").
+Agora some de verdade, e uma sala temporaria marcada com um jogo e uma **sala de
+grupo (LFG)**.
+
+- **Migracao `20260906150000_salas_de_grupo`:** `Channel.jogo` (o jogo que a
+  sala junta), `Channel.criadaPor` (quem abriu — janela de carencia e "1 por
+  pessoa"), `Server.salasDeGrupo` (opt-in, default `false`),
+  `@@index([serverId, isTemporary])`.
+
+- **Auto-remocao — no gateway** (`apps/realtime/src/voz/salas-efemeras.ts`):
+  - `talvezRemoverSalaEfemera(io, channelId)` — chamado depois de todo
+    `leaveVoice` (`voice:leave`, `disconnect`, `voice:join` do canal anterior,
+    `voice:move`). Apaga se: `isTemporary`, ocupacao zero (`countInChannel`, a
+    verdade em memoria), e mais velho que a **carencia de 30s** (senao a sala
+    recem-criada morreria antes de o criador entrar). `resyncEavisarServidor`
+    avisa os clientes.
+  - `varrerSalasEfemeras(io)` — `setInterval` de 3 min no `index.ts`. Pega o que
+    o caminho por evento nao pega: sala criada e ninguem entrou, ou gateway
+    reiniciado (ocupacao em memoria zerou sem gerar `leaveVoice`).
+
+- **Criar sala — no web:** `criarSalaDeGrupoAction({ serverId, jogo })`.
+  Qualquer membro com `CONNECT`, com o toggle ligado. Limites: **1 sala ativa
+  por pessoa/servidor** (devolve a que existe), **teto de 8** salas por
+  servidor, rate-limit 5/10min por conta. Cria um canal de voz `isTemporary`
+  solto e devolve o `channelId`; o cliente navega e entra com `useEntrarNaVoz`.
+
+- **Painel:** dentro de "Jogando agora" (estagio 1), por jogo, o
+  `<SalasDeGrupoDoJogo>` mostra as salas abertas daquele jogo (contagem viva +
+  Entrar) e, se voce esta jogando aquilo e nao tem sala, "Criar sala de grupo".
+  Uma sala aberta faz o jogo aparecer no painel mesmo sem ninguem com status
+  "jogando".
+
+- **Toggle** "Salas de grupo por jogo" na aba **Geral** das config (so
+  `MANAGE_SERVER`). Desligar nao apaga as salas abertas — elas somem quando
+  esvaziam; so impede novas.
+
+- Sidebar: sala de grupo aparece nos canais soltos com o selo **grupo** (antes
+  era so "tmp").
+
+Testes: `salas-de-grupo` (limites do `criarSalaDeGrupo`), `salas-efemeras` (as
+tres guardas do `talvezRemoverSalaEfemera`). 600 passando, typecheck +
+check:esm + next build ok.
+
+### Limitacoes conhecidas (estagio 3)
+
+- **LFG e dentro do servidor.** Achar quem joga X em QUALQUER servidor e o
+  estagio 4.
+- **A sala fica solta na arvore, visivel a todo mundo com `VIEW_CHANNEL`** no
+  servidor. Sala de grupo privada (so convidados) nao entra no MVP.
+- **Casa jogo por texto** (`normalizarNome`, mesmo do estagio 2). A sala nasce
+  com o nome exato do jogo vindo do painel, entao o casamento com o grupo e
+  direto; digitar o jogo torto e o unico jeito de errar.
+- **Janela de ate 3 min + 30s** entre uma sala vazia (criada e abandonada, ou
+  orfa de restart) e a varredura apaga-la.
+- **Gateway caindo com salas cheias:** a varredura so apaga depois que
+  esvaziam — uma sala cheia sobrevive ao restart (o que e o certo).
+- **`verify-phase*` nao exercitam** — precisa de 2 clientes numa call. Coberto
+  por unitario + build.
 
 ---
 

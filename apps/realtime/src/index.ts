@@ -15,6 +15,7 @@ import { registerDmHandlers } from "./handlers/dm";
 import { registerReactionHandlers } from "./handlers/reactions";
 import { joinAllServerRooms } from "./rooms";
 import { limparCargosDeJogoNaConexao } from "./games/cargos-por-jogo";
+import { varrerSalasEfemeras } from "./voz/salas-efemeras";
 import {
   attachSocket,
   isConnected,
@@ -342,6 +343,17 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
 
 const stopSessionGuard = startSessionGuard(io);
 
+/**
+ * Varredura das salas de voz efemeras. O caminho por evento
+ * (`talvezRemoverSalaEfemera`) cobre "a ultima pessoa saiu"; esta varredura
+ * pega o resto — sala criada e ninguem entrou, ou o gateway reiniciou com
+ * salas cheias que depois esvaziaram sem gerar `leaveVoice`.
+ */
+const salasEfemerasTimer = setInterval(() => {
+  void varrerSalasEfemeras(io);
+}, 3 * 60 * 1000);
+salasEfemerasTimer.unref?.();
+
 httpServer.listen(env.port, () => {
   log.info("gateway.boot", `gateway ouvindo na porta ${env.port}`, {
     porta: env.port,
@@ -366,6 +378,7 @@ async function shutdown(signal: string) {
   log.info("gateway.encerrando", `${signal} recebido, encerrando`, { signal });
 
   stopSessionGuard();
+  clearInterval(salasEfemerasTimer);
   spotifyPoller.parar();
 
   // Sem isso, uma conexao keep-alive ociosa segura a porta ate o timeout dela.

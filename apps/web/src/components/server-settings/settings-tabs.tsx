@@ -25,6 +25,7 @@ export function SettingsTabs({
   bans,
   audit,
   cargoPorJogo,
+  salasDeGrupo,
 }: {
   serverId: string;
   serverName: string;
@@ -36,6 +37,7 @@ export function SettingsTabs({
   bans: ServerBan[];
   audit: { entries: AuditEntry[]; hasMore: boolean };
   cargoPorJogo: boolean;
+  salasDeGrupo: boolean;
 }) {
   const canManageServer = viewerCan(viewer, "MANAGE_SERVER");
   const canManageRoles = viewerCan(viewer, "MANAGE_ROLES");
@@ -85,6 +87,7 @@ export function SettingsTabs({
           serverIconUrl={serverIconUrl}
           members={members}
           viewer={viewer}
+          salasDeGrupo={salasDeGrupo}
         />
       ) : null}
 

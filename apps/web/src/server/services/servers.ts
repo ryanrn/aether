@@ -170,6 +170,11 @@ export interface ServerContext {
    * 2). Governa se `Role.jogoVinculado` surte efeito. So a aba de cargos usa.
    */
   cargoPorJogo: boolean;
+  /**
+   * Salas de grupo (LFG) ligadas neste servidor? (fase 2, estagio 3). Governa
+   * se o membro pode criar salas de grupo por jogo.
+   */
+  salasDeGrupo: boolean;
 }
 
 function toPublicChannel(channel: {
@@ -181,6 +186,8 @@ function toPublicChannel(channel: {
   position: number;
   isPrivate: boolean;
   isTemporary: boolean;
+  jogo?: string | null;
+  criadaPor?: string | null;
   userLimit: number | null;
 }): PublicChannel {
   return {
@@ -192,6 +199,8 @@ function toPublicChannel(channel: {
     position: channel.position,
     isPrivate: channel.isPrivate,
     isTemporary: channel.isTemporary,
+    jogo: channel.jogo ?? null,
+    criadaPor: channel.criadaPor ?? null,
     userLimit: channel.userLimit,
   };
 }
@@ -217,6 +226,7 @@ export async function getServerContext(
       iconUrl: true,
       ownerId: true,
       cargoPorJogo: true,
+      salasDeGrupo: true,
       _count: { select: { members: true } },
       categories: {
         orderBy: { position: "asc" },
@@ -233,6 +243,8 @@ export async function getServerContext(
           position: true,
           isPrivate: true,
           isTemporary: true,
+          jogo: true,
+          criadaPor: true,
           userLimit: true,
         },
       },
@@ -349,6 +361,7 @@ export async function getServerContext(
       jogoVinculado: role.jogoVinculado,
     })),
     cargoPorJogo: server.cargoPorJogo,
+    salasDeGrupo: server.salasDeGrupo,
   };
 }
 

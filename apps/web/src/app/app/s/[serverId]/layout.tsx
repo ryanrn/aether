@@ -155,6 +155,7 @@ export default async function ServerLayout({
               ...data.categories.flatMap((category) => category.channels),
             ].filter((channel) => channel.type === "VOICE")}
             viewer={viewer}
+            salasDeGrupo={data.salasDeGrupo}
           />
         </div>
 

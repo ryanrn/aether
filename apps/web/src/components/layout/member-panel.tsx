@@ -16,9 +16,11 @@ import {
   UserActivityCard,
   type CardAnchor,
 } from "@/components/profile/user-activity-card";
+import { normalizarNome } from "@aether/shared";
 import { canManageRole, viewerCan } from "@/lib/permissions";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
+import { SalasDeGrupoDoJogo } from "./salas-de-grupo-do-jogo";
 
 /**
  * Painel de membros.
@@ -40,6 +42,7 @@ export function MemberPanel({
   serverName,
   voiceChannels,
   viewer,
+  salasDeGrupo,
 }: {
   members: PublicMember[];
   /** ids que ja tem amizade, pedido pendente ou bloqueio comigo */
@@ -52,6 +55,8 @@ export function MemberPanel({
   /** canais de voz, para o cartao resolver o nome do canal ocupado */
   voiceChannels: PublicChannel[];
   viewer: ViewerContext;
+  /** salas de grupo (LFG) ligadas no servidor — fase 2, estagio 3 */
+  salasDeGrupo: boolean;
 }) {
   const [editing, setEditing] = useState<PublicMember | null>(null);
   const [openCard, setOpenCard] = useState<{
@@ -97,8 +102,27 @@ export function MemberPanel({
     grupo.members.push(member);
     porJogo.set(act.game, grupo);
   }
+  /**
+   * Uma sala de grupo aberta tambem faz o jogo aparecer aqui, mesmo que
+   * ninguem no painel esteja com o status "jogando" — a sala foi criada com o
+   * nome exato do jogo, entao a chave casa.
+   */
+  for (const canal of voiceChannels) {
+    if (!canal.isTemporary || !canal.jogo) continue;
+    if (!porJogo.has(canal.jogo)) {
+      porJogo.set(canal.jogo, { icon: null, cover: null, members: [] });
+    }
+  }
   const jogos = [...porJogo.entries()].sort(
     (a, b) => b[1].members.length - a[1].members.length,
+  );
+
+  /** Meu userId e o jogo que EU estou jogando — para "Criar sala". */
+  const meuUserId =
+    members.find((m) => m.id === viewer.memberId)?.user.id ?? null;
+  const meuJogo = meuUserId ? (activity[meuUserId]?.game ?? null) : null;
+  const jaTenhoSala = voiceChannels.some(
+    (c) => c.isTemporary && c.criadaPor != null && c.criadaPor === meuUserId,
   );
 
   const groups = new Map<string, { color: string; members: PublicMember[] }>();
@@ -169,6 +193,17 @@ export function MemberPanel({
                         {grupo.members.length}
                       </span>
                     </div>
+                    <SalasDeGrupoDoJogo
+                      serverId={serverId}
+                      jogo={game}
+                      canaisDeVoz={voiceChannels}
+                      podeCriar={
+                        salasDeGrupo &&
+                        meuJogo != null &&
+                        normalizarNome(meuJogo) === normalizarNome(game)
+                      }
+                      jaTenhoSala={jaTenhoSala}
+                    />
                     <ul className="flex flex-col gap-0.5">
                       {grupo.members.map((member) => (
                         <MemberRow

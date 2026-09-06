@@ -186,6 +186,10 @@ export interface PublicChannel {
   position: number;
   isPrivate: boolean;
   isTemporary: boolean;
+  /** sala de grupo (LFG): o jogo que ela junta, ou `null` num canal comum */
+  jogo?: string | null;
+  /** id de quem abriu a sala de grupo, ou `null` (fase 2, estagio 3) */
+  criadaPor?: string | null;
   userLimit: number | null;
 }
 
