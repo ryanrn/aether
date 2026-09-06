@@ -986,18 +986,24 @@ export interface ConversaDmNaoLida {
  * DERIVADO de `unread` + `conversasDm`, pelo mesmo motivo do `useUnreadByServer`:
  * um segundo contador em paralelo acabaria discordando do que zera quando a
  * conversa abre (`setActiveChannel`).
+ *
+ * MESMO padrao do `useVoiceParticipants`: seleciona os mapas crus (refs
+ * estaveis) e deriva a lista com `useMemo`. `useShallow` sobre uma lista de
+ * objetos novos a cada calculo nunca da igual — e um laco de render infinito.
  */
 export function useConversasDm(): ConversaDmNaoLida[] {
-  return useRealtimeStore(
-    useShallow((state) =>
-      Object.entries(state.conversasDm)
+  const conversasDm = useRealtimeStore((state) => state.conversasDm);
+  const unread = useRealtimeStore((state) => state.unread);
+  return useMemo(
+    () =>
+      Object.entries(conversasDm)
         .map(([dmId, outro]) => ({
           dmId,
           outro,
-          naoLidas: state.unread[dmId] ?? 0,
+          naoLidas: unread[dmId] ?? 0,
         }))
         .sort((a, b) => b.naoLidas - a.naoLidas),
-    ),
+    [conversasDm, unread],
   );
 }
 

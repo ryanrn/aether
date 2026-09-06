@@ -205,7 +205,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
          * As DMs em si chegam pela sala pessoal (`message:new`), como sempre.
          */
         socketInstance.emit("dm:list", (r) => {
-          if (r.ok) useRealtimeStore.getState().hidratarConversasDm(r.conversas);
+          if (r?.ok) {
+            useRealtimeStore.getState().hidratarConversasDm(r.conversas);
+          }
         });
       });
 
