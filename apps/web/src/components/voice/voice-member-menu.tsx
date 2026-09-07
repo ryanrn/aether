@@ -12,6 +12,7 @@ import {
   DEFAULT_VOLUME,
   readUserVolumes,
   saveUserVolume,
+  VOLUME_MAX,
 } from "@/lib/voice/volumes";
 import { cn } from "@/lib/utils";
 
@@ -210,7 +211,12 @@ export function VoiceMemberMenu({
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] text-ink-300">Volume</span>
+              <span className="text-[12px] text-ink-300">
+                Volume
+                {volume > 1 ? (
+                  <span className="ml-1.5 text-signal-idle">amplificado</span>
+                ) : null}
+              </span>
               <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-500">
                 {Math.round(volume * 100)}%
               </span>
@@ -218,7 +224,7 @@ export function VoiceMemberMenu({
             <input
               type="range"
               min={0}
-              max={100}
+              max={Math.round(VOLUME_MAX * 100)}
               step={1}
               value={Math.round(volume * 100)}
               onChange={(event) =>
@@ -227,6 +233,15 @@ export function VoiceMemberMenu({
               aria-label={`Volume de ${participant.user.displayName}`}
               className="mt-2 block w-full accent-accent-500"
             />
+            {/*
+              Marcas: 100% e o mix cru, acima disso o room.ts amplifica via
+              GainNode (o mesmo caminho do volume de saida global).
+            */}
+            <div className="mt-1 flex justify-between font-mono text-[9px] text-ink-600">
+              <span>0</span>
+              <span>100%</span>
+              <span>{Math.round(VOLUME_MAX * 100)}%</span>
+            </div>
           </div>
         ) : null}
 

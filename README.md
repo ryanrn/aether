@@ -2283,8 +2283,9 @@ nele), e o proprio bucket recusa mime fora da lista mesmo com a service_role.
 ## Limitacoes conhecidas dos AJUSTES DE USO (arvore em tempo real, volumes)
 
 Fora do roteiro das 7 fases: pedidos que sairam do uso real com pessoas na
-call. Pronto: a arvore de canais atualiza sozinha, volume por pessoa, e volume
-do audio de tela.
+call. Pronto: a arvore de canais atualiza sozinha, volume por pessoa, volume
+do audio de tela, e volume de saida global — os tres com amplificacao (0..200%)
+acima de 100%.
 
 ### Foto de perfil
 
@@ -2449,21 +2450,52 @@ Preferencia LOCAL, guardada no `localStorage`: e o volume com que EU ouço os
 outros. Nao passa pelo gateway nem pelo banco — se passasse, mexer no volume
 de alguem afetaria o que os outros escutam.
 
-- **O teto e 100%, nao da para amplificar.** `HTMLMediaElement.volume` aceita
-  0..1 por especificacao; acima disso lanca IndexSizeError. Amplificar exigiria
-  rotear todo o audio por um GainNode da Web Audio API — este projeto ja apanhou
-  de reproducao de audio (ver o comentario sobre `display:none` em
-  `lib/voice/room.ts`), e trocar "consigo abaixar quem esta alto" por "posso ter
-  quebrado o audio de todo mundo" nao compensa. Para equilibrar vozes
-  desiguais, abaixe a mais alta.
+- **Todos os volumes vao de 0 a 200% (`VOLUME_MAX`).** Ate 100% e o MIX
+  RELATIVO entre as fontes; acima disso e ganho de verdade (ver
+  _Amplificacao_, abaixo). Para equilibrar vozes desiguais sem amplificar nada,
+  continua valendo: abaixe a mais alta.
 - **Um controle so para o audio de TODAS as telas**, nao um por transmissao.
   Na pratica uma pessoa compartilha por vez; um slider por miniatura seria mais
   interface do que utilidade.
 - **O volume nao viaja entre navegadores.** Trocar de maquina recomeça em 100%.
-- **Nada disso foi exercitado numa call real de duas pessoas.** Os quinze
-  testes de `tests/unit/volumes.test.ts` cobrem a logica pura (corte de faixa,
+- **Nada disso foi exercitado numa call real de duas pessoas.** Os testes de
+  `tests/unit/volumes.test.ts` cobrem a logica pura (corte de faixa,
   persistencia, armazenamento corrompido ou bloqueado); o efeito sonoro em si
   depende de duas pessoas numa call e foi deixado para o teste de uso.
+
+### Amplificacao (qualquer volume acima de 100%)
+
+Tres entradas, todas locais (`localStorage`), todas 0..200%:
+
+- **volume de saida global** — slider em `Config -> Voz`, multiplica TUDO
+  (chave `aether.volumes.output`);
+- **volume por pessoa** — menu do participante (chave `aether.volumes.users`);
+- **volume do audio de tela** — menu da transmissao (chave `aether.volumes.screen`).
+
+O que chega ao ouvido e `saida_global x volume_da_fonte`. Ate 1.0 e o caminho
+de reproducao de sempre: `element.volume`, com `setSinkId` por `<audio>`.
+**Acima de 1.0** (de qualquer uma das entradas, ou do PRODUTO delas) a fonte e
+mutada e passa a tocar por uma derivacao Web Audio propria
+(`MediaStreamSource -> GainNode -> AudioContext`) — o unico jeito de amplificar,
+ja que `HTMLMediaElement.volume` nao passa de 1. Abaixo de 100% o codigo antigo
+nao e tocado.
+
+- **No modo amplificado quem escolhe o alto-falante e o `AudioContext`**, nao
+  os `<audio>` (que estao mutados). `AudioContext.setSinkId` e Chromium 110+ —
+  fora do Chromium a saida amplificada vai para o dispositivo padrao do
+  sistema, a mesma degradacao que a escolha de alto-falante ja tem no Firefox.
+- **O primeiro audio amplificado pode sair mudo por um instante** se o
+  `AudioContext` nascer suspenso (politica de autoplay, sem gesto recente).
+  Mexer em qualquer slider (ou qualquer clique) destrava. Na pratica entrar na
+  call ja e o gesto; no Electron a politica e permissiva.
+- **Global e por-pessoa MULTIPLICAM.** 200% x 200% = 400%, e a essa altura
+  qualquer voz normalizada satura (clipa). O teto de 200% por slider e o mesmo
+  do Discord; nao ha limitador/compressor no caminho, e o produto nao e
+  limitado.
+- **Nao foi exercitado numa call real.** A logica pura esta em
+  `tests/unit/volumes.test.ts`; a amplificacao em si (grafo, troca de
+  alto-falante amplificado, ensurdecer no meio) depende de duas pessoas numa
+  call e ficou para o teste de uso.
 
 ## Transferencia de posse e exclusao de servidor
 

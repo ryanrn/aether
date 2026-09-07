@@ -12,6 +12,11 @@ import {
   type AudioDevice,
 } from "@/lib/voice/devices";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import {
+  VOLUME_MAX,
+  readOutputVolume,
+  saveOutputVolume,
+} from "@/lib/voice/volumes";
 import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +41,8 @@ export function VoiceTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const [speakers, setSpeakers] = useState<AudioDevice[]>([]);
   const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(null);
+  /** 0..VOLUME_MAX; 1 = 100%. Lido do localStorage apos montar. */
+  const [outputVolume, setOutputVolume] = useState(1);
 
   const roomControls = useRealtimeStore((state) => state.roomControls);
 
@@ -44,7 +51,16 @@ export function VoiceTab() {
     void listMicrophones().then(setDevices);
     setSelectedSpeaker(readPreferredSpeaker());
     void listSpeakers().then(setSpeakers);
+    setOutputVolume(readOutputVolume());
   }, []);
+
+  function mudarVolumeDeSaida(porcentagem: number) {
+    const valor = porcentagem / 100;
+    setOutputVolume(valor);
+    saveOutputVolume(valor);
+    // Sem call ativa a escolha fica guardada e vale na proxima conexao.
+    roomControls?.setOutputVolume(valor);
+  }
 
   async function pickSpeaker(deviceId: string) {
     setSelectedSpeaker(deviceId);
@@ -123,6 +139,44 @@ export function VoiceTab() {
             ))}
           </div>
         )}
+      </Field>
+
+      <Field
+        label="Volume de saida"
+        hint="Vale para tudo que voce ouve na call — microfones e audio de tela — sobre o volume de cada pessoa. Acima de 100% amplifica no seu aparelho e pode distorcer."
+      >
+        <div className="rounded-md border border-line bg-base-900 px-3 py-3">
+          <div className="flex items-center justify-between">
+            <span
+              className={cn(
+                "text-[12px]",
+                outputVolume > 1 ? "text-signal-idle" : "text-ink-400",
+              )}
+            >
+              {outputVolume > 1 ? "Amplificado" : "Normal"}
+            </span>
+            <span className="font-mono text-[11px] tabular-nums text-ink-400">
+              {Math.round(outputVolume * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={Math.round(VOLUME_MAX * 100)}
+            step={1}
+            value={Math.round(outputVolume * 100)}
+            onChange={(event) =>
+              mudarVolumeDeSaida(Number(event.target.value))
+            }
+            aria-label="Volume de saida"
+            className="mt-2 block w-full accent-accent-500"
+          />
+          <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-500">
+            <span>0%</span>
+            <span>100%</span>
+            <span>{Math.round(VOLUME_MAX * 100)}%</span>
+          </div>
+        </div>
       </Field>
 
       {/* Teste de microfone (Design v2 isolado) */}

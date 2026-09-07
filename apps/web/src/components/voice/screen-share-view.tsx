@@ -9,6 +9,7 @@ import {
   DEFAULT_VOLUME,
   readScreenVolume,
   saveScreenVolume,
+  VOLUME_MAX,
 } from "@/lib/voice/volumes";
 import { mediaLog } from "@/lib/voice/debug";
 import { cn } from "@/lib/utils";
@@ -406,7 +407,7 @@ function MenuFlutuante({
         <input
           type="range"
           min={0}
-          max={100}
+          max={Math.round(VOLUME_MAX * 100)}
           step={1}
           value={Math.round(volume * 100)}
           onChange={(e) => mudarVolume(Number(e.target.value) / 100)}
@@ -519,7 +520,7 @@ function ScreenAudioVolume() {
             <input
               type="range"
               min={0}
-              max={100}
+              max={Math.round(VOLUME_MAX * 100)}
               step={1}
               value={Math.round(volume * 100)}
               onChange={(event) => change(Number(event.target.value) / 100)}

@@ -2,20 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clampVolume,
   DEFAULT_VOLUME,
+  readOutputVolume,
   readScreenVolume,
   readUserVolumes,
+  saveOutputVolume,
   saveScreenVolume,
   saveUserVolume,
+  VOLUME_MAX,
 } from "../../apps/web/src/lib/voice/volumes";
 
 /**
- * Volume por pessoa e da tela.
+ * Volume por pessoa, da tela e de saida global.
  *
  * E preferencia local guardada no localStorage, entao o que importa testar e
  * a resiliencia: o conteudo desse armazenamento e editavel pelo usuario e
  * sobrevive a versoes do app. Um valor estranho ali nao pode virar exceção no
- * meio de uma call — `HTMLMediaElement.volume` lanca IndexSizeError para
- * qualquer coisa fora de 0..1.
+ * meio de uma call — todo volume vai de 0 a `VOLUME_MAX` (200%); e o `room.ts`
+ * quem garante que `HTMLMediaElement.volume` nunca recebe mais que 1 (acima
+ * disso usa um GainNode).
  */
 
 class MemoryStorage {
@@ -46,24 +50,26 @@ afterEach(() => {
 });
 
 describe("clampVolume", () => {
-  it("mantem valores validos", () => {
+  it("mantem valores validos, inclusive amplificacao acima de 100%", () => {
     expect(clampVolume(0)).toBe(0);
     expect(clampVolume(0.5)).toBe(0.5);
     expect(clampVolume(1)).toBe(1);
+    expect(clampVolume(1.8)).toBe(1.8);
   });
 
-  it("corta acima de 1 e abaixo de 0", () => {
+  it("corta no teto de 200% e no piso de 0", () => {
     /**
-     * O teto de 1 nao e estetico: `element.volume = 1.5` lanca IndexSizeError
-     * e derrubaria o audio da call inteira.
+     * Passar de 200% (`VOLUME_MAX`) nao e mais alto, e distorcido. E abaixo de
+     * 0 nao existe.
      */
-    expect(clampVolume(2)).toBe(1);
+    expect(clampVolume(VOLUME_MAX)).toBe(2);
+    expect(clampVolume(3)).toBe(VOLUME_MAX);
     expect(clampVolume(-1)).toBe(0);
   });
 
   it("devolve o padrao para valor que nao e numero utilizavel", () => {
     expect(clampVolume(NaN)).toBe(DEFAULT_VOLUME);
-    expect(clampVolume(Infinity)).toBe(1);
+    expect(clampVolume(Infinity)).toBe(DEFAULT_VOLUME);
   });
 });
 
@@ -95,9 +101,14 @@ describe("volume por usuario", () => {
     expect(all).not.toHaveProperty("baixo");
   });
 
-  it("corta valor fora da faixa ao guardar", () => {
+  it("guarda amplificacao por pessoa (acima de 100%)", () => {
+    saveUserVolume("baixinho", 1.75);
+    expect(readUserVolumes()["baixinho"]).toBe(1.75);
+  });
+
+  it("corta valor fora da faixa ao guardar — teto de 200%", () => {
     saveUserVolume("usuario-1", 5);
-    expect(readUserVolumes()["usuario-1"]).toBe(1);
+    expect(readUserVolumes()["usuario-1"]).toBe(VOLUME_MAX);
   });
 
   it("ignora JSON corrompido em vez de lancar", () => {
@@ -118,7 +129,7 @@ describe("volume por usuario", () => {
       "aether.volumes.users",
       JSON.stringify({ exagerado: 99, negativo: -3 }),
     );
-    expect(readUserVolumes()).toEqual({ exagerado: 1, negativo: 0 });
+    expect(readUserVolumes()).toEqual({ exagerado: VOLUME_MAX, negativo: 0 });
   });
 });
 
@@ -140,6 +151,53 @@ describe("volume da tela", () => {
   it("cai no padrao se o valor guardado nao for numero", () => {
     storage.setItem("aether.volumes.screen", "muito alto");
     expect(readScreenVolume()).toBe(DEFAULT_VOLUME);
+  });
+});
+
+describe("volume de saida global", () => {
+  it("comeca em 100% quando nunca foi definido", () => {
+    expect(readOutputVolume()).toBe(DEFAULT_VOLUME);
+  });
+
+  it("guarda e le de volta, inclusive acima de 100%", () => {
+    /**
+     * Diferente do volume por pessoa: este AMPLIFICA, entao passar de 1 e
+     * legitimo — o teto e 200%, nao 100%.
+     */
+    saveOutputVolume(1.6);
+    expect(readOutputVolume()).toBe(1.6);
+  });
+
+  it("corta no teto de 200% — passar disso e clipping, nao volume", () => {
+    saveOutputVolume(9);
+    expect(readOutputVolume()).toBe(VOLUME_MAX);
+  });
+
+  it("nao aceita negativo", () => {
+    saveOutputVolume(-2);
+    expect(readOutputVolume()).toBe(0);
+  });
+
+  it("aceita zero — silenciar a saida inteira e um valor legitimo", () => {
+    saveOutputVolume(0);
+    expect(readOutputVolume()).toBe(0);
+  });
+
+  it("cai no padrao se o valor guardado nao for numero", () => {
+    storage.setItem("aether.volumes.output", "alto pra caramba");
+    expect(readOutputVolume()).toBe(DEFAULT_VOLUME);
+  });
+
+  it("nao lanca quando o localStorage recusa escrever", () => {
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("QuotaExceededError");
+        },
+      },
+    });
+    expect(() => saveOutputVolume(1.5)).not.toThrow();
   });
 });
 

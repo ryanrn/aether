@@ -186,6 +186,8 @@ interface RealtimeState {
     setUserVolume: (userId: string, volume: number) => void;
     /** volume local do audio que vem junto do compartilhamento de tela (0..1) */
     setScreenAudioVolume: (volume: number) => void;
+    /** volume de saida global (0..2) — multiplica tudo que chega; amplia acima de 100% */
+    setOutputVolume: (volume: number) => void;
     /** troca a qualidade da transmissao ativa, sem reabrir o seletor de tela */
     setSharePreset: (preset: SharePresetId) => Promise<boolean>;
     /** liga/desliga a camera; `false` quando o dispositivo recusou */

@@ -40,6 +40,7 @@ import {
 import {
   clampVolume,
   DEFAULT_VOLUME,
+  readOutputVolume,
   readScreenVolume,
   readUserVolumes,
 } from "./volumes";
@@ -123,6 +124,12 @@ export interface VoiceRoomHandle {
   setUserVolume: (userId: string, volume: number) => void;
   /** volume do audio que vem junto dos compartilhamentos de tela (0..1) */
   setScreenAudioVolume: (volume: number) => void;
+  /**
+   * Volume de saida global (0..2). Multiplica TUDO que chega — mic e tela —
+   * sobre o volume relativo de cada fonte. Ate 1.0 e o `element.volume` de
+   * sempre; acima, a fonte e mutada e sai por um `GainNode` proprio.
+   */
+  setOutputVolume: (volume: number) => void;
   /** abre o seletor nativo do navegador e publica. `false` se o usuario cancelou. */
   startScreenShare: (
     preset: SharePresetId,
@@ -428,6 +435,25 @@ export async function connectVoiceRoom({
   );
   let screenVolume = readScreenVolume();
 
+  /**
+   * Volume de saida global — 0..2, multiplica todo o audio que chega sobre o
+   * volume relativo de cada fonte. Ate 1.0 e o caminho de sempre
+   * (`element.volume`); acima disso a fonte entra na Web Audio, ver
+   * `garantirGrafoDeAudio`.
+   */
+  let outputVolume = readOutputVolume();
+
+  /**
+   * So nasce quando alguem pede volume acima de 100% — ate la o audio sai
+   * direto pelos <audio>, com `setSinkId` por elemento, como sempre.
+   */
+  let grafoDeAudio: AudioContext | null = null;
+  /** Por elemento amplificado: a derivacao <stream> -> ganho -> saida. */
+  const estagiosDeGanho = new Map<
+    HTMLMediaElement,
+    { origem: MediaStreamAudioSourceNode; ganho: GainNode }
+  >();
+
   function bucketOf(identity: string): AttachedAudio {
     const existing = attachedAudio.get(identity);
     if (existing) return existing;
@@ -436,16 +462,106 @@ export async function connectVoiceRoom({
     return created;
   }
 
-  /** Volume efetivo de um elemento: ensurdecido zera tudo. */
+  function garantirGrafoDeAudio(): AudioContext | null {
+    if (grafoDeAudio) return grafoDeAudio;
+    try {
+      grafoDeAudio = new AudioContext();
+    } catch (erro) {
+      mediaLog("nao consegui abrir o AudioContext para amplificar", erro);
+      return null;
+    }
+    aplicarSinkNoGrafo();
+    return grafoDeAudio;
+  }
+
+  /**
+   * O destino do grafo ignora o `setSinkId` dos <audio>: no modo amplificado
+   * quem escolhe o alto-falante e o proprio contexto. `AudioContext.setSinkId`
+   * e Chromium 110+; fora dele cai no dispositivo padrao — a mesma degradacao
+   * que a escolha de alto-falante ja tem no Firefox.
+   */
+  function aplicarSinkNoGrafo(): void {
+    if (!grafoDeAudio || !preferredSpeaker) return;
+    const ctx = grafoDeAudio as AudioContext & {
+      setSinkId?: (sinkId: string) => Promise<void>;
+    };
+    if (typeof ctx.setSinkId !== "function") return;
+    void ctx.setSinkId(preferredSpeaker).catch((erro: unknown) => {
+      mediaLog("grafo: alto-falante escolhido recusado", erro);
+    });
+  }
+
+  function conectarGanho(
+    element: HTMLMediaElement,
+  ): { origem: MediaStreamAudioSourceNode; ganho: GainNode } | null {
+    const existente = estagiosDeGanho.get(element);
+    if (existente) return existente;
+    const ctx = garantirGrafoDeAudio();
+    if (!ctx || !(element.srcObject instanceof MediaStream)) return null;
+    /**
+     * Derivacao SEPARADA do <audio> (nao `createMediaElementSource`): o
+     * elemento nunca e sequestrado, entao mutar/desmutar continua funcionando
+     * e voltar para <=100% e so desconectar os nos.
+     */
+    const origem = ctx.createMediaStreamSource(element.srcObject);
+    const ganho = ctx.createGain();
+    origem.connect(ganho);
+    ganho.connect(ctx.destination);
+    const estagio = { origem, ganho };
+    estagiosDeGanho.set(element, estagio);
+    return estagio;
+  }
+
+  function desconectarGanho(element: HTMLMediaElement): void {
+    const estagio = estagiosDeGanho.get(element);
+    if (!estagio) return;
+    estagio.origem.disconnect();
+    estagio.ganho.disconnect();
+    estagiosDeGanho.delete(element);
+  }
+
+  /** 0..1 — o que `HTMLMediaElement.volume` aceita sem lancar IndexSizeError. */
+  function paraElemento(valor: number): number {
+    if (!Number.isFinite(valor)) return DEFAULT_VOLUME;
+    return Math.min(1, Math.max(0, valor));
+  }
+
+  /**
+   * Volume efetivo: saida global x volume da fonte, zero se ensurdecido. Ate
+   * 1.0 vai no `element.volume`; acima, o elemento e mutado e um `GainNode`
+   * assume — a peca que o Discord tambem usa para passar de 100%.
+   */
   function applyVolume(
     element: HTMLMediaElement,
     identity: string,
     isScreen: boolean,
   ): void {
-    element.muted = deafened;
-    element.volume = isScreen
+    const relativo = isScreen
       ? screenVolume
       : (userVolumes.get(identity) ?? DEFAULT_VOLUME);
+    const efetivo = deafened ? 0 : outputVolume * relativo;
+
+    if (efetivo > 1) {
+      const estagio = conectarGanho(element);
+      if (estagio && grafoDeAudio) {
+        element.muted = true;
+        element.volume = 1;
+        estagio.ganho.gain.setTargetAtTime(
+          efetivo,
+          grafoDeAudio.currentTime,
+          0.03,
+        );
+        if (grafoDeAudio.state === "suspended") {
+          void grafoDeAudio.resume().catch(() => undefined);
+        }
+        return;
+      }
+      // Sem Web Audio disponivel: satura em 100% em vez de derrubar o audio.
+    }
+
+    desconectarGanho(element);
+    element.muted = deafened;
+    element.volume = paraElemento(efetivo);
   }
 
   function reapplyAll(): void {
@@ -549,7 +665,10 @@ export async function connectVoiceRoom({
   room.on(
     RoomEvent.TrackUnsubscribed,
     (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
-      for (const element of track.detach()) element.remove();
+      for (const element of track.detach()) {
+        desconectarGanho(element);
+        element.remove();
+      }
       if (screenShares.delete(participant.identity)) publishScreenShares();
       if (cameras.delete(participant.identity)) publishCameras();
     },
@@ -558,6 +677,7 @@ export async function connectVoiceRoom({
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     const bucket = attachedAudio.get(participant.identity);
     for (const element of [...(bucket?.mic ?? []), ...(bucket?.screen ?? [])]) {
+      desconectarGanho(element);
       element.remove();
     }
     attachedAudio.delete(participant.identity);
@@ -933,6 +1053,16 @@ export async function connectVoiceRoom({
       }
     },
 
+    setOutputVolume(volume) {
+      outputVolume = clampVolume(volume);
+      reapplyAll();
+      // O drag do slider e um gesto do usuario — bom momento para destravar o
+      // contexto se ele nasceu suspenso.
+      if (grafoDeAudio && grafoDeAudio.state === "suspended") {
+        void grafoDeAudio.resume().catch(() => undefined);
+      }
+    },
+
     /**
      * Troca o alto-falante de TUDO que ja esta tocando (mic dos outros e som
      * de tela) e guarda a escolha para as proximas faixas, que chegam depois
@@ -941,6 +1071,9 @@ export async function connectVoiceRoom({
     async setOutputDevice(deviceId) {
       preferredSpeaker = deviceId;
       savePreferredSpeaker(deviceId);
+      // No modo amplificado, quem carrega o alto-falante e o contexto, nao os
+      // <audio> (que estao mutados).
+      aplicarSinkNoGrafo();
 
       const elements = [...attachedAudio.values()].flatMap((bucket) => [
         ...bucket.mic,
@@ -1386,10 +1519,16 @@ export async function connectVoiceRoom({
 
       for (const bucket of attachedAudio.values()) {
         for (const element of [...bucket.mic, ...bucket.screen]) {
+          desconectarGanho(element);
           element.remove();
         }
       }
       attachedAudio.clear();
+      estagiosDeGanho.clear();
+      if (grafoDeAudio) {
+        void grafoDeAudio.close().catch(() => undefined);
+        grafoDeAudio = null;
+      }
       screenShares.clear();
       await room.disconnect();
     },
