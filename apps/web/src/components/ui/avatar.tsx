@@ -26,8 +26,15 @@ export function Avatar({
   src,
   status,
   size = "sm",
+  /**
+   * Tamanho exato em px, quando o chamador precisa de um valor fora da escala
+   * `xs/sm/md/lg` — hoje so o chat, cujo avatar e configuravel. Sobrepoe
+   * `size` para largura/altura; o resto (anel de status, moldura) continua
+   * seguindo `size`, entao passe o `size` mais proximo junto.
+   */
+  px,
   speaking = false,
-  round = false,
+  round = true,
   moldura = null,
   ring = "border-base-900",
   className,
@@ -37,15 +44,18 @@ export function Avatar({
   src?: string | null;
   status?: UserStatus;
   size?: keyof typeof SIZES;
+  /** tamanho exato em px; sobrepoe `size` na largura/altura do avatar */
+  px?: number;
   /** anel de "falando" — usado a partir da fase 4 */
   speaking?: boolean;
   /**
-   * Redondo em vez do quadrado-arredondado padrao.
+   * Formato do avatar. REDONDO e o padrao do app inteiro.
    *
-   * A tela de amigos usa redondo; o resto do app usa `rounded-md`. Nao e
-   * capricho de um lugar so: e uma divergencia que ainda precisa ser decidida
-   * para o app inteiro, e ficar como propriedade deixa isso visivel em vez de
-   * escondido numa classe solta.
+   * A divergencia antiga (amigos redondo, resto `rounded-md`) foi resolvida
+   * para redondo quando o sistema de decoracao de perfil (Avatar Cosmetics)
+   * entrou: decoracao circular sobre avatar quadrado nunca encaixa. `round`
+   * segue como prop caso algum lugar futuro precise do quadrado, mas o default
+   * e `true`.
    */
   round?: boolean;
   /**
@@ -95,10 +105,15 @@ export function Avatar({
         className={cn(
           "relative flex items-center justify-center overflow-hidden font-medium text-ink-100 transition-shadow duration-100",
           round ? "rounded-full" : "rounded-md",
-          SIZES[size],
+          px ? "leading-none" : SIZES[size],
           speaking && "speaking-ring",
         )}
-        style={src ? undefined : { backgroundColor: colorFromId(userId) }}
+        style={{
+          ...(px
+            ? { width: px, height: px, fontSize: Math.round(px * 0.36) }
+            : null),
+          ...(src ? null : { backgroundColor: colorFromId(userId) }),
+        }}
       >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element

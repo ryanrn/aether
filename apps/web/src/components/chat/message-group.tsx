@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
+import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageItem } from "./message-item";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
@@ -25,6 +26,7 @@ export interface GrupoDeMensagens {
 }
 
 export function MessageGroup({ grupo }: { grupo: GrupoDeMensagens }) {
+  const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
   const primeira = grupo.mensagens[0];
   if (!primeira) return null;
   const inicio = new Date(primeira.createdAt);
@@ -40,7 +42,8 @@ export function MessageGroup({ grupo }: { grupo: GrupoDeMensagens }) {
           name={grupo.autor.displayName}
           src={grupo.autor.avatarUrl}
           moldura={grupo.autor.moldura}
-          size="sm"
+          size={tamanhoAvatar >= 36 ? "md" : "sm"}
+          px={tamanhoAvatar}
         />
       </div>
 

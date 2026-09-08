@@ -5,6 +5,7 @@ import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
 import { NovidadesModal } from "@/components/layout/novidades-modal";
 import { AetherIconSprite } from "@/components/ui/aether-icon";
+import { SCRIPT_APARENCIA } from "@/components/ui/aparencia";
 
 /**
  * Tipografia.
@@ -69,7 +70,22 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${rubik.variable} ${chakra.variable} ${jetbrains.variable}`}
+      /*
+        O script sem-flash escreve `--app-scale` e `data-*` no <html> antes da
+        hidratacao, entao o que o servidor mandou (sem esses atributos) nao bate
+        com o cliente. `suppressHydrationWarning` cobre exatamente este caso —
+        so este elemento, um nivel — e e o padrao para script de tema.
+      */
+      suppressHydrationWarning
     >
+      <head>
+        {/*
+          Escala/contraste/movimento aplicados ANTES da primeira pintura, senao
+          a interface piscaria na escala 1 e saltaria para a escolhida. Le o
+          mesmo `localStorage` que o `usePrefsDoChat`.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_APARENCIA }} />
+      </head>
       {/*
         Coluna de altura fixa: a barra de titulo em cima, o resto embaixo.
         `h-dvh` no lugar de `min-h-dvh` porque o conteudo abaixo precisa de uma

@@ -2510,6 +2510,36 @@ nao e tocado.
   alto-falante amplificado, ensurdecer no meio) depende de duas pessoas numa
   call e ficou para o teste de uso.
 
+## Redesign do chat (em etapas)
+
+Reformulacao da experiencia de texto, feita em 5 etapas, cada uma um commit com
+regressao verde. Nao toca voz, WebRTC, servidores nem o schema de mensagens
+existente.
+
+| etapa | o que | estado |
+| --- | --- | --- |
+| 1 | Agrupamento real (`<MessageGroup>`): avatar/nome/horario uma vez por grupo; espaco entre grupos > dentro do grupo, por `--chat-gap-*`. `message-item` enxuto; barra de hover reagir · mais; reacoes em chip sem borda. | ✅ |
+| 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
+| 3 | Emoji Twemoji (self-hosted) + seletor de GIF (Tenor, server-proxy). | a fazer |
+| 4 | Profile card no chat; perfil global x servidor; `User.bio`; amizades com estados. | a fazer |
+| 5 | Reply real (`replyToId` ja existe no schema) + mensagens de sistema efemeras + refino/responsivo. | a fazer |
+
+### Limitacoes conhecidas ate aqui
+
+- **Preferencias sao por APARELHO** (`localStorage`, chave `aether:chat:prefs`),
+  como todo o resto de preferencia do app. Nao sincronizam entre dispositivos —
+  sincronizar exigiria tabela + evento no gateway.
+- **Escala da interface usa `zoom` no `<html>`**, nao `font-size` no root. `zoom`
+  e o unico jeito de escalar TUDO (inclusive `px` fixo) de forma nitida e sem
+  depender de a interface ser 100% `rem`. E padrao nos alvos (Chrome/Electron);
+  navegadores muito antigos ignorariam e ficariam em 100%.
+- **`data-density` virou so um gancho de estilo.** As medidas do chat vem todas
+  inline do `usePrefsDoChat`; os presets de densidade sao pontos de partida que
+  o ajuste fino sobrescreve.
+- **Sem teste automatizado da tela.** `typecheck`, `vitest` (618) e `next build`
+  passam; o efeito visual (agrupamento, densidades, escala, contraste) foi
+  conferido num preview isolado e fica para o teste de uso no app real.
+
 ## Transferencia de posse e exclusao de servidor
 
 A "zona de risco" que a aba Geral das configuracoes do servidor prometia e

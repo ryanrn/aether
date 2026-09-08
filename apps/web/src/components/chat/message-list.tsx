@@ -46,6 +46,9 @@ export function MessageList({
   const fontSize = usePrefsDoChat((p) => p.fontSize);
   const densidade = usePrefsDoChat((p) => p.densidade);
   const timestamps = usePrefsDoChat((p) => p.timestamps);
+  const gapMensagem = usePrefsDoChat((p) => p.gapMensagem);
+  const gapGrupo = usePrefsDoChat((p) => p.gapGrupo);
+  const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
 
   /**
    * Enquanto a store nao foi semeada (primeiro render e hidratacao), usamos o
@@ -131,7 +134,15 @@ export function MessageList({
       onScroll={handleScroll}
       data-density={densidade}
       data-chat-ts={timestamps}
-      style={{ "--chat-font": `${fontSize}px` } as React.CSSProperties}
+      style={
+        {
+          "--chat-font": `${fontSize}px`,
+          "--chat-gap-msg": `${gapMensagem}px`,
+          "--chat-gap-group": `${gapGrupo}px`,
+          "--chat-avatar": `${tamanhoAvatar}px`,
+          "--chat-gutter": `${tamanhoAvatar + 14}px`,
+        } as React.CSSProperties
+      }
       className="chat-root flex-1 overflow-y-auto overscroll-contain"
     >
       {loading ? (

@@ -9,6 +9,7 @@ import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { VoiceSession } from "@/components/realtime/voice-session";
+import { AparenciaProvider } from "@/components/ui/aparencia";
 import { ParedeDeVerificacao } from "@/components/auth/parede-de-verificacao";
 import { AceiteDeTermos } from "@/components/auth/aceite-de-termos";
 
@@ -63,6 +64,7 @@ export default async function AppLayout({
      * Aqui em cima os dois atravessam toda navegacao dentro de `/app`.
      */
     <RealtimeProvider>
+      <AparenciaProvider />
       <div className="flex h-full w-full overflow-hidden bg-base-950">
         {precisaTermos ? (
           <AceiteDeTermos atualizados={session.user.aceitouTermosEm !== null} />

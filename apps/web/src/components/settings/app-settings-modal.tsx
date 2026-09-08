@@ -9,6 +9,8 @@ import { logoutAction } from "@/server/actions/auth";
 import { podeAtualizar } from "@/lib/desktop/update";
 import { AccountTab } from "./account-tab";
 import { ActivityTab } from "./activity-tab";
+import { AparenciaTab } from "./aparencia-tab";
+import { AcessibilidadeTab } from "./acessibilidade-tab";
 import { ConexoesTab } from "./conexoes-tab";
 import { EsteComputadorTab } from "./este-computador-tab";
 import { PlanoTab } from "./plano-tab";
@@ -33,6 +35,8 @@ import { VoiceTab } from "./voice-tab";
 type Tab =
   | "conta"
   | "voz"
+  | "aparencia"
+  | "acessibilidade"
   | "atividade"
   | "conexoes"
   | "computador"
@@ -66,6 +70,22 @@ const TABS: {
     grupo: "Usuario",
     titulo: "Voz e video",
     sub: "Microfone, fones e o teste de som.",
+  },
+  {
+    id: "aparencia",
+    label: "Aparencia",
+    icon: "palette",
+    grupo: "Usuario",
+    titulo: "Aparencia",
+    sub: "Como o chat se parece — densidade, fonte, espacamento.",
+  },
+  {
+    id: "acessibilidade",
+    label: "Acessibilidade",
+    icon: "activity",
+    grupo: "Usuario",
+    titulo: "Acessibilidade",
+    sub: "Escala da interface, contraste e movimento.",
   },
   {
     id: "atividade",
@@ -237,6 +257,10 @@ export function AppSettingsModal({
               <AccountTab user={user} server={server} />
             ) : active === "voz" ? (
               <VoiceTab />
+            ) : active === "aparencia" ? (
+              <AparenciaTab user={user} />
+            ) : active === "acessibilidade" ? (
+              <AcessibilidadeTab />
             ) : active === "conexoes" ? (
               <ConexoesTab />
             ) : active === "computador" ? (
