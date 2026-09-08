@@ -661,6 +661,25 @@
     letter-spacing: 0.003em;
   }
 
+  /*
+   * Emoji Twemoji inline — acompanha a fonte do contexto (`em`), fica na linha
+   * de base do texto e nao herda a selecao azul do resto.
+   */
+  .emoji-tw {
+    display: inline-block;
+    height: 1.3em;
+    width: 1.3em;
+    margin: 0 0.05em;
+    vertical-align: -0.28em;
+    object-fit: contain;
+  }
+  /* Mensagem so de emoji: deixa maiores, como quase todo chat faz. */
+  .chat-msg__texto--jumbo .emoji-tw {
+    height: 2.4em;
+    width: 2.4em;
+    vertical-align: -0.5em;
+  }
+
   /* horario da linha, na sarjeta do avatar — so no hover por padrao */
   .chat-msg__hora {
     opacity: 0;

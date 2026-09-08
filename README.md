@@ -2520,7 +2520,7 @@ existente.
 | --- | --- | --- |
 | 1 | Agrupamento real (`<MessageGroup>`): avatar/nome/horario uma vez por grupo; espaco entre grupos > dentro do grupo, por `--chat-gap-*`. `message-item` enxuto; barra de hover reagir · mais; reacoes em chip sem borda. | ✅ |
 | 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
-| 3 | Emoji Twemoji (self-hosted) + seletor de GIF (Tenor, server-proxy). | a fazer |
+| 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/` + a folha do seletor em `/twemoji-sheet-64.png`. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
 | 4 | Profile card no chat; perfil global x servidor; `User.bio`; amizades com estados. | a fazer |
 | 5 | Reply real (`replyToId` ja existe no schema) + mensagens de sistema efemeras + refino/responsivo. | a fazer |
 
@@ -2536,9 +2536,22 @@ existente.
 - **`data-density` virou so um gancho de estilo.** As medidas do chat vem todas
   inline do `usePrefsDoChat`; os presets de densidade sao pontos de partida que
   o ajuste fino sobrescreve.
-- **Sem teste automatizado da tela.** `typecheck`, `vitest` (618) e `next build`
-  passam; o efeito visual (agrupamento, densidades, escala, contraste) foi
-  conferido num preview isolado e fica para o teste de uso no app real.
+- **Sem teste automatizado da tela.** `typecheck`, `vitest` e `next build`
+  passam; o efeito visual (agrupamento, densidades, escala, contraste, Twemoji)
+  foi conferido num preview isolado e fica para o teste de uso no app real.
+- **Twemoji: os SVGs (`public/twemoji/`) NAO sao versionados** — `@twemoji/svg`
+  traz 3700 arquivos e o `predev`/`prebuild` do `apps/web` os copia
+  (`scripts/build-twemoji.mjs`). A folha do seletor
+  (`public/twemoji-sheet-64.png`, ~2,8 MB) E versionada: e um arquivo so, e o
+  grid do emoji-mart pinta sempre por spritesheet (nao da para trocar por SVG
+  individual ali).
+- **GIF depende de `TENOR_API_KEY` no servidor.** Sem ela, `/api/gif` responde
+  `{ disponivel: false }` e a aba GIF do seletor mostra "em breve" — nada
+  quebra. A chave fica so no servidor; a midia vem do CDN do Tenor
+  (`media.tenor.com`, liberado no `img-src`/`media-src`).
+- **GIF enviado e uma URL de midia no `content` da mensagem.** O `<MessageItem>`
+  reconhece uma URL solta de host confiavel e desenha a midia. E o embed minimo
+  — sem tabela de embeds nem schema; a formalizacao fica para depois.
 
 ## Transferencia de posse e exclusao de servidor
 

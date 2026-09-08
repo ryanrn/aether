@@ -9,7 +9,8 @@ import {
 } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { cn } from "@/lib/utils";
-import { EmojiPicker } from "@/components/chat/emoji-picker";
+import { MediaPicker } from "@/components/chat/media-picker";
+import type { GifEscolhido } from "@/components/chat/gif-picker";
 import {
   AnexosPendentes,
   ehImagem,
@@ -51,7 +52,11 @@ export function MessageComposer({
   const failPending = useRealtimeStore((state) => state.failPending);
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
+  const [seletor, setSeletor] = useState<{
+    x: number;
+    y: number;
+    aba: "emoji" | "gif";
+  } | null>(null);
   /** Onde o cursor deve ficar depois que o React aplicar o texto novo. */
   const [cursorPendente, setCursorPendente] = useState<number | null>(null);
 
@@ -209,6 +214,40 @@ export function MessageComposer({
   }
 
   /**
+   * GIF vai como uma mensagem cujo `content` E a URL direta do .gif/.mp4 do
+   * Tenor. O `<MessageItem>` reconhece essa URL sozinha e desenha a midia em
+   * vez do texto. Sem passar por anexo: nao e arquivo nosso no R2, e um embed
+   * de link. Mesma via otimista do texto.
+   */
+  function enviarGif(gif: GifEscolhido) {
+    if (disabled || !socket) return;
+    const nonce =
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    addPending({
+      id: nonce,
+      conversationId: channelId,
+      content: gif.url,
+      author: selfUser,
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+      reactions: [],
+      anexos: [],
+      pending: true,
+      nonce,
+    });
+
+    socket.emit(
+      "message:send",
+      { conversationId: channelId, content: gif.url, nonce, anexoIds: [] },
+      (result) => {
+        if (!result.ok) failPending(channelId, nonce, result.error);
+      },
+    );
+  }
+
+  /**
    * Insere o emoji NO CURSOR, e nao no fim.
    *
    * Quem esta editando no meio da frase espera o emoji onde o cursor esta —
@@ -321,9 +360,9 @@ export function MessageComposer({
           />
 
           {/*
-          Emoji ANTES do enviar: e a ordem em que se usa — escolhe o emoji,
-          depois manda. Invertido, o botao de enviar ficaria no meio do
-          caminho da mao.
+          Emoji e GIF ANTES do enviar: e a ordem em que se usam — escolhe o
+          que acrescentar, depois manda. Os dois abrem o mesmo seletor
+          (`MediaPicker`), so em abas diferentes.
         */}
           <button
             type="button"
@@ -332,7 +371,20 @@ export function MessageComposer({
               const r = evento.currentTarget.getBoundingClientRect();
               // Acima do botao: o campo fica no rodape, e abrir para baixo
               // jogaria o seletor para fora da janela.
-              setSeletor({ x: r.right - 352, y: r.top - 440 });
+              setSeletor({ x: r.right - 352, y: r.top - 452, aba: "gif" });
+            }}
+            aria-label="Enviar GIF"
+            title="GIF"
+            className="mb-[1px] grid h-7 shrink-0 place-items-center rounded-md px-1 text-[10px] font-bold tracking-tight text-ink-500 transition-colors hover:bg-base-800 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            GIF
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={(evento) => {
+              const r = evento.currentTarget.getBoundingClientRect();
+              setSeletor({ x: r.right - 352, y: r.top - 452, aba: "emoji" });
             }}
             aria-label="Inserir emoji"
             title="Emoji"
@@ -385,18 +437,17 @@ export function MessageComposer({
       </div>
 
       {seletor ? (
-        <EmojiPicker
+        <MediaPicker
           anchor={seletor}
+          abaInicial={seletor.aba}
           /**
-           * NAO FECHA a cada escolha — escolher varios seguidos e o uso comum,
-           * e reabrir a cada um seria um clique a mais por emoji.
-           *
-           * Isso so funciona porque o seletor abre ACIMA do campo e nao o
-           * cobre: se cobrisse, ficar aberto esconderia o que a pessoa acabou
-           * de escrever, e ela nao veria o resultado do proprio clique. Sai
-           * clicando fora ou com Esc.
+           * Emoji NAO fecha a cada escolha — escolher varios seguidos e o uso
+           * comum. So funciona porque o seletor abre ACIMA do campo e nao o
+           * cobre. GIF fecha ao escolher (envia na hora). Sai clicando fora ou
+           * com Esc.
            */
-          onEscolher={inserirEmoji}
+          onEmoji={inserirEmoji}
+          onGif={enviarGif}
           onClose={() => setSeletor(null)}
         />
       ) : null}

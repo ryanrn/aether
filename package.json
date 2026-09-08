@@ -35,7 +35,8 @@
     "backup": "dotenv -e .env -- node scripts/backup.mjs",
     "backup:verify": "dotenv -e .env -- node scripts/verify-backup.mjs",
     "restore": "dotenv -e .env -- node scripts/restore.mjs",
-    "design": "node design-lab/serve.mjs"
+    "design": "node design-lab/serve.mjs",
+    "build:twemoji": "node scripts/build-twemoji.mjs"
   },
   "devDependencies": {
     "dotenv-cli": "^11.0.0",

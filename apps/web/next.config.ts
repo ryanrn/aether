@@ -218,6 +218,9 @@ const csp = [
     r2Leitura,
     "https://images.igdb.com",
     "https://i.scdn.co",
+    // Previa e GIF do Tenor. A CHAVE da API fica no servidor (`/api/gif`); a
+    // midia em si e conteudo publico e vem direto do CDN deles.
+    "https://media.tenor.com",
   ]
     .filter(Boolean)
     .join(" "),
@@ -228,9 +231,12 @@ const csp = [
   // Tela e camera chegam como MediaStream; o worklet de audio vem de /public.
   /**
    * Video e audio anexados sao baixados do R2, entao a leitura entra aqui
-   * tambem — nao so em `img-src`.
+   * tambem — nao so em `img-src`. O `.mp4` do Tenor (GIF pesado vira video)
+   * pelo mesmo motivo.
    */
-  ["media-src 'self' blob:", r2Leitura].filter(Boolean).join(" "),
+  ["media-src 'self' blob:", r2Leitura, "https://media.tenor.com"]
+    .filter(Boolean)
+    .join(" "),
   "worker-src 'self' blob:",
 
   /**

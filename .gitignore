@@ -32,3 +32,6 @@ backups/
 # Sem ele o electron-builder falha num clone limpo, e a falha nao diz o porque.
 !apps/desktop/build/
 !apps/desktop/build/icon.png
+
+# Twemoji: 3700 SVGs gerados de @twemoji/svg pelo predev/prebuild (scripts/build-twemoji.mjs).
+apps/web/public/twemoji/

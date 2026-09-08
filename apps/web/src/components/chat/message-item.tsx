@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { copiarTexto } from "@/lib/clipboard";
+import { Emoji, TextoComEmoji } from "@/components/ui/emoji";
+import { quebrarEmEmoji } from "@/lib/emoji/twemoji";
+import { ehMidiaEmbutivel, MidiaEmbutida } from "@/components/chat/midia-embutida";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
 /**
@@ -79,6 +82,8 @@ export function MessageItem({
 
   // Mensagem que ainda nao existe no banco nao pode receber reacao.
   const podeReagir = socket !== null && !message.pending && !message.failed;
+  const midiaUrl = ehMidiaEmbutivel(message.content);
+  const jumbo = !midiaUrl && ehSoEmoji(message.content);
   const podeDenunciar =
     !message.pending && !message.failed && message.author.id !== selfUserId;
 
@@ -153,9 +158,18 @@ export function MessageItem({
         da mensagem e o texto que mais se le no app — dai `ink-200`, e nao o tom
         de coisa secundaria.
       */}
-      <p className="chat-msg__texto select-text whitespace-pre-wrap break-words text-ink-200">
-        {message.content}
-      </p>
+      {midiaUrl ? (
+        <MidiaEmbutida url={midiaUrl} />
+      ) : (
+        <p
+          className={cn(
+            "chat-msg__texto select-text whitespace-pre-wrap break-words text-ink-200",
+            jumbo && "chat-msg__texto--jumbo leading-none",
+          )}
+        >
+          <TextoComEmoji texto={message.content} />
+        </p>
+      )}
 
       <AnexosDaMensagem anexos={message.anexos ?? []} />
 
@@ -177,7 +191,7 @@ export function MessageItem({
                   : "bg-base-800/70 text-ink-300 hover:bg-base-750",
               )}
             >
-              <span className="text-[13px]">{reacao.emoji}</span>
+              <Emoji char={reacao.emoji} className="!h-4 !w-4" />
               <span className="font-mono tabular-nums">{reacao.count}</span>
             </button>
           ))}
@@ -276,4 +290,17 @@ function formatarHora(date: Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** So emoji (ate 8) e espaco — ai o chat desenha os emojis grandes. */
+function ehSoEmoji(texto: string): boolean {
+  const t = texto.trim();
+  if (!t) return false;
+  const pedacos = quebrarEmEmoji(t);
+  let emojis = 0;
+  for (const p of pedacos) {
+    if (p.tipo === "emoji") emojis++;
+    else if (p.valor.trim().length > 0) return false;
+  }
+  return emojis > 0 && emojis <= 8;
 }
