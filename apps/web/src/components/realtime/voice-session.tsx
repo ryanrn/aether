@@ -46,6 +46,13 @@ export function VoiceSession() {
     (selfVoice?.selfMuted ?? false) || (selfVoice?.serverMuted ?? false);
   const deafened =
     (selfVoice?.selfDeafened ?? false) || (selfVoice?.serverDeafened ?? false);
+  /**
+   * Teste de microfone ("Ouvir a si mesmo"): enquanto ele roda, a faixa
+   * publicada na call TEM que ficar muda de verdade. O `startMicLevel` abre um
+   * stream local proprio pro monitor; sem cortar a faixa da call aqui, os
+   * outros continuavam ouvindo e a interface ("nao transmitindo") mentia.
+   */
+  const micTest = useRealtimeStore((state) => state.micTest);
 
   const roomRef = useRef<VoiceRoomHandle | null>(null);
   /** desliga a camada `[AETHER NETWORK]` junto com a sessao */
@@ -256,8 +263,8 @@ export function VoiceSession() {
 
   // 2. mute e deafen passam a ter efeito real sobre a midia
   useEffect(() => {
-    void roomRef.current?.setMicrophoneEnabled(!muted);
-  }, [muted]);
+    void roomRef.current?.setMicrophoneEnabled(!muted && !micTest);
+  }, [muted, micTest]);
 
   useEffect(() => {
     roomRef.current?.setDeafened(deafened);

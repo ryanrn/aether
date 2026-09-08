@@ -9,8 +9,8 @@ import {
   DEFAULT_VOLUME,
   readScreenVolume,
   saveScreenVolume,
-  VOLUME_MAX,
 } from "@/lib/voice/volumes";
+import { VolumeSlider } from "@/components/ui/volume-slider";
 import { mediaLog } from "@/lib/voice/debug";
 import { cn } from "@/lib/utils";
 
@@ -404,15 +404,11 @@ function MenuFlutuante({
             {Math.round(volume * 100)}%
           </span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={Math.round(VOLUME_MAX * 100)}
-          step={1}
-          value={Math.round(volume * 100)}
-          onChange={(e) => mudarVolume(Number(e.target.value) / 100)}
-          aria-label="Volume do audio da tela"
-          className="mt-1.5 w-full accent-accent-500"
+        <VolumeSlider
+          value={volume}
+          onChange={mudarVolume}
+          label="Volume do audio da tela"
+          className="mt-2"
         />
       </div>
 
@@ -517,15 +513,11 @@ function ScreenAudioVolume() {
                 {Math.round(volume * 100)}%
               </span>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={Math.round(VOLUME_MAX * 100)}
-              step={1}
-              value={Math.round(volume * 100)}
-              onChange={(event) => change(Number(event.target.value) / 100)}
-              aria-label="Volume do audio da tela"
-              className="mt-2 w-full accent-accent-500"
+            <VolumeSlider
+              value={volume}
+              onChange={change}
+              label="Volume do audio da tela"
+              className="mt-2.5"
             />
           </div>
         </>

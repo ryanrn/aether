@@ -117,6 +117,13 @@ e feita em estagios, cada um com regressao verde:
   derrubar a call; em falha reabre o mic e avisa. O popover trava as 3 durante a troca.
 - **Faixa de teste de microfone: seletor de dispositivo inline.** `<MonitorStrip>`
   lista os microfones e troca na hora (mesma preferencia da call e das Configuracoes).
+- **"Ouvir a si mesmo" agora MUTA a call de verdade.** O `startMicLevel` abre um
+  stream local proprio pro monitor, mas a faixa publicada continuava no ar — a
+  interface dizia "nao transmitindo" e os outros ouviam. `voice-session.tsx`
+  passou a incluir `micTest` na conta que liga/desliga o microfone
+  (`setMicrophoneEnabled(!muted && !micTest)`); ao parar o teste, volta pro
+  estado de mudo anterior. Nao cobre o caso raro de a call reconectar no meio do
+  teste (o mesmo ja valia pro mudo comum).
 - **Glow de fala segue o RMS por participante.** `room.ts` empurra `onAudioLevels`
   (~11x/s) com o RMS proprio (analisador local) + `RemoteParticipant.audioLevel`
   dos outros. `useVoiceLevel(id)` devolve um numero — o card so re-renderiza se o
@@ -2471,6 +2478,12 @@ Tres entradas, todas locais (`localStorage`), todas 0..200%:
   (chave `aether.volumes.output`);
 - **volume por pessoa** — menu do participante (chave `aether.volumes.users`);
 - **volume do audio de tela** — menu da transmissao (chave `aether.volumes.screen`).
+
+Todos usam um componente so, `components/ui/volume-slider.tsx` (`<VolumeSlider>`):
+0..200%, gradiente que muda de cor acima de 100% (ambar) e de 150% (vermelho),
+marca do neutro em 100%, balao com o valor ao arrastar. Antes cada tela
+desenhava o proprio `<input type=range>` e os limites divergiam — o cartao de
+perfil parava em 100% enquanto o menu do palco ia a 200%.
 
 O que chega ao ouvido e `saida_global x volume_da_fonte`. Ate 1.0 e o caminho
 de reproducao de sempre: `element.volume`, com `setSinkId` por `<audio>`.

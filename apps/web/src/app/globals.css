@@ -501,6 +501,80 @@
       height: 55%;
     }
   }
+
+  /*
+   * Slider de volume — `components/ui/volume-slider.tsx`.
+   *
+   * O corpo (trilha, preenchimento, marca dos 100%, balao) e desenhado em
+   * Tailwind no componente. So os pseudo-elementos do `<input type=range>`,
+   * que nenhuma classe utilitaria alcanca, moram aqui. `--vs-accent` vem
+   * inline do componente e muda com o estado (azul / ambar / vermelho).
+   */
+  .volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .volume-slider:focus {
+    outline: none;
+  }
+  .volume-slider::-webkit-slider-runnable-track {
+    height: 100%;
+    background: transparent;
+  }
+  .volume-slider::-moz-range-track {
+    height: 100%;
+    background: transparent;
+  }
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: var(--radius-pill);
+    background: #fff;
+    border: 2px solid var(--vs-accent, var(--color-accent-500));
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.45),
+      0 0 0 0 color-mix(in oklch, var(--vs-accent, var(--color-accent-500)) 32%, transparent);
+    transition:
+      transform var(--dur-2) var(--ease-aether),
+      box-shadow var(--dur-2) var(--ease-aether),
+      border-color var(--dur-2) var(--ease-aether);
+  }
+  .volume-slider::-moz-range-thumb {
+    height: 16px;
+    width: 16px;
+    border: 2px solid var(--vs-accent, var(--color-accent-500));
+    border-radius: var(--radius-pill);
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    transition:
+      transform var(--dur-2) var(--ease-aether),
+      box-shadow var(--dur-2) var(--ease-aether),
+      border-color var(--dur-2) var(--ease-aether);
+  }
+  .volume-slider:hover::-webkit-slider-thumb,
+  .volume-slider:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.15);
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.5),
+      0 0 0 6px color-mix(in oklch, var(--vs-accent, var(--color-accent-500)) 20%, transparent);
+  }
+  .volume-slider:hover::-moz-range-thumb,
+  .volume-slider:focus-visible::-moz-range-thumb {
+    transform: scale(1.15);
+  }
+  .volume-slider:active::-webkit-slider-thumb {
+    transform: scale(1.06);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .volume-slider::-webkit-slider-thumb,
+    .volume-slider::-moz-range-thumb {
+      transition: none;
+    }
+  }
 }
 
 @keyframes aether-fade-in {

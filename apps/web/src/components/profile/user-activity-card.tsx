@@ -26,6 +26,7 @@ import {
   readUserVolumes,
   saveUserVolume,
 } from "@/lib/voice/volumes";
+import { VolumeSlider } from "@/components/ui/volume-slider";
 import { useElapsed } from "@/lib/use-elapsed";
 import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
@@ -561,17 +562,11 @@ export function UserActivityCard({
                   {Math.round(volume * 100)}%
                 </span>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={Math.round(volume * 100)}
-                onChange={(evento) =>
-                  mudarVolume(Number(evento.target.value) / 100)
-                }
-                aria-label={`Volume de ${user.displayName}`}
-                className="mt-2 block w-full accent-accent-500"
+              <VolumeSlider
+                value={volume}
+                onChange={mudarVolume}
+                label={`Volume de ${user.displayName}`}
+                className="mt-2.5"
               />
             </div>
           ) : null}

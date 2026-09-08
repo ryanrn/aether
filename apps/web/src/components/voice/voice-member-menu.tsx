@@ -12,8 +12,8 @@ import {
   DEFAULT_VOLUME,
   readUserVolumes,
   saveUserVolume,
-  VOLUME_MAX,
 } from "@/lib/voice/volumes";
+import { VolumeSlider } from "@/components/ui/volume-slider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -221,27 +221,12 @@ export function VoiceMemberMenu({
                 {Math.round(volume * 100)}%
               </span>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={Math.round(VOLUME_MAX * 100)}
-              step={1}
-              value={Math.round(volume * 100)}
-              onChange={(event) =>
-                changeVolume(Number(event.target.value) / 100)
-              }
-              aria-label={`Volume de ${participant.user.displayName}`}
-              className="mt-2 block w-full accent-accent-500"
+            <VolumeSlider
+              value={volume}
+              onChange={changeVolume}
+              label={`Volume de ${participant.user.displayName}`}
+              className="mt-2.5"
             />
-            {/*
-              Marcas: 100% e o mix cru, acima disso o room.ts amplifica via
-              GainNode (o mesmo caminho do volume de saida global).
-            */}
-            <div className="mt-1 flex justify-between font-mono text-[9px] text-ink-600">
-              <span>0</span>
-              <span>100%</span>
-              <span>{Math.round(VOLUME_MAX * 100)}%</span>
-            </div>
           </div>
         ) : null}
 

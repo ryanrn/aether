@@ -12,11 +12,8 @@ import {
   type AudioDevice,
 } from "@/lib/voice/devices";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
-import {
-  VOLUME_MAX,
-  readOutputVolume,
-  saveOutputVolume,
-} from "@/lib/voice/volumes";
+import { readOutputVolume, saveOutputVolume } from "@/lib/voice/volumes";
+import { VolumeSlider } from "@/components/ui/volume-slider";
 import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -54,8 +51,7 @@ export function VoiceTab() {
     setOutputVolume(readOutputVolume());
   }, []);
 
-  function mudarVolumeDeSaida(porcentagem: number) {
-    const valor = porcentagem / 100;
+  function mudarVolumeDeSaida(valor: number) {
     setOutputVolume(valor);
     saveOutputVolume(valor);
     // Sem call ativa a escolha fica guardada e vale na proxima conexao.
@@ -159,23 +155,12 @@ export function VoiceTab() {
               {Math.round(outputVolume * 100)}%
             </span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={Math.round(VOLUME_MAX * 100)}
-            step={1}
-            value={Math.round(outputVolume * 100)}
-            onChange={(event) =>
-              mudarVolumeDeSaida(Number(event.target.value))
-            }
-            aria-label="Volume de saida"
-            className="mt-2 block w-full accent-accent-500"
+          <VolumeSlider
+            value={outputVolume}
+            onChange={mudarVolumeDeSaida}
+            label="Volume de saida"
+            className="mt-2.5"
           />
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-500">
-            <span>0%</span>
-            <span>100%</span>
-            <span>{Math.round(VOLUME_MAX * 100)}%</span>
-          </div>
         </div>
       </Field>
 
