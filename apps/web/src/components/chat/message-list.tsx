@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicMessage } from "@aether/shared";
 import {
@@ -10,9 +10,10 @@ import {
   type ChatMessage,
 } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import { MessageItem } from "./message-item";
+import { usePrefsDoChat } from "@/lib/chat/prefs";
+import { MessageGroup, type GrupoDeMensagens } from "./message-group";
 
-/** Janela em que mensagens seguidas do mesmo autor viram um bloco so. */
+/** Janela em que mensagens seguidas do mesmo autor viram um grupo so. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 /** Distancia do fim em que ainda consideramos que a pessoa esta "acompanhando". */
 const STICK_THRESHOLD_PX = 120;
@@ -30,8 +31,7 @@ export function MessageList({
   channelName: string;
   /**
    * Conversa direta nao leva "#": o prefixo e o simbolo de CANAL, e coloca-lo
-   * antes do nome de uma pessoa faz a tela dizer "#LucasCR", que le como se
-   * existisse um canal com o nome dela.
+   * antes do nome de uma pessoa faz a tela dizer "#LucasCR".
    */
   ehConversaDireta?: boolean;
 }) {
@@ -43,12 +43,17 @@ export function MessageList({
     (state) => state.setHistoryLoading,
   );
 
+  const fontSize = usePrefsDoChat((p) => p.fontSize);
+  const densidade = usePrefsDoChat((p) => p.densidade);
+  const timestamps = usePrefsDoChat((p) => p.timestamps);
+
   /**
    * Enquanto a store nao foi semeada (primeiro render e hidratacao), usamos o
-   * que veio do SSR. Sem isso a lista renderizaria vazia no servidor e cheia
-   * no cliente — mismatch de hidratacao e um flash de tela vazia.
+   * que veio do SSR. Sem isso a lista renderizaria vazia no servidor e cheia no
+   * cliente — mismatch de hidratacao e um flash de tela vazia.
    */
   const messages: ChatMessage[] = stored.length > 0 ? stored : initialMessages;
+  const grupos = useMemo(() => agrupar(messages), [messages]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -124,7 +129,10 @@ export function MessageList({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto overscroll-contain"
+      data-density={densidade}
+      data-chat-ts={timestamps}
+      style={{ "--chat-font": `${fontSize}px` } as React.CSSProperties}
+      className="chat-root flex-1 overflow-y-auto overscroll-contain"
     >
       {loading ? (
         <div className="flex justify-center py-3">
@@ -154,13 +162,9 @@ export function MessageList({
           </p>
         </div>
       ) : (
-        <ul className="pb-4 pt-2">
-          {messages.map((message, index) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              compact={isGrouped(messages[index - 1], message)}
-            />
+        <ul className="py-3">
+          {grupos.map((grupo) => (
+            <MessageGroup key={grupo.chave} grupo={grupo} />
           ))}
         </ul>
       )}
@@ -168,16 +172,40 @@ export function MessageList({
   );
 }
 
-/** Mesma pessoa, dentro da janela, sem falha de envio no meio. */
-function isGrouped(
-  previous: ChatMessage | undefined,
-  current: ChatMessage,
-): boolean {
-  if (!previous) return false;
-  if (previous.author.id !== current.author.id) return false;
-  if (previous.failed) return false;
+/**
+ * Quebra a lista plana em grupos. Mesma pessoa, dentro da janela, sem falha de
+ * envio no meio — a falha corta o grupo para o aviso de erro nao ficar orfao
+ * embaixo de uma mensagem que deu certo.
+ */
+function agrupar(mensagens: ChatMessage[]): GrupoDeMensagens[] {
+  const grupos: GrupoDeMensagens[] = [];
+
+  for (const mensagem of mensagens) {
+    const atual = grupos[grupos.length - 1];
+    const anterior = atual?.mensagens[atual.mensagens.length - 1];
+
+    if (
+      atual &&
+      anterior &&
+      anterior.author.id === mensagem.author.id &&
+      !anterior.failed &&
+      dentroDaJanela(anterior, mensagem)
+    ) {
+      atual.mensagens.push(mensagem);
+    } else {
+      grupos.push({
+        chave: mensagem.id,
+        autor: mensagem.author,
+        mensagens: [mensagem],
+      });
+    }
+  }
+
+  return grupos;
+}
+
+function dentroDaJanela(anterior: ChatMessage, atual: ChatMessage): boolean {
   const delta =
-    new Date(current.createdAt).getTime() -
-    new Date(previous.createdAt).getTime();
+    new Date(atual.createdAt).getTime() - new Date(anterior.createdAt).getTime();
   return delta >= 0 && delta < GROUP_WINDOW_MS;
 }

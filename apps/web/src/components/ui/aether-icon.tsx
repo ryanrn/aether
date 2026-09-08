@@ -52,6 +52,8 @@ export type AetherIconName =
   | "search"
   | "plus"
   | "menu"
+  | "more"
+  | "reply"
   | "crown"
   | "shield"
   | "shield-check"
@@ -313,6 +315,14 @@ export function AetherIconSprite() {
         </symbol>
         <symbol id="ic-menu" viewBox="0 0 24 24">
           <path d="M4 7h16M4 12h16M4 17h16" />
+        </symbol>
+        <symbol id="ic-more" viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="1.35" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" />
+          <circle cx="19" cy="12" r="1.35" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="ic-reply" viewBox="0 0 24 24">
+          <path d="M9 15 4 10l5-5M4 10h9a7 7 0 0 1 7 7v2" />
         </symbol>
         <symbol id="ic-signal" viewBox="0 0 24 24">
           <path d="M6 20.5v-4.5M12 20.5V9.5M18 20.5v-17" />

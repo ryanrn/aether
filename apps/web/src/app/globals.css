@@ -575,6 +575,67 @@
       transition: none;
     }
   }
+
+  /*
+   * CHAT — variaveis de aparencia (etapa 1 do redesign).
+   *
+   * O ritmo do chat sai de tres medidas: espaco DENTRO de um grupo (mensagens
+   * seguidas da mesma pessoa), espaco ENTRE grupos, e respiro vertical de cada
+   * linha. `data-density` no container da lista escolhe o preset; `--chat-font`
+   * vem inline do `usePrefsDoChat`. A etapa 2 abre os tres para ajuste fino e
+   * soma escala da interface + acessibilidade.
+   */
+  .chat-root {
+    --chat-font: 15px;
+    --chat-gap-msg: 3px;
+    --chat-gap-group: 17px;
+    --chat-row-py: 2px;
+    /* coluna do avatar (32px) + folga */
+    --chat-gutter: 46px;
+  }
+  .chat-root[data-density="compacta"] {
+    --chat-gap-msg: 2px;
+    --chat-gap-group: 9px;
+    --chat-row-py: 1px;
+  }
+  .chat-root[data-density="espacosa"] {
+    --chat-gap-msg: 6px;
+    --chat-gap-group: 26px;
+    --chat-row-py: 4px;
+  }
+
+  .chat-group + .chat-group {
+    margin-top: var(--chat-gap-group);
+  }
+  .chat-group__corpo > * + * {
+    margin-top: var(--chat-gap-msg);
+  }
+  .chat-msg__texto {
+    font-size: var(--chat-font);
+    line-height: 1.45;
+  }
+
+  /* horario da linha, na sarjeta do avatar — so no hover por padrao */
+  .chat-msg__hora {
+    opacity: 0;
+    transition: opacity var(--dur-1) var(--ease-aether);
+  }
+  .chat-msg:hover .chat-msg__hora {
+    opacity: 1;
+  }
+  .chat-root[data-chat-ts="sempre"] .chat-msg__hora {
+    opacity: 0.7;
+  }
+  .chat-root[data-chat-ts="nunca"] .chat-msg__hora,
+  .chat-root[data-chat-ts="nunca"] .chat-group__hora {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-msg__hora {
+      transition: none;
+    }
+  }
 }
 
 @keyframes aether-fade-in {
