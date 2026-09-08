@@ -113,7 +113,7 @@ describe("criarSinkSentry", () => {
         userId: "u1",
         socketId: "s1",
         detalhe: { a: 1 },
-      } as RegistroDeLog),
+      }),
     );
     const evento = JSON.parse(enviado[0]!.corpo.split("\n")[2]!);
     expect(evento.tags.userId).toBe("u1");
