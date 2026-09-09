@@ -41,6 +41,7 @@ export const MOLDURA_ESPESSURA = {
   sm: "-inset-[2px]",
   md: "-inset-[3px]",
   lg: "-inset-[4px]",
+  xl: "-inset-[5px]",
 } as const;
 
 /**
@@ -50,6 +51,12 @@ export const MOLDURA_ESPESSURA = {
  * visivelmente mais quadrados que os da foto. Redondo continua redondo.
  */
 export const MOLDURA_RAIO = {
-  quadrado: { xs: "rounded-[8px]", sm: "rounded-[8px]", md: "rounded-[9px]", lg: "rounded-[10px]" },
+  quadrado: {
+    xs: "rounded-[8px]",
+    sm: "rounded-[8px]",
+    md: "rounded-[9px]",
+    lg: "rounded-[10px]",
+    xl: "rounded-[12px]",
+  },
   redondo: "rounded-full",
 } as const;

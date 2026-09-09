@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   hidratarPrefsDoChat,
+  larguraDaSarjeta,
   LIMITES,
   usePrefsDoChat,
   type Densidade,
@@ -233,7 +234,7 @@ function Preview({ user }: { user: PublicUser }) {
           "--chat-gap-msg": `${gapMensagem}px`,
           "--chat-gap-group": `${gapGrupo}px`,
           "--chat-avatar": `${tamanhoAvatar}px`,
-          "--chat-gutter": `${tamanhoAvatar + 14}px`,
+          "--chat-gutter": `${larguraDaSarjeta(tamanhoAvatar)}px`,
         } as React.CSSProperties
       }
       className="chat-root overflow-hidden rounded-lg border border-line bg-base-900 py-3"

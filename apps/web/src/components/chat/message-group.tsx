@@ -73,7 +73,7 @@ export function MessageGroup({
           name={grupo.autor.displayName}
           src={grupo.autor.avatarUrl}
           moldura={grupo.autor.moldura}
-          size={tamanhoAvatar >= 36 ? "md" : "sm"}
+          size={tamanhoAvatar >= 44 ? "lg" : "md"}
           px={tamanhoAvatar}
         />
       </button>

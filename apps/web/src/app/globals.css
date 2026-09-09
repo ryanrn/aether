@@ -633,8 +633,8 @@
     --chat-font: 15px;
     --chat-gap-msg: 3px;
     --chat-gap-group: 17px;
-    --chat-avatar: 32px;
-    --chat-gutter: 46px;
+    --chat-avatar: 38px;
+    --chat-gutter: 54px;
     --chat-row-py: 2px;
   }
   .chat-root[data-density="compacta"] {
@@ -646,6 +646,15 @@
 
   .chat-group + .chat-group {
     margin-top: var(--chat-gap-group);
+  }
+  /*
+   * O avatar do grupo e `position:absolute` na sarjeta; num grupo de uma linha
+   * curta ele ficaria mais alto que o proprio grupo e vazaria para o espaco de
+   * baixo. O piso pela altura do avatar (que ja sobra atras da foto quando ha
+   * mais texto) segura isso — e da area para a decoracao/cosmetico respirar.
+   */
+  .chat-group {
+    min-height: var(--chat-avatar);
   }
   .chat-group__corpo > * + * {
     margin-top: var(--chat-gap-msg);

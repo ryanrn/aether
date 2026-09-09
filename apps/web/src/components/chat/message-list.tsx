@@ -10,7 +10,7 @@ import {
   type ChatMessage,
 } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import { usePrefsDoChat } from "@/lib/chat/prefs";
+import { larguraDaSarjeta, usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageGroup, type GrupoDeMensagens } from "./message-group";
 import type { PublicUser } from "@aether/shared";
 
@@ -165,7 +165,7 @@ export function MessageList({
           "--chat-gap-msg": `${gapMensagem}px`,
           "--chat-gap-group": `${gapGrupo}px`,
           "--chat-avatar": `${tamanhoAvatar}px`,
-          "--chat-gutter": `${tamanhoAvatar + 14}px`,
+          "--chat-gutter": `${larguraDaSarjeta(tamanhoAvatar)}px`,
         } as React.CSSProperties
       }
       className="chat-root flex-1 overflow-y-auto overscroll-contain"

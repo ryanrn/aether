@@ -27,7 +27,7 @@ export interface ChatPrefs {
   timestamps: ModoTimestamp;
   gapMensagem: number; // 0–12 px, dentro do grupo
   gapGrupo: number; // 6–40 px, entre grupos
-  tamanhoAvatar: number; // 24–44 px
+  tamanhoAvatar: number; // 28–52 px
 
   /* ---- acessibilidade / global ---- */
   escalaInterface: number; // 0.8–1.5 — afeta o app inteiro (Ctrl +/-)
@@ -42,9 +42,9 @@ export const PRESETS_DENSIDADE: Record<
   Densidade,
   Pick<ChatPrefs, "fontSize" | "gapMensagem" | "gapGrupo" | "tamanhoAvatar">
 > = {
-  compacta: { fontSize: 14, gapMensagem: 2, gapGrupo: 10, tamanhoAvatar: 26 },
-  confortavel: { fontSize: 15, gapMensagem: 3, gapGrupo: 17, tamanhoAvatar: 32 },
-  espacosa: { fontSize: 16, gapMensagem: 6, gapGrupo: 26, tamanhoAvatar: 38 },
+  compacta: { fontSize: 14, gapMensagem: 2, gapGrupo: 10, tamanhoAvatar: 30 },
+  confortavel: { fontSize: 15, gapMensagem: 3, gapGrupo: 17, tamanhoAvatar: 38 },
+  espacosa: { fontSize: 16, gapMensagem: 6, gapGrupo: 26, tamanhoAvatar: 44 },
 };
 
 export const PREFS_PADRAO: ChatPrefs = {
@@ -64,12 +64,22 @@ export const LIMITES = {
   fontSize: [13, 19],
   gapMensagem: [0, 12],
   gapGrupo: [6, 40],
-  tamanhoAvatar: [24, 44],
+  tamanhoAvatar: [28, 52],
   escalaInterface: [0.8, 1.5],
 } as const;
 
 /** Passo do Ctrl +/- (e o do slider, que aceita 0,05, e mais fino). */
 export const PASSO_ESCALA = 0.1;
+
+/**
+ * A largura da SARJETA do chat — a coluna a esquerda onde mora o avatar do
+ * grupo e o horario de hover de cada linha. E o avatar mais uma folga fixa; o
+ * texto das mensagens fica indentado por esse valor. Uma funcao so para os dois
+ * lugares que precisam (a lista e a previa das Configuracoes) nao divergirem.
+ */
+export function larguraDaSarjeta(tamanhoAvatar: number): number {
+  return tamanhoAvatar + 16;
+}
 
 function clamp(valor: number, [min, max]: readonly [number, number]): number {
   if (!Number.isFinite(valor)) return min;

@@ -2539,6 +2539,13 @@ existente.
 - **`data-density` virou so um gancho de estilo.** As medidas do chat vem todas
   inline do `usePrefsDoChat`; os presets de densidade sao pontos de partida que
   o ajuste fino sobrescreve.
+- **Avatar do chat maior** — o preset "confortavel" foi de 32 para 38px e a
+  faixa do slider de 24–44 para 28–52. Quem NAO mexeu no slider ve o novo
+  tamanho (o valor vem do preset); quem ajustou a mao mantem a escolha, so
+  represa a nova faixa. A sarjeta (`--chat-gutter`) acompanha por
+  `larguraDaSarjeta()` — avatar + 16px — nos dois lugares que precisam (a lista
+  e a previa das Configuracoes). `.chat-group` ganhou `min-height` pela altura
+  do avatar para grupos de uma linha curta nao deixarem o avatar vazar.
 - **Sem teste automatizado da tela.** `typecheck`, `vitest` e `next build`
   passam; o efeito visual (agrupamento, densidades, escala, contraste, Twemoji)
   foi conferido num preview isolado e fica para o teste de uso no app real.
@@ -3453,6 +3460,17 @@ O anel fica ATRAS do avatar e um pouco maior. O miolo e coberto pela propria
 imagem, entao so a beirada aparece — assim a moldura nunca corta nem deforma a
 foto, e gradiente sai de graca. Acompanha os DOIS formatos, porque o app usa
 `rounded-md` na maioria das telas e `rounded-full` so em amigos.
+
+**A ESCALA DE AVATAR E UMA FONTE UNICA** — `AVATAR_PX` em
+`components/ui/avatar.tsx`: `xs 24 · sm 32 · md 44 · lg 72 · xl 96`. Nenhum
+componente mede avatar a mao; quem precisa de valor fora da escala (so o chat,
+que e slider) passa `px`. O `<Avatar>` publica `--avatar-size` (px do circulo)
+e `data-avatar-size` (o degrau) no wrapper, e tem um slot `decoracao` que
+renderiza numa camada que pode transbordar ~18% do circulo sem empurrar layout
+— e o ponto de entrada do catalogo de decoracoes, ainda sem ninguem passando.
+O miolo seguro do rosto e sempre o `box` cheio; cosmetico mora na borda
+externa. O cartao de perfil usa `xl`, o maior da interface: e onde foto,
+moldura, decoracao e presenca aparecem com folga.
 
 MOVIMENTO E DECIDIDO PELOS BYTES, nunca pela extensao. Travar apenas o GIF
 deixaria o buraco: WEBP anima pela flag ANIM do bloco VP8X e PNG anima como

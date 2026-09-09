@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
  * Secao vazia nao aparece. Presenca/atividade vem da store em tempo real —
  * enquanto o cartao esta aberto, a pessoa comecar a jogar muda o que se ve.
  */
-const LARGURA = 300;
+const LARGURA = 320;
 const FOLGA = 8;
 
 export function CartaoDePerfil({
@@ -160,18 +160,22 @@ export function CartaoDePerfil({
         role="dialog"
       >
       {/* faixa de cor so para o avatar se apoiar */}
-      <div className="h-[52px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+      <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
 
       <div className="px-4 pb-4">
-        <div className="-mt-7 mb-2">
+        {/*
+          O maior avatar da interface: e aqui que a pessoa ve a foto, a
+          moldura, a decoracao e o indicador de presenca com folga. Sobe metade
+          para dentro da faixa (`-mt-12` ~ metade de 96) para "se apoiar" nela.
+        */}
+        <div className="-mt-12 mb-2">
           <Avatar
             userId={user.id}
             name={nome}
             src={user.avatarUrl}
             moldura={user.moldura}
             status={status}
-            size="lg"
-            px={60}
+            size="xl"
             ring="border-base-900"
           />
         </div>

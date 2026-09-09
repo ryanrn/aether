@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from "react";
 import type { UserStatus } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import {
@@ -13,12 +14,47 @@ const STATUS_COLOR: Record<UserStatus, string> = {
   OFFLINE: "bg-signal-offline",
 };
 
-const SIZES = {
-  xs: "h-6 w-6 text-[10px]",
-  sm: "h-8 w-8 text-[11px]",
-  md: "h-10 w-10 text-sm",
-  lg: "h-16 w-16 text-lg",
+/**
+ * A ESCALA DE AVATAR DO APP — fonte unica de verdade.
+ *
+ * Um numero por variante, em px. Todo tamanho de avatar do produto sai daqui;
+ * nao existe mais `h-10 w-10` solto num componente. Quando um contexto precisa
+ * de um valor fora da escala (hoje so o chat, cujo avatar e um slider), passa
+ * `px` — mas isso e a excecao, nao o caminho normal.
+ *
+ * A escala foi redimensionada para dar PRESENCA ao avatar: ele e a base visual
+ * dos cosmeticos (moldura, decoracao, efeito), e cosmetico sobre um icone de
+ * 32px nao se le. Cada degrau tem um papel:
+ *
+ *   xs  24  listas densas embutidas — rostos empilhados numa call, sublistas
+ *   sm  32  linhas de lista e barras — membros, conversas, userbar
+ *   md  44  cabecalhos e cartoes de menu — conversa aberta, menu do trilho
+ *   lg  72  cartoes de identidade — cartao de atividade, conta, tela de login
+ *   xl  96  o cartao de perfil — o maior da interface, onde a decoracao
+ *           aparece inteira e o indicador de presenca fica confortavel
+ *
+ * O sistema de cosmeticos le `--avatar-size` (px do circulo) no wrapper e
+ * `data-avatar-size` (o degrau) para saber a area util sem medir o DOM.
+ */
+export const AVATAR_PX = {
+  xs: 24,
+  sm: 32,
+  md: 44,
+  lg: 72,
+  xl: 96,
 } as const;
+
+export type TamanhoAvatar = keyof typeof AVATAR_PX;
+
+/**
+ * O ponto de status cresce em degraus, nao proporcional ao pixel: num avatar
+ * grande um ponto proporcional viraria uma bola exagerada.
+ */
+function tamanhoDoPonto(box: number): string {
+  if (box >= 88) return "h-[18px] w-[18px]";
+  if (box >= 56) return "h-4 w-4";
+  return "h-3 w-3";
+}
 
 export function Avatar({
   userId,
@@ -28,14 +64,15 @@ export function Avatar({
   size = "sm",
   /**
    * Tamanho exato em px, quando o chamador precisa de um valor fora da escala
-   * `xs/sm/md/lg` — hoje so o chat, cujo avatar e configuravel. Sobrepoe
-   * `size` para largura/altura; o resto (anel de status, moldura) continua
-   * seguindo `size`, entao passe o `size` mais proximo junto.
+   * `xs..xl` — hoje so o chat, cujo avatar e configuravel. Sobrepoe `size` na
+   * largura/altura; o resto (espessura da moldura) continua seguindo `size`,
+   * entao passe o `size` mais proximo junto.
    */
   px,
   speaking = false,
   round = true,
   moldura = null,
+  decoracao = null,
   ring = "border-base-900",
   className,
 }: {
@@ -43,7 +80,7 @@ export function Avatar({
   name: string;
   src?: string | null;
   status?: UserStatus;
-  size?: keyof typeof SIZES;
+  size?: TamanhoAvatar;
   /** tamanho exato em px; sobrepoe `size` na largura/altura do avatar */
   px?: number;
   /** anel de "falando" — usado a partir da fase 4 */
@@ -70,6 +107,19 @@ export function Avatar({
    */
   moldura?: string | null;
   /**
+   * Slot de COSMETICO por cima do avatar — decoracao, efeito, acessorio.
+   *
+   * Renderiza numa camada que pode TRANSBORDAR o circulo (a "area do
+   * cosmetico", ~18% para fora de cada lado) sem empurrar layout: e
+   * `position:absolute` e `pointer-events:none`. Nunca encolhe a foto — o
+   * miolo seguro do rosto e sempre o `box` cheio; a decoracao mora na borda
+   * externa.
+   *
+   * Hoje ninguem passa: e o ponto de entrada para quando o catalogo de
+   * decoracoes entrar. A moldura (o anel atras) continua vindo por `moldura`.
+   */
+  decoracao?: ReactNode;
+  /**
    * Cor do anel do ponto de status.
    *
    * O anel existe para SEPARAR o ponto do que esta atras dele, entao precisa
@@ -80,10 +130,17 @@ export function Avatar({
   ring?: string;
   className?: string;
 }) {
+  const box = px ?? AVATAR_PX[size];
   const estiloDaMoldura = moldura ? MOLDURA_ESTILO[moldura] : undefined;
 
   return (
-    <div className={cn("relative shrink-0", className)}>
+    <div
+      className={cn("relative shrink-0", className)}
+      style={
+        { "--avatar-size": `${box}px`, width: box, height: box } as CSSProperties
+      }
+      data-avatar-size={size}
+    >
       {estiloDaMoldura ? (
         /*
          * ANTES do avatar no DOM, e por isso atras dele na pintura. Sem
@@ -103,15 +160,12 @@ export function Avatar({
       ) : null}
       <div
         className={cn(
-          "relative flex items-center justify-center overflow-hidden font-medium text-ink-100 transition-shadow duration-100",
+          "relative flex h-full w-full items-center justify-center overflow-hidden font-medium text-ink-100 transition-shadow duration-100",
           round ? "rounded-full" : "rounded-md",
-          px ? "leading-none" : SIZES[size],
           speaking && "speaking-ring",
         )}
         style={{
-          ...(px
-            ? { width: px, height: px, fontSize: Math.round(px * 0.36) }
-            : null),
+          fontSize: Math.round(box * 0.36),
           ...(src ? null : { backgroundColor: colorFromId(userId) }),
         }}
       >
@@ -122,12 +176,20 @@ export function Avatar({
           initials(name)
         )}
       </div>
+      {decoracao ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[-18%] z-20"
+        >
+          {decoracao}
+        </span>
+      ) : null}
       {status ? (
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 z-10 rounded-full border-2",
+            "absolute -bottom-0.5 -right-0.5 z-30 rounded-full border-2",
             ring,
-            size === "lg" ? "h-4 w-4" : "h-3 w-3",
+            tamanhoDoPonto(box),
             STATUS_COLOR[status],
           )}
           aria-label={status}
