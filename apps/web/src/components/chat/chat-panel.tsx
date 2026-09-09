@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { PublicMessage, PublicUser } from "@aether/shared";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { CartaoDePerfil } from "@/components/profile/cartao-de-perfil";
 import { MessageList } from "./message-list";
 import { MessageComposer } from "./message-composer";
+
+/** Quem clicou em qual avatar/nome, e onde — para ancorar o cartao. */
+export interface PerfilAberto {
+  user: PublicUser;
+  ancora: DOMRect;
+}
 
 /**
  * Junta lista e campo de envio, e semeia a store com o historico que veio do
@@ -21,6 +28,8 @@ export function ChatPanel({
   initialHasMore,
   selfUser,
   canSend,
+  serverId,
+  serverName,
   ehConversaDireta = false,
 }: {
   channelId: string;
@@ -29,11 +38,26 @@ export function ChatPanel({
   initialHasMore: boolean;
   selfUser: PublicUser;
   canSend: boolean;
+  /** servidor aberto — ausente em conversa direta; o cartao usa para os cargos */
+  serverId?: string;
+  serverName?: string;
   /** Repassado para a lista: conversa direta nao mostra "#". */
   ehConversaDireta?: boolean;
 }) {
   const prependHistory = useRealtimeStore((state) => state.prependHistory);
   const setActiveChannel = useRealtimeStore((state) => state.setActiveChannel);
+
+  const [perfil, setPerfil] = useState<PerfilAberto | null>(null);
+
+  /**
+   * Clicar na MESMA pessoa fecha; noutra, troca. O `id` decide o toggle e a
+   * `ancora` nova reposiciona o cartao.
+   */
+  const abrirPerfil = useCallback((user: PublicUser, ancora: DOMRect) => {
+    setPerfil((atual) =>
+      atual?.user.id === user.id ? null : { user, ancora },
+    );
+  }, []);
 
   useEffect(() => {
     prependHistory(channelId, initialMessages, initialHasMore);
@@ -63,6 +87,7 @@ export function ChatPanel({
         channelName={channelName}
         ehConversaDireta={ehConversaDireta}
         initialMessages={initialMessages}
+        onAbrirPerfil={abrirPerfil}
       />
       <MessageComposer
         channelId={channelId}
@@ -70,6 +95,17 @@ export function ChatPanel({
         selfUser={selfUser}
         canSend={canSend}
       />
+
+      {perfil ? (
+        <CartaoDePerfil
+          key={perfil.user.id}
+          user={perfil.user}
+          serverId={serverId}
+          serverName={serverName}
+          ancora={perfil.ancora}
+          onClose={() => setPerfil(null)}
+        />
+      ) : null}
     </div>
   );
 }

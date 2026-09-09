@@ -90,6 +90,11 @@ model User {
   /// Guarda o id do catalogo em codigo (`MOLDURAS`), nao o visual. Moldura
   /// retirada do catalogo vira nulo na leitura, sem quebrar a tela.
   molduraId                 String?
+  /// Bio do perfil GLOBAL — texto curto que a pessoa escreve sobre si. Nulo =
+  /// nunca preencheu; string vazia nao e guardada (a action apaga). Aparece no
+  /// cartao de perfil; nao viaja no `PublicUser` (seria peso em toda mensagem)
+  /// — o cartao busca sob demanda.
+  bio                       String?
   status                    UserStatus @default(OFFLINE)
   /// Aceita conversa direta de quem NAO e amigo, mas divide um servidor.
   ///

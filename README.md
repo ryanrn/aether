@@ -2521,7 +2521,7 @@ existente.
 | 1 | Agrupamento real (`<MessageGroup>`): avatar/nome/horario uma vez por grupo; espaco entre grupos > dentro do grupo, por `--chat-gap-*`. `message-item` enxuto; barra de hover reagir · mais; reacoes em chip sem borda. | ✅ |
 | 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
 | 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/`. **Seletor proprio** (`emoji-panel.tsx`), nao o `<Picker>` do emoji-mart: cada celula e o mesmo `<Emoji>` da mensagem. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
-| 4 | Profile card no chat; perfil global x servidor; `User.bio`; amizades com estados. | a fazer |
+| 4 | Cartao de perfil ao clicar no avatar/nome no chat (`cartao-de-perfil.tsx`): ancora no elemento, vira pra cima se nao couber, fecha por Esc/fora/toggle. Avatar, nome, @, status, **bio** (`User.bio`, migracao `20260909120000`), atividade/jogo/Spotify da store, cargos do servidor, botoes de amizade com estado (`carregarPerfilAction` -> `perfilParaCartao`). Secao vazia nao aparece. | ✅ |
 | 5 | Reply real (`replyToId` ja existe no schema) + mensagens de sistema efemeras + refino/responsivo. | a fazer |
 
 ### Limitacoes conhecidas ate aqui
@@ -2556,6 +2556,18 @@ existente.
 - **GIF enviado e uma URL de midia no `content` da mensagem.** O `<MessageItem>`
   reconhece uma URL solta de host confiavel e desenha a midia. E o embed minimo
   — sem tabela de embeds nem schema; a formalizacao fica para depois.
+- **`User.bio` NAO entra no `PublicUser`.** Seria bytes em toda mensagem e todo
+  membro para um dado que so o cartao usa. O cartao busca sob demanda ao abrir
+  (`carregarPerfilAction`), junto com apelido, cargos e o estado da amizade —
+  uma consulta por pilar, todas por indice.
+- **Migracao `20260909120000_user_bio` (`ALTER TABLE "User" ADD COLUMN "bio"`)
+  precisa ser aplicada em producao** (`npm run db:deploy`) antes de a Etapa 4
+  ficar de pe la. Ate aplicar, ler/gravar bio erra em producao — o resto do
+  cartao (status, atividade, cargos) funciona.
+- **O cartao ancora no elemento clicado**, abre abaixo, vira pra cima se nao
+  couber, e clampa na horizontal. Fecha por Esc, clique fora ou clicar de novo
+  na mesma pessoa. O `mousedown` nos gatilhos nao propaga, senao o toggle
+  fecharia-e-reabriria.
 
 ## Transferencia de posse e exclusao de servidor
 

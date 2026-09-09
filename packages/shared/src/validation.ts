@@ -23,6 +23,16 @@ export const displayNameSchema = z
   .max(32, "Nome de exibicao pode ter no maximo 32 caracteres");
 
 /**
+ * Bio do perfil global. Curta de proposito — e um cartao, nao uma pagina. Vazia
+ * APAGA (volta a nulo), entao string vazia e valida. Quebra de linha passa;
+ * o cartao respeita com `whitespace-pre-wrap`.
+ */
+export const bioSchema = z
+  .string()
+  .trim()
+  .max(190, "A bio pode ter no maximo 190 caracteres");
+
+/**
  * Apelido por servidor. Vazio APAGA o apelido (volta ao nome de exibicao) —
  * por isso a string vazia e valida aqui, diferente do displayName.
  */

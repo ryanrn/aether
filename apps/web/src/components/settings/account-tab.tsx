@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
 import { ToggleRow } from "@/components/ui/switch";
+import { EditorDeBio } from "./editor-de-bio";
 
 /**
  * Minha conta: foto, nome de exibicao e apelido no servidor atual.
@@ -452,6 +453,8 @@ export function AccountTab({
           maxLength={32}
         />
       </Field>
+
+      <EditorDeBio userId={user.id} />
 
       {server ? (
         <div className="border-t border-line pt-5">

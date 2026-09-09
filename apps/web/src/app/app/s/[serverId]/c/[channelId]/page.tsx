@@ -50,11 +50,13 @@ export default async function ChannelPage({
       isPrivate: true,
       isTemporary: true,
       userLimit: true,
+      server: { select: { name: true } },
     },
   });
   if (!channel) notFound();
 
-  const publicChannel: PublicChannel = channel;
+  const { server, ...canalSemServidor } = channel;
+  const publicChannel: PublicChannel = canalSemServidor;
   const iconeCanal: AetherIconName = channel.isPrivate
     ? "lock"
     : channel.type === "VOICE"
@@ -110,6 +112,8 @@ export default async function ChannelPage({
           initialHasMore={history.hasMore}
           selfUser={selfUser}
           canSend={canSend}
+          serverId={serverId}
+          serverName={server.name}
         />
       ) : canConnect ? (
         <VoiceStage

@@ -12,6 +12,7 @@ import {
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageGroup, type GrupoDeMensagens } from "./message-group";
+import type { PublicUser } from "@aether/shared";
 
 /** Janela em que mensagens seguidas do mesmo autor viram um grupo so. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -25,6 +26,7 @@ export function MessageList({
   initialMessages,
   channelName,
   ehConversaDireta = false,
+  onAbrirPerfil,
 }: {
   channelId: string;
   initialMessages: PublicMessage[];
@@ -34,6 +36,8 @@ export function MessageList({
    * antes do nome de uma pessoa faz a tela dizer "#LucasCR".
    */
   ehConversaDireta?: boolean;
+  /** clique no avatar/nome de um grupo -> abre o cartao de perfil */
+  onAbrirPerfil: (user: PublicUser, ancora: DOMRect) => void;
 }) {
   const socket = useSocket();
   const stored = useChannelMessages(channelId);
@@ -175,7 +179,11 @@ export function MessageList({
       ) : (
         <ul className="py-3">
           {grupos.map((grupo) => (
-            <MessageGroup key={grupo.chave} grupo={grupo} />
+            <MessageGroup
+              key={grupo.chave}
+              grupo={grupo}
+              onAbrirPerfil={onAbrirPerfil}
+            />
           ))}
         </ul>
       )}

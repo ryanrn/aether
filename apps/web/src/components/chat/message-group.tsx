@@ -5,6 +5,7 @@ import { SeloPlano } from "@/components/ui/selo-plano";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageItem } from "./message-item";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
+import type { PublicUser } from "@aether/shared";
 
 /**
  * Um GRUPO de mensagens seguidas da mesma pessoa.
@@ -25,18 +26,44 @@ export interface GrupoDeMensagens {
   mensagens: ChatMessage[];
 }
 
-export function MessageGroup({ grupo }: { grupo: GrupoDeMensagens }) {
+export function MessageGroup({
+  grupo,
+  onAbrirPerfil,
+}: {
+  grupo: GrupoDeMensagens;
+  /** ausente = so no preview de configuracoes, onde o cartao nao faz sentido */
+  onAbrirPerfil?: (user: PublicUser, ancora: DOMRect) => void;
+}) {
   const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
   const primeira = grupo.mensagens[0];
   if (!primeira) return null;
   const inicio = new Date(primeira.createdAt);
+
+  const abrir = (evento: React.MouseEvent) =>
+    onAbrirPerfil?.(
+      grupo.autor,
+      evento.currentTarget.getBoundingClientRect(),
+    );
+
+  /**
+   * O `mousedown` NAO pode chegar ao `document`: o cartao fecha ao clicar fora,
+   * e sem isto clicar de novo no mesmo nome faria o cartao fechar (mousedown) e
+   * reabrir (click) — nunca alternando.
+   */
+  const semPropagar = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
     <li
       className="chat-group relative px-4"
       style={{ paddingLeft: "calc(1rem + var(--chat-gutter))" }}
     >
-      <div className="absolute left-4 top-0">
+      <button
+        type="button"
+        onClick={abrir}
+        onMouseDown={semPropagar}
+        aria-label={`Perfil de ${grupo.autor.displayName}`}
+        className="absolute left-4 top-0 rounded-full transition-transform hover:scale-105"
+      >
         <Avatar
           userId={grupo.autor.id}
           name={grupo.autor.displayName}
@@ -45,12 +72,17 @@ export function MessageGroup({ grupo }: { grupo: GrupoDeMensagens }) {
           size={tamanhoAvatar >= 36 ? "md" : "sm"}
           px={tamanhoAvatar}
         />
-      </div>
+      </button>
 
       <div className="flex items-baseline gap-2">
-        <span className="text-[13px] font-semibold text-ink-100">
+        <button
+          type="button"
+          onClick={abrir}
+          onMouseDown={semPropagar}
+          className="text-[13px] font-semibold text-ink-100 hover:underline"
+        >
           {grupo.autor.displayName}
-        </span>
+        </button>
         <SeloPlano tier={grupo.autor.plano} tamanho="sm" />
         <time
           dateTime={primeira.createdAt}

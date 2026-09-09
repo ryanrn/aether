@@ -466,3 +466,29 @@ export interface PublicFriendship {
   kind: "friend" | "incoming" | "outgoing" | "blocked";
   createdAt: string;
 }
+
+/** Estado da relacao entre quem olha e a pessoa do cartao de perfil. */
+export type RelacaoComUsuario =
+  | "eu"
+  | "nenhuma"
+  | "amigos"
+  | "pedido-enviado"
+  | "pedido-recebido"
+  | "bloqueado"
+  | "bloqueou-voce";
+
+/**
+ * O que o cartao de perfil precisa ALEM do `PublicUser` (que ele ja tem da
+ * mensagem). Buscado sob demanda quando o cartao abre — nao viaja em toda
+ * mensagem.
+ */
+export interface PerfilParaCartao {
+  bio: string | null;
+  /** apelido no servidor atual; `null` em DM ou sem apelido */
+  nickname: string | null;
+  /** cargos no servidor atual, ja ordenados; `[]` em DM ou sem cargo com cor */
+  roles: PublicRole[];
+  relacao: RelacaoComUsuario;
+  /** id da amizade — para aceitar/recusar um `pedido-recebido`; `null` senao */
+  friendshipId: string | null;
+}

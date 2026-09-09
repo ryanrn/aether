@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@aether/db";
 import {
+  bioSchema,
   displayNameSchema,
   molduraPorId,
   planoAtende,
@@ -159,6 +160,35 @@ export async function updateDisplayNameAction(
     await notifyProfileChanged({ userId: session.user.id });
     revalidatePath("/app", "layout");
     return ok({ displayName: parsed.data });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Bio do perfil global. Sem `userId` na entrada — cada um mexe na propria, id
+ * vindo do cookie. Vazia APAGA (volta a nulo). Nao propaga por `PublicUser`,
+ * entao nao precisa de `notifyProfileChanged` — o cartao busca sob demanda e ja
+ * pega o novo valor na proxima abertura.
+ */
+export async function atualizarBioAction(
+  bio: string,
+): Promise<ActionResult<{ bio: string | null }>> {
+  try {
+    const session = await requireUser();
+
+    const parsed = bioSchema.safeParse(bio);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Bio invalida", "bio");
+    }
+
+    const valor = parsed.data.length > 0 ? parsed.data : null;
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { bio: valor },
+    });
+
+    return ok({ bio: valor });
   } catch (error) {
     return toActionError(error);
   }
