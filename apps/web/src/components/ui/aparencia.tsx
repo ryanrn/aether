@@ -32,6 +32,40 @@ export function AparenciaProvider() {
     aplicarBandeira(el, "legibilidade", legibilidade ? "1" : null);
   }, [escala, contraste, movimento, animacoes, legibilidade]);
 
+  /**
+   * Ctrl/Cmd + `+` / `-` / `0` controlam a escala de acessibilidade — o mesmo
+   * gesto do zoom nativo do navegador, mas mexendo na preferencia do app (que
+   * persiste e reflete no slider). Chamamos `preventDefault` para o zoom do
+   * Chrome/Electron nao disparar junto e dobrar o efeito.
+   */
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.altKey) return;
+      const { ajustarEscala, zerarEscala } = usePrefsDoChat.getState();
+      switch (e.key) {
+        case "=":
+        case "+":
+        case "Add": // Numpad+ em alguns layouts
+          e.preventDefault();
+          ajustarEscala(0.1);
+          break;
+        case "-":
+        case "_":
+        case "Subtract":
+          e.preventDefault();
+          ajustarEscala(-0.1);
+          break;
+        case "0":
+          e.preventDefault();
+          zerarEscala();
+          break;
+      }
+    }
+    window.addEventListener("keydown", aoTeclar, { passive: false });
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, []);
+
   return null;
 }
 
@@ -51,7 +85,7 @@ export const SCRIPT_APARENCIA = `
     var p = JSON.parse(localStorage.getItem('aether:chat:prefs') || '{}');
     var e = document.documentElement;
     var s = typeof p.escalaInterface === 'number'
-      ? Math.min(1.2, Math.max(0.9, p.escalaInterface)) : 1;
+      ? Math.min(1.5, Math.max(0.8, p.escalaInterface)) : 1;
     if (s !== 1) e.style.zoom = String(s);
     if (p.contrasteAlto) e.dataset.contraste = 'alto';
     if (p.reduzirMovimento) e.dataset.movReduzido = '1';

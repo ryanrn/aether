@@ -7,10 +7,10 @@ import { ToggleRow } from "@/components/ui/switch";
 /**
  * Acessibilidade — o que vale para o APP INTEIRO, nao so o chat.
  *
- * A escala mexe no `font-size` do root; como o Tailwind mede quase tudo em
- * `rem`, a interface cresce junto. Contraste e movimento viram `data-*` no
- * `<html>`, lidos por `globals.css`. Tudo persiste no `localStorage`, aplicado
- * sem flash pelo script do layout raiz.
+ * A escala aplica `zoom` no `<html>`, entao a interface inteira cresce junto.
+ * Tambem responde a Ctrl +/- / Ctrl 0 (ver `AparenciaProvider`). Contraste e
+ * movimento viram `data-*` no `<html>`, lidos por `globals.css`. Tudo persiste
+ * no `localStorage`, aplicado sem flash pelo script do layout raiz.
  */
 export function AcessibilidadeTab() {
   const prefs = usePrefsDoChat();
@@ -46,13 +46,30 @@ export function AcessibilidadeTab() {
             className="mt-2 block w-full accent-accent-500"
           />
           <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-600">
-            <span>90%</span>
+            <span>80%</span>
             <span>100%</span>
-            <span>120%</span>
+            <span>150%</span>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
             Aumenta ou diminui a interface inteira, como o zoom do navegador.
-            Para mexer so no texto do chat, use a fonte na aba Aparencia.
+            Atalho:{" "}
+            <kbd className="rounded border border-line bg-base-800 px-1 font-mono text-[10px] text-ink-300">
+              Ctrl
+            </kbd>{" "}
+            com{" "}
+            <kbd className="rounded border border-line bg-base-800 px-1 font-mono text-[10px] text-ink-300">
+              +
+            </kbd>
+            ,{" "}
+            <kbd className="rounded border border-line bg-base-800 px-1 font-mono text-[10px] text-ink-300">
+              -
+            </kbd>{" "}
+            ou{" "}
+            <kbd className="rounded border border-line bg-base-800 px-1 font-mono text-[10px] text-ink-300">
+              0
+            </kbd>{" "}
+            para voltar a 100%. Para mexer so no texto do chat, use a fonte na
+            aba Aparencia.
           </p>
         </div>
       </div>

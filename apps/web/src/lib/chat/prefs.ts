@@ -30,7 +30,7 @@ export interface ChatPrefs {
   tamanhoAvatar: number; // 24–44 px
 
   /* ---- acessibilidade / global ---- */
-  escalaInterface: number; // 0.9–1.2 — afeta o app inteiro
+  escalaInterface: number; // 0.8–1.5 — afeta o app inteiro (Ctrl +/-)
   contrasteAlto: boolean;
   reduzirMovimento: boolean;
   reduzirAnimacoes: boolean;
@@ -65,8 +65,11 @@ export const LIMITES = {
   gapMensagem: [0, 12],
   gapGrupo: [6, 40],
   tamanhoAvatar: [24, 44],
-  escalaInterface: [0.9, 1.2],
+  escalaInterface: [0.8, 1.5],
 } as const;
+
+/** Passo do Ctrl +/- (e o do slider, que aceita 0,05, e mais fino). */
+export const PASSO_ESCALA = 0.1;
 
 function clamp(valor: number, [min, max]: readonly [number, number]): number {
   if (!Number.isFinite(valor)) return min;
@@ -113,6 +116,10 @@ function num(v: unknown, padrao: number): number {
 
 interface PrefsStore extends ChatPrefs {
   definir: <K extends keyof ChatPrefs>(chave: K, valor: ChatPrefs[K]) => void;
+  /** Ctrl +/-: soma `delta` a `escalaInterface`, preso aos LIMITES e arredondado ao passo. */
+  ajustarEscala: (delta: number) => void;
+  /** Ctrl 0: volta a escala para 100%. */
+  zerarEscala: () => void;
   restaurar: () => void;
 }
 
@@ -139,6 +146,22 @@ export const usePrefsDoChat = create<PrefsStore>((set, get) => ({
       gravar({ ...get(), ...patch });
       return patch;
     });
+  },
+  ajustarEscala: (delta) => {
+    const atual = get().escalaInterface;
+    const alvo =
+      Math.round(
+        clamp(atual + delta, LIMITES.escalaInterface) / PASSO_ESCALA,
+      ) * PASSO_ESCALA;
+    const proximo = Math.round(alvo * 100) / 100;
+    if (proximo === atual) return;
+    gravar({ ...get(), escalaInterface: proximo });
+    set({ escalaInterface: proximo });
+  },
+  zerarEscala: () => {
+    if (get().escalaInterface === 1) return;
+    gravar({ ...get(), escalaInterface: 1 });
+    set({ escalaInterface: 1 });
   },
   restaurar: () => {
     gravar(PREFS_PADRAO);

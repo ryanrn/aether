@@ -2532,7 +2532,10 @@ existente.
 - **Escala da interface usa `zoom` no `<html>`**, nao `font-size` no root. `zoom`
   e o unico jeito de escalar TUDO (inclusive `px` fixo) de forma nitida e sem
   depender de a interface ser 100% `rem`. E padrao nos alvos (Chrome/Electron);
-  navegadores muito antigos ignorariam e ficariam em 100%.
+  navegadores muito antigos ignorariam e ficariam em 100%. Faixa 80%–150%,
+  passo de 5% no slider; `Ctrl` + `+` / `-` (e `Ctrl 0` para voltar a 100%)
+  ajustam de 10% em 10% e chamam `preventDefault` para o zoom nativo do
+  navegador nao disparar junto — o listener global mora no `<AparenciaProvider>`.
 - **`data-density` virou so um gancho de estilo.** As medidas do chat vem todas
   inline do `usePrefsDoChat`; os presets de densidade sao pontos de partida que
   o ajuste fino sobrescreve.
