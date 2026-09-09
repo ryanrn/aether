@@ -10,13 +10,21 @@ import { ComunidadesTab } from "./comunidades-tab";
 import { ChavesTab } from "./chaves-tab";
 import { FlagsTab } from "./flags-tab";
 import { DenunciasTab } from "./denuncias-tab";
+import { CosmeticosTab } from "./cosmeticos-tab";
 
-type Aba = "denuncias" | "jogos" | "comunidades" | "chaves" | "flags";
+type Aba =
+  | "denuncias"
+  | "jogos"
+  | "comunidades"
+  | "cosmeticos"
+  | "chaves"
+  | "flags";
 
 const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
   { id: "denuncias", rotulo: "Denúncias", icone: "shield-check" },
   { id: "jogos", rotulo: "Biblioteca de jogos", icone: "library" },
   { id: "comunidades", rotulo: "Comunidades", icone: "compass" },
+  { id: "cosmeticos", rotulo: "Cosméticos", icone: "sparkle" },
   { id: "chaves", rotulo: "Chaves de plano", icone: "key" },
   { id: "flags", rotulo: "Kill switches", icone: "shield" },
 ];
@@ -117,6 +125,8 @@ export function EquipePanel() {
           <JogosTab onPendentes={(n) => setContagem("jogos", n)} />
         ) : aba === "comunidades" ? (
           <ComunidadesTab onPendentes={(n) => setContagem("comunidades", n)} />
+        ) : aba === "cosmeticos" ? (
+          <CosmeticosTab />
         ) : aba === "chaves" ? (
           <ChavesTab />
         ) : (

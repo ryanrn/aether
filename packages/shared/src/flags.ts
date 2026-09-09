@@ -21,7 +21,8 @@ export type ChaveDeFlag =
   | "registro_aberto"
   | "exige_email_verificado"
   | "upload_de_imagem"
-  | "voz_habilitada";
+  | "voz_habilitada"
+  | "loja_de_cosmeticos";
 
 export interface DefinicaoDeFlag {
   /** Nome curto para a tela da equipe. */
@@ -60,6 +61,12 @@ export const FLAGS_CONHECIDAS: Record<ChaveDeFlag, DefinicaoDeFlag> = {
     descricao:
       "Entrar em canal de voz. Desligar recusa novos voice:join; quem já está na call não é derrubado.",
     padrao: true,
+  },
+  loja_de_cosmeticos: {
+    rotulo: "Loja de cosméticos",
+    descricao:
+      "A loja de cosméticos para os usuários (comprar/equipar decoração e banner). Desligada até haver cosméticos publicados e a tela da loja pronta. O painel da equipe (cadastro) NÃO depende disto — continua acessível.",
+    padrao: false,
   },
 };
 

@@ -823,6 +823,112 @@ model PlanKeyRedemption {
   @@index([userId])
 }
 
+/// A CATEGORIA de um cosmetico. Duas, e o escopo e esse:
+///  - DECORATION: a arte que fica EM VOLTA do avatar (pode transbordar o
+///    circulo). Renderiza sobre o avatar em qualquer lugar que ele aparece.
+///  - BANNER: a faixa do TOPO do cartao de perfil, atras do nome (3:1).
+///
+/// Vira um TYPE no Postgres de proposito: o conjunto e estrutural e curto, e
+/// somar uma categoria e mudanca de arquitetura (pasta nova, regra de dimensao
+/// nova), nao dado que entra por uma string solta. A raridade, ao contrario, e
+/// catalogo em codigo (`@aether/shared/cosmeticos`) e fica como texto aqui.
+enum CosmeticType {
+  DECORATION
+  BANNER
+}
+
+/// Um cosmetico de perfil cadastrado pela equipe — decoracao de avatar ou
+/// banner.
+///
+/// MESMO DESENHO DAS MOLDURAS EM CODIGO E DOS PLANOS: o que e definicao visual
+/// mora fora do banco. Aqui ficam so os METADADOS e a REFERENCIA do arquivo —
+/// `assetKey` (a chave no Cloudflare R2) e `assetUrl` (a URL publica/CDN que o
+/// app carrega). O binario nunca entra numa coluna: imagem em linha de banco
+/// vira dado editavel, com tudo que isso traz (peso, migracao, revisao), e o R2
+/// ja serve o arquivo com egress zero e cache de CDN na frente.
+///
+/// A diferenca para `MOLDURAS` (o catalogo de aneis em codigo, gradientes CSS):
+/// aquelas sao poucas, fixas e versionadas junto do codigo; a DECORATION daqui
+/// e uma imagem (que pode transbordar o circulo) criada e publicada pela equipe
+/// sem deploy — que e o ponto da funcionalidade. As duas coexistem: o anel
+/// atras, a decoracao por cima.
+///
+/// `ativo` nasce `false`: todo cosmetico entra como RASCUNHO e so aparece para
+/// usuario / loja quando a equipe publica. Desativar depois NAO apaga o asset do
+/// R2 — isso e um passo separado e explicito, para nao deixar orfao nem destruir
+/// arte por engano.
+model Cosmetic {
+  id String @id @default(cuid())
+
+  /// O identificador ESTAVEL que o app referencia — "aether-flame". Nao muda
+  /// depois de criado; e por ele que uma escolha de usuario continua valendo
+  /// mesmo que o nome de exibicao mude.
+  slug String @unique
+
+  nome      String
+  descricao String?
+
+  tipo CosmeticType
+
+  /// Id de uma raridade do catalogo em codigo (`RARIDADES` em
+  /// `@aether/shared/cosmeticos`). Texto, e nao enum: a escada de raridade pode
+  /// ganhar degrau sem migracao, como o catalogo de molduras.
+  raridade String
+
+  /// So METADADO DE EXIBICAO enquanto nao ha carteira. Nulo = sem preco
+  /// definido. Quando a economia existir, a compra le disto; hoje ninguem debita
+  /// nada.
+  precoMoedas Int?
+
+  /// Plano MINIMO para equipar — reaproveita a regra de `plans.ts`
+  /// (`planoAtende`). `FREE` = qualquer um. A autorizacao de verdade e no
+  /// servidor, na hora de equipar, nunca so na tela.
+  tierMinimo PlanTier @default(FREE)
+
+  /// Rascunho ate a equipe publicar. Desativado: some da loja e do perfil,
+  /// ninguem novo equipa; quem ja equipou para de exibir na proxima leitura
+  /// (mesma logica de `molduraEfetiva`).
+  ativo Boolean @default(false)
+
+  /// Ordem na vitrine/loja, dentro do tipo. Empate cai no `createdAt`.
+  ordem Int @default(0)
+
+  /// A chave do objeto no R2 — "cosmetics/decorations/aether-flame-1a2b3c4d.png".
+  /// Prefixada pela pasta do tipo e sufixada por um hash do conteudo, para um
+  /// arquivo trocado virar chave nova e o cache imutavel continuar valendo.
+  ///
+  /// E a camada PRINCIPAL: o banner inteiro, ou (numa decoracao de duas
+  /// camadas) a parte da FRENTE, sobre o avatar.
+  assetKey  String
+  /// A URL publica de leitura (R2_PUBLIC_URL + assetKey). Guardada resolvida
+  /// para o app nao remontar caminho a cada render.
+  assetUrl  String
+  assetMime String
+  largura   Int?
+  altura    Int?
+
+  /// A camada de TRAS de uma decoracao (atras do avatar) — so quando a arte
+  /// tem duas partes, como uma coroa cujo aro passa por tras da cabeca. Nula
+  /// em banner e em decoracao de uma camada so.
+  assetTrasKey String?
+  assetTrasUrl String?
+
+  /// Miniatura WEBP pequena, para a grade do catalogo nao baixar o asset cheio
+  /// de cada item. Nula ate ser gerada.
+  thumbKey String?
+  thumbUrl String?
+
+  /// userId de quem cadastrou. Sem FK: e registro de auditoria, nao relacao
+  /// viva — mesmo criterio de `PlanKey.criadaPor`.
+  criadoPor String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// A loja e o painel filtram sempre por (tipo, ativo) e ordenam por `ordem`.
+  @@index([tipo, ativo, ordem])
+}
+
 /// Um arquivo anexado a uma mensagem.
 ///
 /// A LINHA NASCE ANTES DO ARQUIVO. Quem cria e a action que autoriza o envio,

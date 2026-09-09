@@ -91,3 +91,182 @@ export function moldurasDoPlano(plano: PlanTier): Moldura[] {
 export function podeAvatarAnimado(plano: PlanTier): boolean {
   return planoAtende(plano, "PRO");
 }
+
+/* ---------------------------------------------------------------------------
+ * Cosmeticos com asset (cadastrados pela equipe, arquivo no R2)
+ *
+ * Escopo: DECORACAO em volta do avatar e BANNER do perfil. So isso.
+ *
+ * Diferente das MOLDURAS acima (aneis em gradiente CSS, catalogo em codigo,
+ * fixas): estes a equipe cria e publica pelo painel, sem deploy — o binario e
+ * uma imagem no Cloudflare R2 e o banco (`model Cosmetic`) guarda so os
+ * metadados.
+ *
+ * O que fica AQUI e o que os dois lados (painel e app) precisam concordar sem
+ * consultar o banco: as categorias, a escada de raridade, a pasta de cada tipo
+ * no bucket e as regras de dimensao de cada um.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * A CATEGORIA de um cosmetico. Espelha o enum `CosmeticType` do Prisma — o
+ * shared nao importa `@aether/db` (direcao de dependencia), entao a uniao e
+ * declarada aqui, do mesmo jeito que `MessageRow` em `types.ts`.
+ */
+export const COSMETIC_TYPES = ["DECORATION", "BANNER"] as const;
+export type CosmeticType = (typeof COSMETIC_TYPES)[number];
+
+export function ehCosmeticType(valor: unknown): valor is CosmeticType {
+  return (
+    typeof valor === "string" &&
+    (COSMETIC_TYPES as readonly string[]).includes(valor)
+  );
+}
+
+/** O rotulo em portugues de cada categoria, para o painel e a loja. */
+export const ROTULO_COSMETIC_TYPE: Record<CosmeticType, string> = {
+  DECORATION: "Decoracao do avatar",
+  BANNER: "Banner do perfil",
+};
+
+/**
+ * A PASTA de cada tipo dentro do bucket — `cosmetics/<pasta>/...`.
+ *
+ * Fixa e plural, como o exemplo da spec (`cosmetics/decorations/`). O storage
+ * monta a chave a partir disto; nao inventa caminho por conta propria.
+ */
+export const PASTA_DO_COSMETICO: Record<CosmeticType, string> = {
+  DECORATION: "decorations",
+  BANNER: "banners",
+};
+
+/**
+ * As regras de DIMENSAO de cada tipo, checadas no envio (com `sharp`) e
+ * mostradas no painel antes.
+ *
+ *  - DECORATION: perto de quadrada. Ela abraca um circulo — arte alongada nao
+ *    encaixa. A spec pede ~512x512 (ou 640 com sangria), miolo transparente.
+ *  - BANNER: 3:1, como o resto do mercado. ~1500x500.
+ *
+ * `ladoMin` evita arte que some na tela; `ladoMax` evita peso a toa (o R2
+ * serve isto com CDN, mas 8000px de PNG ainda e download pesado).
+ */
+export interface RegraDeDimensao {
+  ratioMin: number;
+  ratioMax: number;
+  ladoMin: number;
+  ladoMax: number;
+  /** o alvo, em texto, para o painel dizer o que enviar */
+  alvo: string;
+}
+
+export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
+  DECORATION: {
+    ratioMin: 0.9,
+    ratioMax: 1.11,
+    ladoMin: 256,
+    ladoMax: 4096,
+    alvo:
+      "quadrada 512x512, PNG/WEBP RGBA. Rosto (Ø260 central) e o canto " +
+      "inferior-direito ficam transparentes; sem sombra projetada",
+  },
+  BANNER: {
+    ratioMin: 2.6,
+    ratioMax: 3.4,
+    ladoMin: 600,
+    ladoMax: 4096,
+    alvo: "3:1, ~1500x500, PNG ou WEBP",
+  },
+};
+
+/**
+ * A escada de raridade — catalogo em codigo, guardada como id de texto na
+ * coluna `Cosmetic.raridade` (ganha degrau sem migracao).
+ *
+ * Os nomes e a ordem seguem o mock da Loja (`common`..`mythic`). A cor e
+ * CATEGORICA e dessaturada — sempre acompanha um rotulo, nunca aparece
+ * sozinha —, para nao competir com o accent nem com o `SeloPlano`.
+ *
+ * `peso` so ordena (raro por cima); nao governa drop nem preco.
+ */
+export interface Raridade {
+  id: string;
+  nome: string;
+  peso: number;
+  /** hex, para o chip/rotulo. Igual as vars `--r-*` do mock. */
+  cor: string;
+}
+
+export const RARIDADES: readonly Raridade[] = [
+  { id: "common", nome: "Comum", peso: 1, cor: "#8b929c" },
+  { id: "rare", nome: "Raro", peso: 2, cor: "#5e9cc9" },
+  { id: "epic", nome: "Epico", peso: 3, cor: "#b98cf0" },
+  { id: "legendary", nome: "Lendario", peso: 4, cor: "#e5a94e" },
+  { id: "mythic", nome: "Mitico", peso: 5, cor: "#e5626b" },
+] as const;
+
+const RARIDADE_POR_ID = new Map(RARIDADES.map((r) => [r.id, r]));
+
+export function raridadePorId(id: string | null | undefined): Raridade | null {
+  if (!id) return null;
+  return RARIDADE_POR_ID.get(id) ?? null;
+}
+
+export function ehRaridade(valor: unknown): valor is string {
+  return typeof valor === "string" && RARIDADE_POR_ID.has(valor);
+}
+
+/**
+ * O cosmetico como o APP o consome: metadados + a URL do asset no CDN. Nunca
+ * carrega chave de bucket nem nada de admin (quem criou, rascunhos, preco
+ * interno). Montado no servidor a partir de `Cosmetic`, para o app so
+ * renderizar.
+ */
+export interface PublicCosmetic {
+  id: string;
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  tipo: CosmeticType;
+  raridade: string;
+  precoMoedas: number | null;
+  tierMinimo: PlanTier;
+  /**
+   * A camada PRINCIPAL. Banner: e o banner. Decoracao de uma camada: a peca
+   * inteira. Decoracao de duas camadas: a da FRENTE (sobre o avatar).
+   */
+  assetUrl: string;
+  /**
+   * A camada de TRAS de uma decoracao (atras do avatar) — so quando a arte
+   * tem duas partes, como uma coroa cujo aro passa por tras da cabeca. `null`
+   * em banner e em decoracao de uma camada.
+   */
+  assetTrasUrl: string | null;
+  thumbUrl: string | null;
+  largura: number | null;
+  altura: number | null;
+}
+
+/**
+ * O cosmetico como o PAINEL DA EQUIPE o ve — tudo, inclusive rascunho, quem
+ * criou e os carimbos de tempo. Nunca vai para o app do usuario.
+ */
+export interface CosmeticoNoPainel {
+  id: string;
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  tipo: CosmeticType;
+  raridade: string;
+  precoMoedas: number | null;
+  tierMinimo: PlanTier;
+  ativo: boolean;
+  ordem: number;
+  assetUrl: string;
+  assetTrasUrl: string | null;
+  thumbUrl: string | null;
+  largura: number | null;
+  altura: number | null;
+  criadoPor: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+}

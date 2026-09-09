@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COSMETIC_TYPES, ehRaridade } from "./cosmeticos";
 import { Permission, type PermissionKey } from "./permissions";
 
 /**
@@ -136,6 +137,93 @@ export function limiteDoAvatar(mime: string): number {
 
 /** O maior teto possivel — o que o bucket precisa aceitar na origem. */
 export const AVATAR_LIMITE_DO_BUCKET = AVATAR_ANIMADO_MAX_BYTES;
+
+/**
+ * Asset de cosmetico (decoracao de avatar ou banner de perfil) — enviado pela
+ * equipe no painel, arquivo pequeno que vai direto do servidor para o R2.
+ *
+ * SO PNG E WEBP no v1. SVG fica de fora pelo mesmo motivo de sempre — e XML e
+ * aceita `<script>` —, e o resto (JPEG) nao guarda transparencia, que e o
+ * ponto de uma decoracao. Animado passa (WEBP com movimento), so a miniatura
+ * congela no primeiro quadro.
+ *
+ * O teto de 4 MB e o corpo de uma Server Action da Vercel (4,5 MB): o upload
+ * passa pelo servidor de proposito, porque ele precisa dos bytes para medir a
+ * dimensao e gerar a miniatura.
+ *
+ * As regras de DIMENSAO variam por tipo (decoracao e quase quadrada, banner e
+ * 3:1) — ver `COSMETIC_REGRAS` em `./cosmeticos`.
+ */
+export const COSMETIC_MIME_TYPES = ["image/png", "image/webp"] as const;
+export type CosmeticMimeType = (typeof COSMETIC_MIME_TYPES)[number];
+export const COSMETIC_ASSET_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
+ * O slug de um cosmetico — o identificador estavel que o app referencia.
+ * Minusculas, numeros e hifen; sem hifen nas pontas. Curto e previsivel para
+ * virar parte do caminho no bucket sem escape.
+ */
+export const cosmeticSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(2, "O slug precisa de ao menos 2 caracteres")
+  .max(48, "O slug pode ter no maximo 48 caracteres")
+  .regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    "Use apenas letras minusculas, numeros e hifen (sem hifen nas pontas)",
+  );
+
+/**
+ * Os METADADOS de um cosmetico, vindos do formulario do painel. O arquivo
+ * (asset) e tratado a parte — chega como `File` no FormData da action, nao
+ * aqui.
+ *
+ * `ativo` NAO entra: todo cosmetico nasce rascunho, e a publicacao e um passo
+ * proprio (ver `definirCosmeticoAtivo`). Assim ninguem publica sem antes ver o
+ * preview.
+ */
+const precoMoedasSchema = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  z.union([
+    z.null(),
+    z.coerce
+      .number()
+      .int("O preco precisa ser um numero inteiro")
+      .min(0, "O preco nao pode ser negativo")
+      .max(1_000_000, "Preco alto demais"),
+  ]),
+);
+
+export const cosmeticoMetaSchema = z.object({
+  nome: z
+    .string()
+    .trim()
+    .min(1, "De um nome ao cosmetico")
+    .max(60, "O nome pode ter no maximo 60 caracteres"),
+  descricao: z
+    .string()
+    .trim()
+    .max(240, "A descricao pode ter no maximo 240 caracteres")
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  tipo: z.enum(COSMETIC_TYPES, {
+    errorMap: () => ({ message: "Tipo de cosmetico invalido" }),
+  }),
+  slug: cosmeticSlugSchema,
+  raridade: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine(ehRaridade, "Raridade invalida"),
+  precoMoedas: precoMoedasSchema,
+  tierMinimo: z.enum(["FREE", "PLUS", "PRO"], {
+    errorMap: () => ({ message: "Plano minimo invalido" }),
+  }),
+  ordem: z.coerce.number().int().min(0).max(9999).catch(0),
+});
+
+export type CosmeticoMeta = z.infer<typeof cosmeticoMetaSchema>;
 
 /** Acha uma marca ASCII nos primeiros bytes. Limitado para nao varrer 10 MB. */
 function contemMarca(bytes: Uint8Array, marca: string, ate = 4096): boolean {

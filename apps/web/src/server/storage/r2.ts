@@ -156,6 +156,43 @@ export async function autorizarUpload(params: {
 }
 
 /**
+ * Grava um objeto no R2 DIRETO do servidor, e devolve a URL publica.
+ *
+ * Diferente de `autorizarUpload`, que assina uma URL para o NAVEGADOR enviar:
+ * aqui os bytes ja estao na mao (arquivo pequeno, so a equipe envia, e o
+ * servidor precisa deles para medir dimensao e gerar miniatura de qualquer
+ * jeito). E o mesmo caminho do `storage.ts` do Supabase, so que para o R2.
+ *
+ * `cacheControl` entra no objeto: cosmetico e estatico e a chave carrega um
+ * hash do conteudo, entao `immutable` com validade longa e seguro — trocar a
+ * arte gera chave nova.
+ */
+export async function enviarObjeto(params: {
+  chave: string;
+  contentType: string;
+  bytes: Uint8Array;
+  cacheControl?: string;
+}): Promise<string | null> {
+  const config = configR2();
+  if (!config) return null;
+
+  try {
+    await cliente(config).send(
+      new PutObjectCommand({
+        Bucket: config.bucket,
+        Key: params.chave,
+        Body: params.bytes,
+        ContentType: params.contentType,
+        CacheControl: params.cacheControl,
+      }),
+    );
+    return `${config.publicUrl}/${params.chave}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * O objeto existe e tem o tamanho que dissemos?
  *
  * Chamada DEPOIS do envio, antes de registrar o anexo. A assinatura ja tranca
