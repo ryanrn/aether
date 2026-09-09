@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
-import { EmojiMartHost } from "./emoji-picker";
+import { PainelDeEmoji } from "./emoji-panel";
 import { GifPicker, type GifEscolhido } from "./gif-picker";
 
 /**
@@ -97,7 +97,7 @@ export function MediaPicker({
 
       <div className="min-h-0 flex-1">
         {aba === "emoji" ? (
-          <EmojiMartHost onEscolher={onEmoji} />
+          <PainelDeEmoji onEscolher={onEmoji} />
         ) : aba === "gif" ? (
           <GifPicker
             onEscolher={(g) => {

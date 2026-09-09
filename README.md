@@ -2520,7 +2520,7 @@ existente.
 | --- | --- | --- |
 | 1 | Agrupamento real (`<MessageGroup>`): avatar/nome/horario uma vez por grupo; espaco entre grupos > dentro do grupo, por `--chat-gap-*`. `message-item` enxuto; barra de hover reagir · mais; reacoes em chip sem borda. | ✅ |
 | 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
-| 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/` + a folha do seletor em `/twemoji-sheet-64.png`. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
+| 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/`. **Seletor proprio** (`emoji-panel.tsx`), nao o `<Picker>` do emoji-mart: cada celula e o mesmo `<Emoji>` da mensagem. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
 | 4 | Profile card no chat; perfil global x servidor; `User.bio`; amizades com estados. | a fazer |
 | 5 | Reply real (`replyToId` ja existe no schema) + mensagens de sistema efemeras + refino/responsivo. | a fazer |
 
@@ -2541,10 +2541,14 @@ existente.
   foi conferido num preview isolado e fica para o teste de uso no app real.
 - **Twemoji: os SVGs (`public/twemoji/`) NAO sao versionados** — `@twemoji/svg`
   traz 3700 arquivos e o `predev`/`prebuild` do `apps/web` os copia
-  (`scripts/build-twemoji.mjs`). A folha do seletor
-  (`public/twemoji-sheet-64.png`, ~2,8 MB) E versionada: e um arquivo so, e o
-  grid do emoji-mart pinta sempre por spritesheet (nao da para trocar por SVG
-  individual ali).
+  (`scripts/build-twemoji.mjs`).
+- **O seletor de emoji e proprio, nao o `<Picker>` do emoji-mart.** O grid do
+  emoji-mart so desenha por spritesheet, e as coordenadas de recorte sumiram do
+  `@emoji-mart/data` (v1.2.1 so tem `unified`/`native` por skin) — todo emoji
+  caia no recorte 0,0 e a tela virava `#️⃣`. `emoji-panel.tsx` usa so os DADOS
+  (catalogo + palavras-chave, sob demanda) e desenha cada celula com o mesmo
+  `<Emoji>` Twemoji da mensagem. A busca e por nome/keyword em INGLES (o
+  `@emoji-mart/data` nao traduz keyword) — limitacao v1.
 - **GIF depende de `TENOR_API_KEY` no servidor.** Sem ela, `/api/gif` responde
   `{ disponivel: false }` e a aba GIF do seletor mostra "em breve" — nada
   quebra. A chave fica so no servidor; a midia vem do CDN do Tenor

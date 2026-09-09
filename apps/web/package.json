@@ -24,7 +24,6 @@
     "@shiguredo/rnnoise-wasm": "^2025.1.5",
     "@twemoji/svg": "15.0.0",
     "clsx": "^2.1.1",
-    "emoji-mart": "^5.6.0",
     "emoji-regex": "10.4.0",
     "jose": "^6.2.9",
     "livekit-client": "^2.22.0",
