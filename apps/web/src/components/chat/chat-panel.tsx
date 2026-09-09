@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { PublicMessage, PublicUser } from "@aether/shared";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import {
+  useRealtimeStore,
+  type ChatMessage,
+} from "@/lib/stores/realtime-store";
 import { CartaoDePerfil } from "@/components/profile/cartao-de-perfil";
 import { MessageList } from "./message-list";
 import { MessageComposer } from "./message-composer";
@@ -48,6 +51,7 @@ export function ChatPanel({
   const setActiveChannel = useRealtimeStore((state) => state.setActiveChannel);
 
   const [perfil, setPerfil] = useState<PerfilAberto | null>(null);
+  const [respondendoA, setRespondendoA] = useState<ChatMessage | null>(null);
 
   /**
    * Clicar na MESMA pessoa fecha; noutra, troca. O `id` decide o toggle e a
@@ -58,6 +62,9 @@ export function ChatPanel({
       atual?.user.id === user.id ? null : { user, ancora },
     );
   }, []);
+
+  // Trocar de conversa cancela a resposta pendente — ela e daquele canal.
+  useEffect(() => setRespondendoA(null), [channelId]);
 
   useEffect(() => {
     prependHistory(channelId, initialMessages, initialHasMore);
@@ -88,12 +95,15 @@ export function ChatPanel({
         ehConversaDireta={ehConversaDireta}
         initialMessages={initialMessages}
         onAbrirPerfil={abrirPerfil}
+        onResponder={setRespondendoA}
       />
       <MessageComposer
         channelId={channelId}
         channelName={channelName}
         selfUser={selfUser}
         canSend={canSend}
+        respondendoA={respondendoA}
+        aoCancelarResposta={() => setRespondendoA(null)}
       />
 
       {perfil ? (

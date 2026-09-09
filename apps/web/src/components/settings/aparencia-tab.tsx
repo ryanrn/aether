@@ -211,6 +211,7 @@ function Preview({ user }: { user: PublicUser }) {
     editedAt: null,
     reactions: i === 1 ? [{ emoji: "\u{1F44B}", count: 2, mine: false }] : [],
     anexos: [],
+    replyTo: null,
   });
 
   const grupos = [

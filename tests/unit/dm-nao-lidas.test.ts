@@ -32,6 +32,7 @@ function dmMsg(autor: string): PublicMessage {
     editedAt: null,
     reactions: [],
     anexos: [],
+    replyTo: null,
     author:
       autor === EU
         ? ({ id: EU, username: "eu", displayName: "Eu", avatarUrl: null } as PublicUser)

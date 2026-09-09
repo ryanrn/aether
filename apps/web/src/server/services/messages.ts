@@ -67,6 +67,14 @@ async function historicoInicial(
       author: {
         select: SELECT_USUARIO_PUBLICO,
       },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          deletedAt: true,
+          author: { select: { displayName: true } },
+        },
+      },
     },
     // As mais recentes primeiro para o banco usar o indice de (pai, createdAt)
     // e nao varrer tudo; a ordem para a tela e invertida abaixo.

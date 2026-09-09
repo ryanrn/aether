@@ -23,6 +23,7 @@ function msg(over: Partial<PublicMessage> & { id: string }): PublicMessage {
     editedAt: null,
     reactions: [],
     anexos: [],
+    replyTo: null,
     author: {
       id: EU,
       username: "eu",

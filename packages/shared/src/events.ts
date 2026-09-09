@@ -475,6 +475,12 @@ export interface ClientToServerEvents {
        * declarar 1 KB.
        */
       anexoIds?: string[];
+      /**
+       * Id da mensagem sendo RESPONDIDA. O gateway confere que ela existe na
+       * MESMA conversa e nao foi apagada — id de outra conversa ou inventado e
+       * ignorado (a mensagem sai sem resposta, nao da erro).
+       */
+      replyToId?: string;
     },
     ack: (result: SendMessageAck) => void,
   ) => void;

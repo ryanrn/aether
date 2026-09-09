@@ -73,6 +73,14 @@ const MESSAGE_SELECT = {
   author: {
     select: SELECT_USUARIO_PUBLICO,
   },
+  replyTo: {
+    select: {
+      id: true,
+      content: true,
+      deletedAt: true,
+      author: { select: { displayName: true } },
+    },
+  },
 } as const;
 
 /**
@@ -201,6 +209,11 @@ export function registerMessageHandlers(
           .slice(0, MAX_ANEXOS)
       : [];
 
+    const replyToId =
+      typeof payload.replyToId === "string" && payload.replyToId.length > 0
+        ? payload.replyToId
+        : null;
+
     if (!limiter.take(userId)) {
       respond({ ok: false, error: "Muitas mensagens seguidas. Respire." });
       return;
@@ -240,6 +253,26 @@ export function registerMessageHandlers(
       }
 
       /**
+       * A mensagem respondida tem que ser DESTA conversa e existir. Id de outra
+       * conversa vazaria conteudo de onde a pessoa nao entra; id apagado ou
+       * inventado nao quebra — a resposta so sai sem referencia.
+       */
+      let replyValido: string | null = null;
+      if (replyToId) {
+        const alvo = await prisma.message.findFirst({
+          where: {
+            id: replyToId,
+            deletedAt: null,
+            ...(conversa.tipo === "canal"
+              ? { channelId: conversa.channelId }
+              : { dmChannelId: conversa.dmId }),
+          },
+          select: { id: true },
+        });
+        replyValido = alvo?.id ?? null;
+      }
+
+      /**
        * A mensagem e os anexos entram JUNTOS, numa transacao.
        *
        * Sem ela, uma falha ao ligar os anexos deixaria a mensagem publicada
@@ -248,10 +281,14 @@ export function registerMessageHandlers(
        */
       const created = await prisma.$transaction(async (tx) => {
         const msg = await tx.message.create({
-          data:
-            conversa.tipo === "canal"
-              ? { channelId: conversa.channelId, authorId: userId, content: parsed.data }
-              : { dmChannelId: conversa.dmId, authorId: userId, content: parsed.data },
+          data: {
+            authorId: userId,
+            content: parsed.data,
+            ...(replyValido ? { replyToId: replyValido } : {}),
+            ...(conversa.tipo === "canal"
+              ? { channelId: conversa.channelId }
+              : { dmChannelId: conversa.dmId }),
+          },
           select: { id: true },
         });
 

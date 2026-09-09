@@ -2522,7 +2522,7 @@ existente.
 | 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
 | 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/`. **Seletor proprio** (`emoji-panel.tsx`), nao o `<Picker>` do emoji-mart: cada celula e o mesmo `<Emoji>` da mensagem. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
 | 4 | Cartao de perfil ao clicar no avatar/nome no chat (`cartao-de-perfil.tsx`): ancora no elemento, vira pra cima se nao couber, fecha por Esc/fora/toggle. Avatar, nome, @, status, **bio** (`User.bio`, migracao `20260909120000`), atividade/jogo/Spotify da store, cargos do servidor, botoes de amizade com estado (`carregarPerfilAction` -> `perfilParaCartao`). Secao vazia nao aparece. | ✅ |
-| 5 | Reply real (`replyToId` ja existe no schema) + mensagens de sistema efemeras + refino/responsivo. | a fazer |
+| 5 | **Reply** — `replyToId` (ja no schema, sem migracao), `PublicMessage.replyTo` (resumo: autor + trecho), gateway valida que a original e da MESMA conversa. Composer com barra "Respondendo a X"; referencia clicavel rola ate a original e pisca. **Separador de data** entre dias ("Hoje"/"Ontem"/"9 de setembro"). Cartao de perfil vira folha no rodape em tela estreita. | ✅ |
 
 ### Limitacoes conhecidas ate aqui
 
@@ -2567,7 +2567,19 @@ existente.
 - **O cartao ancora no elemento clicado**, abre abaixo, vira pra cima se nao
   couber, e clampa na horizontal. Fecha por Esc, clique fora ou clicar de novo
   na mesma pessoa. O `mousedown` nos gatilhos nao propaga, senao o toggle
-  fecharia-e-reabriria.
+  fecharia-e-reabriria. Em tela `< 480px` vira folha colada no rodape.
+- **Reply nao entra no schema** — a coluna `Message.replyToId` ja existia (do
+  modelo, sem uso). O `PublicMessage.replyTo` e so o RESUMO (autor + ~120
+  chars); a original inteira ja esta na lista. Clicar na referencia rola ate
+  ela SE estiver carregada — puxar historico antigo so por isso nao compensa.
+  Mensagem apagada vira "mensagem apagada", nao some a referencia.
+- **Mudanca no gateway (`apps/realtime`)**: `message:send` agora aceita
+  `replyToId` e confere que a original e da mesma conversa e nao foi apagada —
+  id de outra conversa ou inventado e ignorado (sai sem referencia, sem erro).
+  **Precisa de `fly deploy` junto do deploy da web.**
+- **Sem mensagens de sistema de call** — nao ha chamada em DM nem em canal de
+  texto no AETHER, entao o unico "evento discreto" real e o separador de data.
+  O `<SeparadorDeData>` serve de molde para quando (se) houver eventos de call.
 
 ## Transferencia de posse e exclusao de servidor
 

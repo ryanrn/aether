@@ -33,9 +33,13 @@ import type { ChatMessage } from "@/lib/stores/realtime-store";
 export function MessageItem({
   message,
   primeira,
+  onResponder,
+  onIrParaMensagem,
 }: {
   message: ChatMessage;
   primeira: boolean;
+  onResponder?: (message: ChatMessage) => void;
+  onIrParaMensagem?: (id: string) => void;
 }) {
   const time = new Date(message.createdAt);
   const socket = useSocket();
@@ -90,6 +94,7 @@ export function MessageItem({
   return (
     <div
       ref={linhaRef}
+      data-mid={message.id}
       onContextMenu={abrirMenu}
       style={{
         paddingTop: "var(--chat-row-py)",
@@ -100,6 +105,13 @@ export function MessageItem({
         message.pending && "opacity-55",
       )}
     >
+      {message.replyTo ? (
+        <ReferenciaDeResposta
+          reply={message.replyTo}
+          onIr={() => onIrParaMensagem?.(message.replyTo!.id)}
+        />
+      ) : null}
+
       {/* horario na sarjeta do avatar (hover) — a primeira ja tem no cabecalho */}
       {!primeira ? (
         <time
@@ -114,8 +126,8 @@ export function MessageItem({
 
       {/*
         Acoes rapidas — flutuam no canto, ancoradas por `absolute` para nao
-        empurrar a altura da mensagem quando o socket conecta. Reagir e "mais"
-        (que abre o mesmo menu do botao direito). Responder chega na etapa 5.
+        empurrar a altura da mensagem quando o socket conecta: reagir · responder
+        · mais (o mesmo menu do botao direito).
       */}
       {podeReagir ? (
         <div
@@ -138,6 +150,17 @@ export function MessageItem({
           >
             <AetherIcon name="smile" className="h-4 w-4" strokeWidth={1.75} />
           </button>
+          {onResponder ? (
+            <button
+              type="button"
+              onClick={() => onResponder(message)}
+              title="Responder"
+              aria-label="Responder a esta mensagem"
+              className="grid h-7 w-7 place-items-center border-l border-line text-ink-400 transition-colors hover:bg-base-750 hover:text-accent-300"
+            >
+              <AetherIcon name="reply" className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={(evento) => {
@@ -245,6 +268,18 @@ export function MessageItem({
           {selecao ? "Copiar selecao" : "Copiar texto"}
         </ItemDoMenu>
 
+        {onResponder && !message.pending && !message.failed ? (
+          <ItemDoMenu
+            icone={<AetherIcon name="reply" className="h-3.5 w-3.5" />}
+            onClick={() => {
+              menu.fechar();
+              onResponder(message);
+            }}
+          >
+            Responder
+          </ItemDoMenu>
+        ) : null}
+
         <ItemDoMenu
           icone={<AetherIcon name="smile" className="h-3.5 w-3.5" />}
           disabled={!podeReagir}
@@ -278,6 +313,44 @@ export function MessageItem({
         oQue={`mensagem de ${message.author.displayName}`}
       />
     </div>
+  );
+}
+
+/**
+ * A referencia curta a mensagem respondida, acima do conteudo. Clicar rola ate
+ * a original e a pisca. Se a original foi apagada, vira "mensagem apagada".
+ */
+function ReferenciaDeResposta({
+  reply,
+  onIr,
+}: {
+  reply: NonNullable<ChatMessage["replyTo"]>;
+  onIr: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onIr}
+      className="group/ref mb-0.5 flex max-w-full items-center gap-1.5 text-[11.5px] text-ink-500 transition-colors hover:text-ink-300"
+    >
+      <span
+        aria-hidden
+        className="ml-1 h-2 w-3.5 shrink-0 rounded-tl-md border-l border-t border-line-strong"
+      />
+      <AetherIcon name="reply" className="h-3 w-3 shrink-0 -scale-x-100" />
+      <span className="shrink-0 font-medium text-ink-400 group-hover/ref:text-ink-200">
+        {reply.autorNome}
+      </span>
+      <span className="truncate">
+        {reply.apagada ? (
+          <span className="italic text-ink-600">mensagem apagada</span>
+        ) : reply.trecho ? (
+          reply.trecho
+        ) : (
+          <span className="italic">anexo</span>
+        )}
+      </span>
+    </button>
   );
 }
 

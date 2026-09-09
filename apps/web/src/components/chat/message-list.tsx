@@ -27,6 +27,7 @@ export function MessageList({
   channelName,
   ehConversaDireta = false,
   onAbrirPerfil,
+  onResponder,
 }: {
   channelId: string;
   initialMessages: PublicMessage[];
@@ -38,6 +39,8 @@ export function MessageList({
   ehConversaDireta?: boolean;
   /** clique no avatar/nome de um grupo -> abre o cartao de perfil */
   onAbrirPerfil: (user: PublicUser, ancora: DOMRect) => void;
+  /** "responder" no hover -> o composer entra em modo resposta */
+  onResponder: (message: ChatMessage) => void;
 }) {
   const socket = useSocket();
   const stored = useChannelMessages(channelId);
@@ -132,6 +135,24 @@ export function MessageList({
     if (element) element.scrollTop = element.scrollHeight;
   }, [channelId]);
 
+  /**
+   * Rola ate a mensagem original e a pisca — clicando na referencia de uma
+   * resposta. Se ela nao estiver carregada (historico antigo), nao faz nada:
+   * puxar historico so por isso e caro e raro.
+   */
+  const irParaMensagem = useCallback((id: string) => {
+    const alvo = containerRef.current?.querySelector<HTMLElement>(
+      `[data-mid="${CSS.escape(id)}"]`,
+    );
+    if (!alvo) return;
+    alvo.scrollIntoView({ block: "center", behavior: "smooth" });
+    alvo.classList.add("chat-msg--destacada");
+    window.setTimeout(
+      () => alvo.classList.remove("chat-msg--destacada"),
+      1600,
+    );
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -177,15 +198,34 @@ export function MessageList({
           </p>
         </div>
       ) : (
-        <ul className="py-3">
-          {grupos.map((grupo) => (
-            <MessageGroup
-              key={grupo.chave}
-              grupo={grupo}
-              onAbrirPerfil={onAbrirPerfil}
-            />
-          ))}
-        </ul>
+        <div role="log" className="py-3">
+          {grupos.map((grupo, i) => {
+            const anterior = grupos[i - 1];
+            const mudouDia =
+              !anterior ||
+              !mesmoDia(
+                new Date(
+                  anterior.mensagens[anterior.mensagens.length - 1]!.createdAt,
+                ),
+                new Date(grupo.mensagens[0]!.createdAt),
+              );
+            return (
+              <div key={grupo.chave} className="contents">
+                {mudouDia ? (
+                  <SeparadorDeData
+                    data={new Date(grupo.mensagens[0]!.createdAt)}
+                  />
+                ) : null}
+                <MessageGroup
+                  grupo={grupo}
+                  onAbrirPerfil={onAbrirPerfil}
+                  onResponder={onResponder}
+                  onIrParaMensagem={irParaMensagem}
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -221,6 +261,48 @@ function agrupar(mensagens: ChatMessage[]): GrupoDeMensagens[] {
   }
 
   return grupos;
+}
+
+function mesmoDia(a: Date, b: Date): boolean {
+  return a.toDateString() === b.toDateString();
+}
+
+/**
+ * Marco de data entre grupos de dias diferentes — evento discreto, no meio da
+ * coluna, com um fio de cada lado. "Hoje" / "Ontem" / "9 de setembro".
+ */
+function SeparadorDeData({ data }: { data: Date }) {
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+
+  const rotulo = mesmoDia(data, hoje)
+    ? "Hoje"
+    : mesmoDia(data, ontem)
+      ? "Ontem"
+      : data.toLocaleDateString("pt-BR", {
+          day: "numeric",
+          month: "long",
+          ...(data.getFullYear() !== hoje.getFullYear()
+            ? { year: "numeric" }
+            : {}),
+        });
+
+  return (
+    <div
+      className="my-2 flex items-center gap-3 px-4 text-ink-600 select-none"
+      role="separator"
+    >
+      <span className="h-px flex-1 bg-line" />
+      <span
+        className="font-mono text-[10px] uppercase tracking-[0.14em]"
+        suppressHydrationWarning
+      >
+        {rotulo}
+      </span>
+      <span className="h-px flex-1 bg-line" />
+    </div>
+  );
 }
 
 function dentroDaJanela(anterior: ChatMessage, atual: ChatMessage): boolean {

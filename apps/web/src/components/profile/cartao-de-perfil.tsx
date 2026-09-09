@@ -71,6 +71,8 @@ export function CartaoDePerfil({
   const caixaRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [perfil, setPerfil] = useState<PerfilParaCartao | null>(null);
+  /** tela estreita: o cartao vira uma folha colada embaixo, largura toda */
+  const [folha, setFolha] = useState(false);
 
   const status = usePresenceStatus(user.id);
   const jogo = useRealtimeStore((s) => s.activity[user.id] ?? null);
@@ -108,19 +110,23 @@ export function CartaoDePerfil({
 
   // posiciona depois de medir a altura real
   useLayoutEffect(() => {
-    const alt = caixaRef.current?.offsetHeight ?? 320;
-    const vh = window.innerHeight;
     const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
+    if (vw < 480) {
+      setFolha(true);
+      setPos({ left: FOLGA, top: 0 }); // top real vem do CSS da folha
+      return;
+    }
+    setFolha(false);
+
+    const alt = caixaRef.current?.offsetHeight ?? 320;
     let top = ancora.bottom + FOLGA;
     if (top + alt > vh - FOLGA) {
       const acima = ancora.top - alt - FOLGA;
       top = acima >= FOLGA ? acima : Math.max(FOLGA, vh - alt - FOLGA);
     }
-    const left = Math.max(
-      FOLGA,
-      Math.min(ancora.left, vw - LARGURA - FOLGA),
-    );
+    const left = Math.max(FOLGA, Math.min(ancora.left, vw - LARGURA - FOLGA));
     setPos({ left, top });
   }, [ancora, perfil, jogo, musica]);
 
@@ -131,16 +137,28 @@ export function CartaoDePerfil({
   const temCargos = (perfil?.roles.length ?? 0) > 0;
 
   return createPortal(
-    <div
-      ref={caixaRef}
-      style={{
-        left: pos?.left ?? -9999,
-        top: pos?.top ?? -9999,
-        width: LARGURA,
-      }}
-      className="fixed z-[75] animate-rise overflow-hidden rounded-xl border border-line bg-base-900 shadow-2xl"
-      role="dialog"
-    >
+    <>
+      {folha ? (
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={onClose}
+          className="fixed inset-0 z-[74] bg-black/40"
+        />
+      ) : null}
+      <div
+        ref={caixaRef}
+        style={
+          folha
+            ? { left: FOLGA, right: FOLGA, bottom: FOLGA }
+            : { left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: LARGURA }
+        }
+        className={cn(
+          "fixed z-[75] animate-rise overflow-hidden border border-line bg-base-900 shadow-2xl",
+          folha ? "max-h-[80vh] overflow-y-auto rounded-2xl" : "rounded-xl",
+        )}
+        role="dialog"
+      >
       {/* faixa de cor so para o avatar se apoiar */}
       <div className="h-[52px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
 
@@ -247,7 +265,8 @@ export function CartaoDePerfil({
           </div>
         ) : null}
       </div>
-    </div>,
+      </div>
+    </>,
     document.body,
   );
 }

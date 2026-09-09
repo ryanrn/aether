@@ -332,6 +332,21 @@ export interface PublicMessage {
   editedAt: string | null;
   reactions: PublicReaction[];
   anexos: PublicAttachment[];
+  /**
+   * A mensagem RESPONDIDA, reduzida ao que a referencia mostra: quem escreveu e
+   * um trecho. `null` quando nao e resposta; `{ apagada: true }` quando a
+   * original foi apagada depois (a referencia vira "mensagem apagada", nao
+   * some). So o resumo viaja — a original inteira ja esta (ou estara) na lista.
+   */
+  replyTo: MessageReplyTo | null;
+}
+
+export interface MessageReplyTo {
+  id: string;
+  autorNome: string;
+  /** primeiras ~120 chars do conteudo, ou "" se era so anexo */
+  trecho: string;
+  apagada: boolean;
 }
 
 /**
@@ -364,6 +379,17 @@ export interface MessageRow {
    * mensagem no chat carregar o selo do plano junto com o nome.
    */
   author: UserRow;
+  /**
+   * A mensagem respondida, crua do banco. `null` quando `replyToId` e nulo.
+   * `deletedAt` vem junto: o soft-delete nao apaga a linha, e a referencia
+   * precisa saber se deve mostrar "mensagem apagada".
+   */
+  replyTo?: {
+    id: string;
+    content: string;
+    deletedAt: Date | null;
+    author: { displayName: string };
+  } | null;
 }
 
 /**
@@ -440,6 +466,23 @@ export function toPublicMessage(
       altura: a.altura,
     })),
     author: toPublicUser(row.author),
+    replyTo: row.replyTo ? resumirResposta(row.replyTo) : null,
+  };
+}
+
+const TRECHO_MAX = 120;
+
+function resumirResposta(
+  r: NonNullable<MessageRow["replyTo"]>,
+): MessageReplyTo {
+  const apagada = r.deletedAt !== null;
+  const bruto = apagada ? "" : r.content.replace(/\s+/g, " ").trim();
+  return {
+    id: r.id,
+    autorNome: r.author.displayName,
+    trecho:
+      bruto.length > TRECHO_MAX ? `${bruto.slice(0, TRECHO_MAX)}…` : bruto,
+    apagada,
   };
 }
 

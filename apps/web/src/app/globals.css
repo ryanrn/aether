@@ -680,6 +680,32 @@
     vertical-align: -0.5em;
   }
 
+  /* mensagem original piscando depois de clicar numa referencia de resposta */
+  .chat-msg--destacada {
+    animation: aether-realce-msg 1.6s var(--ease-aether);
+  }
+  @keyframes aether-realce-msg {
+    0%,
+    70% {
+      background-color: color-mix(
+        in oklch,
+        var(--color-accent-500) 16%,
+        transparent
+      );
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+  :root[data-mov-reduzido="1"] .chat-msg--destacada {
+    animation: none;
+    background-color: color-mix(
+      in oklch,
+      var(--color-accent-500) 16%,
+      transparent
+    );
+  }
+
   /* horario da linha, na sarjeta do avatar — so no hover por padrao */
   .chat-msg__hora {
     opacity: 0;

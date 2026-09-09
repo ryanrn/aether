@@ -29,10 +29,14 @@ export interface GrupoDeMensagens {
 export function MessageGroup({
   grupo,
   onAbrirPerfil,
+  onResponder,
+  onIrParaMensagem,
 }: {
   grupo: GrupoDeMensagens;
   /** ausente = so no preview de configuracoes, onde o cartao nao faz sentido */
   onAbrirPerfil?: (user: PublicUser, ancora: DOMRect) => void;
+  onResponder?: (message: GrupoDeMensagens["mensagens"][number]) => void;
+  onIrParaMensagem?: (id: string) => void;
 }) {
   const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
   const primeira = grupo.mensagens[0];
@@ -53,7 +57,7 @@ export function MessageGroup({
   const semPropagar = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <li
+    <div
       className="chat-group relative px-4"
       style={{ paddingLeft: "calc(1rem + var(--chat-gutter))" }}
     >
@@ -99,10 +103,12 @@ export function MessageGroup({
             key={mensagem.id}
             message={mensagem}
             primeira={indice === 0}
+            onResponder={onResponder}
+            onIrParaMensagem={onIrParaMensagem}
           />
         ))}
       </div>
-    </li>
+    </div>
   );
 }
 

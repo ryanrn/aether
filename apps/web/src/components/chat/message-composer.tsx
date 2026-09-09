@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import type { PublicUser } from "@aether/shared";
+import type { MessageReplyTo, PublicUser } from "@aether/shared";
 import {
   useConnectionStatus,
   useRealtimeStore,
+  type ChatMessage,
 } from "@/lib/stores/realtime-store";
+import { TextoComEmoji } from "@/components/ui/emoji";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { cn } from "@/lib/utils";
 import { MediaPicker } from "@/components/chat/media-picker";
@@ -39,11 +41,16 @@ export function MessageComposer({
   channelName,
   selfUser,
   canSend,
+  respondendoA,
+  aoCancelarResposta,
 }: {
   channelId: string;
   channelName: string;
   selfUser: PublicUser;
   canSend: boolean;
+  /** mensagem que este envio vai responder, ou `null` */
+  respondendoA: ChatMessage | null;
+  aoCancelarResposta: () => void;
 }) {
   const socket = useSocket();
   const status = useConnectionStatus();
@@ -156,6 +163,18 @@ export function MessageComposer({
     }
   }
 
+  /** resumo da mensagem respondida, para a linha otimista ja mostrar a referencia */
+  function resumoOtimista(): MessageReplyTo | null {
+    if (!respondendoA) return null;
+    const bruto = respondendoA.content.replace(/\s+/g, " ").trim();
+    return {
+      id: respondendoA.id,
+      autorNome: respondendoA.author.displayName,
+      trecho: bruto.length > 120 ? `${bruto.slice(0, 120)}…` : bruto,
+      apagada: false,
+    };
+  }
+
   function send() {
     const content = value.trim();
     // Com anexo pronto, mensagem sem texto e legitima — mandar so uma imagem
@@ -168,6 +187,7 @@ export function MessageComposer({
     const nonce =
       globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const replyToId = respondendoA?.id;
 
     addPending({
       id: nonce,
@@ -178,6 +198,7 @@ export function MessageComposer({
       editedAt: null,
       // Mensagem que ainda nao existe no banco nao tem reacao.
       reactions: [],
+      replyTo: resumoOtimista(),
       /**
        * A mensagem otimista ja mostra os anexos, com a URL local da previa
        * quando e imagem. Sem isso a imagem sumiria entre o envio e a
@@ -201,10 +222,11 @@ export function MessageComposer({
     setValue("");
     resetHeight();
     setAnexos([]);
+    aoCancelarResposta();
 
     socket.emit(
       "message:send",
-      { conversationId: channelId, content, nonce, anexoIds },
+      { conversationId: channelId, content, nonce, anexoIds, replyToId },
       (result) => {
         // O sucesso chega pelo evento message:new (que tambem atende as outras
         // abas); aqui so tratamos a falha.
@@ -233,14 +255,23 @@ export function MessageComposer({
       createdAt: new Date().toISOString(),
       editedAt: null,
       reactions: [],
+      replyTo: resumoOtimista(),
       anexos: [],
       pending: true,
       nonce,
     });
+    const replyToId = respondendoA?.id;
+    aoCancelarResposta();
 
     socket.emit(
       "message:send",
-      { conversationId: channelId, content: gif.url, nonce, anexoIds: [] },
+      {
+        conversationId: channelId,
+        content: gif.url,
+        nonce,
+        anexoIds: [],
+        replyToId,
+      },
       (result) => {
         if (!result.ok) failPending(channelId, nonce, result.error);
       },
@@ -281,6 +312,12 @@ export function MessageComposer({
      */
     setCursorPendente(inicio + emoji.length);
   }
+
+  // Entrar em modo resposta leva o foco pro campo — a pessoa clicou "responder"
+  // pra escrever.
+  useEffect(() => {
+    if (respondendoA) textareaRef.current?.focus();
+  }, [respondendoA]);
 
   function resetHeight() {
     const element = textareaRef.current;
@@ -324,6 +361,30 @@ export function MessageComposer({
           disabled && "opacity-60",
         )}
       >
+        {respondendoA ? (
+          <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px] text-ink-400">
+            <AetherIcon
+              name="reply"
+              className="h-3.5 w-3.5 shrink-0 -scale-x-100 text-ink-500"
+            />
+            <span className="shrink-0">Respondendo a</span>
+            <span className="shrink-0 font-medium text-ink-200">
+              {respondendoA.author.displayName}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-ink-500">
+              <TextoComEmoji texto={respondendoA.content.slice(0, 80)} />
+            </span>
+            <button
+              type="button"
+              onClick={aoCancelarResposta}
+              aria-label="Cancelar resposta"
+              className="shrink-0 rounded p-0.5 text-ink-500 transition-colors hover:bg-base-800 hover:text-ink-200"
+            >
+              <AetherIcon name="x" className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+
         <AnexosPendentes anexos={anexos} onRemover={removerAnexo} />
 
         <div className="flex items-end gap-2 px-3 py-2">
@@ -337,6 +398,16 @@ export function MessageComposer({
               grow();
             }}
             onKeyDown={(event) => {
+              // Esc com o campo vazio cancela a resposta pendente.
+              if (
+                event.key === "Escape" &&
+                respondendoA &&
+                value.length === 0
+              ) {
+                event.preventDefault();
+                aoCancelarResposta();
+                return;
+              }
               // Enter envia; Shift+Enter quebra linha. IME em composicao nao
               // pode enviar no meio de uma palavra sendo montada.
               if (
