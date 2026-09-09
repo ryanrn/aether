@@ -16,6 +16,7 @@ import {
 } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
@@ -298,22 +299,18 @@ function CartaoCosmetico({
   );
 }
 
-/** A arte composta sobre um avatar (decoracao) ou numa faixa 3:1 (banner). */
-function MiniPreview({
-  cosmetico: c,
-  px = 64,
-}: {
-  cosmetico: Pick<
-    CosmeticoNoPainel,
-    "tipo" | "nome" | "assetUrl" | "assetTrasUrl" | "thumbUrl"
-  >;
-  px?: number;
-}) {
+type ArteDoCosmetico = Pick<
+  CosmeticoNoPainel,
+  "tipo" | "nome" | "assetUrl" | "assetTrasUrl" | "thumbUrl"
+>;
+
+/** O item na lista: decoracao sobre um avatar de teste, ou a faixa 3:1. */
+function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px?: number }) {
   if (c.tipo === "BANNER") {
     return (
       <div
         className="overflow-hidden rounded-md border border-line bg-base-900"
-        style={{ width: px * 1.6, height: (px * 1.6) / 3 }}
+        style={{ width: px * 1.8, height: (px * 1.8) / 3 }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -326,24 +323,83 @@ function MiniPreview({
   }
   return (
     <div
-      className="relative grid place-items-center rounded-md border border-line bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]"
+      className="grid place-items-center rounded-md border border-line bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]"
       style={{ width: px, height: px }}
     >
-      {c.assetTrasUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={c.assetTrasUrl}
-          alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-        />
-      ) : null}
-      <Avatar userId={`pv-${c.nome}`} name="AE" px={px * 0.62} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={c.assetUrl}
-        alt=""
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+      <AvatarDecorado
+        userId={`pv-${c.nome}`}
+        name="AE"
+        px={Math.round(px * 0.92)}
+        decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
       />
+    </div>
+  );
+}
+
+const FUNDOS = [
+  { id: "escuro", rotulo: "Escuro", cor: "var(--color-base-950)" },
+  { id: "claro", rotulo: "Claro", cor: "#e9ebef" },
+  { id: "faixa", rotulo: "Faixa", cor: "var(--color-accent-700)" },
+] as const;
+
+/**
+ * O preview do formulario. Decoracao: sobre o `<Avatar>` real, em tres tamanhos
+ * do app (lista, cabecalho, cartao) e com troca de fundo — arte transparente so
+ * se confere assim. Banner: dentro de um cartao de perfil de mentira.
+ */
+function PreviaCosmetico({ cosmetico: c }: { cosmetico: ArteDoCosmetico }) {
+  const [fundo, setFundo] = useState<(typeof FUNDOS)[number]["id"]>("escuro");
+  const corFundo = FUNDOS.find((f) => f.id === fundo)!.cor;
+
+  if (c.tipo === "BANNER") {
+    return (
+      <div className="w-full max-w-[300px] overflow-hidden rounded-lg border border-line bg-base-900">
+        <div className="aspect-[3/1] w-full bg-base-800">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={c.assetUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+        <div className="-mt-8 px-4 pb-4">
+          <Avatar userId="pv-banner" name="AE" px={56} ring="border-base-900" />
+          <p className="mt-1.5 text-[14px] font-semibold text-ink-100">Nome</p>
+          <p className="font-mono text-[11px] text-ink-500">@usuario</p>
+        </div>
+      </div>
+    );
+  }
+
+  const deco = { frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl };
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div
+        className="flex items-end gap-4 rounded-lg border border-line p-4"
+        style={{ background: corFundo }}
+      >
+        {[40, 72, 112].map((px) => (
+          <AvatarDecorado
+            key={px}
+            userId="pv-deco"
+            name="AE"
+            px={px}
+            decoracao={deco}
+          />
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        {FUNDOS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFundo(f.id)}
+            aria-pressed={fundo === f.id}
+            className={cn(
+              "h-6 w-6 rounded-full border border-line-strong transition-transform",
+              fundo === f.id && "outline outline-2 outline-offset-2 outline-accent-500",
+            )}
+            style={{ background: f.cor }}
+            title={f.rotulo}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -545,56 +601,52 @@ function FormularioCosmetico({
           </Field>
         </div>
 
-        {/* asset + preview */}
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-          <div className="flex flex-col gap-3">
+        {/* asset */}
+        <div className="flex flex-col gap-3">
+          <Field
+            label={r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem do banner"}
+            required={!editando}
+            hint={regra.alvo}
+          >
+            <ArquivoInput
+              arquivo={asset}
+              temAtual={editando}
+              onEscolher={setAsset}
+            />
+          </Field>
+
+          {r.tipo === "DECORATION" ? (
             <Field
-              label={
-                r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem do banner"
-              }
-              required={!editando}
-              hint={regra.alvo}
+              label="Arte de trás (opcional)"
+              hint="Fica atrás do avatar — só se a peça tiver duas camadas."
             >
               <ArquivoInput
-                arquivo={asset}
-                temAtual={editando}
-                onEscolher={setAsset}
+                arquivo={assetTras}
+                temAtual={Boolean(inicial?.assetTrasUrl)}
+                onEscolher={setAssetTras}
               />
             </Field>
+          ) : null}
+        </div>
 
-            {r.tipo === "DECORATION" ? (
-              <Field
-                label="Arte de trás (opcional)"
-                hint="Fica atrás do avatar — só se a peça tiver duas camadas."
-              >
-                <ArquivoInput
-                  arquivo={assetTras}
-                  temAtual={Boolean(inicial?.assetTrasUrl)}
-                  onEscolher={setAssetTras}
-                />
-              </Field>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col items-center gap-1.5">
-            <Label>Preview</Label>
-            {previewFrente ? (
-              <MiniPreview
-                cosmetico={{
-                  tipo: r.tipo,
-                  nome: r.nome || "preview",
-                  assetUrl: previewFrente,
-                  assetTrasUrl: previewTras,
-                  thumbUrl: null,
-                }}
-                px={112}
-              />
-            ) : (
-              <div className="grid h-28 w-28 place-items-center rounded-md border border-dashed border-line text-[11px] text-ink-600">
-                sem arte
-              </div>
-            )}
-          </div>
+        {/* preview */}
+        <div className="flex flex-col items-center gap-1.5 rounded-lg border border-line bg-base-900/40 p-4">
+          <Label>Preview</Label>
+          {previewFrente ? (
+            <PreviaCosmetico
+              cosmetico={{
+                tipo: r.tipo,
+                nome: r.nome || "preview",
+                assetUrl: previewFrente,
+                assetTrasUrl: previewTras,
+                thumbUrl: null,
+              }}
+            />
+          ) : (
+            <div className="grid h-28 w-full place-items-center rounded-md border border-dashed border-line text-[11px] text-ink-600">
+              anexe a arte para ver o preview
+            </div>
+          )}
         </div>
 
         <FieldError>{erro?.msg}</FieldError>

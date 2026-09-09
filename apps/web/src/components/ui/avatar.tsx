@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import type { UserStatus } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import {
@@ -34,7 +34,10 @@ const STATUS_COLOR: Record<UserStatus, string> = {
  *           aparece inteira e o indicador de presenca fica confortavel
  *
  * O sistema de cosmeticos le `--avatar-size` (px do circulo) no wrapper e
- * `data-avatar-size` (o degrau) para saber a area util sem medir o DOM.
+ * `data-avatar-size` (o degrau) para saber a area util sem medir o DOM. Quando
+ * ha uma DECORACAO, quem compõe as camadas em volta e o `<AvatarDecorado>`
+ * (`components/profile/avatar-decorado.tsx`) — ele envolve este componente e
+ * encolhe a foto para o miolo Ø64% que a arte reserva.
  */
 export const AVATAR_PX = {
   xs: 24,
@@ -72,7 +75,6 @@ export function Avatar({
   speaking = false,
   round = true,
   moldura = null,
-  decoracao = null,
   ring = "border-base-900",
   className,
 }: {
@@ -106,19 +108,6 @@ export function Avatar({
    * retirada do catalogo some da tela e o avatar continua inteiro.
    */
   moldura?: string | null;
-  /**
-   * Slot de COSMETICO por cima do avatar — decoracao, efeito, acessorio.
-   *
-   * Renderiza numa camada que pode TRANSBORDAR o circulo (a "area do
-   * cosmetico", ~18% para fora de cada lado) sem empurrar layout: e
-   * `position:absolute` e `pointer-events:none`. Nunca encolhe a foto — o
-   * miolo seguro do rosto e sempre o `box` cheio; a decoracao mora na borda
-   * externa.
-   *
-   * Hoje ninguem passa: e o ponto de entrada para quando o catalogo de
-   * decoracoes entrar. A moldura (o anel atras) continua vindo por `moldura`.
-   */
-  decoracao?: ReactNode;
   /**
    * Cor do anel do ponto de status.
    *
@@ -176,14 +165,6 @@ export function Avatar({
           initials(name)
         )}
       </div>
-      {decoracao ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-[-18%] z-20"
-        >
-          {decoracao}
-        </span>
-      ) : null}
       {status ? (
         <span
           className={cn(
