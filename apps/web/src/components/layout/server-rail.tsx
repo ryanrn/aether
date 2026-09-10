@@ -19,17 +19,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import {
-  rotuloDeRevisoes,
-  totalDeRevisoes,
-  type PublicServer,
-  type PublicUser,
-  type RevisoesPendentes,
-} from "@aether/shared";
+import type { PublicServer, PublicUser } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
+import { HomeMenu } from "@/components/layout/home-menu";
 import { UserRailMenu } from "@/components/layout/user-rail-menu";
 import { useShellStore } from "@/lib/stores/shell-store";
 import {
@@ -38,12 +33,7 @@ import {
   NAV_VISIVEL,
 } from "@/components/layout/nav-mobile";
 import { reorderServersAction } from "@/server/actions/servers";
-import { contarRevisoesAction } from "@/server/actions/revisao";
-import {
-  useDmParaAbrir,
-  useTotalDmNaoLido,
-  useUnreadByServer,
-} from "@/lib/stores/realtime-store";
+import { useUnreadByServer } from "@/lib/stores/realtime-store";
 
 /**
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
@@ -99,58 +89,8 @@ export function ServerRail({
 }) {
   const params = useParams<{ serverId?: string }>();
   const activeId = params?.serverId;
-  const pathname = usePathname();
-  const emAmigos = pathname === "/app/amigos";
-  const emGrupos = pathname === "/app/grupos";
-  const emOlimpo = pathname === "/app/olimpo";
-  const emExplorar = pathname === "/app/explorar";
-  const emEquipe = pathname === "/app/equipe";
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
-  const dmNaoLidas = useTotalDmNaoLido();
-  const dmParaAbrir = useDmParaAbrir();
-  const [revisoes, setRevisoes] = useState<RevisoesPendentes | null>(null);
-  const esperandoRevisao = totalDeRevisoes(revisoes);
-
-  /**
-   * Busca a contagem das filas de revisao — o numerinho no icone do painel.
-   *
-   * SO PARA A EQUIPE: para o resto, a chamada nem sai — a action responderia
-   * "Nao encontrado" de qualquer forma, e uma consulta por sessao de todo
-   * mundo para receber recusa seria carga sem contrapartida.
-   *
-   * AO MONTAR E AO VOLTAR PARA A ABA, com um minuto de intervalo minimo. Nao e
-   * tempo real de proposito: nada aqui e urgente, e um `setInterval` batendo
-   * no banco o dia inteiro para mostrar um numero quase sempre zero custaria
-   * caro por nada. Voltar para a janela e o momento em que a pessoa esta
-   * olhando — e alt-tab de jogo dispara `focus` varias vezes por minuto, dai
-   * a janela.
-   */
-  useEffect(() => {
-    if (!equipe) return;
-    let vivo = true;
-    let ultima = 0;
-
-    const buscar = () => {
-      const agora = Date.now();
-      if (agora - ultima < 60_000) return;
-      ultima = agora;
-      contarRevisoesAction()
-        .then((r) => {
-          if (vivo && r.ok) setRevisoes(r.data);
-        })
-        // Falha em silencio: o marcador e conveniencia, rede caida nao pode
-        // virar erro na trilha de servidores.
-        .catch(() => {});
-    };
-
-    buscar();
-    window.addEventListener("focus", buscar);
-    return () => {
-      vivo = false;
-      window.removeEventListener("focus", buscar);
-    };
-  }, [equipe]);
 
   /**
    * A ordem local existe para o arrasto ser INSTANTANEO.
@@ -214,214 +154,12 @@ export function ServerRail({
           navAberta ? NAV_VISIVEL : NAV_ESCONDIDA,
         )}
       >
-        {/**
-         * Amigos primeiro, e separado dos servidores por uma linha: nao e um
-         * servidor, e ficar no meio deles sugeriria que fosse.
-         *
-         * O clique e ESPERTO: com exatamente uma conversa nao lida, vai direto
-         * nela; com zero ou varias, cai na tela de Amigos (que tem a lista de
-         * conversas). Dois avisos, um em cada canto: pedido de amizade (espera
-         * decisao, vermelho) em cima; mensagem nao lida (azul) embaixo.
-         */}
-        <Link
-          href={dmParaAbrir ? `/app/dm/${dmParaAbrir}` : "/app/amigos"}
-          title={
-            dmNaoLidas > 0
-              ? `Amigos — ${dmNaoLidas} conversa(s) com mensagem nova`
-              : "Amigos"
-          }
-          draggable={false}
-          className="group relative flex w-full justify-center"
-        >
-          <span
-            className={cn(
-              "absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emAmigos
-                ? "h-7"
-                : dmNaoLidas > 0
-                  ? "h-3.5"
-                  : "h-0 group-hover:h-3.5",
-            )}
-          />
-          <span
-            className={cn(
-              "grid h-12 w-12 place-items-center transition-all duration-150",
-              emAmigos
-                ? `${ICONE_ATIVO} bg-base-800 text-ink-100`
-                : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
-            )}
-          >
-            <AetherIcon name="users" size="lg" className="h-[22px] w-[22px]" />
-          </span>
-          {pendingRequests > 0 ? (
-            <span
-              aria-label={`${pendingRequests} pedido(s) de amizade`}
-              className="absolute -right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-signal-dnd px-1 text-[10px] font-semibold text-ink-100"
-              style={{ right: "0.6rem" }}
-            >
-              {pendingRequests > 9 ? "9+" : pendingRequests}
-            </span>
-          ) : null}
-          {dmNaoLidas > 0 ? (
-            <span
-              aria-label={`${dmNaoLidas} conversa(s) com mensagem nao lida`}
-              className="pointer-events-none absolute bottom-0 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-signal-dnd px-1 text-[10px] font-bold leading-none text-white ring-2 ring-base-900"
-              style={{ right: "0.4rem" }}
-            >
-              {dmNaoLidas > 9 ? "9+" : dmNaoLidas}
-            </span>
-          ) : null}
-        </Link>
-
-        {/**
-         * Grupos (LFG). Junto de Amigos porque tambem e "do app" e atravessa
-         * servidores — achar gente pra jogar em qualquer um dos seus.
-         */}
-        <Link
-          href="/app/grupos"
-          title="Grupos"
-          draggable={false}
-          className="group relative flex w-full justify-center"
-        >
-          <span
-            className={cn(
-              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emGrupos ? "h-7" : "group-hover:h-3.5",
-            )}
-          />
-          <span
-            className={cn(
-              "grid h-12 w-12 place-items-center transition-all duration-150",
-              emGrupos
-                ? `${ICONE_ATIVO} bg-base-800 text-ink-100`
-                : `${ICONE_REPOUSO} bg-base-800 text-ink-300 group-hover:text-ink-100`,
-            )}
-          >
-            <AetherIcon name="gamepad" size="lg" className="h-[22px] w-[22px]" />
-          </span>
-        </Link>
-
-        {/**
-         * O Olimpo logo abaixo de amigos, e ANTES da linha que separa os
-         * servidores. As duas coisas acima da linha sao "do app"; abaixo dela
-         * sao "seus servidores" — e assinatura nao e servidor.
-         *
-         * A coroa fica dourada mesmo desligada, de proposito: e o unico item
-         * da trilha que nao e um lugar onde voce ja esta, e sim um convite. Um
-         * icone cinza ali seria lido como mais um botao de navegacao.
-         */}
-        <Link
-          href="/app/olimpo"
-          title="Olimpo"
-          draggable={false}
-          className="group relative flex w-full justify-center"
-        >
-          <span
-            className={cn(
-              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emOlimpo ? "h-7" : "group-hover:h-3.5",
-            )}
-          />
-          <span
-            className={cn(
-              "grid h-12 w-12 place-items-center transition-all duration-150",
-              emOlimpo
-                ? `${ICONE_ATIVO} bg-amber-400/15 text-amber-300`
-                : `${ICONE_REPOUSO} bg-base-800 text-amber-400/80 group-hover:bg-amber-400/10 group-hover:text-amber-300`,
-            )}
-          >
-            <AetherIcon name="crown" size="lg" className="h-[22px] w-[22px]" />
-          </span>
-        </Link>
-
         {/*
-          Explorar comunidades.
-          
-          Depois do Olimpo e ANTES da linha que separa os servidores, porque e
-          o mesmo tipo de item que os dois acima: um lugar do app, e nao um
-          servidor do qual voce e membro. Abaixo da linha ficam so os seus.
-          
-          Cor neutra, ao contrario da coroa: a coroa e dourada por ser um
-          convite a assinar; explorar e navegacao, e navegacao dourada
-          competiria com ela por atencao sem ter o que vender.
+          A HOME do app: Amigos, Loja, Grupos, Olimpo, Explorar e (para a
+          equipe) o painel. Era cinco icones soltos aqui; virou uma marca so.
+          O ponto de aviso resume pedido de amizade e conversa nova.
         */}
-        <Link
-          href="/app/explorar"
-          title="Explorar comunidades"
-          draggable={false}
-          className="group relative flex w-full justify-center"
-        >
-          <span
-            className={cn(
-              "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-              emExplorar ? "h-7" : "group-hover:h-3.5",
-            )}
-          />
-          <span
-            className={cn(
-              "grid h-12 w-12 place-items-center transition-all duration-150",
-              emExplorar
-                ? ICONE_ATIVO + " bg-accent-500 text-white"
-                : ICONE_REPOUSO +
-                    " bg-base-800 text-ink-300 group-hover:bg-accent-500 group-hover:text-white",
-            )}
-          >
-            <AetherIcon
-              name="compass"
-              size="lg"
-              className="h-[22px] w-[22px]"
-            />
-          </span>
-        </Link>
-
-        {/*
-          Painel da equipe. So aparece para quem e equipe — para o resto,
-          esconder o icone e cortesia de interface; quem barra de verdade e a
-          propria pagina, respondendo 404 pra quem chutar a URL.
-
-          Vermelho, e nao neutro como o compass: e o UNICO item da trilha que
-          pode carregar um numero dizendo "tem coisa esperando voce", e a cor
-          de aviso e o que faz o marcador ser notado sem precisar ler o
-          numero.
-        */}
-        {equipe ? (
-          <Link
-            href="/app/equipe"
-            title="Painel da equipe"
-            draggable={false}
-            className="group relative flex w-full justify-center"
-          >
-            <span
-              className={cn(
-                "absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-ink-100 transition-all duration-200",
-                emEquipe ? "h-7" : "group-hover:h-3.5",
-              )}
-            />
-            <span
-              className={cn(
-                "relative grid h-12 w-12 place-items-center transition-all duration-150",
-                emEquipe
-                  ? ICONE_ATIVO + " bg-signal-dnd/15 text-signal-dnd"
-                  : ICONE_REPOUSO +
-                      " bg-base-800 text-ink-300 group-hover:bg-signal-dnd/10 group-hover:text-signal-dnd",
-              )}
-            >
-              <AetherIcon
-                name="shield"
-                size="lg"
-                className="h-[22px] w-[22px]"
-              />
-              {esperandoRevisao > 0 ? (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -right-0.5 -top-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-amber-400 px-1 text-[9px] font-bold leading-none text-base-950 ring-2 ring-base-900"
-                >
-                  {rotuloDeRevisoes(esperandoRevisao)}
-                </span>
-              ) : null}
-            </span>
-          </Link>
-        ) : null}
+        <HomeMenu pendingRequests={pendingRequests} equipe={equipe} />
 
         <span className="h-px w-8 bg-line" />
 
