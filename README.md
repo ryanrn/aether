@@ -4069,6 +4069,48 @@ enviados e um grafico das ultimas ~2 min.
   uma rajada de perda entre duas amostras some do numero exibido, mas
   aparece no grafico como um pico de ping.
 
+## Developer Platform (bots, webhooks, API) — fundacao
+
+Terceiros podem criar bots e integracoes. **Conceito do Discord Developer
+Platform, adaptado a arquitetura real** — nao e copia.
+
+**Referencia completa:** [`docs/developer-platform.md`](docs/developer-platform.md).
+**Exemplo rodavel:** [`examples/bot-exemplo.mjs`](examples/bot-exemplo.mjs) (bot
+que responde `!ping`).
+
+Pecas:
+
+- **Identidade.** Bot e uma linha `User` com `kind = BOT` (webhook, `kind =
+  WEBHOOK`) — `Message` e `toPublicMessage` ficam intocados. `Application`
+  (modelo proprio) aponta `botUserId`. Token `aeb_...` — guarda so o `sha256`.
+- **Portal.** `/app/developers` — cria app, habilita bot, gera token, link de
+  instalacao. Quem administra o servidor (`MANAGE_SERVER`) instala; o bot entra
+  como membro comum e e restringido pelos cargos como qualquer um.
+- **REST v1** (`/api/v1`, `Authorization: Bearer aeb_...`): `users/me`,
+  `servers/:id`, `servers/:id/channels`, `channels/:id/messages` (GET + POST).
+  Acesso indevido -> **404, nunca 403**. Rate limit em camadas (global / por
+  servidor / por canal) no mesmo Redis do login.
+- **Gateway de eventos.** Namespace `/gateway` no MESMO processo do Socket.IO
+  humano — salas por namespace, entao `message:new` do chat nao vaza. v1
+  entrega so `MESSAGE_CREATE`. Sem RESUME.
+- **Escrita passa pelo gateway.** A REST no Vercel chama `/internal/send-message`
+  (`x-aether-internal`) — o gateway continua o unico que grava `Message`.
+- **Webhook de entrada.** `POST /api/v1/webhooks/:id/:token` publica num canal
+  fixo, sem programa rodando. Configuracoes do servidor -> aba Webhooks.
+
+Verificacao ao vivo: `scripts/verify-phase-bots.mjs` (fixture descartavel;
+`VERIFY_BASE_URL` + `VERIFY_REALTIME_URL`).
+
+### Limitacoes conhecidas (v1)
+
+- **Sem voz.** Bots nao entram em canal de voz nem tocam audio — bot de musica
+  nao e possivel ainda.
+- **Sem slash commands.** Comando e texto que o bot interpreta.
+- **So `MESSAGE_CREATE`.** Sem update/delete, sem eventos de canal/membro/reacao.
+- **Sem webhook de saida** (o AETHER nao faz `POST` pra fora).
+- Nome/avatar por mensagem nao customizavel; avatar de app/bot sem upload.
+- Bot ja conectado so ve um servidor novo apos reconectar.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR, com dois
