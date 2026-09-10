@@ -15,7 +15,7 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import type { SecaoAmigos } from "./friends-nav";
+import type { SecaoAmigos } from "./friends-screen";
 import { NavToggle } from "@/components/layout/nav-mobile";
 
 /**
@@ -27,12 +27,16 @@ import { NavToggle } from "@/components/layout/nav-mobile";
  */
 export function FriendsList({
   secao,
+  onSecao,
+  pedidosRecebidos,
   amigos,
   recebidos,
   enviados,
   bloqueados,
 }: {
   secao: SecaoAmigos;
+  onSecao: (secao: SecaoAmigos) => void;
+  pedidosRecebidos: number;
   amigos: PublicFriendship[];
   recebidos: PublicFriendship[];
   enviados: PublicFriendship[];
@@ -91,33 +95,57 @@ export function FriendsList({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-base-950">
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line px-5">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-4 py-1.5">
         <NavToggle />
+        <div className="flex shrink-0 items-center gap-2 pr-1">
+          <AetherIcon name="users" className="h-[18px] w-[18px] text-ink-400" />
+          <h1 className="text-[15px] font-bold text-ink-100">Amigos</h1>
+        </div>
+
+        <span className="h-5 w-px bg-line" />
+
         {/*
-          O TITULO SAI no celular. As abas logo ao lado ja dizem onde se esta,
-          e numa tela de 375px esta linha inteira nao cabe: com o titulo, o
-          botao de adicionar terminava em 495px, 120 alem da tela.
+          As secoes que moravam no `friends-nav` (a coluna que virou o
+          `HomeNavPanel`): agora sao abas do topo, como o desenho pediu.
         */}
-        <h1 className="hidden shrink-0 text-[16px] font-bold text-ink-100 md:block">
-          {secao === "solicitacoes"
-            ? "Solicitacoes"
-            : secao === "bloqueados"
-              ? "Bloqueados"
-              : "Amigos"}
-        </h1>
+        <div className="flex items-center gap-1">
+          <Aba ativa={secao === "amigos"} onClick={() => onSecao("amigos")}>
+            Amigos
+          </Aba>
+          <Aba
+            ativa={secao === "solicitacoes"}
+            onClick={() => onSecao("solicitacoes")}
+          >
+            Solicitações
+            {pedidosRecebidos > 0 ? (
+              <span className="ml-1.5 rounded-full bg-signal-dnd px-1.5 text-[10px] font-bold leading-[15px] text-white">
+                {pedidosRecebidos > 9 ? "9+" : pedidosRecebidos}
+              </span>
+            ) : null}
+          </Aba>
+          <Aba
+            ativa={secao === "bloqueados"}
+            onClick={() => onSecao("bloqueados")}
+          >
+            Bloqueados
+          </Aba>
+        </div>
 
         {secao === "amigos" ? (
-          <div className="flex items-center gap-1">
-            <Aba ativa={aba === "online"} onClick={() => setAba("online")}>
-              Online
-            </Aba>
-            <Aba ativa={aba === "todos"} onClick={() => setAba("todos")}>
-              Todos
-            </Aba>
-          </div>
+          <>
+            <span className="hidden h-5 w-px bg-line sm:block" />
+            <div className="flex items-center gap-1">
+              <Aba ativa={aba === "online"} onClick={() => setAba("online")}>
+                Online
+              </Aba>
+              <Aba ativa={aba === "todos"} onClick={() => setAba("todos")}>
+                Todos
+              </Aba>
+            </div>
+          </>
         ) : null}
 
-        <div className="flex-1" />
+        <div className="ml-auto" />
 
         <button
           type="button"
@@ -126,13 +154,8 @@ export function FriendsList({
             inputRef.current?.focus();
           }}
           aria-label="Adicionar amigo"
-          className="grid shrink-0 place-items-center rounded-[5px] bg-accent-500 px-3.5 py-1.5 text-[13px] font-bold text-white transition-colors duration-150 hover:bg-accent-400 max-md:h-8 max-md:w-8 max-md:px-0"
+          className="grid shrink-0 place-items-center rounded-[5px] bg-signal-online px-3.5 py-1.5 text-[13px] font-bold text-white transition-colors duration-150 hover:brightness-110 max-md:h-8 max-md:w-8 max-md:px-0"
         >
-          {/*
-            No celular vira so o simbolo. O texto custa ~100px numa linha que
-            ja disputa espaco com o botao de menu e as abas — e "adicionar
-            pessoa" e o unico significado que este simbolo tem aqui.
-          */}
           <span className="max-md:hidden">Adicionar amigo</span>
           <AetherIcon
             name="user-plus"

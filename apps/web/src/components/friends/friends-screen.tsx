@@ -2,26 +2,24 @@
 
 import { useState } from "react";
 import type { PublicFriendship } from "@aether/shared";
-import { FriendsNav, type SecaoAmigos } from "./friends-nav";
 import { FriendsList } from "./friends-list";
 import { ActivityPanel } from "./activity-panel";
 
 /**
- * Tela de amigos, em tres paineis fixos.
+ * A tela de Amigos.
  *
- *   244px          flexivel          260px
- *   navegacao      lista             "Ativo agora"
+ * A navegacao DO APP (Amigos, Loja, Grupos, Olimpo, Explorar, painel da equipe)
+ * e as conversas diretas moram no `HomeNavPanel`, a coluna a esquerda que o
+ * layout de `/app` monta fora de um servidor. O que sobra aqui sao duas
+ * colunas: a lista (com as secoes amigos / solicitacoes / bloqueados nas abas
+ * do topo) e o "Ativo agora".
  *
- * Os tres convivem sempre; nenhum flutua sobre o outro e nenhum vira tela
- * separada. Isso importa mais do que parece: o formulario de adicionar mora
- * DENTRO da lista, e nao numa tela vazia propria — quem acabou de adicionar
- * ve a lista mudar no mesmo lugar em que estava olhando.
- *
- * A lista vem RENDERIZADA do servidor (`listFriendships`); quem decide o que e
- * "pendente" e "aceito" e o banco. O que os componentes acrescentam e o estado
- * VIVO — quem esta online agora e o que esta jogando — que chega pelo socket
- * na sala pessoal e nao existe no banco.
+ * A lista vem RENDERIZADA do servidor (`listFriendships`); o que os componentes
+ * acrescentam e o estado VIVO — quem esta online e o que joga — que chega pelo
+ * socket na sala pessoal.
  */
+export type SecaoAmigos = "amigos" | "solicitacoes" | "bloqueados";
+
 export function FriendsScreen({
   friendships,
 }: {
@@ -36,14 +34,10 @@ export function FriendsScreen({
 
   return (
     <div className="flex h-full min-h-0 bg-base-950">
-      <FriendsNav
+      <FriendsList
         secao={secao}
         onSecao={setSecao}
         pedidosRecebidos={recebidos.length}
-      />
-
-      <FriendsList
-        secao={secao}
         amigos={amigos}
         recebidos={recebidos}
         enviados={enviados}

@@ -24,7 +24,7 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicServer, PublicUser } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
 import { CreateServerModal } from "@/components/servers/create-server-modal";
-import { HomeMenu } from "@/components/layout/home-menu";
+import { MarcaHome } from "@/components/layout/marca-home";
 import { UserRailMenu } from "@/components/layout/user-rail-menu";
 import { useShellStore } from "@/lib/stores/shell-store";
 import {
@@ -70,7 +70,6 @@ export function ServerRail({
   servers,
   user,
   pendingRequests = 0,
-  equipe = false,
 }: {
   servers: PublicServer[];
   /** o proprio usuario — para o menu de conta/config/sair no rodape */
@@ -78,14 +77,8 @@ export function ServerRail({
     allowServerDms: boolean;
     allowServerFriendRequests: boolean;
   };
-  /** pedidos de amizade esperando VOCE decidir — o ponto no botao de amigos */
+  /** pedidos de amizade esperando VOCE decidir — o ponto de aviso na marca */
   pendingRequests?: number;
-  /**
-   * Administracao global. So decide se o icone do painel da equipe APARECE —
-   * quem barra de verdade e a propria pagina, que recheca no servidor e
-   * responde 404 para quem nao e.
-   */
-  equipe?: boolean;
 }) {
   const params = useParams<{ serverId?: string }>();
   const activeId = params?.serverId;
@@ -155,11 +148,11 @@ export function ServerRail({
         )}
       >
         {/*
-          A HOME do app: Amigos, Loja, Grupos, Olimpo, Explorar e (para a
-          equipe) o painel. Era cinco icones soltos aqui; virou uma marca so.
-          O ponto de aviso resume pedido de amizade e conversa nova.
+          A marca — atalho para a home. Os cinco itens que viviam soltos aqui
+          (Amigos, Loja, Grupos, Olimpo, Explorar, painel da equipe) agora estao
+          no painel esquerdo (`HomeNavPanel`), que aparece fora de um servidor.
         */}
-        <HomeMenu pendingRequests={pendingRequests} equipe={equipe} />
+        <MarcaHome pendingRequests={pendingRequests} />
 
         <span className="h-px w-8 bg-line" />
 

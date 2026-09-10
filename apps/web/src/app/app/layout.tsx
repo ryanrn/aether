@@ -5,6 +5,7 @@ import { getSession } from "@/server/auth/session";
 import { listServersForUser } from "@/server/services/servers";
 import { countIncomingRequests } from "@/server/services/friends";
 import { ServerRail } from "@/components/layout/server-rail";
+import { HomeNavPanel } from "@/components/layout/home-nav-panel";
 import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
@@ -84,6 +85,15 @@ export default async function AppLayout({
         <ServerRail
           servers={servers}
           user={railUser}
+          pendingRequests={pendingRequests}
+        />
+        {/*
+          A "home" (Amigos, Loja, Grupos, Olimpo, Explorar, painel da equipe e
+          as conversas diretas). So aparece fora de um servidor — ele proprio
+          decide pela rota. Dentro de `/app/s/[serverId]` quem ocupa esta coluna
+          e a arvore de canais.
+        */}
+        <HomeNavPanel
           pendingRequests={pendingRequests}
           equipe={session.user.equipe}
         />
