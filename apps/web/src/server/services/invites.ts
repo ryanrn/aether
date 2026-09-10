@@ -19,6 +19,119 @@ import { banAtivo } from "./moderation";
  */
 class InviteEsgotado extends Error {}
 
+/** Por que um convite nao pode ser usado — cada um vira uma mensagem propria. */
+export type InviteMotivoInvalido =
+  | "inexistente"
+  | "revogado"
+  | "expirado"
+  | "esgotado";
+
+const MENSAGEM: Record<InviteMotivoInvalido, string> = {
+  inexistente: "Convite invalido.",
+  revogado: "Este convite nao esta mais disponivel.",
+  expirado: "Este convite expirou.",
+  esgotado: "Este convite atingiu o limite de usos.",
+};
+
+/**
+ * Motivo pelo qual um convite ja carregado nao serve — ou `null` se serve.
+ * Uma checagem so, usada tanto pela previa quanto pelo resgate.
+ */
+function motivoInvalido(invite: {
+  revokedAt: Date | null;
+  expiresAt: Date | null;
+  uses: number;
+  maxUses: number | null;
+}): InviteMotivoInvalido | null {
+  if (invite.revokedAt) return "revogado";
+  if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+    return "expirado";
+  }
+  if (invite.maxUses !== null && invite.uses >= invite.maxUses) return "esgotado";
+  return null;
+}
+
+export interface InvitePreview {
+  code: string;
+  server: {
+    id: string;
+    name: string;
+    iconUrl: string | null;
+    /** total de membros — o numero do card */
+    memberCount: number;
+  };
+  /** o visitante ja e membro deste servidor */
+  jaMembro: boolean;
+  /** o visitante esta banido deste servidor (so quando ha sessao) */
+  banido: boolean;
+}
+
+/**
+ * O que a pagina de convite mostra ANTES de aceitar: nome, icone e contagem
+ * do servidor.
+ *
+ * Ter o codigo valido E a autorizacao para ver isso — e o mesmo modelo do
+ * Discord, e o codigo tem ~49 bits de entropia. Codigo invalido devolve o
+ * motivo generico e NADA do servidor: nao confirmamos a existencia de nada
+ * para quem chutou um codigo.
+ *
+ * `userId` opcional: sem sessao ainda da para ver a previa (Cenario 4), so
+ * `jaMembro`/`banido` ficam falsos.
+ */
+export async function invitePreview(
+  code: string,
+  userId?: string,
+): Promise<
+  | { ok: true; data: InvitePreview }
+  | { ok: false; motivo: InviteMotivoInvalido; error: string }
+> {
+  const invite = await prisma.invite.findUnique({
+    where: { code: code.toLowerCase() },
+    select: {
+      code: true,
+      serverId: true,
+      uses: true,
+      maxUses: true,
+      expiresAt: true,
+      revokedAt: true,
+      server: { select: { id: true, name: true, iconUrl: true } },
+    },
+  });
+
+  if (!invite) {
+    return { ok: false, motivo: "inexistente", error: MENSAGEM.inexistente };
+  }
+
+  const motivo = motivoInvalido(invite);
+  if (motivo) return { ok: false, motivo, error: MENSAGEM[motivo] };
+
+  const [memberCount, membro, banido] = await Promise.all([
+    prisma.serverMember.count({ where: { serverId: invite.serverId } }),
+    userId
+      ? prisma.serverMember.findUnique({
+          where: { serverId_userId: { serverId: invite.serverId, userId } },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    userId ? banAtivo(invite.serverId, userId) : Promise.resolve(false),
+  ]);
+
+  return {
+    ok: true,
+    data: {
+      code: invite.code,
+      server: {
+        id: invite.server.id,
+        name: invite.server.name,
+        iconUrl: invite.server.iconUrl,
+        memberCount,
+      },
+      jaMembro: membro !== null,
+      banido,
+    },
+  };
+}
+
 export async function joinServerByCode(
   userId: string,
   code: string,
@@ -31,21 +144,16 @@ export async function joinServerByCode(
       uses: true,
       maxUses: true,
       expiresAt: true,
+      revokedAt: true,
     },
   });
 
-  if (!invite)
-    return { ok: false, error: "Convite invalido ou expirado", field: "code" };
-  if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
-    return { ok: false, error: "Convite invalido ou expirado", field: "code" };
+  if (!invite) {
+    return { ok: false, error: MENSAGEM.inexistente, field: "code" };
   }
-  if (invite.maxUses !== null && invite.uses >= invite.maxUses) {
-    return {
-      ok: false,
-      error: "Este convite atingiu o limite de usos",
-      field: "code",
-    };
-  }
+
+  const motivo = motivoInvalido(invite);
+  if (motivo) return { ok: false, error: MENSAGEM[motivo], field: "code" };
 
   // `banAtivo` (nao `findUnique`) porque ban vencido nao conta — auditoria M2.
   if (await banAtivo(invite.serverId, userId)) {
@@ -89,7 +197,11 @@ export async function joinServerByCode(
     await prisma.$transaction(async (tx) => {
       if (invite.maxUses !== null) {
         const { count } = await tx.invite.updateMany({
-          where: { id: invite.id, uses: { lt: invite.maxUses } },
+          where: {
+            id: invite.id,
+            uses: { lt: invite.maxUses },
+            revokedAt: null,
+          },
           data: { uses: { increment: 1 } },
         });
         if (count === 0) throw new InviteEsgotado();
@@ -111,11 +223,7 @@ export async function joinServerByCode(
     });
   } catch (error) {
     if (error instanceof InviteEsgotado) {
-      return {
-        ok: false,
-        error: "Este convite atingiu o limite de usos",
-        field: "code",
-      };
+      return { ok: false, error: MENSAGEM.esgotado, field: "code" };
     }
     throw error;
   }

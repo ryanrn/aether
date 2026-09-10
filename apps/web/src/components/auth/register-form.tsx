@@ -25,7 +25,7 @@ function SubmitButton() {
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ next = "" }: { next?: string }) {
   const [state, formAction] = useActionState<
     ActionResult<undefined> | null,
     FormData
@@ -34,6 +34,7 @@ export function RegisterForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Usuario" hint="3 a 24 caracteres." required>
           <Input

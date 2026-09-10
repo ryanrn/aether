@@ -4,6 +4,7 @@ import { BRAND } from "@aether/shared";
 import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
 import { NovidadesModal } from "@/components/layout/novidades-modal";
+import { DeepLinkListener } from "@/components/realtime/deep-link-listener";
 import { AetherIconSprite } from "@/components/ui/aether-icon";
 import { SCRIPT_APARENCIA } from "@/components/ui/aparencia";
 
@@ -95,6 +96,7 @@ export default function RootLayout({
       <body className="flex h-dvh flex-col overflow-hidden bg-base-950 text-ink-200 antialiased">
         {/* Sprite de icones do AETHER — inline uma vez, cobre o app inteiro. */}
         <AetherIconSprite />
+        <DeepLinkListener />
         <TitleBar />
         {/*
           `overflow-auto` aqui serve as telas curtas (entrar, criar conta) em

@@ -14,6 +14,7 @@ import { log } from "@aether/shared/log";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { createSession, destroySession } from "../auth/session";
+import { sanitizeNextPath } from "@/lib/next-path";
 import { verificarTurnstile } from "../turnstile";
 import { emailDeVerificacao, enviarEmail } from "../email";
 import { fail, toActionError } from "./action-result";
@@ -158,8 +159,10 @@ export async function registerAction(
   }
 
   // redirect() lanca internamente — precisa ficar fora do try/catch.
-  // A conta entra logada mas cai na parede de "confirme seu e-mail" em /app.
-  redirect("/app");
+  // `next` vem do form (link de convite). A conta entra logada; se o destino
+  // for um servidor privado, a parede de "confirme seu e-mail" ainda aparece
+  // — mas a associacao ao servidor ja foi criada e ele aparece no trilho.
+  redirect(sanitizeNextPath(formData.get("next")?.toString()));
 }
 
 export async function loginAction(
@@ -208,7 +211,8 @@ export async function loginAction(
     return toActionError(error);
   }
 
-  redirect("/app");
+  // `next` do form — link de convite preservado pelo login (Cenario 4).
+  redirect(sanitizeNextPath(formData.get("next")?.toString()));
 }
 
 export async function logoutAction(): Promise<void> {

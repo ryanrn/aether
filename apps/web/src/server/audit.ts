@@ -21,6 +21,7 @@ export type AuditAction =
   | "server.transfer_ownership"
   | "invite.create"
   | "invite.use"
+  | "invite.revoke"
   | "channel.create"
   | "channel.update"
   | "channel.delete"

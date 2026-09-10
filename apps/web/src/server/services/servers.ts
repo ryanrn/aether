@@ -38,13 +38,26 @@ const DEFAULT_TREE = [
   },
 ] as const;
 
+/**
+ * Codigo de convite: 10 caracteres de um alfabeto sem ambiguidade visual
+ * (`0/o`, `1/l/i` fora), ~49 bits de entropia. `@unique` no banco garante
+ * unicidade; a colisao e improvavel o bastante para nao valer um retry loop.
+ *
+ * AMOSTRAGEM POR REJEICAO, e nao `byte % 30`: o modulo enviesa os primeiros
+ * 256 % 30 = 16 simbolos (aparecem com prob. 9/256 contra 8/256 dos outros).
+ * Descartar os bytes >= 240 (o maior multiplo de 30) tira o vies inteiro — e
+ * `randomBytes` e barato, entao pedir alguns a mais nao pesa.
+ */
 export function generateInviteCode(): string {
-  // 8 caracteres alfanumericos, sem ambiguidade visual.
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = randomBytes(8);
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // 30 simbolos
+  const teto = 256 - (256 % alphabet.length); // 240
   let code = "";
-  for (const byte of bytes) {
-    code += alphabet[byte % alphabet.length];
+  while (code.length < 10) {
+    for (const byte of randomBytes(16)) {
+      if (byte >= teto) continue;
+      code += alphabet[byte % alphabet.length];
+      if (code.length === 10) break;
+    }
   }
   return code;
 }

@@ -39,6 +39,11 @@ const DESCRIPTORS: Record<string, Descriptor> = {
   "server.leave": { icon: "user-minus", text: () => "saiu do servidor" },
   "invite.create": { icon: "ticket", text: () => "gerou um convite" },
   "invite.use": { icon: "user-plus", text: () => "entrou por convite" },
+  "invite.revoke": {
+    icon: "trash",
+    text: () => "revogou um convite",
+    tone: "danger",
+  },
   "channel.create": {
     icon: "hash",
     text: (e) => `criou o canal ${e.targetLabel ?? UNKNOWN}`,

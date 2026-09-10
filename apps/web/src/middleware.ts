@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@aether/access/tokens";
+import { sanitizeNextPath } from "@/lib/next-path";
 
 /**
  * Primeira barreira de acesso (Edge runtime).
@@ -29,9 +30,14 @@ export async function middleware(request: NextRequest) {
   }
 
   if (claims && AUTH_ROUTES.includes(pathname)) {
+    // Ja logado numa tela de login/cadastro: pula direto para o destino. Sem
+    // isto, um `/login?next=/invite/xxx` clicado por quem ja tem sessao caia
+    // em `/app` e o convite se perdia.
+    const destino = sanitizeNextPath(request.nextUrl.searchParams.get("next"));
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
-    url.search = "";
+    const [caminho, query] = destino.split("?", 2);
+    url.pathname = caminho!;
+    url.search = query ? `?${query}` : "";
     return NextResponse.redirect(url);
   }
 

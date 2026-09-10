@@ -30,6 +30,25 @@ contextBridge.exposeInMainWorld("aetherDesktop", {
     ipcRenderer.send("desktop:audio-capture-failed", detalhes ?? null),
 
   /**
+   * Deep link `aether://invite/<codigo>`.
+   *
+   * O processo principal ja resolveu o codigo para um caminho interno
+   * (`/invite/<codigo>`); a pagina so navega para la (client-side, sem
+   * recarregar). `deepLinkPendente` cobre o caso de o evento ter chegado
+   * antes de o ouvinte existir — ou de o app ter aberto do zero pelo link.
+   * `deepLinkAck` avisa o main que a pagina cuidou, cancelando o fallback.
+   */
+  deepLink: {
+    pendente: () => ipcRenderer.invoke("desktop:deep-link-pendente"),
+    confirmar: () => ipcRenderer.send("desktop:deep-link-ack"),
+    aoReceber: (callback) => {
+      const ouvinte = (_evento, caminho) => callback(caminho);
+      ipcRenderer.on("desktop:deep-link", ouvinte);
+      return () => ipcRenderer.removeListener("desktop:deep-link", ouvinte);
+    },
+  },
+
+  /**
    * Som do sistema para o compartilhamento de tela.
    *
    * Existe porque o Chromium nao abre a captura em aparelhos que se anunciam

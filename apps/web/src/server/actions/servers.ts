@@ -6,6 +6,7 @@ import { prisma } from "@aether/db";
 import {
   createServerSchema,
   deleteServerSchema,
+  inviteCodeSchema,
   joinServerSchema,
   transferOwnershipSchema,
   updateServerSchema,
@@ -114,6 +115,79 @@ export async function joinServerAction(
   redirect(`/app/s/${serverId}`);
 }
 
+/**
+ * Aceitar um convite pela PAGINA de convite (`/invite/<codigo>`).
+ *
+ * Separada da `joinServerAction` (que le `code` de um FormData e e usada pelo
+ * modal "entrar com convite") porque esta recebe o codigo direto e devolve o
+ * `serverId` para o cliente navegar — a pagina de convite ja mostrou a previa
+ * e o clique e o "sim". A regra de entrada e a mesma: `joinServerByCode`
+ * revalida convite, ban, duplicidade e limite no servidor.
+ */
+export async function acceptInviteAction(
+  code: unknown,
+): Promise<ActionResult<{ serverId: string }>> {
+  try {
+    const session = await requireUser();
+
+    const limit = await rateLimit(await clientKey("join-server"), 20, 10 * 60_000);
+    if (!limit.ok) {
+      return fail(`Muitas tentativas. Aguarde ${limit.retryAfter}s.`);
+    }
+
+    const parsed = inviteCodeSchema.safeParse(code);
+    if (!parsed.success) return fail("Convite invalido.", "code");
+
+    const result = await joinServerByCode(session.user.id, parsed.data);
+    if (!result.ok) return result;
+
+    revalidatePath("/app");
+    return ok(result.data);
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Revoga um convite. Exige a MESMA permissao de criar (`CREATE_INVITE`):
+ * revogar e gerar outro sao o mesmo gesto de "trocar o link".
+ *
+ * Soft delete — `revokedAt` em vez de `DELETE` — para a pagina distinguir
+ * "revogado" de "nunca existiu" e para o log guardar quem revogou.
+ */
+export async function revokeInviteAction(
+  serverId: string,
+  code: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const context = await requirePermission(serverId, "CREATE_INVITE");
+
+    const parsed = inviteCodeSchema.safeParse(code);
+    if (!parsed.success) return fail("Convite invalido.");
+
+    // `updateMany` com `serverId` no WHERE: o convite tem de ser DESTE
+    // servidor. Sem isso, o id do codigo viria do cliente e daria para
+    // revogar convite de outro servidor.
+    const { count } = await prisma.invite.updateMany({
+      where: { code: parsed.data.toLowerCase(), serverId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (count === 0) return fail("Convite nao encontrado.");
+
+    await writeAudit({
+      serverId,
+      actorId: context.session.user.id,
+      action: "invite.revoke",
+      targetType: "invite",
+      targetId: parsed.data.toLowerCase(),
+    });
+
+    return ok();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
 /** Gera um convite novo. Exige a permissao CREATE_INVITE. */
 export async function createInviteAction(
   serverId: string,
@@ -155,6 +229,7 @@ export async function getOrCreateInviteAction(
     const existing = await prisma.invite.findFirst({
       where: {
         serverId,
+        revokedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
       orderBy: { createdAt: "desc" },

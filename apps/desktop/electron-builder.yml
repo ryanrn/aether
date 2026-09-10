@@ -8,6 +8,17 @@ appId: com.aether.desktop
 productName: Aether
 copyright: Aether
 
+# Protocolo proprio para os links de convite: `aether://invite/<codigo>`.
+#
+# O electron-builder grava o registro no instalador NSIS (por-usuario, em
+# `HKCU\Software\Classes\aether`). O `main.js` tambem chama
+# `setAsDefaultProtocolClient` em tempo de execucao — cobre o modo dev e
+# reforca caso o registro do instalador nao tenha pegado.
+protocols:
+  - name: AETHER
+    schemes:
+      - aether
+
 directories:
   output: dist
   buildResources: build

@@ -540,6 +540,14 @@ model Invite {
   expiresAt DateTime?
   createdAt DateTime  @default(now())
 
+  /// Revogado por alguem com CREATE_INVITE. Nulo = ativo.
+  ///
+  /// Soft delete de proposito: um convite revogado precisa continuar
+  /// distinguivel de um que nunca existiu, para a pagina responder "este
+  /// convite nao esta mais disponivel" em vez de "invalido" (auditoria M6).
+  /// A linha tambem sobrevive para o log e para "quem revogou".
+  revokedAt DateTime?
+
   @@index([serverId])
 }
 

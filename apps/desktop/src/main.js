@@ -20,6 +20,11 @@ const {
 } = require("./game-detect");
 const { instalarAtualizador } = require("./updater");
 const { registrar } = require("./log");
+const {
+  caminhoDoDeepLink,
+  deepLinkNosArgs,
+  registrarProtocolo,
+} = require("./deep-link");
 
 /**
  * Casca desktop do Aether.
@@ -92,9 +97,67 @@ function desligarIpv6DoWebrtc() {
 
 desligarIpv6DoWebrtc();
 
+// Dono do esquema `aether://` — antes de tudo, para o relançamento pelo
+// protocolo (app fechado) ja encontrar o registro.
+registrarProtocolo();
+
 /** Origem oficial. Tudo fora daqui abre no navegador do sistema, nunca aqui. */
 const APP_ORIGIN =
   process.env.AETHER_APP_URL ?? "https://aether-mocha-phi.vercel.app";
+
+/**
+ * Deep link recebido antes de a pagina ter um ouvinte pronto.
+ *
+ * Cobre dois momentos: (1) o app abriu do zero por causa do link e a pagina
+ * ainda esta carregando; (2) o app ja estava aberto mas o bundle e velho
+ * demais para ter o ouvinte. A pagina pergunta por
+ * `desktop:deep-link-pendente` ao montar; e ha um fallback de `loadURL` se
+ * ninguem confirmar o `desktop:deep-link` a tempo.
+ */
+let deepLinkPendente = null;
+
+/** A janela viva. O atualizador precisa dela para avisar da versao pronta. */
+let janelaPrincipal = null;
+
+/** Manda o deep link para a pagina — ou guarda para ela buscar ao carregar. */
+function entregarDeepLink(caminho) {
+  if (!caminho) return;
+  registrar("deep-link:recebido", { caminho });
+
+  const janela =
+    janelaPrincipal && !janelaPrincipal.isDestroyed() ? janelaPrincipal : null;
+  if (!janela) {
+    deepLinkPendente = caminho;
+    return;
+  }
+
+  if (janela.isMinimized()) janela.restore();
+  janela.focus();
+
+  deepLinkPendente = caminho;
+  janela.webContents.send("desktop:deep-link", caminho);
+
+  /**
+   * Fallback: se a pagina nao confirmar (`desktop:deep-link-ack`) em 2s, ela
+   * provavelmente nao tem o ouvinte (bundle antigo). Ai navegamos na marra —
+   * recarrega a janela, mas o convite nao se perde.
+   */
+  const alvo = caminho;
+  const aoConfirmar = () => {
+    clearTimeout(prazo);
+    ipcMain.removeListener("desktop:deep-link-ack", aoConfirmar);
+    if (deepLinkPendente === alvo) deepLinkPendente = null;
+  };
+  const prazo = setTimeout(() => {
+    ipcMain.removeListener("desktop:deep-link-ack", aoConfirmar);
+    if (deepLinkPendente === alvo && !janela.isDestroyed()) {
+      registrar("deep-link:fallback-loadurl", { caminho: alvo });
+      void janela.webContents.loadURL(`${APP_ORIGIN}${alvo}`);
+      deepLinkPendente = null;
+    }
+  }, 2000);
+  ipcMain.on("desktop:deep-link-ack", aoConfirmar);
+}
 
 function isAllowedUrl(rawUrl) {
   try {
@@ -485,10 +548,7 @@ function instalarDeteccaoDeJogo() {
   if (lerDeteccaoLigada()) vigiaDeJogo.iniciar();
 }
 
-/** A janela viva. O atualizador precisa dela para avisar da versao pronta. */
-let janelaPrincipal = null;
-
-function createWindow() {
+function createWindow(caminhoInicial) {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -541,7 +601,16 @@ function createWindow() {
   });
 
   window.once("ready-to-show", () => window.show());
-  void window.loadURL(APP_ORIGIN);
+  /**
+   * `caminhoInicial` vem de um `aether://…` que abriu o app do zero. So aceita
+   * caminho interno (comeca com `/`), nunca URL — quem valida o formato do
+   * codigo e o `deep-link.js`, e o backend valida o convite de verdade.
+   */
+  const inicio =
+    typeof caminhoInicial === "string" && caminhoInicial.startsWith("/")
+      ? `${APP_ORIGIN}${caminhoInicial}`
+      : APP_ORIGIN;
+  void window.loadURL(inicio);
 
   // Devolvida para o atualizador poder avisar a pagina quando a versao nova
   // ficar pronta — o aviso agora e um botao dentro do app, nao caixa nativa.
@@ -603,11 +672,24 @@ function createWindow() {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  /**
+   * Segunda instancia — no Windows e o que acontece quando o app JA esta
+   * aberto e alguem clica num `aether://…`: o SO relança o .exe, o lock
+   * redireciona para ca, e a URL vem em `argv`.
+   */
+  app.on("second-instance", (_evento, argv) => {
     const [existing] = BrowserWindow.getAllWindows();
-    if (!existing) return;
-    if (existing.isMinimized()) existing.restore();
-    existing.focus();
+    if (existing) {
+      if (existing.isMinimized()) existing.restore();
+      existing.focus();
+    }
+    entregarDeepLink(deepLinkNosArgs(argv));
+  });
+
+  /** macOS entrega o deep link por evento proprio (nao por argv). */
+  app.on("open-url", (evento, url) => {
+    evento.preventDefault();
+    entregarDeepLink(caminhoDoDeepLink(url));
   });
 
   void app.whenReady().then(() => {
@@ -788,9 +870,22 @@ if (!app.requestSingleInstanceLock()) {
       abrirOAuthDeConexao("/api/spotify/connect"),
     );
 
+    /**
+     * A pagina, ao montar, pergunta se ha um deep link esperando (cobre o
+     * caso de o `desktop:deep-link` ter sido enviado antes de o ouvinte
+     * existir, ou de o app ter aberto do zero pelo link). Devolver limpa.
+     */
+    ipcMain.handle("desktop:deep-link-pendente", () => {
+      const caminho = deepLinkPendente;
+      deepLinkPendente = null;
+      return caminho;
+    });
+
     instalarDeteccaoDeJogo();
     instalarLoopback();
-    createWindow();
+
+    // Aberto do zero por um `aether://…`? A janela ja carrega no destino.
+    createWindow(deepLinkNosArgs(process.argv));
 
     // Depois da janela: a verificacao nao pode atrasar a abertura do app.
     instalarAtualizador(janelaPrincipal);

@@ -24,7 +24,7 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ next = "" }: { next?: string }) {
   const [state, formAction] = useActionState<
     ActionResult<undefined> | null,
     FormData
@@ -33,6 +33,7 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <Field label="Usuario ou e-mail" required>
         <Input
           name="identifier"
