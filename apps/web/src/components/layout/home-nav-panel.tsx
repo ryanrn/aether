@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 const ROTAS_HOME = new Set([
   "/app",
   "/app/amigos",
+  "/app/perfil",
   "/app/loja",
   "/app/grupos",
   "/app/olimpo",
@@ -98,6 +99,7 @@ export function HomeNavPanel({
       icone: "users",
       pill: pendingRequests > 0 ? (pendingRequests > 9 ? "9+" : String(pendingRequests)) : null,
     },
+    { href: "/app/perfil", label: "Perfil", icone: "user" },
     { href: "/app/loja", label: "Loja", icone: "sparkle" },
     { href: "/app/grupos", label: "Grupos", icone: "gamepad" },
     { href: "/app/olimpo", label: "Olimpo", icone: "crown", tom: "text-amber-300" },

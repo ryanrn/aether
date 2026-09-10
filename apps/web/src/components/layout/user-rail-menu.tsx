@@ -4,12 +4,16 @@ import { useRef, useState, useTransition } from "react";
 import type { PublicUser } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
-import { AppSettingsModal } from "@/components/settings/app-settings-modal";
+import {
+  AppSettingsModal,
+  type Tab as ConfigTab,
+} from "@/components/settings/app-settings-modal";
 import {
   SelfUserCard,
   type SelfCardAnchor,
 } from "@/components/profile/self-user-card";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useShellStore } from "@/lib/stores/shell-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,6 +41,11 @@ export function UserRailMenu({
   const [card, setCard] = useState<SelfCardAnchor | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [, startTransition] = useTransition();
+
+  // A tela de Perfil (e qualquer outro lugar) abre este MESMO modal pela store.
+  const configAberta = useShellStore((s) => s.configAberta);
+  const abaDeConfig = useShellStore((s) => s.abaDeConfig);
+  const fecharConfig = useShellStore((s) => s.fecharConfig);
 
   const status =
     useRealtimeStore((state) => state.presence[user.id]) ?? "ONLINE";
@@ -90,10 +99,18 @@ export function UserRailMenu({
       ) : null}
 
       <AppSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        open={settingsOpen || configAberta}
+        onClose={() => {
+          setSettingsOpen(false);
+          if (configAberta) fecharConfig();
+        }}
         user={user}
         server={null}
+        abaInicial={
+          configAberta && abaDeConfig
+            ? (abaDeConfig as ConfigTab)
+            : undefined
+        }
       />
     </>
   );

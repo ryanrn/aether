@@ -37,6 +37,19 @@ interface ShellState {
   navAberta: boolean;
   alternarNav: () => void;
   fecharNav: () => void;
+
+  /**
+   * Configuracoes abertas — e em qual aba.
+   *
+   * Mora aqui porque a tela de Perfil (`/app/perfil`) precisa abrir o MESMO
+   * modal de Configuracoes que o menu do avatar no trilho ja monta, sem
+   * duplicar a instancia. O trilho e o unico ponto sempre presente em `/app`;
+   * o modal dele escuta este estado.
+   */
+  configAberta: boolean;
+  abaDeConfig: string | null;
+  abrirConfig: (aba?: string) => void;
+  fecharConfig: () => void;
 }
 
 export const useShellStore = create<ShellState>((set) => ({
@@ -47,4 +60,9 @@ export const useShellStore = create<ShellState>((set) => ({
   navAberta: false,
   alternarNav: () => set((estado) => ({ navAberta: !estado.navAberta })),
   fecharNav: () => set({ navAberta: false }),
+
+  configAberta: false,
+  abaDeConfig: null,
+  abrirConfig: (aba) => set({ configAberta: true, abaDeConfig: aba ?? null }),
+  fecharConfig: () => set({ configAberta: false, abaDeConfig: null }),
 }));

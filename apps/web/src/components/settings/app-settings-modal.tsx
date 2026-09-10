@@ -32,7 +32,7 @@ import { VoiceTab } from "./voice-tab";
  * ("Usuario" / "Assinatura") e um cabecalho que troca por aba.
  */
 
-type Tab =
+export type Tab =
   | "conta"
   | "voz"
   | "aparencia"
