@@ -71,6 +71,9 @@ export function VoiceStage({
   const selfVoice = useSelfVoice();
   const shares = useScreenShares();
   const localSharing = useRealtimeStore((state) => state.localSharing);
+  const watchedShares = useRealtimeStore((state) => state.watchedShares);
+  const watchShare = useRealtimeStore((state) => state.watchShare);
+  const setFocusedShare = useRealtimeStore((state) => state.setFocusedShare);
 
   const isHere = selfVoice?.channelId === channel.id;
   const [statsOpen, setStatsOpen] = useState(false);
@@ -83,10 +86,21 @@ export function VoiceStage({
   const [telaMinimizada, setTelaMinimizada] = useState(false);
   const statsButtonRef = useRef<HTMLButtonElement>(null);
 
-  const sharing = shares.length > 0 || localSharing;
+  /**
+   * A tela SO toma o palco quando eu escolho ver — a minha propria (conferir o
+   * que envio) ou uma que aceitei assistir. Sem isto, a tela de quem comecava
+   * a transmitir tomava a area central de todo mundo no canal, mesmo de quem
+   * so queria conversar.
+   */
+  const assistindoTela =
+    localSharing || shares.some((s) => watchedShares.includes(s.userId));
+  /** Transmissoes ativas que eu ainda nao aceitei ver. */
+  const convitesDeTela = shares.filter(
+    (s) => !watchedShares.includes(s.userId),
+  );
 
   /**
-   * Ninguem mais transmitindo: volta ao estado normal para a proxima vez.
+   * Nada mais para assistir: volta ao estado normal para a proxima vez.
    *
    * Este efeito fica ANTES de qualquer `return` da funcao de proposito: sair
    * da call zera `participants` e faz o componente retornar cedo (bloco
@@ -94,8 +108,8 @@ export function VoiceStage({
    * anterior" — o React #300 que derrubava a tela ao desconectar.
    */
   useEffect(() => {
-    if (!sharing && telaMinimizada) setTelaMinimizada(false);
-  }, [sharing, telaMinimizada]);
+    if (!assistindoTela && telaMinimizada) setTelaMinimizada(false);
+  }, [assistindoTela, telaMinimizada]);
 
   const full =
     channel.userLimit !== null &&
@@ -167,11 +181,11 @@ export function VoiceStage({
   }
 
   /**
-   * Com alguem transmitindo, a tela vira o assunto principal e os
-   * participantes descem para uma faixa compacta — a nao ser que a tela
-   * esteja minimizada, ai a grade volta ao normal e a tela flutua no canto.
+   * Assistindo uma tela, ela vira o assunto principal e os participantes
+   * descem para uma faixa compacta — a nao ser que esteja minimizada, ai a
+   * grade volta ao normal e a tela flutua no canto.
    */
-  const telaEmFoco = sharing && !telaMinimizada;
+  const telaEmFoco = assistindoTela && !telaMinimizada;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -216,11 +230,25 @@ export function VoiceStage({
       {/* faixa vermelha de isolamento — teste de microfone ativo */}
       {isHere ? <MonitorStrip /> : null}
 
+      {/*
+        Alguem transmite e eu ainda nao aceitei ver: uma faixa fina convida,
+        a tela NAO toma o palco e o audio dela nao toca. "Nada abre sozinho."
+      */}
+      {isHere && !telaEmFoco && convitesDeTela.length > 0 ? (
+        <ConviteDeTela
+          shares={convitesDeTela}
+          onAssistir={(userId) => {
+            watchShare(userId);
+            setFocusedShare(userId);
+          }}
+        />
+      ) : null}
+
       {telaEmFoco ? (
         <ScreenShareView onMinimizar={() => setTelaMinimizada(true)} />
       ) : null}
 
-      {sharing && telaMinimizada ? (
+      {assistindoTela && telaMinimizada ? (
         <ScreenShareMini onRestaurar={() => setTelaMinimizada(false)} />
       ) : null}
 
@@ -254,6 +282,56 @@ export function VoiceStage({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Faixa de convite: alguem transmite a tela e a pessoa ainda nao aceitou ver.
+ *
+ * Fica no lugar da antiga tomada automatica de tela — a grade continua sendo o
+ * assunto, o video nao carrega e o audio da tela nao toca ate um clique em
+ * "Assistir". Com mais de uma transmissao, um botao por pessoa.
+ */
+function ConviteDeTela({
+  shares,
+  onAssistir,
+}: {
+  shares: { userId: string; displayName: string }[];
+  onAssistir: (userId: string) => void;
+}) {
+  const uma = shares.length === 1;
+
+  return (
+    <div className="mx-4 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-signal-live/30 bg-signal-live/[0.1] px-3.5 py-2.5">
+      <AetherIcon
+        name="screen-share"
+        size="sm"
+        className="shrink-0 text-signal-live"
+      />
+      <span className="min-w-0 flex-1 leading-tight">
+        <b className="block text-[13px] font-semibold text-[#ff9ea0]">
+          {uma
+            ? `${shares[0]!.displayName} esta compartilhando a tela`
+            : `${shares.length} pessoas estao compartilhando a tela`}
+        </b>
+        <span className="block text-[11px] text-ink-400">
+          Nada abre sozinho. Clique quando quiser ver.
+        </span>
+      </span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {shares.map((share) => (
+          <button
+            key={share.userId}
+            type="button"
+            onClick={() => onAssistir(share.userId)}
+            className="flex items-center gap-1.5 rounded-md border border-signal-live/40 bg-signal-live/15 px-2.5 py-1 text-[12px] font-medium text-[#ff9ea0] transition-colors hover:bg-signal-live/25"
+          >
+            <AetherIcon name="play" size="sm" />
+            {uma ? "Assistir" : share.displayName}
+          </button>
+        ))}
+      </span>
     </div>
   );
 }
@@ -717,6 +795,14 @@ function ParticipantCard({
             {isSelf ? <span className="text-ink-500"> · voce</span> : null}
           </span>
           <span className="ml-auto flex items-center gap-1.5">
+            {participant.streaming ? (
+              <AetherIcon
+                name="screen-share"
+                size="sm"
+                className="text-signal-live"
+                aria-label="Compartilhando tela"
+              />
+            ) : null}
             {deafened ? (
               <AetherIcon
                 name="volume-off"
@@ -755,9 +841,11 @@ function ParticipantCard({
                 ? "text-signal-isolate-ink"
                 : muted
                   ? "text-signal-dnd"
-                  : speaking
-                    ? "text-accent-300"
-                    : "text-ink-400",
+                  : participant.streaming
+                    ? "text-[#ff9ea0]"
+                    : speaking
+                      ? "text-accent-300"
+                      : "text-ink-400",
             )}
           >
             <AetherIcon
@@ -768,9 +856,11 @@ function ParticipantCard({
                     ? "volume-off"
                     : muted
                       ? "mic-off"
-                      : speaking
-                        ? "volume"
-                        : "mic"
+                      : participant.streaming
+                        ? "screen-share"
+                        : speaking
+                          ? "volume"
+                          : "mic"
               }
               size="sm"
             />
@@ -780,9 +870,11 @@ function ParticipantCard({
                 ? "Audio desativado"
                 : muted
                   ? "Microfone desligado"
-                  : speaking
-                    ? "Falando"
-                    : "Conectado"}
+                  : participant.streaming
+                    ? "Compartilhando tela"
+                    : speaking
+                      ? "Falando"
+                      : "Conectado"}
           </div>
         </>
       )}

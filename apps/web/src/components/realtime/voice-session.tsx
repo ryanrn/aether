@@ -28,6 +28,7 @@ export function VoiceSession() {
     (state) => state.setMediaConnected,
   );
   const setScreenShares = useRealtimeStore((state) => state.setScreenShares);
+  const watchedShares = useRealtimeStore((state) => state.watchedShares);
   const setCameras = useRealtimeStore((state) => state.setCameras);
   const setLocalSharing = useRealtimeStore((state) => state.setLocalSharing);
   const setSharePreset = useRealtimeStore((state) => state.setSharePreset);
@@ -138,6 +139,11 @@ export function VoiceSession() {
         }
         roomRef.current = handle;
         setVoiceError(null);
+        // Reaplica o que ja estava liberado (uma reconexao no meio de uma
+        // transmissao que a pessoa estava assistindo).
+        handle.definirTelasOuvidas(
+          useRealtimeStore.getState().watchedShares,
+        );
 
         /**
          * Comparacao das quatro latencias no console, so quando pedida.
@@ -183,6 +189,7 @@ export function VoiceSession() {
           setUserVolume: (userId, volume) =>
             handle.setUserVolume(userId, volume),
           setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
+          definirTelasOuvidas: (ids) => handle.definirTelasOuvidas(ids),
           setOutputVolume: (volume) => handle.setOutputVolume(volume),
           subscribeConnectionStats: (cb) => handle.subscribeConnectionStats(cb),
           subscribeMediaDebug: (cb) => handle.subscribeMediaDebug(cb),
@@ -280,6 +287,11 @@ export function VoiceSession() {
   useEffect(() => {
     roomRef.current?.setDeafened(deafened);
   }, [deafened]);
+
+  // 3. audio de tela so toca para quem aceitou assistir (`watchedShares`).
+  useEffect(() => {
+    roomRef.current?.definirTelasOuvidas(watchedShares);
+  }, [watchedShares]);
 
   return null;
 }

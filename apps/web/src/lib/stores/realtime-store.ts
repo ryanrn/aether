@@ -186,6 +186,12 @@ interface RealtimeState {
     setUserVolume: (userId: string, volume: number) => void;
     /** volume local do audio que vem junto do compartilhamento de tela (0..1) */
     setScreenAudioVolume: (volume: number) => void;
+    /**
+     * Identidades cujo audio de tela pode tocar (as que a pessoa aceitou
+     * assistir). O audio de tela fica mudo ate entrar aqui — nada de ouvir a
+     * tela de quem transmite sem ter pedido.
+     */
+    definirTelasOuvidas: (userIds: string[]) => void;
     /** volume de saida global (0..2) — multiplica tudo que chega; amplia acima de 100% */
     setOutputVolume: (volume: number) => void;
     /** troca a qualidade da transmissao ativa, sem reabrir o seletor de tela */

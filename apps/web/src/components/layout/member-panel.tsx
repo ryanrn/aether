@@ -362,7 +362,13 @@ function MemberRow({
   editable: boolean;
   presence: UserStatus;
   voiceState:
-    { speaking: boolean; selfMuted: boolean; serverMuted: boolean } | undefined;
+    | {
+        speaking: boolean;
+        selfMuted: boolean;
+        serverMuted: boolean;
+        streaming: boolean;
+      }
+    | undefined;
   onOpenCard: (member: PublicMember, event: React.MouseEvent) => void;
   onEditRoles: () => void;
 }) {
@@ -370,6 +376,7 @@ function MemberRow({
     ? voiceState.selfMuted || voiceState.serverMuted
     : false;
   const falando = voiceState ? voiceState.speaking && !mudo : false;
+  const transmitindo = voiceState?.streaming ?? false;
 
   return (
     <li>
@@ -402,7 +409,15 @@ function MemberRow({
         </button>
 
         {voiceState ? (
-          <span className="shrink-0 text-ink-500">
+          <span className="flex shrink-0 items-center gap-1 text-ink-500">
+            {transmitindo ? (
+              <AetherIcon
+                name="screen-share"
+                size="sm"
+                className="h-3 w-3 text-signal-live"
+                aria-label="Compartilhando tela"
+              />
+            ) : null}
             {mudo ? (
               <AetherIcon
                 name="mic-off"

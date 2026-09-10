@@ -56,6 +56,7 @@ export function ScreenShareView({ onMinimizar }: { onMinimizar: () => void }) {
   const setFocusedShare = useRealtimeStore((state) => state.setFocusedShare);
   const watched = useRealtimeStore((state) => state.watchedShares);
   const watchShare = useRealtimeStore((state) => state.watchShare);
+  const unwatchShare = useRealtimeStore((state) => state.unwatchShare);
 
   if (all.length === 0) return null;
 
@@ -79,6 +80,11 @@ export function ScreenShareView({ onMinimizar }: { onMinimizar: () => void }) {
             )
           }
           onMinimizar={onMinimizar}
+          onParar={
+            focused.userId === selfUserId
+              ? undefined
+              : () => unwatchShare(focused.userId)
+          }
         />
       ) : (
         <Convite
@@ -130,6 +136,7 @@ export function ScreenShareMini({ onRestaurar }: { onRestaurar: () => void }) {
   const focusedId = useRealtimeStore((state) => state.focusedShareUserId);
   const watched = useRealtimeStore((state) => state.watchedShares);
   const watchShare = useRealtimeStore((state) => state.watchShare);
+  const unwatchShare = useRealtimeStore((state) => state.unwatchShare);
 
   if (all.length === 0) return null;
   const focused = all.find((item) => item.userId === focusedId) ?? all[0];
@@ -178,6 +185,16 @@ export function ScreenShareMini({ onRestaurar }: { onRestaurar: () => void }) {
           >
             Assistir
           </button>
+        ) : focused.userId !== selfUserId ? (
+          <button
+            type="button"
+            onClick={() => unwatchShare(focused.userId)}
+            title="Parar de ver esta tela"
+            aria-label="Parar de ver esta tela"
+            className="shrink-0 rounded-sm border border-line-strong p-1 text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
+          >
+            <AetherIcon name="screen-stop" className="h-3.5 w-3.5" />
+          </button>
         ) : null}
       </div>
     </div>
@@ -190,12 +207,15 @@ function FocusedStream({
   pinned,
   onTogglePin,
   onMinimizar,
+  onParar,
 }: {
   label: string;
   track: Track;
   pinned: boolean;
   onTogglePin: () => void;
   onMinimizar: () => void;
+  /** parar de ver esta tela — ausente na propria transmissao */
+  onParar?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -262,6 +282,12 @@ function FocusedStream({
         Ganham opacidade cheia no hover / foco.
       */}
       <div className="absolute right-3 top-3 flex items-center gap-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover/stream:opacity-100">
+        {onParar ? (
+          <StreamAction label="Parar de ver esta tela" onClick={onParar} danger>
+            <AetherIcon name="screen-stop" className="h-[18px] w-[18px]" />
+          </StreamAction>
+        ) : null}
+
         <StreamAction label="Minimizar (ver a grade)" onClick={onMinimizar}>
           <AetherIcon name="chevron" className="h-[18px] w-[18px] -rotate-90" />
         </StreamAction>
@@ -307,6 +333,7 @@ function FocusedStream({
           onTogglePin={onTogglePin}
           onPip={() => void togglePip()}
           onFullscreen={() => void toggleFullscreen()}
+          onParar={onParar}
         />
       ) : null}
     </div>
@@ -328,6 +355,7 @@ function MenuFlutuante({
   onTogglePin,
   onPip,
   onFullscreen,
+  onParar,
 }: {
   x: number;
   y: number;
@@ -338,6 +366,7 @@ function MenuFlutuante({
   onTogglePin: () => void;
   onPip: () => void;
   onFullscreen: () => void;
+  onParar?: () => void;
 }) {
   const roomControls = useRealtimeStore((state) => state.roomControls);
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
@@ -464,6 +493,27 @@ function MenuFlutuante({
         <AetherIcon name="maximize" className="h-4 w-4" />
         Tela cheia
       </button>
+
+      {onParar ? (
+        <>
+          <div className="my-1 border-t border-line" />
+          <button
+            type="button"
+            role="menuitem"
+            className={cn(
+              item,
+              "text-signal-dnd hover:bg-signal-dnd/10 hover:text-signal-dnd",
+            )}
+            onClick={() => {
+              onParar();
+              onClose();
+            }}
+          >
+            <AetherIcon name="screen-stop" className="h-4 w-4" />
+            Parar de ver esta tela
+          </button>
+        </>
+      ) : null}
     </div>,
     document.body,
   );
@@ -531,11 +581,13 @@ function StreamAction({
   label,
   onClick,
   active,
+  danger,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
+  danger?: boolean;
 }) {
   return (
     <button
@@ -545,9 +597,11 @@ function StreamAction({
       aria-label={label}
       className={cn(
         "grid h-9 w-9 place-items-center rounded-md border backdrop-blur transition-colors active:scale-95",
-        active
-          ? "border-accent-600/60 bg-accent-600/25 text-accent-300"
-          : "border-line-strong bg-base-900/80 text-ink-200 hover:bg-base-800 hover:text-ink-100",
+        danger
+          ? "border-signal-dnd/45 bg-signal-dnd/15 text-signal-dnd hover:bg-signal-dnd/25"
+          : active
+            ? "border-accent-600/60 bg-accent-600/25 text-accent-300"
+            : "border-line-strong bg-base-900/80 text-ink-200 hover:bg-base-800 hover:text-ink-100",
       )}
     >
       {children}

@@ -125,6 +125,12 @@ export interface VoiceRoomHandle {
   /** volume do audio que vem junto dos compartilhamentos de tela (0..1) */
   setScreenAudioVolume: (volume: number) => void;
   /**
+   * Identidades cujo audio de tela pode tocar — as que a pessoa aceitou
+   * assistir. O audio de tela chega pelo SFU e fica anexado mudo ate a
+   * identidade entrar nesta lista; quem sai dela volta a ficar mudo.
+   */
+  definirTelasOuvidas: (userIds: string[]) => void;
+  /**
    * Volume de saida global (0..2). Multiplica TUDO que chega — mic e tela —
    * sobre o volume relativo de cada fonte. Ate 1.0 e o `element.volume` de
    * sempre; acima, a fonte e mutada e sai por um `GainNode` proprio.
@@ -539,7 +545,13 @@ export async function connectVoiceRoom({
     const relativo = isScreen
       ? screenVolume
       : (userVolumes.get(identity) ?? DEFAULT_VOLUME);
-    const efetivo = deafened ? 0 : outputVolume * relativo;
+    /**
+     * Audio de tela so sai depois do "Assistir". Antes disso o elemento fica
+     * anexado e tocando MUDO (autoplay permite): assim que a identidade entra
+     * em `telasOuvidas`, uma reaplicacao aqui destrava o som na hora.
+     */
+    const liberado = !isScreen || telasOuvidas.has(identity);
+    const efetivo = deafened || !liberado ? 0 : outputVolume * relativo;
 
     if (efetivo > 1) {
       const estagio = conectarGanho(element);
@@ -560,7 +572,7 @@ export async function connectVoiceRoom({
     }
 
     desconectarGanho(element);
-    element.muted = deafened;
+    element.muted = deafened || !liberado;
     element.volume = paraElemento(efetivo);
   }
 
@@ -573,6 +585,17 @@ export async function connectVoiceRoom({
 
   /** Compartilhamentos remotos ativos, por identidade do participante. */
   const screenShares = new Map<string, RemoteScreenShare>();
+
+  /**
+   * Identidades cujo AUDIO de tela a pessoa liberou (aceitou o convite).
+   *
+   * O video ja so aparece depois do "Assistir" — a interface e quem decide
+   * onde desenhar. O audio nao passava por essa porta: chegava pelo SFU e
+   * tocava sozinho, entao quem so queria conversar ouvia o jogo/musica de
+   * quem transmitia sem ter pedido. Aqui o audio de tela nasce MUDO e so sai
+   * quando a identidade entra neste conjunto (via `definirTelasOuvidas`).
+   */
+  const telasOuvidas = new Set<string>();
 
   function publishScreenShares() {
     callbacks.onScreenSharesChange([...screenShares.values()]);
@@ -669,7 +692,11 @@ export async function connectVoiceRoom({
         desconectarGanho(element);
         element.remove();
       }
-      if (screenShares.delete(participant.identity)) publishScreenShares();
+      if (screenShares.delete(participant.identity)) {
+        publishScreenShares();
+        // Parou de transmitir: se recomecar, o audio volta a pedir "Assistir".
+        telasOuvidas.delete(participant.identity);
+      }
       if (cameras.delete(participant.identity)) publishCameras();
     },
   );
@@ -681,6 +708,7 @@ export async function connectVoiceRoom({
       element.remove();
     }
     attachedAudio.delete(participant.identity);
+    telasOuvidas.delete(participant.identity);
     if (screenShares.delete(participant.identity)) publishScreenShares();
     // Quem saiu leva a camera junto — senao o bloco dele ficaria com um
     // quadro congelado de alguem que nao esta mais na sala.
@@ -1049,6 +1077,30 @@ export async function connectVoiceRoom({
       for (const [identity, bucket] of attachedAudio) {
         for (const element of bucket.screen) {
           applyVolume(element, identity, true);
+        }
+      }
+    },
+
+    definirTelasOuvidas(userIds) {
+      const antes = new Set(telasOuvidas);
+      telasOuvidas.clear();
+      for (const id of userIds) telasOuvidas.add(id);
+      // Destrava (ou remuta) o audio de tela que ja esta anexado.
+      for (const [identity, bucket] of attachedAudio) {
+        for (const element of bucket.screen) {
+          applyVolume(element, identity, true);
+          /**
+           * Acabou de ser liberado: se o autoplay mudo tinha sido barrado, o
+           * elemento nem esta tocando — o clique em "Assistir" e um gesto bom
+           * para (re)iniciar.
+           */
+          if (
+            !antes.has(identity) &&
+            telasOuvidas.has(identity) &&
+            element.paused
+          ) {
+            void element.play().catch(() => undefined);
+          }
         }
       }
     },
