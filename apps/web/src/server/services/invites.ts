@@ -27,7 +27,7 @@ export type InviteMotivoInvalido =
   | "esgotado";
 
 const MENSAGEM: Record<InviteMotivoInvalido, string> = {
-  inexistente: "Convite invalido.",
+  inexistente: "Convite invalido ou nao encontrado.",
   revogado: "Este convite nao esta mais disponivel.",
   expirado: "Este convite expirou.",
   esgotado: "Este convite atingiu o limite de usos.",
