@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { SeloPlano } from "@/components/ui/selo-plano";
+import { SeloBot } from "@/components/ui/selo-bot";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageItem } from "./message-item";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
@@ -102,6 +103,7 @@ export function MessageGroup({
         >
           {grupo.autor.displayName}
         </button>
+        <SeloBot kind={grupo.autor.kind} />
         <SeloPlano tier={grupo.autor.plano} tamanho="sm" />
         <time
           dateTime={primeira.createdAt}

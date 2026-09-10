@@ -42,7 +42,7 @@ async function confirmOwnerPassword(
     where: { id: userId },
     select: { passwordHash: true },
   });
-  if (!actor) return false;
+  if (!actor || !actor.passwordHash) return false;
   return verifyPassword(password, actor.passwordHash);
 }
 

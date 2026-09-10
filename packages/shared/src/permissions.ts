@@ -66,6 +66,18 @@ export const Permission = {
    * tela. Sem ele, o botao nasceria sem ninguem que pudesse usa-lo.
    */
   CAMERA: 1n << 20n,
+  /**
+   * Usar `@everyone` / `@here` para notificar o canal inteiro de uma vez.
+   *
+   * Declarada na fundacao da Developer Platform (Etapa 3): um bot ou webhook
+   * NAO deve poder notificar todo mundo so por ter um token. AINDA NAO HA
+   * comportamento — nao ha parsing de `@everyone` em lugar nenhum. Este bit so
+   * existe para que, quando o parsing entrar, a regra ja tenha onde morar.
+   *
+   * Nasce em NENHUM template de cargo: dono e portador de `ADMINISTRATOR` ja
+   * passam pelo curto-circuito de `has()`; o resto so ganha se um admin marcar.
+   */
+  MENTION_EVERYONE: 1n << 21n,
 } as const;
 
 export type PermissionKey = keyof typeof Permission;
@@ -124,6 +136,11 @@ export const PERMISSION_METADATA: Record<
   MANAGE_MESSAGES: {
     label: "Gerenciar mensagens",
     description: "Excluir mensagens de outros usuarios.",
+    group: "canais",
+  },
+  MENTION_EVERYONE: {
+    label: "Mencionar @everyone",
+    description: "Usar @everyone e @here para notificar o canal inteiro.",
     group: "canais",
   },
   CONNECT: {

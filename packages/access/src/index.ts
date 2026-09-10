@@ -1,4 +1,5 @@
 export * from "./block";
+export * from "./bot-token";
 export * from "./channels";
 // Um `export` por ARQUIVO, nunca pela pasta.
 //

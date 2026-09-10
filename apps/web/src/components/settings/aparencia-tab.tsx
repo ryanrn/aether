@@ -199,6 +199,7 @@ function Preview({ user }: { user: PublicUser }) {
     displayName: "Aether",
     avatarUrl: null,
     status: "ONLINE",
+    kind: "HUMAN",
     plano: "FREE",
     moldura: null,
     decoracao: null,

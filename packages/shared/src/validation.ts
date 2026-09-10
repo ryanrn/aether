@@ -23,6 +23,18 @@ export const displayNameSchema = z
   .min(1, "Nome de exibicao obrigatorio")
   .max(32, "Nome de exibicao pode ter no maximo 32 caracteres");
 
+/** Developer Platform: nome e descricao de uma `Application`. */
+export const appNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Nome do aplicativo obrigatorio")
+  .max(48, "Nome pode ter no maximo 48 caracteres");
+
+export const appDescricaoSchema = z
+  .string()
+  .trim()
+  .max(400, "Descricao pode ter no maximo 400 caracteres");
+
 /**
  * Bio do perfil global. Curta de proposito — e um cartao, nao uma pagina. Vazia
  * APAGA (volta a nulo), entao string vazia e valida. Quebra de linha passa;

@@ -72,6 +72,7 @@ export default async function ChannelPage({
     displayName: context.session.user.displayName,
     avatarUrl: context.session.user.avatarUrl,
     status: context.session.user.status,
+    kind: context.session.user.kind,
     plano: context.session.user.plano,
     moldura: context.session.user.moldura,
     decoracao: context.session.user.decoracao,

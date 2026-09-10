@@ -25,12 +25,30 @@ export function isUserStatus(value: unknown): value is UserStatus {
 
 export type ChannelType = "TEXT" | "VOICE";
 
+/**
+ * O que a linha `User` representa. `HUMAN` e o normal; `BOT` e a identidade de
+ * uma `Application`; `WEBHOOK` existe so para ser autor de mensagem de webhook.
+ * Viaja no `PublicUser` para o chat e a lista de membros marcarem o bot.
+ */
+export type UserKind = "HUMAN" | "BOT" | "WEBHOOK";
+
+export function ehUserKind(v: unknown): v is UserKind {
+  return v === "HUMAN" || v === "BOT" || v === "WEBHOOK";
+}
+
 export interface PublicUser {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
   status: UserStatus;
+  /**
+   * `HUMAN` na esmagadora maioria. `BOT`/`WEBHOOK` fazem a tela desenhar o selo
+   * — mensagem de bot tem de ser reconhecivel na hora. OBRIGATORIO pela mesma
+   * razao do `plano`: campo opcional seria esquecido em silencio num `select` e
+   * o bot apareceria disfarcado de gente numa tela so.
+   */
+  kind: UserKind;
   /**
    * O plano JA RESOLVIDO — vencimento aplicado, pronto para desenhar.
    *
@@ -83,6 +101,8 @@ export interface UserRow {
   displayName: string;
   avatarUrl: string | null;
   status: string;
+  /** `User.kind` cru do enum do Postgres — `toPublicUser` estreita. */
+  kind: string;
   /**
    * O mesmo avatar parado, quando o enviado e animado. Nulo se nunca houve
    * animacao — ai `avatarUrl` ja e a versao parada.
@@ -119,6 +139,7 @@ export const SELECT_USUARIO_PUBLICO = {
   avatarUrl: true,
   avatarEstaticoUrl: true,
   status: true,
+  kind: true,
   molduraId: true,
   /**
    * A decoracao equipada — so os quatro campos que `decoracaoEfetiva` precisa.
@@ -174,6 +195,8 @@ export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser
      * tomava com o autor.
      */
     status: isUserStatus(row.status) ? row.status : "OFFLINE",
+    /** Desconhecido vira `HUMAN` — o mesmo cuidado do `status`. */
+    kind: ehUserKind(row.kind) ? row.kind : "HUMAN",
     plano,
     /**
      * Resolvida contra o plano JA calculado acima — e nao contra o tier cru da

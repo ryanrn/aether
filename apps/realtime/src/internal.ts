@@ -6,6 +6,7 @@ import { room, SELECT_USUARIO_PUBLICO, toPublicUser } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { env } from "./env";
 import { resyncEavisarServidor } from "./rooms";
+import { enviarMensagem } from "./enviar-mensagem";
 import type { AetherServer } from "./types";
 import {
   countInChannel,
@@ -65,13 +66,18 @@ function secretMatches(provided: string | undefined): boolean {
   return timingSafeEqual(a, b);
 }
 
-function readJsonBody(request: IncomingMessage): Promise<unknown> {
+function readJsonBody(
+  request: IncomingMessage,
+  limite = 4096,
+): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let raw = "";
     request.on("data", (chunk) => {
       raw += chunk;
-      // Nada legitimo aqui passa de alguns bytes; corta payload absurdo.
-      if (raw.length > 4096) reject(new Error("payload grande demais"));
+      // Nada legitimo aqui passa disto; corta payload absurdo. O padrao serve
+      // aos avisos curtos; `/internal/send-message` passa um limite maior (uma
+      // mensagem vai a 4000 chars).
+      if (raw.length > limite) reject(new Error("payload grande demais"));
     });
     request.on("end", () => {
       try {
@@ -459,6 +465,64 @@ export async function handleInternalRequest(
       json(response, 200, { ok: true, atualizado: true });
     } catch (error) {
       log.error("gateway.internal.profile_changed", "/internal/profile-changed falhou", {
+        err: error,
+      });
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /**
+   * Publica uma mensagem no lugar de um ator — hoje só a REST v1 de bots
+   * (`POST /api/v1/channels/:id/messages`), que roda na Vercel e nao tem o `io`
+   * deste processo. O gateway continua sendo o UNICO que escreve mensagem:
+   * `enviarMensagem` e o mesmo caminho do `message:send` humano, com a mesma
+   * autorizacao (`autorizarConversa` -> `loadMemberAccess` do bot -> permissao
+   * de canal).
+   */
+  if (request.url === "/internal/send-message") {
+    try {
+      const body = (await readJsonBody(request, 64 * 1024)) as {
+        atorUserId?: unknown;
+        conversationId?: unknown;
+        content?: unknown;
+        replyToId?: unknown;
+      };
+      if (
+        typeof body.atorUserId !== "string" ||
+        typeof body.conversationId !== "string"
+      ) {
+        json(response, 400, {
+          ok: false,
+          error: "atorUserId e conversationId sao obrigatorios",
+        });
+        return true;
+      }
+
+      /**
+       * Leitura FRESCA do silenciamento — diferente do socket, que usa o
+       * snapshot do handshake. Um bot silenciado agora nao publica.
+       */
+      const ator = await prisma.user.findUnique({
+        where: { id: body.atorUserId },
+        select: { id: true, silenciadoEm: true, silenciadoAte: true },
+      });
+      if (!ator) {
+        json(response, 404, { ok: false });
+        return true;
+      }
+
+      const resultado = await enviarMensagem(io, {
+        ator,
+        conversationId: body.conversationId,
+        content: body.content,
+        replyToId: body.replyToId,
+        nonce: null,
+        origem: "api",
+      });
+      json(response, 200, resultado);
+    } catch (error) {
+      log.error("gateway.internal.send_message", "/internal/send-message falhou", {
         err: error,
       });
       json(response, 500, { ok: false });

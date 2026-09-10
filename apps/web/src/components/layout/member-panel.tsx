@@ -11,6 +11,7 @@ import type {
 } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
+import { SeloBot } from "@/components/ui/selo-bot";
 import { MemberRolesModal } from "@/components/members/member-roles-modal";
 import {
   UserActivityCard,
@@ -405,6 +406,7 @@ function MemberRow({
           >
             {member.nickname ?? member.user.displayName}
           </span>
+          <SeloBot kind={member.user.kind} />
           <SeloPlano tier={member.user.plano} tamanho="sm" />
         </button>
 

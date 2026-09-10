@@ -33,7 +33,11 @@ export type AuditAction =
   | "member.unban"
   | "member.move"
   | "member.mute"
-  | "member.nickname";
+  | "member.nickname"
+  | "bot.install"
+  | "bot.uninstall"
+  | "webhook.create"
+  | "webhook.revoke";
 
 export async function writeAudit(params: {
   serverId: string;

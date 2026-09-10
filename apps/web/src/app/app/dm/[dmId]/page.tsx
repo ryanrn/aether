@@ -56,6 +56,7 @@ export default async function DmPage({
     displayName: session.user.displayName,
     avatarUrl: session.user.avatarUrl,
     status: session.user.status,
+    kind: session.user.kind,
     plano: session.user.plano,
     moldura: session.user.moldura,
     decoracao: session.user.decoracao,

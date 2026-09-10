@@ -100,7 +100,11 @@ export async function loadSession(
     session.expiresAt.getTime() < Date.now() ||
     // o portador precisa apontar para o dono real da linha: sem isso, um
     // token antigo continuaria valendo se a linha fosse reaproveitada.
-    session.userId !== expectedUserId
+    session.userId !== expectedUserId ||
+    // Identidade sem e-mail = `kind` BOT/WEBHOOK. Elas nunca tem sessao (nao
+    // logam), entao uma linha `Session` apontando para uma delas so pode ser
+    // lixo. Recusar aqui tambem estreita `email` para `string` abaixo.
+    session.user.email === null
   ) {
     return null;
   }

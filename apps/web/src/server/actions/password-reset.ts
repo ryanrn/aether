@@ -100,7 +100,9 @@ export async function requestPasswordResetAction(
   const { html, texto } = emailDeRedefinicao(link, user.displayName);
 
   const envio = await enviarEmail({
-    para: user.email,
+    // A linha foi achada POR `alvo` (o e-mail): `user.email` e sempre igual a
+    // ele. O `?? alvo` so estreita o tipo agora que `email` e nulavel.
+    para: user.email ?? alvo,
     assunto: "Redefinir sua senha no AETHER",
     html,
     texto,

@@ -104,6 +104,7 @@ export function HomeNavPanel({
     { href: "/app/grupos", label: "Grupos", icone: "gamepad" },
     { href: "/app/olimpo", label: "Olimpo", icone: "crown", tom: "text-amber-300" },
     { href: "/app/explorar", label: "Explorar comunidades", icone: "compass" },
+    { href: "/app/developers", label: "Desenvolvedores", icone: "key" },
   ];
 
   return (

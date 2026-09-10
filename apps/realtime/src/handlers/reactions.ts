@@ -3,7 +3,7 @@ import { emojiSchema, room, type PublicReaction } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
-import { autorizarConversa } from "./messages";
+import { autorizarConversa } from "../enviar-mensagem";
 
 /**
  * Reacoes de emoji nas mensagens.

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { log } from "@aether/shared/log";
+import type { SendMessageAck } from "@aether/shared";
 
 /**
  * Avisos do app web para o gateway.
@@ -56,6 +57,50 @@ async function callInternal(
       err: error,
       aviso: errorLabel,
     });
+  }
+}
+
+/**
+ * Publica uma mensagem PELO gateway, no lugar de um ator.
+ *
+ * Hoje so a REST v1 de bots (`POST /api/v1/channels/:id/messages`): ela roda
+ * na Vercel, sem o `io` do gateway, e o gateway continua sendo o unico que
+ * escreve mensagem. Diferente dos outros avisos, esta chamada LE a resposta —
+ * precisa da mensagem criada (ou do motivo da recusa).
+ *
+ * Devolve `null` quando o gateway nao respondeu — a rota traduz em `503`.
+ */
+export async function enviarMensagemPeloGateway(params: {
+  atorUserId: string;
+  conversationId: string;
+  content: string;
+  replyToId?: string;
+}): Promise<SendMessageAck | null> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+
+  try {
+    const response = await fetch(`${GATEWAY_URL}/internal/send-message`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-aether-internal": secret,
+      },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      log.warn("web.gateway_notify.send_message", "gateway recusou o envio", {
+        status: response.status,
+      });
+      return null;
+    }
+    return (await response.json()) as SendMessageAck;
+  } catch (error) {
+    log.warn("web.gateway_notify.send_message", "nao publiquei a mensagem", {
+      err: error,
+    });
+    return null;
   }
 }
 

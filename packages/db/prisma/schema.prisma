@@ -34,12 +34,36 @@ enum OverwriteTarget {
   MEMBER
 }
 
+/// O que uma linha `User` representa.
+///
+/// `HUMAN` e o unico valor ate a Developer Platform: pessoa com login, sessao,
+/// amigos, presenca. `BOT` e a identidade de uma `Application` — sem senha, sem
+/// sessao, entra em servidor como `ServerMember` e age pela API/Gateway.
+/// `WEBHOOK` e a identidade de um `Webhook` — existe SO para ser
+/// `Message.authorId`; nao e membro, nao conecta, nao e mencionavel.
+///
+/// A tabela `User` continua sendo o unico lugar de identidade porque
+/// `Message.authorId`, `ServerMember`, `PublicUser` e o render de mensagem ja
+/// apontam para ela — um ator polimorfico bifurcaria `toPublicMessage` e todo
+/// `select` de autor. As duas buscas por NOME (`friends.ts` add por username,
+/// `auth.ts` login) filtram por `HUMAN` (Etapa 4).
+enum UserKind {
+  HUMAN
+  BOT
+  WEBHOOK
+}
+
 model User {
   id                        String     @id @default(cuid())
   username                  String     @unique
   displayName               String
-  email                     String     @unique
-  passwordHash              String
+  /// `HUMAN` sempre tem e-mail e senha. `BOT`/`WEBHOOK` nunca tem — a
+  /// identidade deles nao loga. Por isso os dois campos viraram nulaveis; a
+  /// coluna `kind` e quem diz qual caso e. `@unique` continua valendo: no
+  /// Postgres varios `NULL` nao colidem.
+  email                     String?    @unique
+  passwordHash              String?
+  kind                      UserKind   @default(HUMAN)
   /// Quando o e-mail foi confirmado. Nulo = nao confirmado — a conta existe e
   /// loga, mas bate numa parede ("confirme seu e-mail") enquanto a flag
   /// `exige_email_verificado` estiver ligada. Ver `@aether/access/verificacao`.
@@ -151,6 +175,12 @@ model User {
   decoracao          Cosmetic?          @relation("UserDecoracao", fields: [decoracaoId], references: [id], onDelete: SetNull)
   banner             Cosmetic?          @relation("UserBanner", fields: [bannerId], references: [id], onDelete: SetNull)
   cosmeticos         UserCosmetic[]
+  /// So quando `kind = BOT`: a `Application` dona desta identidade. Nulo em
+  /// humano e webhook.
+  application        Application?       @relation("AppBot")
+  /// So quando `kind = WEBHOOK`: o `Webhook` que esta identidade serve. Nulo
+  /// em humano e bot.
+  webhook            Webhook?
 
   @@index([status])
 }
@@ -294,13 +324,14 @@ model Server {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members    ServerMember[]
-  roles      Role[]
-  categories Category[]
-  channels   Channel[]
-  invites    Invite[]
-  bans       Ban[]
-  auditLogs  AuditLog[]
+  members       ServerMember[]
+  roles         Role[]
+  categories    Category[]
+  channels      Channel[]
+  invites       Invite[]
+  bans          Ban[]
+  auditLogs     AuditLog[]
+  installations Installation[]
 
   @@index([ownerId])
   /// A vitrine filtra sempre por publico; sem indice ela varre a tabela.
@@ -414,6 +445,7 @@ model Channel {
 
   messages   Message[]
   overwrites ChannelOverwrite[]
+  webhooks   Webhook[]
 
   @@index([serverId, position])
   @@index([categoryId])
@@ -1197,4 +1229,140 @@ model Denuncia {
   /// "quantas denuncias sobre este alvo" — reincidencia
   @@index([tipo, alvoId])
   @@index([reporterId])
+}
+
+// =============================================================================
+// AETHER Developer Platform — Etapa 3 (fundacao, so o modelo)
+//
+// Nada aqui e usado por codigo ainda. As etapas seguintes ligam: resolucao de
+// token (4), REST v1 (6), instalacao (7), portal (8), Gateway de bot (9/10),
+// webhook (11). O modelo entra primeiro, sozinho, para a migracao ser revisada
+// e aplicada sem nenhum comportamento novo dependendo dela.
+// =============================================================================
+
+/// A aplicacao registrada por um desenvolvedor.
+///
+/// Guarda o lado do DESENVOLVEDOR: dono, descricao, avatar, estado. As
+/// credenciais ficam em `BotToken`; onde o bot pode agir, em `Installation`. A
+/// IDENTIDADE do bot no chat e uma linha `User` (`kind = BOT`), apontada por
+/// `botUserId` — a mesma razao de `Subscription` ser modelo proprio mas
+/// `User.molduraId` ser coluna: lifecycle pesado na tabela propria, a
+/// referencia de hot-path fica no `User`.
+model Application {
+  id        String  @id @default(cuid())
+  /// userId (humano) do dono. Sem FK: registro de "quem criou", nao relacao
+  /// viva — mesmo criterio de `Cosmetic.criadoPor` / `PlanKey.criadaPor`.
+  ownerId   String
+  name      String
+  descricao String?
+  avatarUrl String?
+
+  /// A linha `User` (`kind = BOT`) que e a cara do bot no chat. Nula enquanto
+  /// o bot nao foi habilitado. `onDelete: SetNull` (padrao do Prisma para
+  /// relacao opcional): apagar a identidade nao apaga a Application.
+  botUserId String? @unique
+  bot       User?   @relation("AppBot", fields: [botUserId], references: [id])
+
+  /// A equipe desligou a aplicacao inteira (abuso). Todos os tokens passam a
+  /// recusar; o bot e evitado dos Gateways. Soft — o historico fica.
+  blockedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tokens        BotToken[]
+  installations Installation[]
+
+  @@index([ownerId])
+}
+
+/// Uma credencial da `Application`. Formato `aeb_<appId>.<segredo>`.
+///
+/// O BANCO NUNCA GUARDA O TOKEN EM CLARO — so `sha256(token)`. O `prefixo` (os
+/// primeiros caracteres) e o unico pedaco legivel, so para reconhecer a chave
+/// numa lista. Mesmo desenho de `PlanKey` (codigoHash + prefixo) e do
+/// `PasswordReset`. Mostrado UMA vez, na criacao/rotacao.
+///
+/// Rotacao = nova linha; `revokedAt` na antiga (janela de graca opcional).
+/// Varias linhas vivas convivem durante a troca.
+model BotToken {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// sha256 do token entregue. Unico para o lookup achar a linha em O(1).
+  tokenHash  String @unique
+  /// os ~8 primeiros caracteres, em claro — so para a lista do portal.
+  prefixo    String
+  lastUsedAt DateTime?
+  /// sha256 do ultimo IP que usou — deteccao de uso anomalo sem guardar IP cru.
+  lastIpHash String?
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([applicationId])
+}
+
+/// "Esta aplicacao esta autorizada a atuar neste servidor."
+///
+/// Uma linha valida (`revokedAt IS NULL`) e o que faz um bot instalado ser
+/// `ServerMember` do servidor — e so por isso `loadMemberAccess` devolve
+/// acesso. Token valido SEM `Installation` para o servidor => `loadMemberAccess`
+/// nulo => 404. Servidor Y nao alcancado por ter um token de app instalado no
+/// servidor X.
+model Installation {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  serverId      String
+  server        Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  /// userId (humano) que autorizou a instalacao. Sem FK — mesmo criterio de
+  /// `Cosmetic.criadoPor`.
+  installedBy String
+  /// Categorias de evento que a instalacao recebe no Gateway. Primeiro array
+  /// do schema; Postgres nativo (`text[]`). Etapa 10 so entende `["messages"]`.
+  scopes      String[] @default(["messages"])
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  /// Um app instala UMA vez por servidor.
+  @@unique([applicationId, serverId])
+  @@index([serverId])
+}
+
+/// Um webhook de ENTRADA: `POST /api/v1/webhooks/:id/:token` publica uma
+/// mensagem no canal fixado aqui. O destino (canal, e portanto servidor) e
+/// desta linha — o cliente do webhook nunca escolhe `serverId`/`channelId`/
+/// `authorId`.
+///
+/// `Webhook` E a entidade de verdade. `webhookUserId` aponta para uma linha
+/// `User` (`kind = WEBHOOK`) que existe SO para satisfazer `Message.authorId`
+/// — sem essa linha, publicar uma mensagem de webhook exigiria `authorId`
+/// nulavel e um branch em `toPublicMessage` (o fork que a Etapa 2 recusou).
+/// Nome/avatar por mensagem (a la Discord) fica para depois, como colunas
+/// aditivas em `Message`.
+model Webhook {
+  id        String  @id @default(cuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  /// A linha `User kind=WEBHOOK`. Criada e destruida junto com o Webhook.
+  webhookUserId String @unique
+  webhookUser   User    @relation(fields: [webhookUserId], references: [id], onDelete: Cascade)
+
+  name      String
+  avatarUrl String?
+
+  /// sha256 do token que vai na URL. `id` e publico, o token e o segredo.
+  tokenHash String @unique
+  /// userId (humano) que criou. Sem FK — mesmo criterio de `Cosmetic.criadoPor`.
+  creatorId String
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([channelId])
 }

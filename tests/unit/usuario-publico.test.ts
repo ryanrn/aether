@@ -22,6 +22,7 @@ const BASE: UserRow = {
   avatarUrl: null,
   avatarEstaticoUrl: null,
   status: "ONLINE",
+  kind: "HUMAN",
   molduraId: null,
   decoracao: null,
   assinatura: null,

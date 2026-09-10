@@ -211,8 +211,22 @@ export type JoinServerAck =
 /** Quantas mensagens o historico devolve por pagina. */
 export const MESSAGE_PAGE_SIZE = 50;
 
+/**
+ * Por que um envio foi recusado — para quem chama traduzir sem casar no texto.
+ * O socket ignora (mostra `error`); a REST v1 de bots mapeia para status HTTP.
+ * Opcional: as recusas de borda do handler (payload, rate limit) nao setam.
+ */
+export type CodigoDeRecusaDeEnvio =
+  | "silenciado"
+  | "invalida"
+  | "nao_encontrada"
+  | "canal_de_voz"
+  | "anexos"
+  | "falha";
+
 export type SendMessageAck =
-  { ok: true; message: PublicMessage } | { ok: false; error: string };
+  | { ok: true; message: PublicMessage }
+  | { ok: false; error: string; codigo?: CodigoDeRecusaDeEnvio };
 
 export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }

@@ -9,10 +9,12 @@ import { RolesTab } from "./roles-tab";
 import { MembersTab } from "./members-tab";
 import { BansTab } from "./bans-tab";
 import { AuditTab } from "./audit-tab";
+import { WebhooksTab } from "./webhooks-tab";
 import type { ServerBan } from "@/server/services/moderation";
 import type { AuditEntry } from "@/server/services/audit-log";
+import type { WebhookNaLista } from "@/server/services/webhooks";
 
-type Tab = "geral" | "cargos" | "membros" | "banimentos" | "registro";
+type Tab = "geral" | "cargos" | "membros" | "banimentos" | "registro" | "webhooks";
 
 export function SettingsTabs({
   serverId,
@@ -24,6 +26,8 @@ export function SettingsTabs({
   viewer,
   bans,
   audit,
+  webhooks,
+  canaisDeTexto,
   cargoPorJogo,
   salasDeGrupo,
 }: {
@@ -36,6 +40,8 @@ export function SettingsTabs({
   viewer: ViewerContext;
   bans: ServerBan[];
   audit: { entries: AuditEntry[]; hasMore: boolean };
+  webhooks: WebhookNaLista[];
+  canaisDeTexto: { id: string; name: string }[];
   cargoPorJogo: boolean;
   salasDeGrupo: boolean;
 }) {
@@ -49,6 +55,7 @@ export function SettingsTabs({
     { id: "cargos", label: "Cargos", enabled: canManageRoles },
     { id: "membros", label: "Membros", enabled: canManageRoles },
     { id: "banimentos", label: "Banimentos", enabled: canBanMembers },
+    { id: "webhooks", label: "Webhooks", enabled: canManageServer },
     { id: "registro", label: "Registro", enabled: canViewAudit },
   ];
 
@@ -112,6 +119,14 @@ export function SettingsTabs({
 
       {active === "banimentos" && canBanMembers ? (
         <BansTab serverId={serverId} bans={bans} />
+      ) : null}
+
+      {active === "webhooks" && canManageServer ? (
+        <WebhooksTab
+          serverId={serverId}
+          webhooks={webhooks}
+          canaisDeTexto={canaisDeTexto}
+        />
       ) : null}
 
       {active === "registro" && canViewAudit ? (

@@ -77,7 +77,14 @@ export async function sendFriendRequestAction(
      * sabe como a pessoa cadastrou. O banco guarda como foi escrito.
      */
     const outro = await prisma.user.findFirst({
-      where: { username: { equals: alvo, mode: "insensitive" } },
+      /**
+       * `kind: "HUMAN"` — bot e webhook tem username (para @mencao) mas NAO
+       * sao "alguem" a quem se manda pedido de amizade. Sem o filtro, o pedido
+       * ficaria PENDING para sempre. Unica porta de descoberta por nome; as
+       * outras (DM, pedido por servidor em comum) ja fecham pelos defaults
+       * `allowServerDms`/`allowServerFriendRequests` da identidade.
+       */
+      where: { username: { equals: alvo, mode: "insensitive" }, kind: "HUMAN" },
       select: { id: true, username: true },
     });
     if (!outro) return fail("Nao existe ninguem com esse nome.", "username");

@@ -149,10 +149,11 @@ export async function registerAction(
         aceitouTermosEm: new Date(),
         termosVersao: VERSAO_DOS_TERMOS,
       },
-      select: { id: true, email: true, displayName: true },
+      select: { id: true, displayName: true },
     });
 
-    await iniciarVerificacaoDeEmail(user);
+    // `email` e o do formulario (nao-nulo), o mesmo que acabou de ser gravado.
+    await iniciarVerificacaoDeEmail({ ...user, email });
     await createSession(user.id);
   } catch (error) {
     return toActionError(error);
@@ -202,6 +203,10 @@ export async function loginAction(
       await verifyPassword(parsed.data.password, "scrypt$16384$8$1$AAAA$AAAA");
       return invalid;
     }
+
+    // Conta sem hash de senha (identidade de bot/webhook) nao loga. Mesma
+    // resposta generica — nao revelamos que o nome existe.
+    if (!user.passwordHash) return invalid;
 
     const valid = await verifyPassword(parsed.data.password, user.passwordHash);
     if (!valid) return invalid;

@@ -28,6 +28,7 @@ import {
 import { socketsAcimaDoTeto } from "./socket-cap";
 import { redisClients } from "./redis-client";
 import { handleInternalRequest } from "./internal";
+import { registrarBotGateway } from "./bot-gateway";
 import { startSessionGuard } from "./session-guard";
 import { iniciarSpotifyPoller } from "./spotify/poller";
 import type { AetherServer, AetherSocket } from "./types";
@@ -133,6 +134,13 @@ const io: AetherServer = new Server(httpServer, {
 if (redisClients) {
   io.adapter(createAdapter(redisClients.pub, redisClients.sub));
 }
+
+/**
+ * Bot Gateway — o namespace `/gateway` onde os bots recebem eventos. Tem o
+ * proprio handshake (bot token) e os proprios handlers; nao encosta no
+ * namespace default do app humano.
+ */
+registrarBotGateway(io);
 
 /**
  * Porta de entrada unica: ninguem passa daqui sem sessao valida.

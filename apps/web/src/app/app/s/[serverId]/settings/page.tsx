@@ -7,6 +7,7 @@ import { requireMember } from "@/server/guards";
 import { getServerContext } from "@/server/services/servers";
 import { listActiveBans } from "@/server/services/moderation";
 import { listAuditLog } from "@/server/services/audit-log";
+import { listarWebhooks } from "@/server/services/webhooks";
 import { viewerCan } from "@/lib/permissions";
 import { SettingsTabs } from "@/components/server-settings/settings-tabs";
 
@@ -83,7 +84,19 @@ export default async function ServerSettingsPage({
   const audit = viewerCan(viewer, "VIEW_AUDIT_LOG")
     ? await listAuditLog(serverId)
     : { entries: [], hasMore: false };
+
+  const webhooks = viewerCan(viewer, "MANAGE_SERVER")
+    ? await listarWebhooks(serverId)
+    : [];
   if (!data) notFound();
+
+  // Canais de texto para o seletor do webhook — dos que o gestor enxerga.
+  const canaisDeTexto = [
+    ...data.looseChannels,
+    ...data.categories.flatMap((c) => c.channels),
+  ]
+    .filter((c) => c.type === "TEXT")
+    .map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -114,6 +127,8 @@ export default async function ServerSettingsPage({
             viewer={viewer}
             bans={bans}
             audit={audit}
+            webhooks={webhooks}
+            canaisDeTexto={canaisDeTexto}
             cargoPorJogo={data.cargoPorJogo}
             salasDeGrupo={data.salasDeGrupo}
           />
