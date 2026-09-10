@@ -10,8 +10,16 @@ import type { UserStatus } from "@aether/shared";
  * (igual a um `<Avatar px>` normal), entao trocar `<Avatar>` por este nao mexe
  * em espacamento nenhum. A arte da decoracao TRANSBORDA esse quadrado: ela e
  * desenhada num canvas de 512 cujo miolo (Ø328 = 64,06%) e a foto, entao a
- * camada ocupa 156% da footprint (`-28%` de cada lado) para o miolo cair
- * exatamente sobre a foto.
+ * camada ocupa 156% da footprint e fica CENTRADA (transform), para o miolo
+ * cair exatamente sobre a foto — os ~28% que sobram de cada lado sao a arte
+ * que abraca o avatar.
+ *
+ * CENTRAGEM POR TRANSFORM, e nao `inset:-28%`: um `<img>` e elemento
+ * SUBSTITUIDO. Com `position:absolute` e os quatro lados fixos mas sem
+ * `width`/`height`, o navegador usa o TAMANHO INTRINSECO da imagem e ancora no
+ * canto — a decoracao saia enorme e jogada para um lado (bug relatado). Com
+ * `w`/`h` explicitos + `translate(-50%,-50%)` ela fica do tamanho certo e no
+ * centro, sempre.
  *
  * Quem clipa (`overflow:hidden` num ancestral) corta a decoracao — os poucos
  * lugares assim precisam de folga (ver o cartao de perfil).
@@ -25,8 +33,6 @@ export interface DecoracaoDeAvatar {
 
 /** Quanto da largura da ARTE a foto ocupa — a spec (Ø328 / 512). */
 export const FOTO_NA_DECORACAO = 0.6406;
-/** Quanto a arte transborda a footprint de cada lado, para o miolo bater. */
-const TRANSBORDO = "-28%";
 
 export function AvatarDecorado({
   decoracao,
@@ -57,8 +63,13 @@ export function AvatarDecorado({
   ring?: string;
   speaking?: boolean;
 }) {
-  const camada = "pointer-events-none absolute object-contain";
-  const inset = { inset: TRANSBORDO } as const;
+  /**
+   * 156,1% da footprint (= 1 / 0,6406, para o miolo Ø328 da arte cair exato
+   * sobre a foto), centrada no ponto medio. `object-contain` mantem a
+   * proporcao da arte (quadrada, na spec) dentro dessa caixa.
+   */
+  const camada =
+    "pointer-events-none absolute left-1/2 top-1/2 h-[156.1%] w-[156.1%] -translate-x-1/2 -translate-y-1/2 object-contain";
 
   return (
     <div
@@ -67,7 +78,7 @@ export function AvatarDecorado({
     >
       {decoracao.trasUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={decoracao.trasUrl} alt="" aria-hidden className={camada} style={inset} />
+        <img src={decoracao.trasUrl} alt="" aria-hidden className={camada} />
       ) : null}
 
       <Avatar
@@ -88,7 +99,6 @@ export function AvatarDecorado({
         alt=""
         aria-hidden
         className={cn(camada, "z-20")}
-        style={inset}
       />
     </div>
   );
