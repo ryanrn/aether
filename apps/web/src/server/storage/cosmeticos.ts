@@ -5,6 +5,8 @@ import {
   COSMETIC_ASSET_MAX_BYTES,
   COSMETIC_MIME_TYPES,
   COSMETIC_REGRAS,
+  DECORACAO_ALVO_FURO,
+  DECORACAO_CANVAS,
   PASTA_DO_COSMETICO,
   type CosmeticMimeType,
   type CosmeticType,
@@ -150,6 +152,157 @@ async function gerarThumb(bytes: Uint8Array): Promise<Uint8Array | null> {
   }
 }
 
+/**
+ * NORMALIZA uma decoracao para a geometria canonica (ver `DECORACAO_ALVO_FURO`
+ * em `@aether/shared`). Toda decoracao sai daqui como PNG 512x512 que:
+ *
+ *  - SANGRA nas 4 bordas (a folga transparente em volta foi recortada);
+ *  - tem o furo transparente central em ~`DECORACAO_ALVO_FURO` do lado.
+ *
+ * Assim o `<AvatarDecorado>` usa uma escala fixa e toda decoracao abraca a
+ * foto do mesmo jeito, sem depender de a arte ter vindo na medida certa.
+ *
+ * A camada de TRAS recebe a MESMA transformacao geometrica da frente (as duas
+ * sao desenhadas centradas no mesmo canvas), para continuarem alinhadas.
+ *
+ * Falha aqui NAO derruba o envio: cai no fluxo antigo com os bytes originais.
+ */
+async function normalizarDecoracao(
+  frenteBytes: Uint8Array,
+  trasBytes: Uint8Array | null,
+): Promise<{ frente: Uint8Array; tras: Uint8Array | null } | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const N = DECORACAO_CANVAS;
+
+    /** bbox da arte opaca, em fracao [0..1], robusta a pixels quase-transparentes */
+    const bboxOpaca = async (buf: Uint8Array) => {
+      const S = 96;
+      const { data } = await sharp(buf)
+        .resize(S, S, { fit: "fill" })
+        .ensureAlpha()
+        .extractChannel(3)
+        .blur(1.2)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let minX = S;
+      let minY = S;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          if (data[y * S + x]! > 28) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < 0) return null;
+      return { minX: minX / S, minY: minY / S, maxX: (maxX + 1) / S, maxY: (maxY + 1) / S };
+    };
+
+    /** raio radial minimo (fracao do lado) do centro ate a arte opaca = o furo */
+    const furoRatio = async (buf: Uint8Array) => {
+      const S = 128;
+      const { data } = await sharp(buf)
+        .resize(S, S, { fit: "fill" })
+        .ensureAlpha()
+        .extractChannel(3)
+        .blur(1.5)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const c = S / 2;
+      let rmin = Infinity;
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          if (data[y * S + x]! > 40) {
+            const d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
+            if (d < rmin) rmin = d;
+          }
+        }
+      }
+      return Number.isFinite(rmin) ? (2 * rmin) / S : 1;
+    };
+
+    /** recorta a folga em volta, centra num quadrado e reamostra para N */
+    const sangrar = async (buf: Uint8Array): Promise<Uint8Array> => {
+      const meta = await sharp(buf).metadata();
+      const W = meta.width ?? N;
+      const H = meta.height ?? N;
+      const b = await bboxOpaca(buf);
+      if (!b) return new Uint8Array(await sharp(buf).resize(N, N, { fit: "fill" }).png().toBuffer());
+      const L = Math.max(0, Math.round(b.minX * W) - 2);
+      const T = Math.max(0, Math.round(b.minY * H) - 2);
+      const R = Math.min(W, Math.round(b.maxX * W) + 2);
+      const B = Math.min(H, Math.round(b.maxY * H) + 2);
+      const cw = Math.max(1, R - L);
+      const ch = Math.max(1, B - T);
+      const lado = Math.max(cw, ch);
+      const recorte = await sharp(buf)
+        .extract({ left: L, top: T, width: cw, height: ch })
+        .toBuffer();
+      const quad = await sharp({
+        create: { width: lado, height: lado, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      })
+        .composite([
+          { input: recorte, left: Math.round((lado - cw) / 2), top: Math.round((lado - ch) / 2) },
+        ])
+        .png()
+        .toBuffer();
+      return new Uint8Array(await sharp(quad).resize(N, N).png().toBuffer());
+    };
+
+    /** k a partir do furo medido, com clamp (anel grosso/fino demais nao explode) */
+    const escalaPara = (furo: number) =>
+      Math.min(1.6, Math.max(0.55, DECORACAO_ALVO_FURO / Math.max(0.08, furo)));
+
+    /**
+     * aplica a escala uniforme `k`. Zoom uniforme mexe no furo E na arte juntos:
+     * `furo_novo = furo * k`. k > 1 -> zoom in (corta o excesso na borda);
+     * k < 1 -> zoom out (recompoe com margem transparente).
+     */
+    const aplicarEscala = async (buf: Uint8Array, k: number): Promise<Uint8Array> => {
+      if (Math.abs(k - 1) < 0.02) return buf;
+      const n = Math.max(1, Math.round(N * k));
+      if (k >= 1) {
+        const off = Math.round((n - N) / 2);
+        return new Uint8Array(
+          await sharp(buf).resize(n, n).extract({ left: off, top: off, width: N, height: N }).png().toBuffer(),
+        );
+      }
+      const menor = await sharp(buf).resize(n, n).toBuffer();
+      const off = Math.round((N - n) / 2);
+      return new Uint8Array(
+        await sharp({
+          create: { width: N, height: N, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+        })
+          .composite([{ input: menor, left: off, top: off }])
+          .png()
+          .toBuffer(),
+      );
+    };
+
+    const frenteFull = await sangrar(frenteBytes);
+    const k = escalaPara(await furoRatio(frenteFull));
+
+    const frente = await aplicarEscala(frenteFull, k);
+    let tras: Uint8Array | null = null;
+    if (trasBytes) {
+      // MESMA escala da frente (nao a medida da propria tras, que pode nem ter
+      // furo definido) para as camadas continuarem alinhadas.
+      tras = await aplicarEscala(await sangrar(trasBytes), k);
+    }
+    return { frente, tras };
+  } catch (erro) {
+    log.warn("web.cosmeticos.normalizar", "normalizacao da decoracao falhou", {
+      err: erro,
+    });
+    return null;
+  }
+}
+
 export type UploadCosmeticoResult =
   | {
       ok: true;
@@ -203,30 +356,53 @@ export async function uploadCosmeticAsset(params: {
       : null;
   if (tras && "erro" in tras) return { ok: false, error: tras.erro };
 
+  // Bytes/mime/medida que de fato vao pro R2 — a decoracao passa pela
+  // normalizacao canonica (512x512 PNG, furo padrao); banner segue cru.
+  let frenteBytes: Uint8Array = frente.bytes;
+  let frenteMime: CosmeticMimeType = frente.mime;
+  let frenteLargura = frente.largura;
+  let frenteAltura = frente.altura;
+  let trasBytes: Uint8Array | null = tras ? tras.bytes : null;
+  let trasMime: CosmeticMimeType = tras ? tras.mime : "image/png";
+
+  if (tipo === "DECORATION") {
+    const canon = await normalizarDecoracao(frente.bytes, tras ? tras.bytes : null);
+    if (canon) {
+      frenteBytes = canon.frente;
+      frenteMime = "image/png";
+      frenteLargura = DECORACAO_CANVAS;
+      frenteAltura = DECORACAO_CANVAS;
+      if (tras && canon.tras) {
+        trasBytes = canon.tras;
+        trasMime = "image/png";
+      }
+    }
+  }
+
   const pasta = PASTA_DO_COSMETICO[tipo];
   const hash = createHash("sha256")
-    .update(frente.bytes)
-    .update(tras ? tras.bytes : Buffer.alloc(0))
+    .update(frenteBytes)
+    .update(trasBytes ?? Buffer.alloc(0))
     .digest("hex")
     .slice(0, 8);
 
-  const assetKey = `cosmetics/${pasta}/${slug}-${hash}.${EXT[frente.mime]}`;
+  const assetKey = `cosmetics/${pasta}/${slug}-${hash}.${EXT[frenteMime]}`;
   const assetUrl = await enviarObjeto({
     chave: assetKey,
-    contentType: frente.mime,
-    bytes: frente.bytes,
+    contentType: frenteMime,
+    bytes: frenteBytes,
     cacheControl: CACHE_IMUTAVEL,
   });
   if (!assetUrl) return { ok: false, error: "Falha ao enviar a imagem" };
 
   let assetTrasKey: string | null = null;
   let assetTrasUrl: string | null = null;
-  if (tras && !("erro" in tras)) {
-    assetTrasKey = `cosmetics/${pasta}/${slug}-${hash}-tras.${EXT[tras.mime]}`;
+  if (trasBytes) {
+    assetTrasKey = `cosmetics/${pasta}/${slug}-${hash}-tras.${EXT[trasMime]}`;
     assetTrasUrl = await enviarObjeto({
       chave: assetTrasKey,
-      contentType: tras.mime,
-      bytes: tras.bytes,
+      contentType: trasMime,
+      bytes: trasBytes,
       cacheControl: CACHE_IMUTAVEL,
     });
     if (!assetTrasUrl) {
@@ -236,7 +412,7 @@ export async function uploadCosmeticAsset(params: {
     }
   }
 
-  const thumbBytes = await gerarThumb(frente.bytes);
+  const thumbBytes = await gerarThumb(frenteBytes);
   let thumbKey: string | null = null;
   let thumbUrl: string | null = null;
   if (thumbBytes) {
@@ -254,9 +430,9 @@ export async function uploadCosmeticAsset(params: {
     ok: true,
     assetKey,
     assetUrl,
-    assetMime: frente.mime,
-    largura: frente.largura,
-    altura: frente.altura,
+    assetMime: frenteMime,
+    largura: frenteLargura,
+    altura: frenteAltura,
     assetTrasKey,
     assetTrasUrl,
     thumbKey,

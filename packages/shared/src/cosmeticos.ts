@@ -166,17 +166,17 @@ export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
     ladoMin: 256,
     ladoMax: 4096,
     /**
-     * A geometria vem do renderer (`<AvatarDecorado>`): a camada e desenhada a
-     * 178% da footprint. Com um miolo transparente de Ø288 (56% do lado) a arte
-     * encosta na borda da foto e entra alguns px nela (abraca), e sobra ~39%
-     * para fora de cada lado. Abertura MAIOR que isso -> a decoracao flutua com
-     * folga; a arte tem que SANGRAR ate as 4 bordas do canvas.
+     * O upload NORMALIZA a arte (ver `DECORACAO_ALVO_FURO`): recorta a folga,
+     * reamostra para 512 e reescala ate o furo central virar ~50%. Entao a
+     * arte nao precisa mais bater medida exata — so precisa ser um anel/moldura
+     * mais ou menos centrado, com furo transparente no meio e nada de pixel
+     * solto longe do anel (senao o recorte automatico erra o enquadramento).
      */
     alvo:
-      "quadrada 512x512, PNG/WEBP RGBA. Miolo circular central de Ø288 (56% " +
-      "do lado, centrado) 100% transparente — e onde entra a foto. A decoracao " +
-      "vai desse circulo ate SANGRAR nas 4 bordas do canvas (sem margem " +
-      "transparente em volta). Sem sombra projetada para fora.",
+      "PNG/WEBP RGBA aprox. quadrado (512x512 e o ideal). Anel/moldura " +
+      "centrado com o miolo transparente onde entra a foto; a arte pode ir " +
+      "ate a borda ou passar dela. Sem pixels soltos fora do anel e sem " +
+      "sombra projetada. O upload ajusta o tamanho e o enquadramento.",
   },
   BANNER: {
     ratioMin: 2.6,
@@ -186,6 +186,36 @@ export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
     alvo: "3:1, ~1500x500, PNG ou WEBP",
   },
 };
+
+/**
+ * GEOMETRIA CANONICA DA DECORACAO — o "padrao" que o upload impoe e o
+ * renderer assume.
+ *
+ * Arte de decoracao chega com margem e furo central de tamanhos imprevisiveis
+ * (cada artista/gerador entrega diferente), entao uma escala fixa no renderer
+ * nunca serve pra todas — uma arte abraca a foto, a seguinte flutua com folga.
+ *
+ * Em vez de o `<AvatarDecorado>` adivinhar por arte, o UPLOAD normaliza toda
+ * decoracao para esta forma unica (`normalizarDecoracao` em
+ * `server/storage/cosmeticos.ts`):
+ *
+ *  1. recorta a folga transparente em volta e reamostra para 512x512 — a arte
+ *     passa a SANGRAR nas 4 bordas sempre;
+ *  2. reescala o conteudo ate o furo transparente central virar ~50% do lado
+ *     (`DECORACAO_ALVO_FURO`), venha do tamanho que vier.
+ *
+ * Com isso o renderer usa UMA escala fixa (`DECORACAO_ESCALA`) e toda
+ * decoracao aparece do mesmo tamanho, abracando a foto igual.
+ */
+export const DECORACAO_CANVAS = 512;
+/** fracao do lado que o furo central (onde entra a foto) ocupa apos normalizar */
+export const DECORACAO_ALVO_FURO = 0.5;
+/**
+ * Largura da camada de arte como fracao da footprint do avatar. Com o furo
+ * canonico de 50%, 1,8 poe a borda da foto a ~90% do raio do furo: a arte
+ * entra ~10% na foto (abraca) e sobra ~40% de cada lado para fora.
+ */
+export const DECORACAO_ESCALA = 1.8;
 
 /**
  * A escada de raridade — catalogo em codigo, guardada como id de texto na
