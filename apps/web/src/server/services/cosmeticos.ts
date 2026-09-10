@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma, prisma, type Cosmetic } from "@aether/db";
+import { log } from "@aether/shared/log";
 import {
   COSMETIC_TYPES,
   planoAtende,
@@ -307,17 +308,34 @@ export async function catalogoParaUsuario(
   plano: PlanTier,
   tipo: CosmeticType,
 ): Promise<CosmeticoDeLoja[]> {
-  const [rows, posses, equip] = await Promise.all([
-    prisma.cosmetic.findMany({
-      where: { ativo: true, tipo },
-      orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
-    }),
-    prisma.userCosmetic.findMany({
-      where: { userId, cosmetic: { tipo } },
-      select: { cosmeticId: true },
-    }),
-    cosmeticosEquipados(userId),
-  ]);
+  let rows: Cosmetic[];
+  let posses: { cosmeticId: string }[];
+  let equip: { decoracaoId: string | null; bannerId: string | null };
+  try {
+    [rows, posses, equip] = await Promise.all([
+      prisma.cosmetic.findMany({
+        where: { ativo: true, tipo },
+        orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.userCosmetic.findMany({
+        where: { userId, cosmetic: { tipo } },
+        select: { cosmeticId: true },
+      }),
+      cosmeticosEquipados(userId),
+    ]);
+  } catch (erro) {
+    /**
+     * A loja de um tipo nao pode derrubar a pagina. O caso conhecido: o enum
+     * `CosmeticType` do banco de producao ainda nao tem um valor que o schema
+     * ja declara (drift) — a query estoura com `22P02`. Ate a migracao rodar,
+     * degrada para vazio em vez de 500.
+     */
+    log.warn("web.cosmeticos.catalogo", "catalogo de cosmetico falhou", {
+      err: erro,
+      tipo,
+    });
+    return [];
+  }
 
   const temPosse = new Set(posses.map((p) => p.cosmeticId));
   const equipadoId = tipo === "DECORATION" ? equip.decoracaoId : equip.bannerId;
