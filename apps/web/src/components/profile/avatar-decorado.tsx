@@ -9,10 +9,17 @@ import type { UserStatus } from "@aether/shared";
  * NAO mexe no `<Avatar>`: envolve. A FOOTPRINT de layout continua sendo `px`
  * (igual a um `<Avatar px>` normal), entao trocar `<Avatar>` por este nao mexe
  * em espacamento nenhum. A arte da decoracao TRANSBORDA esse quadrado: ela e
- * desenhada num canvas de 512 cujo miolo (Ø328 = 64,06%) e a foto, entao a
- * camada ocupa 156% da footprint e fica CENTRADA (transform), para o miolo
- * cair exatamente sobre a foto — os ~28% que sobram de cada lado sao a arte
- * que abraca o avatar.
+ * desenhada num canvas de 512 cujo miolo transparente (~Ø288 = 56%) e a foto,
+ * entao a camada ocupa 178% da footprint e fica CENTRADA (transform). O miolo
+ * da arte fica um pouco MENOR que a foto de proposito: a decoracao encosta e
+ * entra ~alguns px na borda do avatar (abraca de verdade, como no Discord) e
+ * ainda sobra ~39% de cada lado para fora.
+ *
+ * A arte que o OpenDesign entrega tende a ter a abertura central mais larga do
+ * que a spec pede (e ovalada no topo); 178% e a escala que fecha essa folga com
+ * as artes reais sem exigir novo re-export. Se a abertura for um circulo
+ * apertado de verdade, a decoracao so cobre um pouco mais da foto — aceitavel
+ * para arte ornamental.
  *
  * CENTRAGEM POR TRANSFORM, e nao `inset:-28%`: um `<img>` e elemento
  * SUBSTITUIDO. Com `position:absolute` e os quatro lados fixos mas sem
@@ -31,8 +38,13 @@ export interface DecoracaoDeAvatar {
   trasUrl?: string | null;
 }
 
-/** Quanto da largura da ARTE a foto ocupa — a spec (Ø328 / 512). */
-export const FOTO_NA_DECORACAO = 0.6406;
+/**
+ * Quanto da largura da ARTE o miolo transparente (a foto) ocupa. ~Ø288 / 512.
+ * O inverso (1 / 0,5618 ≈ 1,78) e a escala da camada — ver `camada` abaixo.
+ * Menor que a spec teorica de Ø328 de proposito: a arte real vem com abertura
+ * mais larga, e a decoracao tem que abracar a foto, nao flutuar em volta.
+ */
+export const FOTO_NA_DECORACAO = 0.5618;
 
 export function AvatarDecorado({
   decoracao,
@@ -64,12 +76,11 @@ export function AvatarDecorado({
   speaking?: boolean;
 }) {
   /**
-   * 156,1% da footprint (= 1 / 0,6406, para o miolo Ø328 da arte cair exato
-   * sobre a foto), centrada no ponto medio. `object-contain` mantem a
-   * proporcao da arte (quadrada, na spec) dentro dessa caixa.
+   * 178% da footprint (= 1 / 0,5618), centrada no ponto medio. `object-contain`
+   * mantem a proporcao da arte (quadrada, na spec) dentro dessa caixa.
    */
   const camada =
-    "pointer-events-none absolute left-1/2 top-1/2 h-[156.1%] w-[156.1%] -translate-x-1/2 -translate-y-1/2 object-contain";
+    "pointer-events-none absolute left-1/2 top-1/2 h-[178%] w-[178%] -translate-x-1/2 -translate-y-1/2 object-contain";
 
   return (
     <div
