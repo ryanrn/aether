@@ -8,8 +8,6 @@ import { ServerRail } from "@/components/layout/server-rail";
 import { HomeNavPanel } from "@/components/layout/home-nav-panel";
 import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
-import { RealtimeProvider } from "@/components/realtime/realtime-provider";
-import { VoiceSession } from "@/components/realtime/voice-session";
 import { AparenciaProvider } from "@/components/ui/aparencia";
 import { ParedeDeVerificacao } from "@/components/auth/parede-de-verificacao";
 import { AceiteDeTermos } from "@/components/auth/aceite-de-termos";
@@ -56,21 +54,18 @@ export default async function AppLayout({
 
   return (
     /**
-     * O provedor e a sessao de midia moram AQUI, e nao no layout do servidor.
-     *
-     * Foi um bug real que ensinou isso: com eles la dentro, sair para a tela de
-     * amigos desmontava tudo, o socket fechava, e o gateway tirava a pessoa do
-     * canal de voz. Navegar encerrava a chamada — o que nao pode acontecer.
-     *
-     * Aqui em cima os dois atravessam toda navegacao dentro de `/app`.
+     * O provedor de tempo real e a `<VoiceSession>` NAO moram mais aqui — o
+     * App Router remontava este layout ao trocar entre `/app/s/[serverId]` e
+     * `/app/amigos`, e isso derrubava a call. Agora eles vivem no
+     * `<RealtimeRoot>`, no layout RAIZ, que so remonta ao entrar/sair de
+     * `/app`. Este layout ja renderiza DENTRO daquele provedor (via `children`).
      */
-    <RealtimeProvider>
+    <>
       <AparenciaProvider />
       <div className="flex h-full w-full overflow-hidden bg-base-950">
         {precisaTermos ? (
           <AceiteDeTermos atualizados={session.user.aceitouTermosEm !== null} />
         ) : null}
-        <VoiceSession />
         {/*
           No layout do /app, e nao dentro de um servidor: o atalho tem de
           funcionar tambem na tela de amigos e numa conversa direta — que e
@@ -99,6 +94,6 @@ export default async function AppLayout({
         />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
-    </RealtimeProvider>
+    </>
   );
 }

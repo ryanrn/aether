@@ -5,6 +5,7 @@ import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
 import { NovidadesModal } from "@/components/layout/novidades-modal";
 import { DeepLinkListener } from "@/components/realtime/deep-link-listener";
+import { RealtimeRoot } from "@/components/realtime/realtime-root";
 import { AetherIconSprite } from "@/components/ui/aether-icon";
 import { SCRIPT_APARENCIA } from "@/components/ui/aparencia";
 
@@ -104,7 +105,12 @@ export default function RootLayout({
           chegam a usar esta.
         */}
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-          {children}
+          {/*
+            A conexao em tempo real e a sessao de voz moram AQUI, no unico
+            ponto que o App Router nao remonta ao navegar dentro de `/app`.
+            `RealtimeRoot` so as liga quando a rota e `/app*`.
+          */}
+          <RealtimeRoot>{children}</RealtimeRoot>
         </div>
         {/*
           "Veja o que mudou", no primeiro boot depois de uma atualizacao.

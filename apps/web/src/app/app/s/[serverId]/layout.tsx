@@ -10,7 +10,6 @@ import { MemberPanel } from "@/components/layout/member-panel";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
 import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
 import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
-import { VoiceChimes } from "@/components/realtime/voice-chimes";
 
 /**
  * Casca do servidor.
@@ -94,7 +93,6 @@ export default async function ServerLayout({
         <ConnectionBanner />
         <VoiceActivityMonitor />
         <GameActivityMonitor />
-        <VoiceChimes />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar

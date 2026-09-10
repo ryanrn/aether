@@ -165,9 +165,16 @@ export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
     ratioMax: 1.11,
     ladoMin: 256,
     ladoMax: 4096,
+    /**
+     * A geometria vem do renderer (`<AvatarDecorado>`): a foto ocupa um
+     * circulo central de Ø328 num canvas de 512 (64,06%), e a decoracao e
+     * desenhada dali ate a BORDA do canvas — a arte da borda aparece ~28%
+     * para fora do avatar de cada lado. Miolo Ø328 totalmente transparente.
+     */
     alvo:
-      "quadrada 512x512, PNG/WEBP RGBA. Rosto (Ø260 central) e o canto " +
-      "inferior-direito ficam transparentes; sem sombra projetada",
+      "quadrada 512x512, PNG/WEBP RGBA. Miolo circular central de Ø328 (64% " +
+      "do lado) 100% transparente — e onde entra a foto. Desenhe a decoracao " +
+      "desse circulo ate a borda do canvas. Sem sombra projetada para fora.",
   },
   BANNER: {
     ratioMin: 2.6,

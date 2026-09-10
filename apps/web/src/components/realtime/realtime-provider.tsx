@@ -30,6 +30,26 @@ export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const REALTIME_URL =
   process.env.NEXT_PUBLIC_REALTIME_URL ?? "http://localhost:4000";
 
+/**
+ * O socket vive ACIMA do ciclo de vida do React, num modulo.
+ *
+ * POR QUE: o `RealtimeProvider` mora em `/app/layout`, que deveria sobreviver
+ * a navegacao entre `/app/s/[serverId]` e `/app/amigos` — mas na pratica o
+ * App Router remonta o provedor nessa troca. Com o socket preso ao efeito, a
+ * remonta fechava a conexao, o gateway tratava como desconexao e derrubava a
+ * pessoa do canal de voz; o `RealtimeProvider` reconectava na hora e re-entrava
+ * na call — o sintoma era "a chamada pisca e volta, com barulho" a cada clique
+ * no icone da home.
+ *
+ * Agora o `.close()` e ADIADO: uma remonta rapida cancela o descarte e
+ * reaproveita o mesmo socket (os handlers continuam presos), entao nada na
+ * arvore de voz re-renderiza. Saida real do app (nenhuma remonta em 4s) fecha
+ * de verdade. Recarga de pagina (`session:revoked`, `server:evicted`, F5) leva
+ * o modulo junto.
+ */
+let socketVivo: TypedSocket | null = null;
+let descarteAgendado: ReturnType<typeof setTimeout> | null = null;
+
 const SocketContext = createContext<TypedSocket | null>(null);
 
 export function useSocket(): TypedSocket | null {
@@ -84,6 +104,31 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   // 1. conexao: criada uma vez e mantida entre navegacoes de canal
   useEffect(() => {
+    /** Fecha o socket de verdade — so quando ninguem remontou a tempo. */
+    function descartar() {
+      socketVivo?.removeAllListeners();
+      socketVivo?.close();
+      socketVivo = null;
+      descarteAgendado = null;
+    }
+    function adiarDescarte() {
+      if (descarteAgendado) clearTimeout(descarteAgendado);
+      descarteAgendado = setTimeout(descartar, 4000);
+    }
+
+    // Remonta rapida do provedor: o socket anterior ainda esta de pe (o
+    // descarte foi so agendado), com os handlers presos. Reaproveita — a
+    // referencia nao muda, entao effect 2 e a `<VoiceSession>` nao re-rodam e
+    // a call nem pisca.
+    if (descarteAgendado) {
+      clearTimeout(descarteAgendado);
+      descarteAgendado = null;
+    }
+    if (socketVivo) {
+      setSocket(socketVivo);
+      return adiarDescarte;
+    }
+
     let instance: TypedSocket | null = null;
     let cancelled = false;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -168,6 +213,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       });
 
       const socketInstance = instance;
+      socketVivo = socketInstance;
 
       socketInstance.on("connect", () => {
         const state = useRealtimeStore.getState();
@@ -357,9 +403,13 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       if (refreshTimer) clearTimeout(refreshTimer);
-      instance?.removeAllListeners();
-      instance?.close();
-      setSocket(null);
+      /**
+       * NAO fecha na hora e NAO faz `setSocket(null)`: se for uma remonta
+       * rapida do provedor, a proxima montagem cancela `descarteAgendado` e
+       * reaproveita o socket com a mesma referencia — nada na arvore de voz
+       * re-renderiza. So fecha se ninguem remontar em 4s (saida real do app).
+       */
+      adiarDescarte();
     };
   }, []);
 

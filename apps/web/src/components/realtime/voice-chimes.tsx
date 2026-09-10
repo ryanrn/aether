@@ -14,8 +14,12 @@ import { playJoinChime, playLeaveChime } from "@/lib/voice/sounds";
  * 2. Ensurdecido nao ouve nada. Quem desligou o audio nao quer ser avisado
  *    por audio.
  *
- * Fica no layout do servidor, nao na pagina do canal: a call continua quando
- * voce navega para um canal de texto, e o aviso tem de continuar junto.
+ * 3. A propria (re)montagem do componente NAO toca nada — `primeiraVezRef`
+ *    sincroniza em silencio. Sem isso, montar ja em call (voltar da home para
+ *    um servidor) tocava o som de "entrei" do nada.
+ *
+ * Mora no `<RealtimeRoot>` (layout raiz), junto da `<VoiceSession>`: o aviso
+ * acompanha a call por TODA a navegacao dentro de `/app`, nao so entre canais.
  */
 export function VoiceChimes() {
   const selfVoice = useSelfVoice();
@@ -30,8 +34,25 @@ export function VoiceChimes() {
   const channelRef = useRef<string | null>(null);
   const deafenedRef = useRef(deafened);
   deafenedRef.current = deafened;
+  /** a primeira passada so registra o estado — nunca toca som */
+  const primeiraVezRef = useRef(true);
 
   useEffect(() => {
+    const occupantsAgora = new Set(
+      Object.values(voice)
+        .filter((p) => p.channelId === channelId)
+        .map((p) => p.userId),
+    );
+
+    // Montou (ou remontou): sincroniza em silencio. Entrar de fato numa call
+    // depois disso ja passa pela logica normal abaixo e toca o som certo.
+    if (primeiraVezRef.current) {
+      primeiraVezRef.current = false;
+      channelRef.current = channelId;
+      knownRef.current = channelId === null ? null : occupantsAgora;
+      return;
+    }
+
     const previousChannel = channelRef.current;
 
     // Saiu da call
@@ -42,36 +63,32 @@ export function VoiceChimes() {
       return;
     }
 
-    const occupants = new Set(
-      Object.values(voice)
-        .filter((participant) => participant.channelId === channelId)
-        .map((participant) => participant.userId),
-    );
-
     // Entrou agora (ou trocou de canal): um som so, o seu.
     if (previousChannel !== channelId) {
       if (!deafenedRef.current) playJoinChime();
       channelRef.current = channelId;
-      knownRef.current = occupants;
+      knownRef.current = occupantsAgora;
       return;
     }
 
     const known = knownRef.current;
     if (!known) {
-      knownRef.current = occupants;
+      knownRef.current = occupantsAgora;
       return;
     }
 
     if (!deafenedRef.current) {
-      for (const userId of occupants) {
+      for (const userId of occupantsAgora) {
         if (userId !== selfUserId && !known.has(userId)) playJoinChime();
       }
       for (const userId of known) {
-        if (userId !== selfUserId && !occupants.has(userId)) playLeaveChime();
+        if (userId !== selfUserId && !occupantsAgora.has(userId)) {
+          playLeaveChime();
+        }
       }
     }
 
-    knownRef.current = occupants;
+    knownRef.current = occupantsAgora;
   }, [channelId, voice, selfUserId]);
 
   return null;
