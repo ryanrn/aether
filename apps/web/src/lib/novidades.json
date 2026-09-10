@@ -96,5 +96,15 @@
         "texto": "Jogos do EA app agora aparecem na atividade, inclusive os com EA AntiCheat, que escondia o jogo por completo. O app le do proprio jogo quais executaveis o anti-cheat protege e casa por eles. Verificado com o EA SPORTS FC 26 rodando."
       }
     ]
+  },
+  "0.1.29": {
+    "data": "2026-09-10",
+    "resumo": "Links de convite abrem direto no aplicativo.",
+    "itens": [
+      {
+        "categoria": "recurso",
+        "texto": "Convites viraram link: em vez de passar o codigo, voce compartilha um endereco que mostra o servidor e entra com um clique. Funciona no navegador e, no aplicativo, o botao \"Abrir no AETHER Desktop\" leva direto ao servidor — se voce nao estiver logado, ele passa pelo login e volta pro convite sozinho."
+      }
+    ]
   }
 }
