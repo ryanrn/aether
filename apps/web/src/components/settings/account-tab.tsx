@@ -7,6 +7,7 @@ import {
   limiteDoAvatar,
   planoAtende,
   podeAvatarAnimado,
+  type CosmeticoDeLoja,
   type PublicUser,
 } from "@aether/shared";
 import {
@@ -19,8 +20,10 @@ import {
   uploadAvatarAction,
 } from "@/server/actions/profile";
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { AvatarCropper } from "./avatar-cropper";
 import { MOLDURA_ESTILO } from "@/components/ui/molduras";
+import { SeletorDeCosmeticos } from "./seletor-de-cosmeticos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
@@ -106,6 +109,9 @@ export function AccountTab({
   );
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /** A decoracao equipada — o preview do avatar acompanha o seletor. */
+  const [decoracao, setDecoracao] = useState<CosmeticoDeLoja | null>(null);
 
   /**
    * Grava na hora, sem botao de salvar.
@@ -264,14 +270,28 @@ export function AccountTab({
     <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative">
-          <Avatar
-            userId={user.id}
-            name={displayName || user.username}
-            /* A previa manda enquanto existe: e o ponto da previa. */
-            src={previa?.url ?? avatarUrl}
-            moldura={moldura}
-            size="lg"
-          />
+          {decoracao ? (
+            <AvatarDecorado
+              userId={user.id}
+              name={displayName || user.username}
+              src={previa?.url ?? avatarUrl}
+              moldura={moldura}
+              px={72}
+              decoracao={{
+                frenteUrl: decoracao.assetUrl,
+                trasUrl: decoracao.assetTrasUrl,
+              }}
+            />
+          ) : (
+            <Avatar
+              userId={user.id}
+              name={displayName || user.username}
+              /* A previa manda enquanto existe: e o ponto da previa. */
+              src={previa?.url ?? avatarUrl}
+              moldura={moldura}
+              size="lg"
+            />
+          )}
           {previa?.animado ? (
             /*
              * GIF parece imagem parada no primeiro quadro. Sem dizer que e
@@ -423,7 +443,27 @@ export function AccountTab({
             );
           })}
         </div>
+
       </div>
+
+      {/*
+        DECORACAO e BANNER — cosmeticos com arte, cadastrados pela equipe. So
+        aparecem com a flag `loja_de_cosmeticos` ligada (o seletor devolve nada
+        quando desligada). A decoracao acompanha o preview do avatar la em cima.
+      */}
+      <SeletorDeCosmeticos
+        tipo="DECORATION"
+        userId={user.id}
+        nome={displayName || user.username}
+        avatarUrl={previa?.url ?? avatarUrl}
+        onEquipar={setDecoracao}
+      />
+      <SeletorDeCosmeticos
+        tipo="BANNER"
+        userId={user.id}
+        nome={displayName || user.username}
+        avatarUrl={previa?.url ?? avatarUrl}
+      />
 
       <input
         ref={inputRef}

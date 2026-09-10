@@ -323,13 +323,13 @@ function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px
   }
   return (
     <div
-      className="grid place-items-center rounded-md border border-line bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]"
+      className="grid place-items-center overflow-hidden rounded-md border border-line bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]"
       style={{ width: px, height: px }}
     >
       <AvatarDecorado
         userId={`pv-${c.nome}`}
         name="AE"
-        px={Math.round(px * 0.92)}
+        px={Math.round(px * 0.62)}
         decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
       />
     </div>
@@ -371,10 +371,10 @@ function PreviaCosmetico({ cosmetico: c }: { cosmetico: ArteDoCosmetico }) {
   return (
     <div className="flex flex-col items-center gap-3">
       <div
-        className="flex items-end gap-4 rounded-lg border border-line p-4"
+        className="flex items-end gap-6 rounded-lg border border-line px-9 py-7"
         style={{ background: corFundo }}
       >
-        {[40, 72, 112].map((px) => (
+        {[28, 44, 72].map((px) => (
           <AvatarDecorado
             key={px}
             userId="pv-deco"

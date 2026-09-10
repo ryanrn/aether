@@ -4,7 +4,13 @@
  */
 
 import { planoEfetivo, type PlanTier } from "./plans";
-import { molduraEfetiva, podeAvatarAnimado } from "./cosmeticos";
+import {
+  decoracaoEfetiva,
+  molduraEfetiva,
+  podeAvatarAnimado,
+  type DecoracaoPublica,
+  type DecoracaoRow,
+} from "./cosmeticos";
 
 export const USER_STATUSES = ["ONLINE", "IDLE", "DND", "OFFLINE"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -49,6 +55,13 @@ export interface PublicUser {
    * assinante em conta que deixou de pagar.
    */
   moldura: string | null;
+  /**
+   * A DECORACAO de avatar equipada, JA RESOLVIDA (contra plano e `ativo`) — as
+   * duas URLs, ou `null`. Viaja no `PublicUser` porque a decoracao aparece em
+   * cima do avatar em toda parte (chat, listas). O BANNER nao vem aqui: so
+   * aparece no cartao de perfil, que o resolve sob demanda.
+   */
+  decoracao: DecoracaoPublica | null;
 }
 
 /**
@@ -77,6 +90,11 @@ export interface UserRow {
   avatarEstaticoUrl: string | null;
   /** A escolha guardada. Continua no banco mesmo sem plano que a cubra. */
   molduraId: string | null;
+  /**
+   * A relacao `User.decoracao` ja trazida pelo `select` — linha crua do
+   * `Cosmetic` equipado, ou `null`. `toPublicUser` resolve contra o plano.
+   */
+  decoracao: DecoracaoRow | null;
   assinatura: {
     tier: PlanTier;
     expiraEm: Date | string | null;
@@ -102,6 +120,20 @@ export const SELECT_USUARIO_PUBLICO = {
   avatarEstaticoUrl: true,
   status: true,
   molduraId: true,
+  /**
+   * A decoracao equipada — so os quatro campos que `decoracaoEfetiva` precisa.
+   * E um LEFT JOIN por linha de usuario; `Cosmetic` e tabela pequena e a busca
+   * e por chave primaria, entao o custo e baixo. O banner NAO entra: nao viaja
+   * no `PublicUser`.
+   */
+  decoracao: {
+    select: {
+      assetUrl: true,
+      assetTrasUrl: true,
+      tierMinimo: true,
+      ativo: true,
+    },
+  },
   /**
    * So `tier` e `expiraEm`: sao o que `planoEfetivo` precisa. Provedor, id
    * externo e quem concedeu ficam fora — nao servem a tela e nao tem por que
@@ -149,6 +181,11 @@ export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser
      * periodo entre o vencimento e alguem mexer na linha.
      */
     moldura: molduraEfetiva(row.molduraId, plano)?.id ?? null,
+    /**
+     * Mesma resolucao contra o plano JA calculado: decoracao paga em conta que
+     * venceu some, e a escolha continua no banco para voltar sozinha.
+     */
+    decoracao: decoracaoEfetiva(row.decoracao, plano),
   };
 }
 
@@ -527,6 +564,13 @@ export type RelacaoComUsuario =
  */
 export interface PerfilParaCartao {
   bio: string | null;
+  /**
+   * O BANNER de perfil equipado, ja RESOLVIDO (contra plano e `ativo`) — a URL,
+   * ou `null`. So o cartao usa, entao busca aqui em vez de viajar no
+   * `PublicUser`. A decoracao de avatar, ao contrario, esta no `PublicUser`
+   * porque aparece em todo lugar.
+   */
+  banner: string | null;
   /** apelido no servidor atual; `null` em DM ou sem apelido */
   nickname: string | null;
   /** cargos no servidor atual, ja ordenados; `[]` em DM ou sem cargo com cor */

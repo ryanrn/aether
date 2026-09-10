@@ -23,6 +23,7 @@ const BASE: UserRow = {
   avatarEstaticoUrl: null,
   status: "ONLINE",
   molduraId: null,
+  decoracao: null,
   assinatura: null,
 };
 

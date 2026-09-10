@@ -3,9 +3,12 @@ import "server-only";
 import { Prisma, prisma, type Cosmetic } from "@aether/db";
 import {
   COSMETIC_TYPES,
+  planoAtende,
+  type CosmeticoDeLoja,
   type CosmeticoNoPainel,
   type CosmeticoMeta,
   type CosmeticType,
+  type PlanTier,
   type PublicCosmetic,
 } from "@aether/shared";
 import { apagarAssetCosmetico } from "../storage/cosmeticos";
@@ -273,4 +276,158 @@ export async function listarCosmeticosPublicos(filtro?: {
     orderBy: [{ tipo: "asc" }, { ordem: "asc" }, { createdAt: "asc" }],
   });
   return rows.map(paraPublico);
+}
+
+/* ------------------------------------------------------------ equipar/possuir */
+
+export class CosmeticoIndisponivel extends Error {
+  override name = "CosmeticoIndisponivel";
+}
+
+/** O que esta pessoa tem equipado — os dois ids. */
+export async function cosmeticosEquipados(
+  userId: string,
+): Promise<{ decoracaoId: string | null; bannerId: string | null }> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { decoracaoId: true, bannerId: true },
+  });
+  return { decoracaoId: u?.decoracaoId ?? null, bannerId: u?.bannerId ?? null };
+}
+
+/**
+ * O catalogo do tipo, com o estado desta pessoa em cada item.
+ *
+ * Ordena por raridade (raro primeiro) e depois `ordem`, como uma vitrine faz.
+ * Item bloqueado por plano continua na lista — esconder o que existe atras do
+ * plano nao vende, so avisa que voce nao pertence.
+ */
+export async function catalogoParaUsuario(
+  userId: string,
+  plano: PlanTier,
+  tipo: CosmeticType,
+): Promise<CosmeticoDeLoja[]> {
+  const [rows, posses, equip] = await Promise.all([
+    prisma.cosmetic.findMany({
+      where: { ativo: true, tipo },
+      orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.userCosmetic.findMany({
+      where: { userId, cosmetic: { tipo } },
+      select: { cosmeticId: true },
+    }),
+    cosmeticosEquipados(userId),
+  ]);
+
+  const temPosse = new Set(posses.map((p) => p.cosmeticId));
+  const equipadoId = tipo === "DECORATION" ? equip.decoracaoId : equip.bannerId;
+
+  return rows.map((row) => {
+    const bloqueado = !planoAtende(plano, row.tierMinimo);
+    const possui =
+      !bloqueado && (row.precoMoedas == null || temPosse.has(row.id));
+    return {
+      ...paraPublico(row),
+      bloqueado,
+      possui,
+      equipado: row.id === equipadoId,
+    };
+  });
+}
+
+/**
+ * Verifica se a pessoa PODE equipar um cosmetico agora: existe, esta ativo, e
+ * do tipo certo, o plano cobre, e (se pago) ela possui.
+ */
+async function podeEquipar(
+  userId: string,
+  plano: PlanTier,
+  tipo: CosmeticType,
+  cosmeticId: string,
+): Promise<boolean> {
+  const c = await prisma.cosmetic.findUnique({
+    where: { id: cosmeticId },
+    select: { tipo: true, ativo: true, tierMinimo: true, precoMoedas: true },
+  });
+  if (!c || !c.ativo || c.tipo !== tipo) return false;
+  if (!planoAtende(plano, c.tierMinimo)) return false;
+  if (c.precoMoedas != null) {
+    const posse = await prisma.userCosmetic.findUnique({
+      where: { userId_cosmeticId: { userId, cosmeticId } },
+      select: { userId: true },
+    });
+    if (!posse) return false;
+  }
+  return true;
+}
+
+/**
+ * Equipa (ou, com `null`, desequipa) a decoracao ou o banner. Devolve o id que
+ * ficou valendo.
+ *
+ * A ESCOLHA fica guardada mesmo que o plano caia depois — a leitura
+ * (`decoracaoEfetiva` / o cartao de perfil) e que decide se aparece. Igual a
+ * moldura.
+ */
+export async function equiparCosmetico(
+  userId: string,
+  plano: PlanTier,
+  tipo: CosmeticType,
+  cosmeticId: string | null,
+): Promise<string | null> {
+  if (cosmeticId !== null) {
+    const ok = await podeEquipar(userId, plano, tipo, cosmeticId);
+    if (!ok) throw new CosmeticoIndisponivel();
+  }
+  const campo = tipo === "DECORATION" ? "decoracaoId" : "bannerId";
+  await prisma.user.update({
+    where: { id: userId },
+    data: { [campo]: cosmeticId },
+  });
+  return cosmeticId;
+}
+
+/**
+ * O BANNER equipado, resolvido — a URL, ou `null`. Para o cartao de perfil, que
+ * busca sob demanda (banner nao viaja no `PublicUser`).
+ */
+export async function bannerEquipado(
+  userId: string,
+  plano: PlanTier,
+): Promise<string | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      banner: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
+    },
+  });
+  const b = u?.banner;
+  if (!b || !b.ativo || !planoAtende(plano, b.tierMinimo)) return null;
+  return b.assetUrl;
+}
+
+/**
+ * Concede um cosmetico a uma pessoa (a equipe, pelo painel). Idempotente —
+ * conceder de novo nao duplica nem erra.
+ */
+export async function concederCosmetico(
+  userId: string,
+  cosmeticId: string,
+): Promise<void> {
+  const alvo = await prisma.cosmetic.findUnique({
+    where: { id: cosmeticId },
+    select: { id: true },
+  });
+  if (!alvo) throw new CosmeticoNaoEncontrado();
+  const pessoa = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!pessoa) throw new CosmeticoNaoEncontrado();
+
+  await prisma.userCosmetic.upsert({
+    where: { userId_cosmeticId: { userId, cosmeticId } },
+    update: {},
+    create: { userId, cosmeticId, origem: "concedido" },
+  });
 }

@@ -1,8 +1,10 @@
 import "server-only";
 
 import { prisma } from "@aether/db";
+import { planoAtende, planoEfetivo } from "@aether/shared";
 import type {
   PerfilParaCartao,
+  PlanTier,
   PublicRole,
   RelacaoComUsuario,
 } from "@aether/shared";
@@ -27,7 +29,11 @@ export async function perfilParaCartao(
   const [alvo, relacao, dadosServidor] = await Promise.all([
     prisma.user.findUnique({
       where: { id: alvoId },
-      select: { bio: true },
+      select: {
+        bio: true,
+        assinatura: { select: { tier: true, expiraEm: true } },
+        banner: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
+      },
     }),
     calcularRelacao(viewerId, alvoId),
     serverId ? cargosNoServidor(viewerId, alvoId, serverId) : null,
@@ -35,11 +41,29 @@ export async function perfilParaCartao(
 
   return {
     bio: alvo?.bio?.trim() || null,
+    banner: bannerResolvido(alvo),
     nickname: dadosServidor?.nickname ?? null,
     roles: dadosServidor?.roles ?? [],
     relacao: alvoId === viewerId ? "eu" : relacao.estado,
     friendshipId: relacao.friendshipId,
   };
+}
+
+/**
+ * O banner equipado que de fato vale — resolvido contra o plano (vencimento
+ * aplicado) e contra `ativo`, como a moldura e a decoracao. Some se o plano
+ * caiu; a escolha continua no banco.
+ */
+function bannerResolvido(
+  alvo: {
+    assinatura: { tier: PlanTier; expiraEm: Date | null } | null;
+    banner: { assetUrl: string; ativo: boolean; tierMinimo: PlanTier } | null;
+  } | null,
+): string | null {
+  const b = alvo?.banner;
+  if (!b || !b.ativo) return null;
+  const plano = planoEfetivo(alvo?.assinatura ?? null);
+  return planoAtende(plano, b.tierMinimo) ? b.assetUrl : null;
 }
 
 async function cargosNoServidor(

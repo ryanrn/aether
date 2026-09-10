@@ -17,6 +17,7 @@ import type {
 } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
@@ -159,8 +160,17 @@ export function CartaoDePerfil({
         )}
         role="dialog"
       >
-      {/* faixa de cor so para o avatar se apoiar */}
-      <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+      {/* a faixa: banner equipado, ou so uma cor para o avatar se apoiar */}
+      {perfil?.banner ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={perfil.banner}
+          alt=""
+          className="h-[76px] w-full object-cover"
+        />
+      ) : (
+        <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+      )}
 
       <div className="px-4 pb-4">
         {/*
@@ -169,15 +179,31 @@ export function CartaoDePerfil({
           para dentro da faixa (`-mt-12` ~ metade de 96) para "se apoiar" nela.
         */}
         <div className="-mt-12 mb-2">
-          <Avatar
-            userId={user.id}
-            name={nome}
-            src={user.avatarUrl}
-            moldura={user.moldura}
-            status={status}
-            size="xl"
-            ring="border-base-900"
-          />
+          {user.decoracao ? (
+            <AvatarDecorado
+              userId={user.id}
+              name={nome}
+              src={user.avatarUrl}
+              moldura={user.moldura}
+              status={status}
+              px={96}
+              ring="border-base-900"
+              decoracao={{
+                frenteUrl: user.decoracao.frente,
+                trasUrl: user.decoracao.tras,
+              }}
+            />
+          ) : (
+            <Avatar
+              userId={user.id}
+              name={nome}
+              src={user.avatarUrl}
+              moldura={user.moldura}
+              status={status}
+              size="xl"
+              ring="border-base-900"
+            />
+          )}
         </div>
 
         <div className="flex items-center gap-2">

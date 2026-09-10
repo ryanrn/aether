@@ -33,6 +33,11 @@ const updateMany = vi.fn();
 const del = vi.fn();
 const groupBy = vi.fn();
 const apagarAssetCosmetico = vi.fn();
+const userFindUnique = vi.fn();
+const userUpdate = vi.fn();
+const ucFindMany = vi.fn();
+const ucFindUnique = vi.fn();
+const ucUpsert = vi.fn();
 
 vi.mock("@aether/db", () => ({
   prisma: {
@@ -45,6 +50,12 @@ vi.mock("@aether/db", () => ({
       updateMany,
       delete: del,
       groupBy,
+    },
+    user: { findUnique: userFindUnique, update: userUpdate },
+    userCosmetic: {
+      findMany: ucFindMany,
+      findUnique: ucFindUnique,
+      upsert: ucUpsert,
     },
   },
   Prisma: { PrismaClientKnownRequestError: FakeKnownError },
@@ -61,8 +72,13 @@ const {
   excluirCosmetico,
   contarCosmeticosPorTipo,
   listarCosmeticosPublicos,
+  catalogoParaUsuario,
+  equiparCosmetico,
+  concederCosmetico,
+  bannerEquipado,
   SlugEmUso,
   CosmeticoNaoEncontrado,
+  CosmeticoIndisponivel,
 } = await import("../../apps/web/src/server/services/cosmeticos");
 
 const META = {
@@ -112,6 +128,11 @@ beforeEach(() => {
     del,
     groupBy,
     apagarAssetCosmetico,
+    userFindUnique,
+    userUpdate,
+    ucFindMany,
+    ucFindUnique,
+    ucUpsert,
   ].forEach((m) => m.mockReset());
   apagarAssetCosmetico.mockResolvedValue(undefined);
 });
@@ -311,5 +332,147 @@ describe("cosmeticoMetaSchema", () => {
     expect(
       cosmeticoMetaSchema.parse({ ...base, precoMoedas: "", descricao: "  " }).descricao,
     ).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------- equipar/possuir */
+
+describe("catalogoParaUsuario", () => {
+  it("marca bloqueado / possui / equipado por peca", async () => {
+    findMany.mockResolvedValue([
+      // gratis, FREE -> possui, nao bloqueado
+      linha({ id: "gratis", precoMoedas: null, tierMinimo: "FREE", ativo: true }),
+      // paga, FREE, SEM posse -> nao possui
+      linha({ id: "paga", precoMoedas: 500, tierMinimo: "FREE", ativo: true }),
+      // gratis mas PRO -> bloqueado para quem e PLUS
+      linha({ id: "pro", precoMoedas: null, tierMinimo: "PRO", ativo: true }),
+    ]);
+    ucFindMany.mockResolvedValue([]); // nenhuma posse
+    userFindUnique.mockResolvedValue({ decoracaoId: "gratis", bannerId: null });
+
+    const cat = await catalogoParaUsuario("u1", "PLUS", "DECORATION");
+    const by = Object.fromEntries(cat.map((c) => [c.id, c]));
+
+    expect(by.gratis).toMatchObject({ possui: true, bloqueado: false, equipado: true });
+    expect(by.paga).toMatchObject({ possui: false, bloqueado: false, equipado: false });
+    expect(by.pro).toMatchObject({ possui: false, bloqueado: true, equipado: false });
+    // where filtra por ativo:true e pelo tipo
+    expect(findMany.mock.calls[0]![0].where).toMatchObject({
+      ativo: true,
+      tipo: "DECORATION",
+    });
+  });
+
+  it("peca paga COM posse conta como possuida", async () => {
+    findMany.mockResolvedValue([
+      linha({ id: "paga", precoMoedas: 500, tierMinimo: "FREE", ativo: true }),
+    ]);
+    ucFindMany.mockResolvedValue([{ cosmeticId: "paga" }]);
+    userFindUnique.mockResolvedValue({ decoracaoId: null, bannerId: null });
+
+    const cat = await catalogoParaUsuario("u1", "FREE", "DECORATION");
+    expect(cat[0]).toMatchObject({ possui: true, bloqueado: false });
+  });
+});
+
+describe("equiparCosmetico", () => {
+  it("null desequipa sem checar nada", async () => {
+    userUpdate.mockResolvedValue({});
+    const r = await equiparCosmetico("u1", "FREE", "DECORATION", null);
+    expect(r).toBeNull();
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { decoracaoId: null },
+    });
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it("equipa uma peca gratis que o plano cobre", async () => {
+    findUnique.mockResolvedValue({
+      tipo: "BANNER",
+      ativo: true,
+      tierMinimo: "PLUS",
+      precoMoedas: null,
+    });
+    userUpdate.mockResolvedValue({});
+
+    await equiparCosmetico("u1", "PRO", "BANNER", "b1");
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { bannerId: "b1" },
+    });
+  });
+
+  it("recusa: inativa, tipo errado, plano de menos, ou paga sem posse", async () => {
+    const casos = [
+      { c: { tipo: "DECORATION", ativo: false, tierMinimo: "FREE", precoMoedas: null }, plano: "PRO" },
+      { c: { tipo: "BANNER", ativo: true, tierMinimo: "FREE", precoMoedas: null }, plano: "PRO" },
+      { c: { tipo: "DECORATION", ativo: true, tierMinimo: "PRO", precoMoedas: null }, plano: "PLUS" },
+      { c: { tipo: "DECORATION", ativo: true, tierMinimo: "FREE", precoMoedas: 900 }, plano: "PRO" },
+    ] as const;
+
+    for (const caso of casos) {
+      findUnique.mockResolvedValue(caso.c);
+      ucFindUnique.mockResolvedValue(null); // sem posse
+      await expect(
+        equiparCosmetico("u1", caso.plano, "DECORATION", "x"),
+      ).rejects.toBeInstanceOf(CosmeticoIndisponivel);
+    }
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("paga COM posse: equipa", async () => {
+    findUnique.mockResolvedValue({
+      tipo: "DECORATION",
+      ativo: true,
+      tierMinimo: "FREE",
+      precoMoedas: 900,
+    });
+    ucFindUnique.mockResolvedValue({ userId: "u1" });
+    userUpdate.mockResolvedValue({});
+
+    await equiparCosmetico("u1", "FREE", "DECORATION", "x");
+    expect(userUpdate).toHaveBeenCalled();
+  });
+});
+
+describe("bannerEquipado", () => {
+  it("null quando inativo ou acima do plano; a URL quando vale", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      banner: { assetUrl: "u", ativo: false, tierMinimo: "FREE" },
+    });
+    expect(await bannerEquipado("u1", "PRO")).toBeNull();
+
+    userFindUnique.mockResolvedValueOnce({
+      banner: { assetUrl: "u", ativo: true, tierMinimo: "PRO" },
+    });
+    expect(await bannerEquipado("u1", "PLUS")).toBeNull();
+
+    userFindUnique.mockResolvedValueOnce({
+      banner: { assetUrl: "https://cdn/b.png", ativo: true, tierMinimo: "PLUS" },
+    });
+    expect(await bannerEquipado("u1", "PRO")).toBe("https://cdn/b.png");
+  });
+});
+
+describe("concederCosmetico", () => {
+  it("upsert idempotente com origem 'concedido'", async () => {
+    findUnique.mockResolvedValue({ id: "c1" });
+    userFindUnique.mockResolvedValue({ id: "u1" });
+    ucUpsert.mockResolvedValue({});
+
+    await concederCosmetico("u1", "c1");
+    expect(ucUpsert).toHaveBeenCalledWith({
+      where: { userId_cosmeticId: { userId: "u1", cosmeticId: "c1" } },
+      update: {},
+      create: { userId: "u1", cosmeticId: "c1", origem: "concedido" },
+    });
+  });
+
+  it("cosmetico ou usuario inexistente: CosmeticoNaoEncontrado", async () => {
+    findUnique.mockResolvedValue(null);
+    await expect(concederCosmetico("u1", "x")).rejects.toBeInstanceOf(
+      CosmeticoNaoEncontrado,
+    );
   });
 });

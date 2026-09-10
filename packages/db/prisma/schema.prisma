@@ -90,6 +90,15 @@ model User {
   /// Guarda o id do catalogo em codigo (`MOLDURAS`), nao o visual. Moldura
   /// retirada do catalogo vira nulo na leitura, sem quebrar a tela.
   molduraId                 String?
+  /// A DECORACAO de avatar equipada (`Cosmetic` tipo DECORATION). Mesma logica
+  /// da moldura: a escolha fica guardada; a LEITURA (`toPublicUser`) decide se
+  /// aparece — contra o plano e contra `Cosmetic.ativo`. `onDelete: SetNull`:
+  /// tirar a peca do catalogo desequipa quem a usava, sem quebrar nada.
+  decoracaoId               String?
+  /// O BANNER de perfil equipado (`Cosmetic` tipo BANNER). So aparece no
+  /// cartao de perfil, entao NAO viaja no `PublicUser` (seria peso em toda
+  /// mensagem) — o cartao resolve sob demanda, como a bio.
+  bannerId                  String?
   /// Bio do perfil GLOBAL — texto curto que a pessoa escreve sobre si. Nulo =
   /// nunca preencheu; string vazia nao e guardada (a action apaga). Aparece no
   /// cartao de perfil; nao viaja no `PublicUser` (seria peso em toda mensagem)
@@ -139,6 +148,9 @@ model User {
   issuedBans         Ban[]               @relation("BanIssuer")
   jogosSugeridos     SugestaoDeJogo[]
   conexoes           Connection[]
+  decoracao          Cosmetic?          @relation("UserDecoracao", fields: [decoracaoId], references: [id], onDelete: SetNull)
+  banner             Cosmetic?          @relation("UserBanner", fields: [bannerId], references: [id], onDelete: SetNull)
+  cosmeticos         UserCosmetic[]
 
   @@index([status])
 }
@@ -925,8 +937,33 @@ model Cosmetic {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  equipadaComoDecoracao User[]         @relation("UserDecoracao")
+  equipadoComoBanner    User[]         @relation("UserBanner")
+  posses                UserCosmetic[]
+
   /// A loja e o painel filtram sempre por (tipo, ativo) e ordenam por `ordem`.
   @@index([tipo, ativo, ordem])
+}
+
+/// Quem POSSUI qual cosmetico.
+///
+/// As pecas GRATIS (`precoMoedas` nulo) sao equipaveis SEM linha aqui, desde
+/// que o plano cubra o `tierMinimo` — igual as molduras. A posse explicita e
+/// para o que for pago (quando a loja existir) ou concedido pela equipe. Ate
+/// la esta tabela pode ficar vazia e tudo funciona.
+///
+/// `origem` guarda de onde veio ("concedido", "loja"...) para o historico
+/// nao mentir depois que a loja entrar.
+model UserCosmetic {
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cosmeticId  String
+  cosmetic    Cosmetic @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+  origem      String
+  adquiridoEm DateTime @default(now())
+
+  @@id([userId, cosmeticId])
+  @@index([cosmeticId])
 }
 
 /// Um arquivo anexado a uma mensagem.

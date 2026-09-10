@@ -201,6 +201,7 @@ function Preview({ user }: { user: PublicUser }) {
     status: "ONLINE",
     plano: "FREE",
     moldura: null,
+    decoracao: null,
   }));
 
   const msg = (autor: PublicUser, texto: string, i: number): ChatMessage => ({

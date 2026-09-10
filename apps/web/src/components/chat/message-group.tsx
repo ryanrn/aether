@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { MessageItem } from "./message-item";
@@ -68,14 +69,28 @@ export function MessageGroup({
         aria-label={`Perfil de ${grupo.autor.displayName}`}
         className="absolute left-4 top-0 rounded-full transition-transform hover:scale-105"
       >
-        <Avatar
-          userId={grupo.autor.id}
-          name={grupo.autor.displayName}
-          src={grupo.autor.avatarUrl}
-          moldura={grupo.autor.moldura}
-          size={tamanhoAvatar >= 44 ? "lg" : "md"}
-          px={tamanhoAvatar}
-        />
+        {grupo.autor.decoracao ? (
+          <AvatarDecorado
+            userId={grupo.autor.id}
+            name={grupo.autor.displayName}
+            src={grupo.autor.avatarUrl}
+            moldura={grupo.autor.moldura}
+            px={tamanhoAvatar}
+            decoracao={{
+              frenteUrl: grupo.autor.decoracao.frente,
+              trasUrl: grupo.autor.decoracao.tras,
+            }}
+          />
+        ) : (
+          <Avatar
+            userId={grupo.autor.id}
+            name={grupo.autor.displayName}
+            src={grupo.autor.avatarUrl}
+            moldura={grupo.autor.moldura}
+            size={tamanhoAvatar >= 44 ? "lg" : "md"}
+            px={tamanhoAvatar}
+          />
+        )}
       </button>
 
       <div className="flex items-baseline gap-2">

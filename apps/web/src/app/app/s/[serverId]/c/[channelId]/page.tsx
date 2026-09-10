@@ -74,6 +74,7 @@ export default async function ChannelPage({
     status: context.session.user.status,
     plano: context.session.user.plano,
     moldura: context.session.user.moldura,
+    decoracao: context.session.user.decoracao,
   };
 
   const history =

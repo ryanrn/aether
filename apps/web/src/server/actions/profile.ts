@@ -5,12 +5,16 @@ import { prisma } from "@aether/db";
 import {
   bioSchema,
   displayNameSchema,
+  ehCosmeticType,
   molduraPorId,
   planoAtende,
   podeAvatarAnimado,
   setNicknameSchema,
   type ActionResult,
+  type CosmeticoDeLoja,
+  type CosmeticType,
 } from "@aether/shared";
+import { flagLigada } from "@aether/access";
 import { writeAudit } from "../audit";
 import {
   assertHierarchy,
@@ -18,6 +22,11 @@ import {
   requirePermission,
   requireUser,
 } from "../guards";
+import {
+  CosmeticoIndisponivel,
+  catalogoParaUsuario,
+  equiparCosmetico,
+} from "../services/cosmeticos";
 import { notifyProfileChanged, resyncGatewayRooms } from "../realtime-notify";
 import { uploadUserAvatar } from "../storage";
 import { fail, ok, toActionError } from "./action-result";
@@ -115,6 +124,81 @@ export async function setMolduraAction(
     revalidatePath("/app", "layout");
     return ok({ molduraId });
   } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/* ----------------------------------------------- cosmeticos com asset (R2) -- */
+
+/**
+ * A loja/seletor de cosmeticos so aparece com a flag `loja_de_cosmeticos`
+ * ligada — ate haver pecas publicadas e a tela pronta, nada disto existe para
+ * o usuario. O painel da equipe (cadastro) NAO passa por aqui.
+ */
+async function lojaAberta(): Promise<boolean> {
+  return flagLigada("loja_de_cosmeticos");
+}
+
+function lerTipo(valor: unknown): CosmeticType | null {
+  return ehCosmeticType(valor) ? valor : null;
+}
+
+/** O catalogo de um tipo (DECORATION | BANNER), com o estado desta pessoa. */
+export async function listarCatalogoDeCosmeticosAction(
+  tipo: unknown,
+): Promise<ActionResult<CosmeticoDeLoja[]>> {
+  try {
+    const session = await requireUser();
+    if (!(await lojaAberta())) return ok([]);
+
+    const t = lerTipo(tipo);
+    if (!t) return fail("Tipo invalido");
+
+    return ok(await catalogoParaUsuario(session.user.id, session.user.plano, t));
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Equipa (ou, com `null`, desequipa) a decoracao ou o banner.
+ *
+ * A autorizacao e AQUI: a tela esconde o bloqueado, mas quem impede de mandar
+ * o id de uma peca paga/inativa direto e esta funcao. Guarda a escolha mesmo
+ * sem plano — a leitura decide se aparece, como a moldura.
+ */
+export async function equiparCosmeticoAction(
+  tipo: unknown,
+  cosmeticId: string | null,
+): Promise<ActionResult<{ tipo: CosmeticType; cosmeticId: string | null }>> {
+  try {
+    const session = await requireUser();
+    if (!(await lojaAberta())) return fail("Nao encontrado");
+
+    const t = lerTipo(tipo);
+    if (!t) return fail("Tipo invalido");
+    const id =
+      cosmeticId === null || cosmeticId === ""
+        ? null
+        : typeof cosmeticId === "string"
+          ? cosmeticId
+          : undefined;
+    if (id === undefined) return fail("Cosmetico invalido");
+
+    const valendo = await equiparCosmetico(
+      session.user.id,
+      session.user.plano,
+      t,
+      id,
+    );
+
+    await notifyProfileChanged({ userId: session.user.id });
+    revalidatePath("/app", "layout");
+    return ok({ tipo: t, cosmeticId: valendo });
+  } catch (error) {
+    if (error instanceof CosmeticoIndisponivel) {
+      return fail("Esse cosmético não está disponível para você.");
+    }
     return toActionError(error);
   }
 }

@@ -270,3 +270,51 @@ export interface CosmeticoNoPainel {
   criadoEm: string;
   atualizadoEm: string;
 }
+
+/**
+ * O cosmetico como a LOJA / o seletor do perfil o ve: o publico + o estado
+ * desta pessoa.
+ *
+ *  - `bloqueado`: o plano nao alcanca o `tierMinimo` — nao da para equipar.
+ *  - `possui`: da para equipar. Peca gratis com o plano ok ja conta como
+ *    possuida; peca paga precisa de uma linha em `UserCosmetic` (loja ou
+ *    concessao da equipe).
+ *  - `equipado`: e o que esta valendo agora.
+ */
+export interface CosmeticoDeLoja extends PublicCosmetic {
+  possui: boolean;
+  bloqueado: boolean;
+  equipado: boolean;
+}
+
+/**
+ * A DECORACAO que viaja no `PublicUser` — so as duas URLs, ja RESOLVIDAS contra
+ * o plano e contra `Cosmetic.ativo`. Nada de slug, nome ou raridade: a tela so
+ * precisa renderizar as camadas, e isto acompanha a pessoa em toda mensagem.
+ */
+export interface DecoracaoPublica {
+  frente: string;
+  tras: string | null;
+}
+
+/** O que o `select` traz da relacao `User.decoracao` — linha crua. */
+export interface DecoracaoRow {
+  assetUrl: string;
+  assetTrasUrl: string | null;
+  tierMinimo: PlanTier;
+  ativo: boolean;
+}
+
+/**
+ * A decoracao que de fato VALE agora — resolvida na leitura, como
+ * `molduraEfetiva`. Desativada no catalogo, ou acima do plano de quem a
+ * escolheu: some da tela, a escolha continua no banco.
+ */
+export function decoracaoEfetiva(
+  row: DecoracaoRow | null | undefined,
+  plano: PlanTier,
+): DecoracaoPublica | null {
+  if (!row || !row.ativo) return null;
+  if (!planoAtende(plano, row.tierMinimo)) return null;
+  return { frente: row.assetUrl, tras: row.assetTrasUrl };
+}

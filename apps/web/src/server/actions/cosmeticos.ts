@@ -6,10 +6,12 @@ import {
   type CosmeticoNoPainel,
   type CosmeticType,
 } from "@aether/shared";
+import { prisma } from "@aether/db";
 import { sessaoDaEquipe } from "../guards";
 import {
   CosmeticoNaoEncontrado,
   SlugEmUso,
+  concederCosmetico,
   contarCosmeticosPorTipo,
   criarCosmetico,
   definirCosmeticoAtivo,
@@ -197,6 +199,38 @@ export async function editarCosmeticoAction(
       throw erro;
     }
   } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Concede um cosmetico a uma pessoa (por nome de usuario). Serve para dar peca
+ * paga a quem nao passou pela loja — teste, parceria, premio. Idempotente.
+ */
+export async function concederCosmeticoAction(
+  username: string,
+  cosmeticId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const sessao = await sessaoDaEquipe();
+    if (!sessao) return fail("Nao encontrado");
+    if (typeof username !== "string" || !username.trim()) {
+      return fail("Informe o nome de usuário", "username");
+    }
+    if (typeof cosmeticId !== "string" || !cosmeticId) {
+      return fail("Cosmético inválido");
+    }
+
+    const alvo = await prisma.user.findUnique({
+      where: { username: username.trim() },
+      select: { id: true },
+    });
+    if (!alvo) return fail("Usuário não encontrado", "username");
+
+    await concederCosmetico(alvo.id, cosmeticId);
+    return ok();
+  } catch (error) {
+    if (error instanceof CosmeticoNaoEncontrado) return fail("Nao encontrado");
     return toActionError(error);
   }
 }
