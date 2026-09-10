@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { MediaGrant } from "@aether/shared";
 import { useRealtimeStore, useSelfVoice } from "@/lib/stores/realtime-store";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import { connectVoiceRoom, type VoiceRoomHandle } from "@/lib/voice/room";
+import type { VoiceRoomHandle } from "@/lib/voice/room";
 import { diagnosticoDeRedeLigado } from "@/lib/voice/network-diagnostics";
 
 /**
@@ -64,62 +64,73 @@ export function VoiceSession() {
 
     let cancelled = false;
 
-    connectVoiceRoom({
-      url: media.url,
-      token: media.token,
-      canPublish: media.canPublish,
-      callbacks: {
-        onSpeakingChange: (speaking) => {
-          // O indicador continua sendo publicado pelo NOSSO gateway: a
-          // bordinha precisa acender tambem para quem esta olhando um canal
-          // em que nao entrou, e o SFU so conhece a propria sala.
-          socket.emit("voice:speaking", speaking);
-        },
-        onAudioLevels: (levels) =>
-          useRealtimeStore.getState().setVoiceLevels(levels),
-        onConnectionChange: (connected) => setMediaConnected(connected),
-        onScreenSharesChange: (shares) => setScreenShares(shares),
-        onCamerasChange: (cameras) => setCameras(cameras),
-        onLocalShareEnded: () => {
-          // Cobre tambem o "parar de compartilhar" da barra do navegador, que
-          // nao passa pela nossa interface.
-          setLocalSharing(false);
-          socket.emit("voice:streaming", false);
-        },
-        onError: (message) => setVoiceError(message),
-        /**
-         * Token de midia novo para a sala atual. A `room.ts` chama quando a
-         * conexao com o SFU cai de vez; o gateway revalida a permissao e
-         * reemite. `null` quando o socket esta fora ou o gateway recusa/demora
-         * — ai a `room.ts` para de tentar (e, se o socket voltar, o
-         * `RealtimeProvider` religa a call por inteiro).
-         */
-        renovarCredencial: () =>
-          new Promise<MediaGrant | null>((resolve) => {
-            if (!socket.connected) {
-              resolve(null);
-              return;
-            }
-            let respondido = false;
-            const encerra = (grant: MediaGrant | null) => {
-              if (respondido) return;
-              respondido = true;
-              resolve(grant);
-            };
-            socket.emit("voice:refresh-token", (r) => {
-              if (r.ok) {
-                setVoiceError(null);
-                encerra(r.media);
-              } else {
-                setVoiceError(r.error);
-                encerra(null);
-              }
-            });
-            // A rede pode nunca devolver o ack — nao deixa a promessa pendurada.
-            setTimeout(() => encerra(null), 8000);
-          }),
-      },
-    })
+    /**
+     * `import()` dinamico DE PROPOSITO: `room.ts` arrasta o `livekit-client`
+     * inteiro, e este componente vive no layout de `/app` — sem o split, toda
+     * tela (Amigos, Loja, DMs) pagava por um cliente WebRTC que so serve para
+     * quem entra numa call. Carrega no primeiro `voice:join` da sessao e fica
+     * em cache. O join ja tem a latencia do handshake do SFU; o chunk nao pesa
+     * ao lado disso.
+     */
+    import("@/lib/voice/room")
+      .then(({ connectVoiceRoom }) =>
+        connectVoiceRoom({
+          url: media.url,
+          token: media.token,
+          canPublish: media.canPublish,
+          callbacks: {
+            onSpeakingChange: (speaking) => {
+              // O indicador continua sendo publicado pelo NOSSO gateway: a
+              // bordinha precisa acender tambem para quem esta olhando um canal
+              // em que nao entrou, e o SFU so conhece a propria sala.
+              socket.emit("voice:speaking", speaking);
+            },
+            onAudioLevels: (levels) =>
+              useRealtimeStore.getState().setVoiceLevels(levels),
+            onConnectionChange: (connected) => setMediaConnected(connected),
+            onScreenSharesChange: (shares) => setScreenShares(shares),
+            onCamerasChange: (cameras) => setCameras(cameras),
+            onLocalShareEnded: () => {
+              // Cobre tambem o "parar de compartilhar" da barra do navegador, que
+              // nao passa pela nossa interface.
+              setLocalSharing(false);
+              socket.emit("voice:streaming", false);
+            },
+            onError: (message) => setVoiceError(message),
+            /**
+             * Token de midia novo para a sala atual. A `room.ts` chama quando a
+             * conexao com o SFU cai de vez; o gateway revalida a permissao e
+             * reemite. `null` quando o socket esta fora ou o gateway recusa/demora
+             * — ai a `room.ts` para de tentar (e, se o socket voltar, o
+             * `RealtimeProvider` religa a call por inteiro).
+             */
+            renovarCredencial: () =>
+              new Promise<MediaGrant | null>((resolve) => {
+                if (!socket.connected) {
+                  resolve(null);
+                  return;
+                }
+                let respondido = false;
+                const encerra = (grant: MediaGrant | null) => {
+                  if (respondido) return;
+                  respondido = true;
+                  resolve(grant);
+                };
+                socket.emit("voice:refresh-token", (r) => {
+                  if (r.ok) {
+                    setVoiceError(null);
+                    encerra(r.media);
+                  } else {
+                    setVoiceError(r.error);
+                    encerra(null);
+                  }
+                });
+                // A rede pode nunca devolver o ack — nao deixa a promessa pendurada.
+                setTimeout(() => encerra(null), 8000);
+              }),
+          },
+        }),
+      )
       .then((handle) => {
         if (cancelled) {
           void handle.disconnect();

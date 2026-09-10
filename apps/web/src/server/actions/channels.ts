@@ -11,11 +11,7 @@ import {
   type ActionResult,
 } from "@aether/shared";
 import { writeAudit } from "../audit";
-import {
-  requireChannelPermission,
-  requireMember,
-  requirePermission,
-} from "../guards";
+import { requireChannelPermission, requirePermission } from "../guards";
 import { resyncGatewayRooms } from "../realtime-notify";
 import {
   createCategory,
@@ -211,19 +207,6 @@ export async function setChannelAccessAction(
   }
 }
 
-export async function getChannelAccessAction(
-  serverId: string,
-  channelId: string,
-): Promise<ActionResult<{ roleIds: string[] }>> {
-  try {
-    await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
-    const roleIds = await getChannelAccess(channelId, serverId);
-    return ok({ roleIds });
-  } catch (error) {
-    return toActionError(error);
-  }
-}
-
 export async function createCategoryAction(
   input: unknown,
 ): Promise<ActionResult<{ categoryId: string }>> {
@@ -336,20 +319,6 @@ export async function getChannelForEditAction(
 
     const allowedRoleIds = await getChannelAccess(channelId, serverId);
     return ok({ ...channel, allowedRoleIds });
-  } catch (error) {
-    return toActionError(error);
-  }
-}
-
-/** Sanidade: confirma que o visitante ainda enxerga o canal (usado em navegacao). */
-export async function assertChannelVisibleAction(
-  serverId: string,
-  channelId: string,
-): Promise<ActionResult<undefined>> {
-  try {
-    await requireMember(serverId);
-    await requireChannelPermission(serverId, channelId, "VIEW_CHANNEL");
-    return ok();
   } catch (error) {
     return toActionError(error);
   }

@@ -22,16 +22,3 @@ export function colorFromId(id: string): string {
   const hue = hash % 360;
   return `hsl(${hue} 42% 32%)`;
 }
-
-export function formatRelative(date: Date | string): string {
-  const value = typeof date === "string" ? new Date(date) : date;
-  const diff = Date.now() - value.getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "agora";
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} d`;
-  return value.toLocaleDateString("pt-BR");
-}
