@@ -226,6 +226,67 @@ describe("enviarMensagem — envio", () => {
     expect(publicarMensagemCriada).toHaveBeenCalledWith(io, expect.anything(), "s_1");
   });
 
+  it("webhook: publica sem checar membro/permissao (Etapa 13)", async () => {
+    /**
+     * Trava o bug que a Etapa 13 achou ao vivo: o webhook NAO e `ServerMember`
+     * (Etapa 11, de proposito), entao `loadMemberAccess`/`getChannelPermissions`
+     * ficam SEM MOCK aqui — se `enviarMensagem` os chamasse para `origem:
+     * "webhook"`, devolveriam `undefined` e a mensagem seria recusada com
+     * "Conversa nao encontrada", que era exatamente o defeito em producao.
+     */
+    const { io, emits } = fakeIo();
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT" });
+
+    const r = await enviarMensagem(io, {
+      ator: { id: "u_webhook", silenciadoEm: null, silenciadoAte: null },
+      conversationId: "c_1",
+      content: "novo jogador entrou",
+      origem: "webhook",
+    });
+
+    expect(r.ok).toBe(true);
+    expect(loadMemberAccess).not.toHaveBeenCalled();
+    expect(getChannelPermissions).not.toHaveBeenCalled();
+    expect(emits[0]!.salas).toBe("channel:c_1");
+  });
+
+  it("webhook: canal inexistente -> 'Conversa nao encontrada', sem tentar DM", async () => {
+    const { io } = fakeIo();
+    channelFindUnique.mockResolvedValue(null);
+
+    const r = await enviarMensagem(io, {
+      ator: { id: "u_webhook", silenciadoEm: null, silenciadoAte: null },
+      conversationId: "c_apagado",
+      content: "oi",
+      origem: "webhook",
+    });
+
+    expect(r).toEqual({
+      ok: false,
+      error: "Conversa nao encontrada",
+      codigo: "nao_encontrada",
+    });
+    expect(loadDmAccess).not.toHaveBeenCalled();
+  });
+
+  it("webhook: canal virou de voz -> recusa", async () => {
+    const { io } = fakeIo();
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+
+    const r = await enviarMensagem(io, {
+      ator: { id: "u_webhook", silenciadoEm: null, silenciadoAte: null },
+      conversationId: "c_1",
+      content: "oi",
+      origem: "webhook",
+    });
+
+    expect(r).toEqual({
+      ok: false,
+      error: "Canal de voz nao aceita mensagem",
+      codigo: "canal_de_voz",
+    });
+  });
+
   it("dm: emite para as duas salas pessoais com serverId null", async () => {
     const { io, emits } = fakeIo();
     channelFindUnique.mockResolvedValue(null); // não é canal

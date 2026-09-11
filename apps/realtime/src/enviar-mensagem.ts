@@ -139,6 +139,36 @@ export async function autorizarConversa(
   };
 }
 
+/**
+ * Resolve o canal de um WEBHOOK — sem checar membro nem permissao.
+ *
+ * A identidade do webhook (`User kind=WEBHOOK`) NAO e `ServerMember` de
+ * proposito (Etapa 11): ele nao e "gente" do servidor, e um cano preso a UM
+ * canal. Chamar `autorizarConversa` para ele sempre devolveria null — foi
+ * exatamente o bug que a Etapa 13 pegou (webhook nunca conseguia publicar).
+ *
+ * A autorizacao do webhook ja aconteceu na CRIACAO: so quem tem
+ * `MANAGE_SERVER` cria um, e escolhe o canal na hora. O token na URL e a
+ * credencial. Aqui so confere que o canal ainda existe e ainda e de texto —
+ * ele pode ter sido apagado ou virado canal de voz depois.
+ */
+async function autorizarCanalDeWebhook(
+  channelId: string,
+): Promise<Conversa | null> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { serverId: true, type: true },
+  });
+  if (!channel) return null;
+
+  return {
+    tipo: "canal",
+    channelId,
+    serverId: channel.serverId,
+    isText: channel.type === "TEXT",
+  };
+}
+
 /** O ator, e o minimo que a regra de envio precisa saber sobre ele. */
 export interface AtorDeMensagem {
   id: string;
@@ -155,7 +185,10 @@ export interface EntradaDeMensagem {
   replyToId?: unknown;
   /** devolvido no evento para o cliente reconciliar a mensagem otimista */
   nonce?: string | null;
-  /** so para log — nao muda regra nenhuma */
+  /**
+   * `"webhook"` muda a regra de autorizacao (ver `autorizarCanalDeWebhook`);
+   * `"gateway"`/`"api"` so vao pro log — o resto do fluxo e identico.
+   */
   origem: "gateway" | "api" | "webhook";
 }
 
@@ -225,11 +258,14 @@ export async function enviarMensagem(
   }
 
   try {
-    const conversa = await autorizarConversa(
-      ator.id,
-      conversationId,
-      "SEND_MESSAGES",
-    );
+    /**
+     * Webhook nao e membro (ver `autorizarCanalDeWebhook`) — a checagem de
+     * membro/permissao so vale para gateway/api, que tem um ator de verdade.
+     */
+    const conversa =
+      origem === "webhook"
+        ? await autorizarCanalDeWebhook(conversationId)
+        : await autorizarConversa(ator.id, conversationId, "SEND_MESSAGES");
     if (!conversa) {
       return {
         ok: false,
