@@ -245,17 +245,24 @@ curl -X POST "https://aether-mocha-phi.vercel.app/api/v1/webhooks/<id>/<token>" 
 
 ---
 
-## Exemplo completo
+## Exemplos completos
 
-[`examples/bot-exemplo.mjs`](../examples/bot-exemplo.mjs) — um bot que responde
-`!ping` com `pong`. Cobre conectar, ler `ready`, tratar `MESSAGE_CREATE` (com o
-filtro anti-loop) e responder pela REST.
+- [`examples/bot-exemplo.mjs`](../examples/bot-exemplo.mjs) — o menor bot
+  possível: responde `!ping` com `pong`. Serve pra entender o fluxo inteiro
+  (conectar, `ready`, `MESSAGE_CREATE`, responder pela REST) em ~90 linhas.
+- [`examples/bot-utilidades.mjs`](../examples/bot-utilidades.mjs) — um bot
+  de verdade, com vários comandos (`!ajuda`, `!dado`, `!moeda`, `!bola8`, `!oi`),
+  cooldown por canal (pra não estourar o rate limit) e tratamento de erro
+  pensado pra ficar rodando por horas, não só demonstrar.
 
 ```bash
 npm install socket.io-client
-# edite o TOKEN no topo do arquivo
-node examples/bot-exemplo.mjs
+AETHER_BOT_TOKEN=aeb_seu_token node examples/bot-utilidades.mjs
 ```
+
+Pra deixar rodando 24h: qualquer coisa que mantenha um processo Node vivo
+serve — [`pm2`](https://pm2.keymetrics.io/), um serviço do Windows, uma VPS
+pequena. O script não muda, só onde ele roda.
 
 ---
 
