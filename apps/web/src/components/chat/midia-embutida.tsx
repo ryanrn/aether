@@ -2,14 +2,18 @@
 
 /**
  * Quando o conteudo de uma mensagem E, sozinho, uma URL de midia confiavel
- * (hoje: GIF/MP4 do Tenor, enviado pelo botao GIF), a mensagem desenha a midia
+ * (hoje: GIF/MP4 do Giphy, enviado pelo botao GIF), a mensagem desenha a midia
  * em vez do texto. E o embed minimo — sem tabela de embeds, sem schema novo.
  *
  * A lista de hosts confiaveis casa com o `img-src`/`media-src` da CSP: so o que
  * o navegador consegue carregar entra aqui, e nada mais vira `<img>`.
+ *
+ * `media.tenor.com` continua aceito por causa de mensagens ANTIGAS — o Tenor
+ * foi trocado pelo Giphy em 2026 porque o Google desligou a API deles
+ * (30/06/2026), mas uma mensagem ja enviada com um GIF de la nao vira texto
+ * cru so por isso.
  */
-
-const HOSTS_CONFIAVEIS = /^https:\/\/media\.tenor\.com\//;
+const HOSTS_CONFIAVEIS = /^https:\/\/(media\.tenor\.com|media[0-9]\.giphy\.com)\//;
 const EXT = /\.(gif|mp4|webp)(\?|$)/i;
 
 export function ehMidiaEmbutivel(conteudo: string): string | null {

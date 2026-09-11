@@ -218,8 +218,15 @@ const csp = [
     r2Leitura,
     "https://images.igdb.com",
     "https://i.scdn.co",
-    // Previa e GIF do Tenor. A CHAVE da API fica no servidor (`/api/gif`); a
-    // midia em si e conteudo publico e vem direto do CDN deles.
+    /**
+     * Previa e GIF do Giphy. A CHAVE da API fica no servidor (`/api/gif`); a
+     * midia em si e conteudo publico e vem direto do CDN deles.
+     * `*.giphy.com` cobre `media0.giphy.com` .. `media4.giphy.com` — o
+     * numero varia por item, sem host fixo.
+     */
+    "https://*.giphy.com",
+    // Tenor foi DESLIGADO pelo Google em 30/06/2026 (trocamos para o Giphy) —
+    // fica so para mensagens ANTIGAS que ja tinham um GIF de la embutido.
     "https://media.tenor.com",
   ]
     .filter(Boolean)
@@ -231,10 +238,15 @@ const csp = [
   // Tela e camera chegam como MediaStream; o worklet de audio vem de /public.
   /**
    * Video e audio anexados sao baixados do R2, entao a leitura entra aqui
-   * tambem — nao so em `img-src`. O `.mp4` do Tenor (GIF pesado vira video)
-   * pelo mesmo motivo.
+   * tambem — nao so em `img-src`. O `.mp4` do Giphy (GIF pesado vira video)
+   * pelo mesmo motivo; `media.tenor.com` fica so para mensagens antigas.
    */
-  ["media-src 'self' blob:", r2Leitura, "https://media.tenor.com"]
+  [
+    "media-src 'self' blob:",
+    r2Leitura,
+    "https://*.giphy.com",
+    "https://media.tenor.com",
+  ]
     .filter(Boolean)
     .join(" "),
   "worker-src 'self' blob:",

@@ -102,6 +102,12 @@ const OPTIONAL_TURNSTILE = [
 /** Nivel minimo de log. OPCIONAL: ausente = `info` em producao. */
 const OPTIONAL_LOG = ["LOG_LEVEL"];
 
+/**
+ * GIF no chat (Giphy). OPCIONAL e sozinha: sem ela `/api/gif` responde
+ * `disponivel: false` e o seletor mostra "em breve" — nada quebra.
+ */
+const OPTIONAL_GIPHY = ["GIPHY_API_KEY"];
+
 const TARGETS = ["production", "preview", "development"];
 
 const gatewayUrl = process.argv[2];
@@ -208,6 +214,7 @@ if (cronMissing.length === 0) {
 // so entra se os DOIS estiverem (meia config falharia na hora do cadastro).
 for (const key of OPTIONAL_SENTRY) if (env[key]) payload[key] = env[key];
 for (const key of OPTIONAL_LOG) if (env[key]) payload[key] = env[key];
+for (const key of OPTIONAL_GIPHY) if (env[key]) payload[key] = env[key];
 const turnstileMissing = OPTIONAL_TURNSTILE.filter((key) => !env[key]);
 if (turnstileMissing.length === 0) {
   for (const key of OPTIONAL_TURNSTILE) payload[key] = env[key];

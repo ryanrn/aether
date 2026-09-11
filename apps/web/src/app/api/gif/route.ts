@@ -8,11 +8,11 @@ import {
 } from "@/server/services/gif";
 
 /**
- * Proxy do Tenor. O navegador nunca fala com a API do Tenor direto — a chave
+ * Proxy do Giphy. O navegador nunca fala com a API do Giphy direto — a chave
  * mora aqui. `?tipo=busca&q=...&pos=...`, `?tipo=alta&pos=...`,
  * `?tipo=categorias`.
  *
- * EXIGE SESSAO (404 se nao, como o resto). Sem `TENOR_API_KEY` a rota responde
+ * EXIGE SESSAO (404 se nao, como o resto). Sem `GIPHY_API_KEY` a rota responde
  * `{ disponivel: false }` e o seletor de GIF mostra "em breve".
  */
 export const dynamic = "force-dynamic";

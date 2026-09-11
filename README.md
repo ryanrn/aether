@@ -2520,7 +2520,7 @@ existente.
 | --- | --- | --- |
 | 1 | Agrupamento real (`<MessageGroup>`): avatar/nome/horario uma vez por grupo; espaco entre grupos > dentro do grupo, por `--chat-gap-*`. `message-item` enxuto; barra de hover reagir · mais; reacoes em chip sem borda. | ✅ |
 | 2 | `Config -> Aparencia` e `Config -> Acessibilidade`. `lib/chat/prefs.ts` (localStorage): densidade, fonte, avatar, espacamentos, timestamps + escala da interface, contraste, movimento, legibilidade. `<AparenciaProvider>` + script sem-flash no layout raiz. | ✅ |
-| 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/`. **Seletor proprio** (`emoji-panel.tsx`), nao o `<Picker>` do emoji-mart: cada celula e o mesmo `<Emoji>` da mensagem. Seletor de **GIF** (Tenor) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
+| 3 | Emoji **Twemoji** em toda a interface (mensagem, reacao, seletor) — SVGs de `@twemoji/svg` servidos de `/twemoji/`. **Seletor proprio** (`emoji-panel.tsx`), nao o `<Picker>` do emoji-mart: cada celula e o mesmo `<Emoji>` da mensagem. Seletor de **GIF** (Giphy) via `MediaPicker` com abas Emoji/GIF/Sticker; proxy em `/api/gif`. | ✅ |
 | 4 | Cartao de perfil ao clicar no avatar/nome no chat (`cartao-de-perfil.tsx`): ancora no elemento, vira pra cima se nao couber, fecha por Esc/fora/toggle. Avatar, nome, @, status, **bio** (`User.bio`, migracao `20260909120000`), atividade/jogo/Spotify da store, cargos do servidor, botoes de amizade com estado (`carregarPerfilAction` -> `perfilParaCartao`). Secao vazia nao aparece. | ✅ |
 | 5 | **Reply** — `replyToId` (ja no schema, sem migracao), `PublicMessage.replyTo` (resumo: autor + trecho), gateway valida que a original e da MESMA conversa. Composer com barra "Respondendo a X"; referencia clicavel rola ate a original e pisca. **Separador de data** entre dias ("Hoje"/"Ontem"/"9 de setembro"). Cartao de perfil vira folha no rodape em tela estreita. | ✅ |
 
@@ -2559,10 +2559,16 @@ existente.
   (catalogo + palavras-chave, sob demanda) e desenha cada celula com o mesmo
   `<Emoji>` Twemoji da mensagem. A busca e por nome/keyword em INGLES (o
   `@emoji-mart/data` nao traduz keyword) — limitacao v1.
-- **GIF depende de `TENOR_API_KEY` no servidor.** Sem ela, `/api/gif` responde
-  `{ disponivel: false }` e a aba GIF do seletor mostra "em breve" — nada
-  quebra. A chave fica so no servidor; a midia vem do CDN do Tenor
-  (`media.tenor.com`, liberado no `img-src`/`media-src`).
+- **GIF depende de `GIPHY_API_KEY` no servidor** (era Tenor — o Google
+  desligou de vez a API publica deles em 30/06/2026). Sem a chave, `/api/gif`
+  responde `{ disponivel: false }` e a aba GIF do seletor mostra "em breve" —
+  nada quebra. A chave fica so no servidor; a midia vem do CDN do Giphy
+  (`*.giphy.com`, liberado no `img-src`/`media-src`; `media.tenor.com` continua
+  liberado so para mensagens antigas que ja tinham um GIF de la). O rodape
+  "Powered By GIPHY" e exigencia deles, nao decoracao — condicao de uso da API.
+  Categorias de atalho no topo do seletor sao uma lista curada no codigo, e nao
+  a taxonomia do Giphy: a deles vem sem miniatura pronta e exigiria uma busca a
+  mais por categoria so para desenhar os chips.
 - **GIF enviado e uma URL de midia no `content` da mensagem.** O `<MessageItem>`
   reconhece uma URL solta de host confiavel e desenha a midia. E o embed minimo
   — sem tabela de embeds nem schema; a formalizacao fica para depois.

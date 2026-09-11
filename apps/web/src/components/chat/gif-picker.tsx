@@ -5,14 +5,17 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import { cn } from "@/lib/utils";
 
 /**
- * Seletor de GIF (Tenor, via `/api/gif`).
+ * Seletor de GIF (Giphy, via `/api/gif`).
  *
  * Feito para virar seletor de STICKER tambem: a grade, a busca e a paginacao
  * nao sabem que e GIF — trocar a fonte de dados basta. Por isso o `<MediaPicker>`
  * ja tem a aba parada de sticker.
  *
- * Sem `TENOR_API_KEY` no servidor, `/api/gif` responde `disponivel: false` e
+ * Sem `GIPHY_API_KEY` no servidor, `/api/gif` responde `disponivel: false` e
  * aqui aparece so o aviso de "em breve".
+ *
+ * O rodape "Powered By GIPHY" NAO e estetico — e exigencia deles para usar a
+ * API (ver `server/services/gif.ts`).
  */
 export interface GifEscolhido {
   url: string;
@@ -116,7 +119,7 @@ export function GifPicker({
       <div className="grid h-full place-items-center px-8 text-center">
         <p className="text-[12px] leading-relaxed text-ink-500">
           {estado === "sem-chave"
-            ? "O envio de GIF ainda nao esta ligado — falta a chave do Tenor."
+            ? "O envio de GIF ainda nao esta ligado — falta a chave do Giphy."
             : "Nao deu para carregar os GIFs agora. Tente de novo em instantes."}
         </p>
       </div>
@@ -131,7 +134,7 @@ export function GifPicker({
           <input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar no Tenor"
+            placeholder="Buscar GIF"
             className="h-8 flex-1 bg-transparent text-[13px] text-ink-100 outline-none placeholder:text-ink-600"
           />
           {busca ? (
@@ -208,8 +211,12 @@ export function GifPicker({
         ) : null}
       </div>
 
+      {/*
+        Atribuicao EXIGIDA pelo Giphy como condicao de uso da API — nao tirar
+        nem esconder. Texto exato deles, sem traducao (e marca registrada).
+      */}
       <p className="shrink-0 border-t border-line px-3 py-1.5 text-[9px] uppercase tracking-[0.1em] text-ink-600">
-        via Tenor
+        Powered By GIPHY
       </p>
     </div>
   );
