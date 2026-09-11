@@ -130,3 +130,45 @@ describe("ordem das mensagens", () => {
     expect(ids()).toEqual(["a", "real"]);
   });
 });
+
+describe("removerMensagem (excluir)", () => {
+  it("some da lista onde estava carregada", () => {
+    const store = useRealtimeStore.getState();
+    store.seedMessages(CANAL, [
+      msg({ id: "a", createdAt: t(1) }),
+      msg({ id: "b", createdAt: t(2) }),
+    ]);
+    store.removerMensagem("a");
+    expect(ids()).toEqual(["b"]);
+  });
+
+  it("id que nao esta carregado em nenhuma conversa: nao muda nada", () => {
+    const store = useRealtimeStore.getState();
+    store.seedMessages(CANAL, [msg({ id: "a", createdAt: t(1) })]);
+    const antes = useRealtimeStore.getState().messages;
+    store.removerMensagem("nao-existe");
+    expect(useRealtimeStore.getState().messages).toBe(antes); // mesma referencia
+  });
+
+  it("quem respondia a ela ganha 'apagada' na hora, sem esperar reload", () => {
+    const store = useRealtimeStore.getState();
+    store.seedMessages(CANAL, [
+      msg({ id: "original", createdAt: t(1), content: "segredo" }),
+      msg({
+        id: "resposta",
+        createdAt: t(2),
+        replyTo: { id: "original", autorNome: "Eu", trecho: "segredo", apagada: false },
+      }),
+    ]);
+    store.removerMensagem("original");
+
+    const lista = useRealtimeStore.getState().messages[CANAL] ?? [];
+    expect(lista.map((m) => m.id)).toEqual(["resposta"]);
+    expect(lista[0]!.replyTo).toEqual({
+      id: "original",
+      autorNome: "Eu",
+      trecho: "",
+      apagada: true,
+    });
+  });
+});

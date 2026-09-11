@@ -232,6 +232,16 @@ export type MessageHistoryAck =
   | { ok: true; messages: PublicMessage[]; hasMore: boolean }
   | { ok: false; error: string };
 
+/**
+ * Por que apagar foi recusado. `nao_encontrada` cobre tanto "nunca existiu"
+ * quanto "ja estava apagada" — as duas respondem igual, de proposito.
+ */
+export type CodigoDeRecusaDeExclusao = "nao_encontrada" | "sem_permissao";
+
+export type DeleteMessageAck =
+  | { ok: true }
+  | { ok: false; error: string; codigo?: CodigoDeRecusaDeExclusao };
+
 /** Uma conversa direta, do ponto de vista de quem perguntou. */
 export interface DmResumo {
   id: string;
@@ -380,6 +390,15 @@ export interface ServerToClientEvents {
     serverId: string | null;
   }) => void;
   /**
+   * Uma mensagem foi apagada (soft delete) — some da tela de quem estiver com
+   * ela carregada. Vai para a MESMA sala que recebeu o `message:new` dela
+   * (`channel:<id>`, ou as duas salas pessoais numa DM).
+   */
+  "message:deleted": (payload: {
+    messageId: string;
+    conversationId: string;
+  }) => void;
+  /**
    * Voce foi movido para outro canal de voz por um moderador.
    *
    * Vem com credenciais novas porque cada canal e uma sala propria no SFU: o
@@ -505,6 +524,15 @@ export interface ClientToServerEvents {
   "message:history": (
     payload: { conversationId: string; before?: string; after?: string },
     ack: (result: MessageHistoryAck) => void,
+  ) => void;
+  /**
+   * Apaga uma mensagem (soft delete). O autor sempre pode; em canal de
+   * servidor, quem tem MANAGE_MESSAGES pode apagar a de outro tambem. DM nao
+   * tem moderador: so o autor.
+   */
+  "message:delete": (
+    payload: { messageId: string },
+    ack: (result: DeleteMessageAck) => void,
   ) => void;
   /**
    * Conecta em um canal de voz. Ainda SEM midia — a fase 4 acopla o WebRTC.

@@ -338,6 +338,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           .receiveMessage(message, nonce, serverId ?? null);
       });
 
+      socketInstance.on("message:deleted", ({ messageId }) => {
+        useRealtimeStore.getState().removerMensagem(messageId);
+      });
+
       /**
        * Fui removido do servidor. O gateway ja tirou este socket das salas, o
        * que corta o acesso; aqui so tiramos a pessoa de uma tela que nao existe

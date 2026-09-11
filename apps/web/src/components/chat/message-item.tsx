@@ -5,6 +5,7 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import { EmojiPicker } from "@/components/chat/emoji-picker";
 import { AnexosDaMensagem } from "@/components/chat/anexos-pendentes";
 import { DenunciarDialog } from "@/components/chat/denunciar-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import {
@@ -14,9 +15,10 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { copiarTexto } from "@/lib/clipboard";
-import { Emoji, TextoComEmoji } from "@/components/ui/emoji";
+import { Emoji } from "@/components/ui/emoji";
 import { quebrarEmEmoji } from "@/lib/emoji/twemoji";
 import { ehMidiaEmbutivel, MidiaEmbutida } from "@/components/chat/midia-embutida";
+import { TextoDeMensagem } from "@/components/chat/texto-de-mensagem";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
 /**
@@ -47,6 +49,9 @@ export function MessageItem({
   const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
   const [denunciarAberto, setDenunciarAberto] = useState(false);
   const [erroReacao, setErroReacao] = useState<string | null>(null);
+  const [excluirAberto, setExcluirAberto] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null);
 
   const menu = useMenuDeContexto();
   const linhaRef = useRef<HTMLDivElement | null>(null);
@@ -90,6 +95,33 @@ export function MessageItem({
   const jumbo = !midiaUrl && ehSoEmoji(message.content);
   const podeDenunciar =
     !message.pending && !message.failed && message.author.id !== selfUserId;
+  /**
+   * So a PROPRIA mensagem, por enquanto. O gateway (`apagarMensagem`) ja aceita
+   * MANAGE_MESSAGES para apagar a de outro tambem — falta so este componente
+   * saber se o cargo de quem olha tem essa permissao NESTE canal, o que ainda
+   * nao chega como prop ate aqui.
+   */
+  const podeExcluir =
+    socket !== null &&
+    !message.pending &&
+    !message.failed &&
+    message.author.id === selfUserId;
+
+  function excluirMensagem() {
+    if (!socket) return;
+    setExcluindo(true);
+    setErroExclusao(null);
+    socket.emit("message:delete", { messageId: message.id }, (resultado) => {
+      setExcluindo(false);
+      if (resultado.ok) {
+        setExcluirAberto(false);
+        // A propria mensagem some da tela via "message:deleted" no store —
+        // nao precisa fazer nada aqui alem de fechar o dialogo.
+        return;
+      }
+      setErroExclusao(resultado.error);
+    });
+  }
 
   return (
     <div
@@ -190,7 +222,7 @@ export function MessageItem({
             jumbo && "chat-msg__texto--jumbo leading-none",
           )}
         >
-          <TextoComEmoji texto={message.content} />
+          <TextoDeMensagem texto={message.content} />
         </p>
       )}
 
@@ -303,6 +335,20 @@ export function MessageItem({
             Denunciar
           </ItemDoMenu>
         ) : null}
+
+        {podeExcluir ? (
+          <ItemDoMenu
+            icone={<AetherIcon name="trash" className="h-3.5 w-3.5" />}
+            danger
+            onClick={() => {
+              menu.fechar();
+              setErroExclusao(null);
+              setExcluirAberto(true);
+            }}
+          >
+            Excluir mensagem
+          </ItemDoMenu>
+        ) : null}
       </ContextMenu>
 
       <DenunciarDialog
@@ -312,6 +358,21 @@ export function MessageItem({
         alvoId={message.id}
         oQue={`mensagem de ${message.author.displayName}`}
       />
+
+      <ConfirmDialog
+        open={excluirAberto}
+        onClose={() => (excluindo ? undefined : setExcluirAberto(false))}
+        title="Excluir mensagem"
+        confirmLabel="Excluir"
+        pending={excluindo}
+        onConfirm={excluirMensagem}
+      >
+        Esta mensagem some para todo mundo no canal. Essa acao nao pode ser
+        desfeita.
+        {erroExclusao ? (
+          <span className="mt-2 block text-signal-dnd">{erroExclusao}</span>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

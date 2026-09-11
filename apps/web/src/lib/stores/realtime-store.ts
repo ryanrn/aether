@@ -291,6 +291,7 @@ interface RealtimeState {
 
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   aplicarReacoes: (messageId: string, reactions: PublicReaction[]) => void;
+  removerMensagem: (messageId: string) => void;
   receiveMessage: (
     message: PublicMessage,
     nonce: string | null,
@@ -781,6 +782,39 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       }
       // Mensagem que nao esta carregada aqui: nada a fazer, e devolver o
       // mesmo objeto evita re-render de tudo a toa.
+      return mudou ? { messages: proximas } : {};
+    }),
+
+  /**
+   * Some com a mensagem — soft delete, mesma ideia de `aplicarReacoes`: o
+   * evento so traz o id, entao percorre as conversas carregadas.
+   *
+   * Duas coisas mudam, nao so uma: a propria mensagem sai da lista, E toda
+   * mensagem que a tinha como resposta ganha "apagada" na hora — sem isto a
+   * referencia continuaria mostrando o texto antigo ate a pagina recarregar.
+   */
+  removerMensagem: (messageId) =>
+    set((state) => {
+      const proximas: Record<string, ChatMessage[]> = {};
+      let mudou = false;
+      for (const [conversa, lista] of Object.entries(state.messages)) {
+        let mudouAqui = false;
+        const nova: ChatMessage[] = [];
+        for (const m of lista) {
+          if (m.id === messageId) {
+            mudouAqui = true;
+            continue;
+          }
+          if (m.replyTo?.id === messageId && !m.replyTo.apagada) {
+            mudouAqui = true;
+            nova.push({ ...m, replyTo: { ...m.replyTo, apagada: true, trecho: "" } });
+            continue;
+          }
+          nova.push(m);
+        }
+        if (mudouAqui) mudou = true;
+        proximas[conversa] = mudouAqui ? nova : lista;
+      }
       return mudou ? { messages: proximas } : {};
     }),
 

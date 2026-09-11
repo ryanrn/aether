@@ -13,6 +13,7 @@ import {
   BASE_DE_ARQUIVOS,
   MESSAGE_SELECT,
 } from "../enviar-mensagem";
+import { apagarMensagem } from "../apagar-mensagem";
 
 /**
  * Chat de texto — os handlers de socket.
@@ -172,6 +173,42 @@ export function registerMessageHandlers(
         socketId: socket.id,
       });
       respond({ ok: false, error: "Falha ao carregar historico" });
+    }
+  });
+
+  /**
+   * Mesmo limitador de `message:send` — de proposito. E a mesma pessoa gastando
+   * do mesmo balde de "acoes de escrita no chat"; um balde separado so para
+   * apagar deixaria alguem alternar enviar/apagar para dobrar a rajada real.
+   */
+  socket.on("message:delete", async (payload, ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+
+    if (!payload || typeof payload !== "object") {
+      respond({ ok: false, error: "payload invalido" });
+      return;
+    }
+    const { messageId } = payload as { messageId?: unknown };
+    if (typeof messageId !== "string" || messageId.length === 0) {
+      respond({ ok: false, error: "payload invalido" });
+      return;
+    }
+
+    if (!limiter.take(userId)) {
+      respond({ ok: false, error: "Muitas acoes seguidas. Respire." });
+      return;
+    }
+
+    try {
+      const resultado = await apagarMensagem(io, { atorId: userId, messageId });
+      respond(resultado);
+    } catch (error) {
+      log.error("gateway.message.delete", "message:delete falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
+      respond({ ok: false, error: "Falha ao apagar" });
     }
   });
 
