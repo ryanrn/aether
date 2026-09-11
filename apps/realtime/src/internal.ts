@@ -487,6 +487,7 @@ export async function handleInternalRequest(
         conversationId?: unknown;
         content?: unknown;
         replyToId?: unknown;
+        origem?: unknown;
       };
       if (
         typeof body.atorUserId !== "string" ||
@@ -498,6 +499,13 @@ export async function handleInternalRequest(
         });
         return true;
       }
+
+      /**
+       * So a rota do webhook manda "webhook" — o resto (bot da REST v1) cai no
+       * default "api". E o que decide, dentro de `enviarMensagem`, se o ator
+       * precisa ser `ServerMember` ou nao (ver `autorizarCanalDeWebhook`).
+       */
+      const origem = body.origem === "webhook" ? "webhook" : "api";
 
       /**
        * Leitura FRESCA do silenciamento — diferente do socket, que usa o
@@ -518,7 +526,7 @@ export async function handleInternalRequest(
         content: body.content,
         replyToId: body.replyToId,
         nonce: null,
-        origem: "api",
+        origem,
       });
       json(response, 200, resultado);
     } catch (error) {

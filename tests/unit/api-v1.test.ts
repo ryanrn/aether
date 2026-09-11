@@ -254,6 +254,7 @@ describe("POST /webhooks/:id/:token", () => {
       atorUserId: "u_wh",
       conversationId: "c_1",
       content: "Novo jogador entrou!",
+      origem: "webhook",
     });
     // procurou pelo HASH do token, nunca pelo token cru
     expect(webhookFindFirst.mock.calls[0]![0].where.tokenHash).toBe(sha256("tok"));

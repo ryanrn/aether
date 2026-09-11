@@ -53,6 +53,7 @@ export async function POST(
     atorUserId: webhook.webhookUserId,
     conversationId: webhook.channelId,
     content: conteudo.data,
+    origem: "webhook",
   });
 
   if (r === null) return erroApi("gateway_unavailable");

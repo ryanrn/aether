@@ -63,10 +63,17 @@ async function callInternal(
 /**
  * Publica uma mensagem PELO gateway, no lugar de um ator.
  *
- * Hoje so a REST v1 de bots (`POST /api/v1/channels/:id/messages`): ela roda
- * na Vercel, sem o `io` do gateway, e o gateway continua sendo o unico que
- * escreve mensagem. Diferente dos outros avisos, esta chamada LE a resposta —
- * precisa da mensagem criada (ou do motivo da recusa).
+ * Duas rotas da REST v1 chamam isto: a de bots (`POST
+ * /api/v1/channels/:id/messages`) e a de webhook (`POST
+ * /api/v1/webhooks/:id/:token`). As duas rodam na Vercel, sem o `io` do
+ * gateway, e o gateway continua sendo o unico que escreve mensagem. Diferente
+ * dos outros avisos, esta chamada LE a resposta — precisa da mensagem criada
+ * (ou do motivo da recusa).
+ *
+ * `origem: "webhook"` importa: o ator do webhook nao e `ServerMember` (de
+ * proposito), entao `enviarMensagem` usa uma autorizacao diferente para ele
+ * (ver `autorizarCanalDeWebhook` em `apps/realtime/src/enviar-mensagem.ts`).
+ * Default `"api"` — o bot.
  *
  * Devolve `null` quando o gateway nao respondeu — a rota traduz em `503`.
  */
@@ -75,6 +82,7 @@ export async function enviarMensagemPeloGateway(params: {
   conversationId: string;
   content: string;
   replyToId?: string;
+  origem?: "api" | "webhook";
 }): Promise<SendMessageAck | null> {
   const secret = process.env.AUTH_SECRET;
   if (!secret) return null;
