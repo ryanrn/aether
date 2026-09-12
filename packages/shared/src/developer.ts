@@ -90,6 +90,27 @@ export interface ApiChannel {
 }
 
 /**
+ * `POST /api/v1/channels/:channelId/voice` — credenciais para o bot entrar na
+ * sala LiveKit deste canal (EXPERIMENTAL — Music Bot).
+ *
+ * Mesmo formato de `MediaGrant` (o que o cliente humano recebe no
+ * `voice:join`), mais `roomName` explícito: o bot não deve reconstruir o nome
+ * da sala sozinho a partir de uma convenção interna (`channel:<id>`) que pode
+ * mudar sem aviso — melhor o servidor dizer.
+ */
+export interface ApiVoiceGrant {
+  url: string;
+  token: string;
+  roomName: string;
+  /** o bot tem SPEAK neste canal? sem isso o token não permite publicar microfone */
+  canPublish: boolean;
+  canShareScreen: boolean;
+  canUseCamera: boolean;
+  /** epoch (ms) do vencimento — o bot deve pedir de novo antes disso */
+  expiresAt: number;
+}
+
+/**
  * Nomes dos eventos que o Gateway de bot entrega (Etapa 10 em diante).
  * `NOUN_VERB` maiúsculo — a convenção do ecossistema, diferente do
  * `dominio:acao` interno de propósito (são camadas diferentes).

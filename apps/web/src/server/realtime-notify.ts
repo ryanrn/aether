@@ -1,7 +1,7 @@
 import "server-only";
 
 import { log } from "@aether/shared/log";
-import type { SendMessageAck } from "@aether/shared";
+import type { SendMessageAck, VoiceJoinAck } from "@aether/shared";
 
 /**
  * Avisos do app web para o gateway.
@@ -297,5 +297,72 @@ export async function ocupacaoDeCanais(
     return corpo.ocupacao ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Pede ao gateway autorizacao + token de voz para o BOT (Music Bot
+ * experimental — ver `docs/developer-platform.md`). Mesma autorizacao de
+ * `voice:join` humano (VIEW_CHANNEL + CONNECT do proprio bot no canal) —
+ * roda no gateway porque so ele tem `createMediaCredentials` e o estado de
+ * ocupacao.
+ *
+ * Devolve `null` quando o gateway nao respondeu — a rota traduz em `503`.
+ */
+export async function entrarEmVozPeloGateway(params: {
+  botUserId: string;
+  channelId: string;
+}): Promise<VoiceJoinAck | null> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+
+  try {
+    const response = await fetch(`${GATEWAY_URL}/internal/voice-token`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-aether-internal": secret,
+      },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      log.warn("web.gateway_notify.voice_token", "gateway recusou o token de voz", {
+        status: response.status,
+      });
+      return null;
+    }
+    return (await response.json()) as VoiceJoinAck;
+  } catch (error) {
+    log.warn("web.gateway_notify.voice_token", "nao pedi o token de voz", {
+      err: error,
+    });
+    return null;
+  }
+}
+
+/** Avisa o gateway que o bot esta saindo do canal de voz que ocupava. */
+export async function sairDaVozPeloGateway(params: {
+  botUserId: string;
+}): Promise<boolean> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return false;
+
+  try {
+    const response = await fetch(`${GATEWAY_URL}/internal/voice-leave`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-aether-internal": secret,
+      },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch (error) {
+    log.warn("web.gateway_notify.voice_leave", "nao avisei a saida de voz", {
+      err: error,
+    });
+    return false;
   }
 }

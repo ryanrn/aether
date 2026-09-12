@@ -1,35 +1,31 @@
 import { prisma } from "@aether/db";
 import {
   canActOnUser,
-  flagLigada,
   getChannelPermissions,
   loadMemberAccess,
 } from "@aether/access";
-import { has, room } from "@aether/shared";
+import { has, room, type VoiceParticipant } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { loadPlan } from "@aether/access";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 import { talvezRemoverSalaEfemera } from "../voz/salas-efemeras";
+import { entrarNaVoz, sairDaVoz } from "../entrar-em-voz";
 import {
   applyServerMute,
   conferirQualidadeDaTela,
   createMediaCredentials,
 } from "../livekit";
 import {
-  countInChannel,
   joinVoice,
-  leaveVoice,
   setVoiceFlags,
   setServerVoiceFlags,
   setVoiceSpeaking,
   setVoiceCamera,
   setVoiceStreaming,
   voiceSocketOf,
-  voiceDeparture,
   voiceLocation,
   voiceParticipant,
-  voiceOfServer,
 } from "../state";
 
 /**
@@ -75,10 +71,7 @@ export function registerVoiceHandlers(
   const { userId, user } = socket.data;
 
   /** Publica a mudanca para o servidor inteiro — a arvore de canais e comum a todos. */
-  function broadcast(
-    serverId: string,
-    participant: ReturnType<typeof voiceDeparture>,
-  ) {
+  function broadcast(serverId: string, participant: VoiceParticipant) {
     io.to(room.server(serverId)).emit("voice:update", {
       serverId,
       participant,
@@ -111,107 +104,26 @@ export function registerVoiceHandlers(
     }
 
     /**
-     * Kill switch de voz. NAO e `retriable`: e um estado deliberado, tentar de
-     * novo em laco nao ajuda. Quem ja esta na call nao e derrubado — so novos
-     * `voice:join` sao recusados.
+     * A autorizacao, a ocupacao e o token de midia moram em `entrarNaVoz`
+     * (`../entrar-em-voz.ts`) — o Music Bot experimental entra pela MESMA
+     * porta, via REST (`/internal/voice-token`), em vez de reimplementar isto.
+     *
+     * `excluirDoAvisoAnterior: socket.id`: trocou de servidor, quem ficou para
+     * tras precisa ver a saida — mas quem MOVEU a call, nao. Sem isto, se o
+     * socket dele ainda estivesse na sala do servidor antigo (corrida com o
+     * `server:leave` do cliente) ele receberia um `voice:update` de "voce
+     * saiu" logo depois de ter entrado no canal novo — e a interface
+     * derrubava a call que acabara de comecar.
      */
-    if (!(await flagLigada("voz_habilitada"))) {
-      respond({ ok: false, error: "A voz esta temporariamente indisponivel." });
-      return;
-    }
-
     try {
-      const channel = await prisma.channel.findUnique({
-        where: { id: channelId },
-        select: { serverId: true, type: true, userLimit: true },
-      });
-      if (!channel || channel.type !== "VOICE") {
-        respond({ ok: false, error: "Canal nao encontrado" });
-        return;
-      }
-
-      const access = await loadMemberAccess(channel.serverId, userId);
-      if (!access) {
-        // Mesma politica do resto do sistema: nao revelamos o que existe.
-        respond({ ok: false, error: "Canal nao encontrado" });
-        return;
-      }
-
-      const bits = await getChannelPermissions(access, channelId);
-      if (bits === null || !has(bits, "VIEW_CHANNEL")) {
-        respond({ ok: false, error: "Canal nao encontrado" });
-        return;
-      }
-      if (!has(bits, "CONNECT")) {
-        respond({ ok: false, error: "Seu cargo nao permite conectar aqui" });
-        return;
-      }
-
-      // O limite so vale para quem esta entrando de fora: trocar de aba dentro
-      // do mesmo canal nao pode ser bloqueado pelo proprio ocupante.
-      const current = await voiceParticipant(userId);
-      const canalAnterior = current?.channelId ?? null;
-      if (
-        channel.userLimit !== null &&
-        current?.channelId !== channelId &&
-        (await countInChannel(channelId)) >= channel.userLimit
-      ) {
-        respond({ ok: false, error: "Canal cheio" });
-        return;
-      }
-
-      const { previousServerId } = await joinVoice({
-        socketId: socket.id,
+      const resultado = await entrarNaVoz(io, {
         userId,
         user,
-        serverId: channel.serverId,
         channelId,
+        socketId: socket.id,
+        excluirDoAvisoAnterior: socket.id,
       });
-
-      /**
-       * Trocou de servidor: quem ficou para tras precisa ver a saida — mas
-       * quem MOVEU a call, nao. `socket.to(...)` exclui o proprio remetente;
-       * `io.to(...)` o incluiria, e se o socket dele ainda estivesse na sala
-       * do servidor antigo (corrida com o `server:leave` do cliente) ele
-       * receberia um `voice:update` de "voce saiu" com `channelId: null` logo
-       * depois de ter entrado no canal novo — e a interface derrubava a call
-       * que acabara de comecar.
-       */
-      if (previousServerId) {
-        socket.to(room.server(previousServerId)).emit("voice:update", {
-          serverId: previousServerId,
-          participant: voiceDeparture(userId, user),
-        });
-      }
-
-      const participant = await voiceParticipant(userId);
-      if (participant) broadcast(channel.serverId, participant);
-
-      /**
-       * Saiu de uma sala de grupo para entrar aqui — ela pode ter esvaziado.
-       * `void`: nada no `voice:join` depende disto.
-       */
-      if (canalAnterior && canalAnterior !== channelId) {
-        void talvezRemoverSalaEfemera(io, canalAnterior);
-      }
-
-      /**
-       * O token sai daqui, depois da checagem de permissao que ja foi feita
-       * acima. As permissoes viram grants assinados: sem SPEAK o token nao
-       * permite publicar microfone, e quem impoe isso passa a ser o SFU.
-       */
-      const media = await createMediaCredentials({
-        channelId,
-        userId,
-        displayName: user.displayName,
-        permissions: bits,
-      });
-
-      respond({
-        ok: true,
-        participants: await voiceOfServer(channel.serverId),
-        media,
-      });
+      respond(resultado);
     } catch (error) {
       log.error("gateway.voice.join", "voice:join falhou", {
         err: error,
@@ -225,11 +137,7 @@ export function registerVoiceHandlers(
   });
 
   socket.on("voice:leave", async () => {
-    const left = await leaveVoice(userId);
-    if (left) {
-      broadcast(left.serverId, voiceDeparture(userId, left.user));
-      void talvezRemoverSalaEfemera(io, left.channelId);
-    }
+    await sairDaVoz(io, { userId });
   });
 
   /**
@@ -665,15 +573,9 @@ export function registerVoiceHandlers(
   });
 
   socket.on("disconnect", () => {
-    void (async () => {
-      // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
-      // mesma pessoa nao devem tirar ninguem da call.
-      const left = await leaveVoice(userId, socket.id);
-      if (left) {
-        broadcast(left.serverId, voiceDeparture(userId, left.user));
-        void talvezRemoverSalaEfemera(io, left.channelId);
-      }
-    })().catch((erro) => {
+    // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
+    // mesma pessoa nao devem tirar ninguem da call.
+    void sairDaVoz(io, { userId, onlyIfSocket: socket.id }).catch((erro) => {
       log.error("gateway.voice.disconnect", "disconnect (voice) falhou", {
         err: erro,
         userId,

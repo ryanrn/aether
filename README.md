@@ -4103,14 +4103,22 @@ Pecas:
   (`x-aether-internal`) — o gateway continua o unico que grava `Message`.
 - **Webhook de entrada.** `POST /api/v1/webhooks/:id/:token` publica num canal
   fixo, sem programa rodando. Configuracoes do servidor -> aba Webhooks.
+- **Voz — 🧪 experimental.** `POST/DELETE /api/v1/channels/:id/voice` entra/sai
+  de canal de voz (protótipo de Music Bot). Reusa a MESMA autorizacao e
+  ocupacao do `voice:join` humano — extraida para `entrarNaVoz`/`sairDaVoz`
+  (`apps/realtime/src/entrar-em-voz.ts`), chamada pelo gateway via
+  `/internal/voice-token`/`/internal/voice-leave`. O bot aparece como
+  participante de verdade; publicar audio ainda exige o SDK Node do LiveKit
+  (nao usado no core) do lado do bot.
 
 Verificacao ao vivo: `scripts/verify-phase-bots.mjs` (fixture descartavel;
 `VERIFY_BASE_URL` + `VERIFY_REALTIME_URL`).
 
 ### Limitacoes conhecidas (v1)
 
-- **Sem voz.** Bots nao entram em canal de voz nem tocam audio — bot de musica
-  nao e possivel ainda.
+- **Voz e experimental.** Bot entra/aparece na call (ver acima), mas publicar
+  audio de verdade (bot de musica) ainda precisa do SDK Node do LiveKit do
+  lado do bot — nao existe hoje em nenhum bot real.
 - **Sem slash commands.** Comando e texto que o bot interpreta.
 - **So `MESSAGE_CREATE`.** Sem update/delete, sem eventos de canal/membro/reacao.
 - **Sem webhook de saida** (o AETHER nao faz `POST` pra fora).

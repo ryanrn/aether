@@ -285,6 +285,17 @@ export interface MediaGrant {
 
 export type VoiceModerateAck = { ok: true } | { ok: false; error: string };
 
+/**
+ * Por que `entrarNaVoz` recusou — o socket ignora (mostra `error`); a REST v1
+ * de bots (`POST /api/v1/channels/:id/voice`) mapeia para status HTTP, o mesmo
+ * papel que `CodigoDeRecusaDeEnvio` cumpre para mensagem.
+ */
+export type CodigoDeRecusaDeVoz =
+  | "nao_encontrada"
+  | "sem_permissao"
+  | "cheio"
+  | "voz_desligada";
+
 export type VoiceJoinAck =
   | {
       ok: true;
@@ -302,6 +313,8 @@ export type VoiceJoinAck =
        * apagava a intencao de estar na call de vez.
        */
       retriable?: boolean;
+      /** opcional: so a REST de bot le isto, o socket humano ignora */
+      codigo?: CodigoDeRecusaDeVoz;
     };
 
 /**

@@ -3,9 +3,11 @@
 Como um programa de terceiro (um "bot") fala com o AETHER: cria uma
 identidade, recebe eventos e publica mensagens.
 
-> **v1 — fundação.** Bots hoje mexem só com **texto**: leem e enviam mensagem,
-> e recebem aviso de mensagem nova. Não entram em canal de voz, não tocam
-> áudio, não têm slash commands. Ver [Limitações](#limitações-conhecidas).
+> **v1 — fundação.** Bots mexem oficialmente só com **texto**: leem e enviam
+> mensagem, recebem aviso de mensagem nova. Não têm slash commands. Existe uma
+> extensão 🧪 **experimental** para entrar em canal de voz (LiveKit) — ver
+> `POST /channels/:channelId/voice` — construída para um protótipo de Music
+> Bot, ainda sem tocar áudio de verdade. Ver [Limitações](#limitações-conhecidas).
 
 ---
 
@@ -126,6 +128,47 @@ Publica uma mensagem no lugar do bot. **201** com a mensagem criada.
 - O destino é o `:channelId` da URL. Mandar `serverId`/`authorId`/`channelId`
   no corpo **não muda nada** — são ignorados.
 - Canal de voz, canal invisível para o bot, ou sem permissão de enviar → 404.
+
+#### `POST /channels/:channelId/voice` — 🧪 EXPERIMENTAL
+
+> Entra num canal de **voz** e devolve credenciais do LiveKit. Existe para o
+> protótipo de Music Bot — ainda não é parte estável do contrato v1, pode
+> mudar sem aviso de compatibilidade. A autorização é a **mesma** que o
+> cliente humano usa (`VIEW_CHANNEL` + `CONNECT` do próprio bot no canal).
+
+**201** com:
+
+```json
+{
+  "url": "wss://seu-sfu.livekit.cloud",
+  "token": "eyJhbGciOi...",
+  "roomName": "channel:c_...",
+  "canPublish": true,
+  "canShareScreen": false,
+  "canUseCamera": false,
+  "expiresAt": 1735689600000
+}
+```
+
+- `token` vale **1 hora**; peça de novo antes de vencer (não há renovação
+  automática pro bot, diferente do cliente humano).
+- `canPublish` reflete se o bot tem `SPEAK` no canal — sem ela, o LiveKit
+  recusa a publicação de áudio mesmo que o bot tente.
+- Canal de texto, canal invisível, ou app sem `CONNECT` → 404/400 (nunca 403).
+- Voz desligada no servidor (kill switch) ou LiveKit não configurado no
+  ambiente → 503.
+- O bot aparece na lista de participantes de voz como qualquer membro — quem
+  está na call vê o bot entrar de verdade.
+
+`DELETE /channels/:channelId/voice` — sai do canal de voz que o bot ocupa
+agora (`channelId` na URL é ignorado; sai de onde estiver). Idempotente:
+chamar sem estar em voz não é erro.
+
+> **Limitação conhecida:** se o processo do bot morrer sem chamar o `DELETE`
+> (crash, sem `SIGTERM` tratado), ele fica marcado como "no canal" até
+> reconectar com o mesmo `botUserId` (que substitui a ocupação) ou até alguém
+> derrubar manualmente. Não há watchdog/TTL na v0 — ver
+> [Riscos](#limitações-conhecidas).
 
 ### Limites (janela deslizante)
 
@@ -268,8 +311,17 @@ pequena. O script não muda, só onde ele roda.
 
 ## Limitações conhecidas
 
-- **Sem voz.** Bots não entram em canal de voz nem publicam áudio. Bot de
-  música / de podcast não é possível na v1.
+- **Voz é experimental (🧪).** `POST /channels/:channelId/voice` deixa o bot
+  entrar e aparecer como participante — mas ele ainda não tem como PUBLICAR
+  áudio sem escrever a parte de participante WebRTC em Node
+  (`livekit-client` é só de navegador; um bot precisa do SDK Node do LiveKit,
+  `@livekit/rtc-node`, que este projeto nunca usou). Bot de música/podcast de
+  verdade ainda não existe — a fundação pra construir um, sim.
+- **Ocupação de voz do bot não expira sozinha.** Se o processo do bot cair sem
+  chamar `DELETE /channels/:channelId/voice`, ele fica "na call" pro resto do
+  AETHER até reconectar (mesmo `botUserId` substitui a ocupação) ou alguém
+  remover manualmente. Sem watchdog/TTL na v0 — aceitável para o protótipo,
+  não para produção.
 - **Sem slash commands.** Comandos são texto que o bot interpreta (`!ping`).
 - **Só `MESSAGE_CREATE`.** Sem `MESSAGE_UPDATE` / `MESSAGE_DELETE`, sem eventos
   de canal, membro ou reação.

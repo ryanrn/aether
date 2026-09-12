@@ -43,7 +43,13 @@ const rateLimit = vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 });
 vi.mock("@/server/auth/rate-limit", () => ({ rateLimit }));
 
 const enviarMensagemPeloGateway = vi.fn();
-vi.mock("@/server/realtime-notify", () => ({ enviarMensagemPeloGateway }));
+const entrarEmVozPeloGateway = vi.fn();
+const sairDaVozPeloGateway = vi.fn();
+vi.mock("@/server/realtime-notify", () => ({
+  enviarMensagemPeloGateway,
+  entrarEmVozPeloGateway,
+  sairDaVozPeloGateway,
+}));
 
 const listRecentMessages = vi.fn();
 vi.mock("@/server/services/messages", () => ({ listRecentMessages }));
@@ -60,14 +66,19 @@ const { GET: getMsgs, POST: postMsg } = await import(
 const { POST: postWebhook } = await import(
   "../../apps/web/src/app/api/v1/webhooks/[id]/[token]/route"
 );
+const { POST: postVoice, DELETE: deleteVoice } = await import(
+  "../../apps/web/src/app/api/v1/channels/[channelId]/voice/route"
+);
 
 const BOT = { applicationId: "app_1", botUserId: "u_bot" };
 const SEND = 1n << 10n;
 const VIEW = 1n << 6n;
 
-function req(opts: { auth?: string; body?: unknown } = {}) {
+function req(
+  opts: { auth?: string; body?: unknown; method?: string } = {},
+) {
   return new Request("http://x/api/v1", {
-    method: opts.body !== undefined ? "POST" : "GET",
+    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers: opts.auth ? { authorization: opts.auth } : {},
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
@@ -85,6 +96,8 @@ beforeEach(() => {
     getChannelPermissions,
     getChannelPermissionMap,
     enviarMensagemPeloGateway,
+    entrarEmVozPeloGateway,
+    sairDaVozPeloGateway,
     listRecentMessages,
   ]) {
     m.mockReset();
@@ -264,6 +277,100 @@ describe("POST /webhooks/:id/:token", () => {
     webhookFindFirst.mockResolvedValue({ webhookUserId: "u_wh", channelId: "c_1" });
     enviarMensagemPeloGateway.mockResolvedValue(null);
     const res = await postWebhook(req({ body: { content: "oi" } }), ctx({ id: "wh_1", token: "t" }));
+    expect(res.status).toBe(503);
+  });
+});
+
+describe("POST/DELETE /channels/:id/voice (Music Bot experimental)", () => {
+  beforeEach(() => resolveBotToken.mockResolvedValue(BOT));
+
+  it("canal nao e de VOZ -> 404 (nem chama o gateway)", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT" });
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(404);
+    expect(entrarEmVozPeloGateway).not.toHaveBeenCalled();
+  });
+
+  it("canal inexistente -> 404", async () => {
+    channelFindUnique.mockResolvedValue(null);
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_x" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("gateway fora do ar -> 503", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+    entrarEmVozPeloGateway.mockResolvedValue(null);
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(503);
+  });
+
+  it("recusa 'nao_encontrada' -> 404", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+    entrarEmVozPeloGateway.mockResolvedValue({
+      ok: false,
+      error: "Canal nao encontrado",
+      codigo: "nao_encontrada",
+    });
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("recusa 'sem_permissao' -> 400 (canal existe, so nao pode conectar)", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+    entrarEmVozPeloGateway.mockResolvedValue({
+      ok: false,
+      error: "Seu cargo nao permite conectar aqui",
+      codigo: "sem_permissao",
+    });
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("LiveKit nao configurado (media null) -> 503, nao 200 com token vazio", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+    entrarEmVozPeloGateway.mockResolvedValue({ ok: true, participants: [], media: null });
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(503);
+  });
+
+  it("sucesso -> 200 com url/token/roomName", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE" });
+    entrarEmVozPeloGateway.mockResolvedValue({
+      ok: true,
+      participants: [],
+      media: {
+        url: "wss://sfu.example",
+        token: "tok",
+        canPublish: true,
+        canShareScreen: false,
+        canUseCamera: false,
+        expiresAt: 999,
+      },
+    });
+    const res = await postVoice(req({ auth: "Bearer x", body: {} }), ctx({ channelId: "c_1" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      url: "wss://sfu.example",
+      token: "tok",
+      roomName: "channel:c_1",
+      canPublish: true,
+      canShareScreen: false,
+      canUseCamera: false,
+      expiresAt: 999,
+    });
+    expect(entrarEmVozPeloGateway).toHaveBeenCalledWith({ botUserId: "u_bot", channelId: "c_1" });
+  });
+
+  it("DELETE sai da voz -> 200", async () => {
+    sairDaVozPeloGateway.mockResolvedValue(true);
+    const res = await deleteVoice(req({ auth: "Bearer x", method: "DELETE" }));
+    expect(res.status).toBe(200);
+    expect(sairDaVozPeloGateway).toHaveBeenCalledWith({ botUserId: "u_bot" });
+  });
+
+  it("DELETE com gateway fora -> 503", async () => {
+    sairDaVozPeloGateway.mockResolvedValue(false);
+    const res = await deleteVoice(req({ auth: "Bearer x", method: "DELETE" }));
     expect(res.status).toBe(503);
   });
 });

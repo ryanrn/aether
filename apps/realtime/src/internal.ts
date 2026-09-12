@@ -7,6 +7,7 @@ import { log } from "@aether/shared/log";
 import { env } from "./env";
 import { resyncEavisarServidor } from "./rooms";
 import { enviarMensagem } from "./enviar-mensagem";
+import { entrarNaVoz, sairDaVoz } from "./entrar-em-voz";
 import type { AetherServer } from "./types";
 import {
   countInChannel,
@@ -44,6 +45,12 @@ import {
  *    nome de exibicao. O `PublicUser` fica congelado no handshake e copiado
  *    para a ocupacao de voz; sem este aviso a foto nova so aparecia no card de
  *    voz depois de reconectar o socket.
+ *  - `/internal/voice-token` / `/internal/voice-leave` — o Music Bot
+ *    experimental entra/sai de canal de voz pela REST v1 (`/api/v1/channels/
+ *    :id/voice`), que roda na Vercel sem `io` nem estado de ocupacao deste
+ *    processo. Chamam `entrarNaVoz`/`sairDaVoz` (`./entrar-em-voz.ts`) — a
+ *    MESMA autorizacao e ocupacao que `voice:join`/`voice:leave` usam para
+ *    humano, so chegando por outra porta.
  *
  * Sem a primeira, apagar a linha no banco nao bastava — a pessoa continuaria
  * recebendo o chat pelo socket ate recarregar a pagina: acesso indevido, nao
@@ -531,6 +538,78 @@ export async function handleInternalRequest(
       json(response, 200, resultado);
     } catch (error) {
       log.error("gateway.internal.send_message", "/internal/send-message falhou", {
+        err: error,
+      });
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /**
+   * O Music Bot pede entrada num canal de voz. `entrarNaVoz` e o MESMO
+   * caminho de `voice:join` (autorizacao, ocupacao, token do LiveKit) — so
+   * muda quem chama. `socketId` sintetico ("bot:<id>") porque o bot nao tem
+   * socket nenhum aberto aqui; e o que amarra a ocupacao dele para
+   * `/internal/voice-leave` (ou uma reconexao) encontrar depois.
+   */
+  if (request.url === "/internal/voice-token") {
+    try {
+      const body = (await readJsonBody(request)) as {
+        botUserId?: unknown;
+        channelId?: unknown;
+      };
+      if (
+        typeof body.botUserId !== "string" ||
+        typeof body.channelId !== "string"
+      ) {
+        json(response, 400, {
+          ok: false,
+          error: "botUserId e channelId sao obrigatorios",
+        });
+        return true;
+      }
+
+      const row = await prisma.user.findUnique({
+        where: { id: body.botUserId },
+        select: SELECT_USUARIO_PUBLICO,
+      });
+      if (!row) {
+        json(response, 404, { ok: false });
+        return true;
+      }
+
+      const resultado = await entrarNaVoz(io, {
+        userId: body.botUserId,
+        user: toPublicUser(row),
+        channelId: body.channelId,
+        socketId: `bot:${body.botUserId}`,
+      });
+      json(response, 200, resultado);
+    } catch (error) {
+      log.error("gateway.internal.voice_token", "/internal/voice-token falhou", {
+        err: error,
+      });
+      json(response, 500, { ok: false });
+    }
+    return true;
+  }
+
+  /** O Music Bot avisa que esta saindo do canal de voz. Idempotente. */
+  if (request.url === "/internal/voice-leave") {
+    try {
+      const body = (await readJsonBody(request)) as { botUserId?: unknown };
+      if (typeof body.botUserId !== "string") {
+        json(response, 400, { ok: false, error: "botUserId e obrigatorio" });
+        return true;
+      }
+
+      const saiu = await sairDaVoz(io, {
+        userId: body.botUserId,
+        onlyIfSocket: `bot:${body.botUserId}`,
+      });
+      json(response, 200, { ok: true, saiu });
+    } catch (error) {
+      log.error("gateway.internal.voice_leave", "/internal/voice-leave falhou", {
         err: error,
       });
       json(response, 500, { ok: false });
