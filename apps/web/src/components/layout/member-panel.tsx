@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import type {
-  PublicChannel,
-  PublicMember,
-  PublicRole,
-  UserStatus,
-  ViewerContext,
+import {
+  corDoCargoPrincipal,
+  type PublicChannel,
+  type PublicMember,
+  type PublicRole,
+  type UserStatus,
+  type ViewerContext,
 } from "@aether/shared";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
@@ -67,6 +68,25 @@ export function MemberPanel({
   // O registro inteiro em vez de um seletor por membro: hook dentro do map
   // quebraria as regras dos hooks, e a referencia so muda quando a presenca muda.
   const presence = useRealtimeStore((state) => state.presence);
+  const definirCoresDeMembro = useRealtimeStore(
+    (state) => state.definirCoresDeMembro,
+  );
+  /**
+   * O chat mostra o nome do autor na cor do cargo dele — antes so aparecia
+   * aqui, na lateral. Este painel e quem ja recebe `members`+`roles` do
+   * servidor ABERTO (o SSR ja fez essa consulta para desenhar a lista abaixo);
+   * em vez do chat pedir a MESMA coisa de novo, ele so LE o mapa que este
+   * efeito guarda no store. Roda de novo sempre que o servidor muda de
+   * membro/cargo (troca de servidor, cargo editado, etc. re-renderizam a
+   * pagina com `members` novo).
+   */
+  useEffect(() => {
+    const cores: Record<string, string> = {};
+    for (const member of members) {
+      cores[member.user.id] = corDoCargoPrincipal(member.roles);
+    }
+    definirCoresDeMembro(cores);
+  }, [members, definirCoresDeMembro]);
   /**
    * Todos os participantes de voz do servidor ABERTO — o mapa `voice` ja e so
    * deste servidor (troca de servidor troca o mapa). Chave = userId.
@@ -132,7 +152,7 @@ export function MemberPanel({
     const top = member.roles.find((role) => !role.isDefault) ?? member.roles[0];
     const key = top?.name ?? "Membros";
     const group = groups.get(key) ?? {
-      color: top?.color ?? "#6B7280",
+      color: corDoCargoPrincipal(member.roles),
       members: [],
     };
     group.members.push(member);

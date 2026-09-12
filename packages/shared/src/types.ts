@@ -237,6 +237,22 @@ export interface PublicMember {
   joinedAt: string;
 }
 
+/** Cor de quem nao tem cargo colorido nenhum (nem o padrao tem cor custom). */
+export const COR_CARGO_PADRAO = "#6B7280";
+
+/**
+ * A cor que representa a pessoa: a do cargo mais alto que NAO e o padrao
+ * (@everyone), ou a do primeiro cargo que ela tiver, ou a cor neutra.
+ *
+ * Uma funcao so, para o painel de membros e o chat nunca decidirem duas cores
+ * diferentes para a mesma pessoa. `roles` precisa vir ordenado por `position`
+ * DESC — quem monta `PublicMember` ja garante isso.
+ */
+export function corDoCargoPrincipal(roles: PublicRole[]): string {
+  const top = roles.find((r) => !r.isDefault) ?? roles[0];
+  return top?.color ?? COR_CARGO_PADRAO;
+}
+
 export interface PublicChannel {
   id: string;
   name: string;

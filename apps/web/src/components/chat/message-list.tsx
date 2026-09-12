@@ -218,6 +218,7 @@ export function MessageList({
                 ) : null}
                 <MessageGroup
                   grupo={grupo}
+                  ehConversaDireta={ehConversaDireta}
                   onAbrirPerfil={onAbrirPerfil}
                   onResponder={onResponder}
                   onIrParaMensagem={irParaMensagem}

@@ -5,6 +5,8 @@ import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { SeloBot } from "@/components/ui/selo-bot";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { cn } from "@/lib/utils";
 import { MessageItem } from "./message-item";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 import type { PublicUser } from "@aether/shared";
@@ -30,17 +32,28 @@ export interface GrupoDeMensagens {
 
 export function MessageGroup({
   grupo,
+  ehConversaDireta = false,
   onAbrirPerfil,
   onResponder,
   onIrParaMensagem,
 }: {
   grupo: GrupoDeMensagens;
+  /**
+   * DM nao tem cargo — nunca colore o nome, mesmo que o outro participante
+   * tambem seja membro de algum servidor que voce tenha aberto por ultimo (o
+   * mapa de cores e do SERVIDOR, `corPorMembro` continuaria com a entrada dele
+   * de la).
+   */
+  ehConversaDireta?: boolean;
   /** ausente = so no preview de configuracoes, onde o cartao nao faz sentido */
   onAbrirPerfil?: (user: PublicUser, ancora: DOMRect) => void;
   onResponder?: (message: GrupoDeMensagens["mensagens"][number]) => void;
   onIrParaMensagem?: (id: string) => void;
 }) {
   const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
+  const corDoCargo = useRealtimeStore((s) =>
+    ehConversaDireta ? undefined : s.corPorMembro[grupo.autor.id],
+  );
   const primeira = grupo.mensagens[0];
   if (!primeira) return null;
   const inicio = new Date(primeira.createdAt);
@@ -99,7 +112,11 @@ export function MessageGroup({
           type="button"
           onClick={abrir}
           onMouseDown={semPropagar}
-          className="text-[13px] font-semibold text-ink-100 hover:underline"
+          className={cn(
+            "text-[13px] font-semibold hover:underline",
+            !corDoCargo && "text-ink-100",
+          )}
+          style={corDoCargo ? { color: corDoCargo } : undefined}
         >
           {grupo.autor.displayName}
         </button>

@@ -227,6 +227,13 @@ interface RealtimeState {
   } | null;
   messages: Record<string, ChatMessage[]>;
   history: Record<string, ChannelHistory>;
+  /**
+   * Cor do cargo principal de cada membro do SERVIDOR ABERTO — userId -> hex.
+   * Igual ao `voice`: e do servidor na tela, trocar de servidor troca o mapa
+   * inteiro. Alimentado pelo `<MemberPanel>` (quem ja recebe `members`+`roles`
+   * do SSR); o `<MessageGroup>` so LE, para o nome do autor no chat.
+   */
+  corPorMembro: Record<string, string>;
   /** canal aberto agora — mensagem que chega nele ja nasce lida */
   activeChannelId: string | null;
   /** mensagens nao lidas por canal */
@@ -292,6 +299,8 @@ interface RealtimeState {
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   aplicarReacoes: (messageId: string, reactions: PublicReaction[]) => void;
   removerMensagem: (messageId: string) => void;
+  /** Substitui o mapa inteiro — chamado pelo `<MemberPanel>` do servidor aberto. */
+  definirCoresDeMembro: (cores: Record<string, string>) => void;
   receiveMessage: (
     message: PublicMessage,
     nonce: string | null,
@@ -434,6 +443,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   watchedShares: [],
   roomControls: null,
   messages: {},
+  corPorMembro: {},
   history: {},
   activeChannelId: null,
   unread: {},
@@ -817,6 +827,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       }
       return mudou ? { messages: proximas } : {};
     }),
+
+  definirCoresDeMembro: (cores) => set({ corPorMembro: cores }),
 
   receiveMessage: (message, nonce, serverId) =>
     set((state) => {
