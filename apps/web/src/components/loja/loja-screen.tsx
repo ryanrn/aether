@@ -466,7 +466,15 @@ function Card({
       className="group grid grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-line bg-base-850 text-left transition-[transform,border-color,background-color] duration-150 hover:-translate-y-0.5 hover:border-line-strong hover:bg-base-800"
     >
       <div className="relative grid aspect-square place-items-center border-b border-line-soft bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]">
-        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={148} />
+        {/*
+          `px=90`, nao 148: este card tem `overflow-hidden` (pro fundo
+          respeitar o `rounded-xl`) numa caixa `aspect-square` que pode ser tao
+          estreita quanto o piso do grid (`minmax(190px,...)`). A decoracao
+          renderiza a 1.8x da footprint (`DECORACAO_ESCALA`) — em 148 ela
+          precisaria de ~266px e a coroa saia cortada pela propria caixa,
+          igual so-a-moldura. 90x1.8=162px cabe com folga mesmo no piso.
+        */}
+        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={90} />
         {tag ? (
           <span
             className={cn(
@@ -539,7 +547,7 @@ function MediaDoCosmetico({
 }: {
   cosmetico: CosmeticoDeLoja;
   user: UserInfo;
-  /** footprint do avatar em px (a decoração transborda ~28% de cada lado) */
+  /** footprint do avatar em px (a decoração renderiza a 1.8x disso, centrada) */
   px: number;
 }) {
   if (cosmetico.tipo === "BANNER") {
