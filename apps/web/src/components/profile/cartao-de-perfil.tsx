@@ -155,22 +155,30 @@ export function CartaoDePerfil({
             : { left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: LARGURA }
         }
         className={cn(
-          "fixed z-[75] animate-rise overflow-hidden border border-line bg-base-900 shadow-2xl",
+          "fixed z-[75] animate-rise border border-line bg-base-900 shadow-2xl",
           folha ? "max-h-[80vh] overflow-y-auto rounded-2xl" : "rounded-xl",
         )}
         role="dialog"
       >
-      {/* a faixa: banner equipado, ou so uma cor para o avatar se apoiar */}
-      {perfil?.banner ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={perfil.banner}
-          alt=""
-          className="h-[76px] w-full object-cover"
-        />
-      ) : (
-        <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
-      )}
+      {/*
+        A faixa clipa SO A SI MESMA (nao o card inteiro) — antes o
+        `overflow-hidden` estava no card, e com `DECORACAO_ESCALA` maior a
+        decoracao (que sobe pra cima do avatar, que sobe pra cima da faixa)
+        estourava o topo do card e ficava cortada. Arredondar so aqui mantem
+        o canto bonito sem clipar o cosmetico.
+      */}
+      <div className={cn("overflow-hidden", folha ? "rounded-t-2xl" : "rounded-t-xl")}>
+        {perfil?.banner ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={perfil.banner}
+            alt=""
+            className="h-[76px] w-full object-cover"
+          />
+        ) : (
+          <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+        )}
+      </div>
 
       <div className="px-4 pb-4">
         {/*

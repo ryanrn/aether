@@ -424,10 +424,16 @@ function Hero({
         </button>
       </div>
       <div className="grid min-h-[240px] place-items-center p-6">
+        {/*
+          `px=160`, nao 200: essa caixa cresce livre (sem overflow-hidden),
+          entao nao corta — mas com `DECORACAO_ESCALA=2,2` um 200 faria a
+          decoracao chegar a 440px, maior do que o hero pede. 160x2,2=352px
+          mantem o tamanho visual parecido com o que era antes (200x1,8=360px).
+        */}
         <MediaDoCosmetico
           cosmetico={cosmetico}
           user={user}
-          px={200}
+          px={160}
         />
       </div>
     </div>
@@ -467,14 +473,14 @@ function Card({
     >
       <div className="relative grid aspect-square place-items-center border-b border-line-soft bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]">
         {/*
-          `px=90`, nao 148: este card tem `overflow-hidden` (pro fundo
+          `px=78`, nao 148: este card tem `overflow-hidden` (pro fundo
           respeitar o `rounded-xl`) numa caixa `aspect-square` que pode ser tao
           estreita quanto o piso do grid (`minmax(190px,...)`). A decoracao
-          renderiza a 1.8x da footprint (`DECORACAO_ESCALA`) — em 148 ela
-          precisaria de ~266px e a coroa saia cortada pela propria caixa,
-          igual so-a-moldura. 90x1.8=162px cabe com folga mesmo no piso.
+          renderiza a `DECORACAO_ESCALA`x da footprint (2,2 hoje) — em 148 ela
+          precisaria de ~326px e saia cortada pela propria caixa. 78x2,2=172px
+          cabe com folga mesmo no piso.
         */}
-        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={90} />
+        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={78} />
         {tag ? (
           <span
             className={cn(
@@ -652,7 +658,12 @@ function PreviaDialog({
                 name={user.displayName}
                 src={user.avatarUrl}
                 moldura={user.moldura}
-                px={168}
+                // 95, nao 168: essa caixa e fixa em 200px e SEM
+                // overflow-hidden — com a DECORACAO_ESCALA de 2,2 um px maior
+                // faria a decoracao sobrar bem alem da caixa e invadir os
+                // botoes de fundo escuro/claro logo abaixo. 95x2,2=209px fica
+                // soltando so um pouco pra fora, do jeito que o preview pede.
+                px={95}
                 decoracao={{
                   frenteUrl: cosmetico.assetUrl,
                   trasUrl: cosmetico.assetTrasUrl,

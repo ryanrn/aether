@@ -91,11 +91,15 @@ export function PerfilScreen({
             type="button"
             onClick={() => abrirConfig("conta")}
             aria-label="Editar perfil"
-            className="mt-5 block w-full overflow-hidden rounded-2xl border border-line bg-base-850 text-left shadow-[var(--shadow-pop)] transition-colors hover:border-line-strong"
+            className="mt-5 block w-full rounded-2xl border border-line bg-base-850 text-left shadow-[var(--shadow-pop)] transition-colors hover:border-line-strong"
           >
-            {/* faixa / banner */}
+            {/*
+              O arredondado do topo vive AQUI, nao no botao inteiro — antes
+              era o `overflow-hidden` do botao que cortava tambem a decoracao
+              do avatar (que sobe por cima da faixa via `-mt-11`).
+            */}
             <div
-              className="h-24 bg-accent-500/15"
+              className="h-24 overflow-hidden rounded-t-2xl bg-accent-500/15"
               style={
                 banner
                   ? {

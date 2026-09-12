@@ -269,39 +269,51 @@ export function AccountTab({
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-4">
-        <div className="relative">
-          {decoracao ? (
-            <AvatarDecorado
-              userId={user.id}
-              name={displayName || user.username}
-              src={previa?.url ?? avatarUrl}
-              moldura={moldura}
-              px={72}
-              decoracao={{
-                frenteUrl: decoracao.assetUrl,
-                trasUrl: decoracao.assetTrasUrl,
-              }}
-            />
-          ) : (
-            <Avatar
-              userId={user.id}
-              name={displayName || user.username}
-              /* A previa manda enquanto existe: e o ponto da previa. */
-              src={previa?.url ?? avatarUrl}
-              moldura={moldura}
-              size="lg"
-            />
-          )}
-          {previa?.animado ? (
-            /*
-             * GIF parece imagem parada no primeiro quadro. Sem dizer que e
-             * animado, a pessoa nao sabe se o movimento sobreviveu ao envio —
-             * e essa duvida e exatamente o que ela veio conferir.
-             */
-            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[4px] border border-amber-400/40 bg-base-900 px-1 py-[1px] text-[9px] font-bold uppercase tracking-[0.06em] text-amber-300">
-              GIF
-            </span>
-          ) : null}
+        <div
+          /*
+           * Com decoracao, a arte renderiza a `DECORACAO_ESCALA` (2,2) do
+           * `px=72` = ~158px — sem reservar essa largura no FLEX PAI, o
+           * layout empurra o botao "Escolher foto" pra cima do cosmetico
+           * (o wrapper, por padrao, so ocupa os 72px do avatar em si). O
+           * `relative` fica no filho de dentro, do tamanho real do avatar,
+           * pra nao deslocar o selo de GIF (que se posiciona contra ele).
+           */
+          style={decoracao ? { width: 160, display: "flex", justifyContent: "center" } : undefined}
+        >
+          <div className="relative">
+            {decoracao ? (
+              <AvatarDecorado
+                userId={user.id}
+                name={displayName || user.username}
+                src={previa?.url ?? avatarUrl}
+                moldura={moldura}
+                px={72}
+                decoracao={{
+                  frenteUrl: decoracao.assetUrl,
+                  trasUrl: decoracao.assetTrasUrl,
+                }}
+              />
+            ) : (
+              <Avatar
+                userId={user.id}
+                name={displayName || user.username}
+                /* A previa manda enquanto existe: e o ponto da previa. */
+                src={previa?.url ?? avatarUrl}
+                moldura={moldura}
+                size="lg"
+              />
+            )}
+            {previa?.animado ? (
+              /*
+               * GIF parece imagem parada no primeiro quadro. Sem dizer que e
+               * animado, a pessoa nao sabe se o movimento sobreviveu ao envio —
+               * e essa duvida e exatamente o que ela veio conferir.
+               */
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[4px] border border-amber-400/40 bg-base-900 px-1 py-[1px] text-[9px] font-bold uppercase tracking-[0.06em] text-amber-300">
+                GIF
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">

@@ -326,10 +326,15 @@ function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px
       className="grid place-items-center overflow-hidden rounded-md border border-line bg-[radial-gradient(120%_120%_at_50%_0,var(--color-base-800),var(--color-base-950))]"
       style={{ width: px, height: px }}
     >
+      {/*
+        0.42, nao 0.62: essa caixa e fixa (`overflow-hidden`, width/height=px).
+        Com `DECORACAO_ESCALA=2,2`, a decoracao precisa caber DENTRO de `px` —
+        0.42*2,2=0.924, ~92% da caixa, com uma margem pequena.
+      */}
       <AvatarDecorado
         userId={`pv-${c.nome}`}
         name="AE"
-        px={Math.round(px * 0.62)}
+        px={Math.round(px * 0.42)}
         decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
       />
     </div>

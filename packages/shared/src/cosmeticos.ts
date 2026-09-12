@@ -212,10 +212,17 @@ export const DECORACAO_CANVAS = 512;
 export const DECORACAO_ALVO_FURO = 0.5;
 /**
  * Largura da camada de arte como fracao da footprint do avatar. Com o furo
- * canonico de 50%, 1,8 poe a borda da foto a ~90% do raio do furo: a arte
- * entra ~10% na foto (abraca) e sobra ~40% de cada lado para fora.
+ * canonico de 50%, 2,2 poe a borda da foto a ~110% do raio do furo: a arte
+ * fica no MESMO diametro da foto (sem invadir) e sobra ~60% de cada lado para
+ * fora — o suficiente pra ler como "moldura solta" (referencia: cosmeticos do
+ * Discord) em vez de "anel colado na borda".
+ *
+ * Ja foi 1,8 (furo a 90% da foto, ~40% de sobra) — pequeno demais pra
+ * decoracao assimetrica (laco, coroa): a arte lia como colada na foto em vez
+ * de flutuando ao redor. Subir a escala e o unico jeito de resolver pra TODA
+ * decoracao de uma vez, sem depender de cada arte ter mais "alcance" desenhado.
  */
-export const DECORACAO_ESCALA = 1.8;
+export const DECORACAO_ESCALA = 2.2;
 
 /**
  * A escada de raridade — catalogo em codigo, guardada como id de texto na

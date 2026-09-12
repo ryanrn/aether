@@ -135,7 +135,10 @@ export function SeletorDeCosmeticos({
                   userId={userId}
                   name={nome}
                   src={avatarUrl}
-                  px={26}
+                  // 18, nao 26: este swatch e fixo em 44px (h-11 w-11) COM
+                  // overflow-hidden. Com DECORACAO_ESCALA=2,2, 26 precisaria
+                  // de ~57px e cortaria; 18x2,2=39.6px cabe.
+                  px={18}
                   decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
                 />
               )}
