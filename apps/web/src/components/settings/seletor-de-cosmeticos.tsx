@@ -139,7 +139,12 @@ export function SeletorDeCosmeticos({
                   // overflow-hidden. Com DECORACAO_ESCALA=2,2, 26 precisaria
                   // de ~57px e cortaria; 18x2,2=39.6px cabe.
                   px={18}
-                  decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
+                  // Swatch de 44px nunca precisa do PNG cheio (200-600KB
+                  // medidos em assets reais) — a miniatura de 160px sobra.
+                  decoracao={{
+                    frenteUrl: c.thumbUrl ?? c.assetUrl,
+                    trasUrl: c.assetTrasUrl,
+                  }}
                 />
               )}
               {!usavel ? (

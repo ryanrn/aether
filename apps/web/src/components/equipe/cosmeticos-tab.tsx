@@ -335,7 +335,11 @@ function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px
         userId={`pv-${c.nome}`}
         name="AE"
         px={Math.round(px * 0.42)}
-        decoracao={{ frenteUrl: c.assetUrl, trasUrl: c.assetTrasUrl }}
+        // Lista do painel: sempre pequeno, a miniatura ja basta.
+        decoracao={{
+          frenteUrl: c.thumbUrl ?? c.assetUrl,
+          trasUrl: c.assetTrasUrl,
+        }}
       />
     </div>
   );

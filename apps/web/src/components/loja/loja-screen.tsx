@@ -480,7 +480,7 @@ function Card({
           precisaria de ~326px e saia cortada pela propria caixa. 78x2,2=172px
           cabe com folga mesmo no piso.
         */}
-        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={78} />
+        <MediaDoCosmetico cosmetico={cosmetico} user={user} px={78} preferThumb />
         {tag ? (
           <span
             className={cn(
@@ -550,11 +550,20 @@ function MediaDoCosmetico({
   cosmetico,
   user,
   px,
+  preferThumb = false,
 }: {
   cosmetico: CosmeticoDeLoja;
   user: UserInfo;
   /** footprint do avatar em px (a decoração renderiza a 1.8x disso, centrada) */
   px: number;
+  /**
+   * Usa a miniatura (160x160 webp) em vez do PNG cheio (200-600KB medidos em
+   * assets reais) quando a decoração renderiza pequena — o card do catálogo
+   * baixava o arquivo inteiro pra mostrar uns 170px de tela. So faz sentido
+   * onde o layer final fica perto ou abaixo de 160px; num preview grande
+   * (hero, px=160 -> layer ~350px) o thumb ficaria borrado.
+   */
+  preferThumb?: boolean;
 }) {
   if (cosmetico.tipo === "BANNER") {
     return (
@@ -579,7 +588,10 @@ function MediaDoCosmetico({
       moldura={user.moldura}
       px={px}
       decoracao={{
-        frenteUrl: cosmetico.assetUrl,
+        frenteUrl:
+          preferThumb && cosmetico.thumbUrl
+            ? cosmetico.thumbUrl
+            : cosmetico.assetUrl,
         trasUrl: cosmetico.assetTrasUrl,
       }}
     />

@@ -11,7 +11,11 @@ import {
   type ActionResult,
 } from "@aether/shared";
 import { writeAudit } from "../audit";
-import { requireChannelPermission, requirePermission } from "../guards";
+import {
+  assertRoleHierarchy,
+  requireChannelPermission,
+  requirePermission,
+} from "../guards";
 import { resyncGatewayRooms } from "../realtime-notify";
 import {
   createCategory,
@@ -187,6 +191,19 @@ export async function setChannelAccessAction(
       parsed.data.channelId,
       "EDIT_CHANNEL",
     );
+
+    /**
+     * EDIT_CHANNEL sozinho nao bastava aqui: sem isto, quem tem essa
+     * permissao mas nao MANAGE_ROLES conseguia liberar um canal privado pra
+     * QUALQUER cargo do servidor, inclusive um de posicao ACIMA da propria —
+     * exatamente o tipo de furo de hierarquia que `assertRoleHierarchy` ja
+     * impede em outras acoes (atribuir cargo a um membro, por exemplo). O
+     * alcance concedido continua limitado a `PRIVATE_ACCESS_ALLOW`, mas
+     * mesmo so isso e informacao/participacao que nao deveria vazar assim.
+     */
+    for (const roleId of parsed.data.roleIds) {
+      await assertRoleHierarchy(context, roleId);
+    }
 
     await setChannelAccess(parsed.data.channelId, serverId, parsed.data.roleIds);
     // A lista de cargos liberados neste canal privado mudou por inteiro.
