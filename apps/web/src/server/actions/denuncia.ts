@@ -6,6 +6,7 @@ import type { AlvoDeDenuncia, StatusDeDenuncia } from "@aether/db";
 import { silenciarGlobalmente, tirarSilenciamento } from "@aether/access";
 import { log } from "@aether/shared/log";
 import { requireUser, sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { revokeAllSessions } from "../auth/session";
 import { desconectarUsuarioDoGateway } from "../realtime-notify";
@@ -167,6 +168,14 @@ export async function silenciarUsuarioAction(input: {
       por: sessao.user.id,
       ate: ate?.toISOString() ?? "indefinido",
     });
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.usuario_silenciado",
+      targetType: "user",
+      targetId: userId,
+      metadata: { motivo: input?.motivo ?? null, ate: ate?.toISOString() ?? null },
+    });
     revalidatePath("/app/equipe");
     return ok();
   } catch (error) {
@@ -184,6 +193,13 @@ export async function tirarSilenciamentoAction(
     log.info("moderacao.silenciamento_tirado", "silenciamento removido", {
       alvo: userId,
       por: sessao.user.id,
+    });
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.silenciamento_removido",
+      targetType: "user",
+      targetId: String(userId ?? ""),
     });
     revalidatePath("/app/equipe");
     return ok();
@@ -203,6 +219,13 @@ export async function apagarMensagemDenunciadaAction(
     log.info("moderacao.mensagem_apagada", "mensagem apagada por moderação", {
       messageId,
       por: sessao.user.id,
+    });
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.mensagem_apagada_moderacao",
+      targetType: "message",
+      targetId: String(messageId ?? ""),
     });
     return ok();
   } catch (error) {

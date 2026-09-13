@@ -600,10 +600,15 @@ model Ban {
   @@index([serverId, expiresAt])
 }
 
+/// `serverId` opcional: acoes GLOBAIS da equipe (flag, chave de plano,
+/// cosmetico, bloqueio de aplicacao) nao pertencem a nenhum servidor, e antes
+/// dessa mudanca simplesmente nao tinham como entrar aqui — o campo era
+/// obrigatorio. O rastro delas ficava so no log estruturado (`log.*`), nunca
+/// pesquisavel dentro do proprio produto, diferente de toda acao de servidor.
 model AuditLog {
   id         String   @id @default(cuid())
-  serverId   String
-  server     Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  serverId   String?
+  server     Server?  @relation(fields: [serverId], references: [id], onDelete: Cascade)
   actorId    String?
   actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   action     String
@@ -613,6 +618,10 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([serverId, createdAt])
+  /// Consulta "so as acoes globais, mais recentes primeiro" — sem isto, com
+  /// o catalogo de acoes globais crescendo, seria scan sequencial filtrando
+  /// por serverId IS NULL.
+  @@index([createdAt])
 }
 
 /// Pedido de redefinicao de senha.

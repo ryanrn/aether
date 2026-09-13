@@ -5,6 +5,7 @@ import type { ActionResult } from "@aether/shared";
 import { ehChaveDeFlag } from "@aether/shared";
 import { definirFlag, lerFlagsParaAdmin, type FlagParaAdmin } from "@aether/access";
 import { sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -14,9 +15,11 @@ import { fail, ok, toActionError } from "./action-result";
  * action responde "Nao encontrado": mesma regra do resto do painel, nao
  * confirmamos que a tela existe para quem chutou o nome da action.
  *
- * NAO PASSA POR `writeAudit`: aquele log exige `serverId`, e flag e global. O
- * rastro de quem virou o que fica no `log.info("flag.alterada", ...)` dentro
- * de `definirFlag`, ate haver um log de auditoria global (fase da denuncia).
+ * O rastro de quem virou o que continua tambem no `log.info("flag.alterada",
+ * ...)` dentro de `definirFlag` (auditoria nao substitui log estruturado, so
+ * soma) — e agora TAMBEM em `AuditLog` (`serverId: null`, migracao
+ * `20260913120000_auditoria_global`), pra ficar pesquisavel dentro do
+ * proprio painel, nao so no provedor de log externo.
  */
 
 export async function listarFlagsAction(): Promise<
@@ -45,6 +48,14 @@ export async function virarFlagAction(
     if (typeof ligado !== "boolean") return fail("Valor invalido");
 
     await definirFlag(chave, ligado, sessao.user.id);
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.flag_alterada",
+      targetType: "flag",
+      targetId: chave,
+      metadata: { ligado },
+    });
 
     // A pagina da equipe e server-rendered; força reler na próxima visita.
     revalidatePath("/app/equipe");

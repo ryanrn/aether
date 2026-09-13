@@ -4,6 +4,7 @@ import type { ActionResult } from "@aether/shared";
 import { PLAN_ORDER, type PlanTier } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import {
   criarChave,
   listarChaves,
@@ -100,6 +101,17 @@ export async function gerarChaveAction(entrada: {
       motivo,
     });
 
+    // Nunca o codigo em claro — so metadado, o mesmo criterio de qualquer
+    // segredo neste projeto (token de bot, chave de plano em si).
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.chave_criada",
+      targetType: "plan_key",
+      targetId: chave.id,
+      metadata: { tier: entrada.tier, dias, maxUsos, motivo: motivo ?? null },
+    });
+
     return ok({
       id: chave.id,
       codigo: chave.codigo,
@@ -140,6 +152,14 @@ export async function revogarChaveAction(
         chaveId: id,
         prefixo: revogada.prefixo,
         tier: revogada.tier,
+      });
+      await writeAudit({
+        serverId: null,
+        actorId: sessao.user.id,
+        action: "global.chave_revogada",
+        targetType: "plan_key",
+        targetId: id,
+        metadata: { prefixo: revogada.prefixo, tier: revogada.tier },
       });
     }
     return ok(await listarChaves());

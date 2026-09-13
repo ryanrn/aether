@@ -3,6 +3,7 @@
 import type { ActionResult } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import {
   definirAplicacaoBloqueada,
   listarAplicacoesParaEquipe,
@@ -48,6 +49,16 @@ export async function definirAplicacaoBloqueadaAction(
       bloquear ? "aplicacao bloqueada pela equipe" : "aplicacao desbloqueada pela equipe",
       { por: sessao.user.id, aplicacaoId: id, nome: alvo.name },
     );
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: bloquear
+        ? "global.aplicacao_bloqueada"
+        : "global.aplicacao_desbloqueada",
+      targetType: "application",
+      targetId: id,
+      metadata: { nome: alvo.name },
+    });
     return ok();
   } catch (error) {
     return toActionError(error);

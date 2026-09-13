@@ -9,6 +9,7 @@ import {
 import { prisma } from "@aether/db";
 import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import {
   CosmeticoNaoEncontrado,
   SlugEmUso,
@@ -277,6 +278,20 @@ export async function excluirCosmeticoAction(
       tipo: excluido.tipo,
       arteApagada: apagarAsset === true,
       possesApagadas: excluido.possesApagadas,
+    });
+    await writeAudit({
+      serverId: null,
+      actorId: sessao.user.id,
+      action: "global.cosmetico_excluido",
+      targetType: "cosmetic",
+      targetId: id,
+      metadata: {
+        slug: excluido.slug,
+        nome: excluido.nome,
+        tipo: excluido.tipo,
+        arteApagada: apagarAsset === true,
+        possesApagadas: excluido.possesApagadas,
+      },
     });
     return ok();
   } catch (error) {

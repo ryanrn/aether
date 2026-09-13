@@ -12,6 +12,12 @@ import { log } from "@aether/shared/log";
  * na sequencia apagaria o proprio registro junto. Nao ha como este log
  * sobreviver ao que ele descreveria; documentado como limitacao no README em
  * vez de fingir um rastro que a exclusao sempre levaria embora.
+ *
+ * AS ACOES "global.*" NAO PERTENCEM A NENHUM SERVIDOR (`serverId: null`) —
+ * kill switch, chave de plano, cosmetico, bloqueio de aplicacao. Antes da
+ * migracao `20260913120000_auditoria_global`, `serverId` era obrigatorio e
+ * essas acoes nao tinham como entrar aqui; o rastro delas ficava so no log
+ * estruturado (`log.*`), nunca pesquisavel dentro do proprio produto.
  */
 export type AuditAction =
   | "server.create"
@@ -37,10 +43,23 @@ export type AuditAction =
   | "bot.install"
   | "bot.uninstall"
   | "webhook.create"
-  | "webhook.revoke";
+  | "webhook.revoke"
+  | "global.flag_alterada"
+  | "global.chave_criada"
+  | "global.chave_revogada"
+  | "global.cosmetico_criado"
+  | "global.cosmetico_editado"
+  | "global.cosmetico_excluido"
+  | "global.cosmetico_publicado"
+  | "global.aplicacao_bloqueada"
+  | "global.aplicacao_desbloqueada"
+  | "global.usuario_silenciado"
+  | "global.silenciamento_removido"
+  | "global.mensagem_apagada_moderacao";
 
 export async function writeAudit(params: {
-  serverId: string;
+  /** `null` so para as acoes "global.*" — todo o resto exige servidor. */
+  serverId: string | null;
   actorId: string | null;
   action: AuditAction;
   targetType?: string;
@@ -66,4 +85,43 @@ export async function writeAudit(params: {
       serverId: params.serverId,
     });
   }
+}
+
+/** As acoes GLOBAIS mais recentes — pra tela de auditoria do painel. */
+export interface EntradaDeAuditoriaGlobal {
+  id: string;
+  actorUsername: string | null;
+  action: AuditAction;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export async function listarAuditoriaGlobal(
+  limite = 100,
+): Promise<EntradaDeAuditoriaGlobal[]> {
+  const linhas = await prisma.auditLog.findMany({
+    where: { serverId: null },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(limite, 200),
+    select: {
+      id: true,
+      action: true,
+      targetType: true,
+      targetId: true,
+      metadata: true,
+      createdAt: true,
+      actor: { select: { username: true } },
+    },
+  });
+  return linhas.map((l) => ({
+    id: l.id,
+    actorUsername: l.actor?.username ?? null,
+    action: l.action as AuditAction,
+    targetType: l.targetType,
+    targetId: l.targetId,
+    metadata: (l.metadata as Record<string, unknown> | null) ?? null,
+    createdAt: l.createdAt.toISOString(),
+  }));
 }
