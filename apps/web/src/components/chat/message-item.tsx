@@ -46,6 +46,9 @@ export function MessageItem({
   const time = new Date(message.createdAt);
   const socket = useSocket();
   const selfUserId = useRealtimeStore((s) => s.selfUserId);
+  const retrySending = useRealtimeStore((s) => s.retrySending);
+  const failPending = useRealtimeStore((s) => s.failPending);
+  const removerMensagemLocal = useRealtimeStore((s) => s.removerMensagem);
   const [seletor, setSeletor] = useState<{ x: number; y: number } | null>(null);
   const [denunciarAberto, setDenunciarAberto] = useState(false);
   const [erroReacao, setErroReacao] = useState<string | null>(null);
@@ -121,6 +124,32 @@ export function MessageItem({
       }
       setErroExclusao(resultado.error);
     });
+  }
+
+  /**
+   * Reenvia uma mensagem que falhou, com o MESMO nonce — assim, se desta vez
+   * der certo, `message:new` reconcilia com esta mesma linha otimista em vez
+   * de duplicar. Tudo que precisa ja esta guardado na propria mensagem
+   * (conteudo, anexos ja enviados, resposta) — nao precisa reescrever nada.
+   */
+  function reenviar() {
+    if (!socket || !message.nonce) return;
+    retrySending(message.conversationId, message.nonce);
+    socket.emit(
+      "message:send",
+      {
+        conversationId: message.conversationId,
+        content: message.content,
+        nonce: message.nonce,
+        anexoIds: message.anexos.map((a) => a.id),
+        replyToId: message.replyTo?.id,
+      },
+      (resultado) => {
+        if (!resultado.ok) {
+          failPending(message.conversationId, message.nonce!, resultado.error);
+        }
+      },
+    );
   }
 
   return (
@@ -283,9 +312,24 @@ export function MessageItem({
       ) : null}
 
       {message.failed ? (
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-signal-dnd">
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-signal-dnd">
           <AetherIcon name="alert" className="h-3 w-3 shrink-0" />
           {message.failed}
+          <button
+            type="button"
+            onClick={reenviar}
+            className="font-medium underline decoration-dotted underline-offset-2 hover:text-signal-dnd/80"
+          >
+            Tentar de novo
+          </button>
+          <span className="text-ink-500">·</span>
+          <button
+            type="button"
+            onClick={() => removerMensagemLocal(message.id)}
+            className="text-ink-500 underline decoration-dotted underline-offset-2 hover:text-ink-300"
+          >
+            Descartar
+          </button>
         </p>
       ) : null}
 

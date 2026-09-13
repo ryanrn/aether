@@ -312,6 +312,14 @@ interface RealtimeState {
   registrarConversaDm: (dmId: string, outro: PublicUser) => void;
   addPending: (message: ChatMessage) => void;
   failPending: (channelId: string, nonce: string, error: string) => void;
+  /**
+   * Volta uma mensagem FALHADA pro estado "enviando" — quem chama e quem
+   * reemite `message:send` de verdade (o store so mexe no estado local, nao
+   * fala com o socket). Antes disto uma falha de envio nao tinha volta: o
+   * campo ja tinha sido limpo, e a unica saida era reescrever a mensagem do
+   * zero.
+   */
+  retrySending: (channelId: string, nonce: string) => void;
   prependHistory: (
     channelId: string,
     messages: PublicMessage[],
@@ -917,6 +925,18 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         [channelId]: (state.messages[channelId] ?? []).map((item) =>
           item.nonce === nonce
             ? { ...item, pending: false, failed: error }
+            : item,
+        ),
+      },
+    })),
+
+  retrySending: (channelId, nonce) =>
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [channelId]: (state.messages[channelId] ?? []).map((item) =>
+          item.nonce === nonce
+            ? { ...item, pending: true, failed: undefined }
             : item,
         ),
       },
