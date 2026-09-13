@@ -228,6 +228,18 @@ export function UserActivityCard({
     });
   }
 
+  /** Mesma permissao de mover — ver o comentario em `voice:disconnect` no gateway. */
+  function desconectar() {
+    setErroModeracao(null);
+    socket?.emit("voice:disconnect", { userId: user.id }, (resultado) => {
+      if (!resultado.ok) {
+        setErroModeracao(resultado.error);
+        return;
+      }
+      onClose();
+    });
+  }
+
   const status = presence[user.id] ?? "OFFLINE";
   const participant = voice[user.id] ?? null;
   const channel = participant?.channelId
@@ -645,6 +657,17 @@ export function UserActivityCard({
                 ))}
               </select>
             </div>
+          ) : null}
+
+          {podeMover ? (
+            <button
+              type="button"
+              onClick={desconectar}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-signal-dnd/40 px-2 py-1.5 text-[11px] text-signal-dnd transition-colors hover:bg-signal-dnd/10"
+            >
+              <AetherIcon name="disconnect" size="sm" className="h-3 w-3" />
+              Desconectar da call
+            </button>
           ) : null}
 
           {erroModeracao ? (

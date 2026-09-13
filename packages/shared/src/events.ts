@@ -608,6 +608,17 @@ export interface ClientToServerEvents {
     ack: (result: VoiceModerateAck) => void,
   ) => void;
   /**
+   * Remove outra pessoa da call SEM mover para lugar nenhum — o "desconectar"
+   * que faltava ao lado de mutar/ensurdecer/mover. Mesma permissao de
+   * `voice:move` (`MOVE_MEMBERS`): quem pode arrastar alguem entre canais ja
+   * podia, na pratica, produzir o mesmo efeito arrastando para um canal sem
+   * ninguem — isto so poupa esse rodeio.
+   */
+  "voice:disconnect": (
+    payload: { userId: string },
+    ack: (result: VoiceModerateAck) => void,
+  ) => void;
+  /**
    * "estou falando agora". Calculado NO CLIENTE a partir do proprio
    * microfone: o navegador mede o volume localmente e manda so um booleano.
    * Nenhum audio trafega — isso e sinalizacao, nao midia.

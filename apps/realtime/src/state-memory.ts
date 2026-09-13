@@ -442,12 +442,12 @@ export const memoryStore: StateStore = {
 
     const before = { muted: entry.serverMuted, deafened: entry.serverDeafened };
 
+    // Independentes de proposito — ver o comentario equivalente em
+    // `state-redis.ts::setServerVoiceFlags`.
     if (typeof patch.serverMuted === "boolean")
       entry.serverMuted = patch.serverMuted;
-    if (typeof patch.serverDeafened === "boolean") {
+    if (typeof patch.serverDeafened === "boolean")
       entry.serverDeafened = patch.serverDeafened;
-      if (patch.serverDeafened) entry.serverMuted = true;
-    }
 
     if (
       before.muted === entry.serverMuted &&

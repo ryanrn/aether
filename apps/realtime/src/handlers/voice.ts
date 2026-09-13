@@ -572,6 +572,69 @@ export function registerVoiceHandlers(
     }
   });
 
+  /**
+   * Desconecta outra pessoa da call, sem mover para lugar nenhum.
+   *
+   * MESMA permissao de `voice:move` (`MOVE_MEMBERS`) e mesma hierarquia
+   * (`canActOnUser`) — quem ja pode arrastar alguem para outro canal
+   * conseguiria o mesmo efeito arrastando para um canal vazio; isto so
+   * evita esse rodeio e deixa a intencao explicita na interface.
+   *
+   * Reaproveita `sairDaVoz` (a mesma funcao de `voice:leave` e do
+   * `disconnect` do socket) em vez de reimplementar remocao de ocupacao —
+   * ela ja emite o `voice:update` de saida que o CLIENTE da propria pessoa
+   * escuta para se desconectar da sala do LiveKit (`realtime-store.ts::
+   * updateVoice`, o caso `channelId === null` para `souEu`).
+   */
+  socket.on("voice:disconnect", async (payload, ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+    const targetId = payload?.userId;
+
+    if (typeof targetId !== "string" || targetId.length === 0) {
+      respond({ ok: false, error: "Usuario invalido" });
+      return;
+    }
+    if (targetId === userId) {
+      respond({ ok: false, error: "Use os proprios controles para sair." });
+      return;
+    }
+
+    const target = await voiceLocation(targetId);
+    if (!target) {
+      respond({ ok: false, error: "Essa pessoa nao esta em um canal de voz" });
+      return;
+    }
+
+    try {
+      const access = await loadMemberAccess(target.serverId, userId);
+      if (!access || !has(access.permissions, "MOVE_MEMBERS")) {
+        respond({ ok: false, error: "Seu cargo nao permite desconectar pessoas" });
+        return;
+      }
+      if (!(await canActOnUser(access, targetId))) {
+        respond({
+          ok: false,
+          error: "Voce so pode desconectar quem tem cargo abaixo do seu",
+        });
+        return;
+      }
+
+      await sairDaVoz(io, { userId: targetId });
+
+      // Pode ter esvaziado uma sala de grupo.
+      void talvezRemoverSalaEfemera(io, target.channelId);
+
+      respond({ ok: true });
+    } catch (error) {
+      log.error("gateway.voice.disconnect", "voice:disconnect falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
+      respond({ ok: false, error: "Falha ao desconectar" });
+    }
+  });
+
   socket.on("disconnect", () => {
     // So derruba a voz se foi ESTE socket que entrou nela: outras abas da
     // mesma pessoa nao devem tirar ninguem da call.

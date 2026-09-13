@@ -591,13 +591,22 @@ export function createRedisStore(redis: Redis): StateStore {
         deafened: decBool(existing.serverDeafened),
       };
 
+      /**
+       * `serverMuted` e `serverDeafened` sao INDEPENDENTES — cada um exige a
+       * propria permissao no gateway (`MUTE_MEMBERS` / `DEAFEN_MEMBERS`; ver
+       * `handlers/voice.ts::voice:moderate`). Ja existiu aqui um acoplamento
+       * ("ensurdecer forca mudo") que quebrava as duas garantias que essa
+       * separacao promete: (1) alguem com so `DEAFEN_MEMBERS` conseguia calar
+       * o microfone de terceiro sem nunca passar pela checagem de
+       * `MUTE_MEMBERS`; (2) tirar o ensurdecimento nao desfazia o mudo, entao
+       * a pessoa ficava sem audio ate alguem lembrar de "devolver o
+       * microfone" numa acao SEPARADA. Nao reintroduzir o acoplamento.
+       */
       const next: Record<string, string> = {};
       if (typeof patch.serverMuted === "boolean")
         next.serverMuted = encBool(patch.serverMuted);
-      if (typeof patch.serverDeafened === "boolean") {
+      if (typeof patch.serverDeafened === "boolean")
         next.serverDeafened = encBool(patch.serverDeafened);
-        if (patch.serverDeafened) next.serverMuted = "1";
-      }
 
       const after = {
         muted:

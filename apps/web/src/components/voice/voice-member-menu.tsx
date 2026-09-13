@@ -164,6 +164,18 @@ export function VoiceMemberMenu({
     );
   }
 
+  /** Mesma permissao de mover — ver o comentario em `voice:disconnect` no gateway. */
+  function disconnect() {
+    setError(null);
+    socket?.emit("voice:disconnect", { userId: participant.userId }, (result) => {
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onClose();
+    });
+  }
+
   if (!canMute && !canDeafen && !canMove && !showVolume) return null;
   if (typeof document === "undefined") return null;
 
@@ -282,6 +294,12 @@ export function VoiceMemberMenu({
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {canMove ? (
+          <MenuItem onClick={disconnect} icon="disconnect" danger>
+            Desconectar da call
+          </MenuItem>
         ) : null}
 
         {error ? (
