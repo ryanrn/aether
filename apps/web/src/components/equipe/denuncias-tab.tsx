@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import type { DenunciaNaFila } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   apagarMensagemDenunciadaAction,
   listarDenunciasAction,
@@ -40,6 +41,13 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, startTransition] = useTransition();
   const [agindoEm, setAgindoEm] = useState<string | null>(null);
+  /**
+   * Id da denuncia esperando confirmacao de "apagar mensagem". Apagar
+   * conteudo de outra pessoa e IRREVERSIVEL — antes disto era um clique so,
+   * sem nenhuma barreira, a unica acao da fila sem confirmacao nenhuma.
+   */
+  const [confirmandoApagar, setConfirmandoApagar] =
+    useState<DenunciaNaFila | null>(null);
 
   const carregar = useCallback(() => {
     void listarDenunciasAction({ status: "ABERTA" }).then((r) => {
@@ -158,13 +166,7 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
                 <button
                   type="button"
                   disabled={ocupado}
-                  onClick={() =>
-                    agir(d.id, async () => {
-                      const r = await apagarMensagemDenunciadaAction(d.alvoId);
-                      if (r.ok) await resolverDenunciaAction(d.id, "RESOLVIDA", "mensagem apagada");
-                      return r;
-                    })
-                  }
+                  onClick={() => setConfirmandoApagar(d)}
                   className="rounded-sm border border-signal-dnd/40 px-2.5 py-1 text-[11px] font-medium text-signal-dnd transition-colors hover:bg-signal-dnd/15 disabled:opacity-50"
                 >
                   Apagar mensagem + resolver
@@ -206,6 +208,39 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
         continua lendo mas não manda mensagem. Sem log de auditoria global
         ainda; o rastro fica no log estruturado (<code>moderacao.*</code>).
       </p>
+
+      <ConfirmDialog
+        open={confirmandoApagar !== null}
+        onClose={() => setConfirmandoApagar(null)}
+        title="Apagar mensagem"
+        confirmLabel="Apagar e resolver"
+        pendingLabel="Apagando..."
+        pending={
+          pendente &&
+          confirmandoApagar !== null &&
+          agindoEm === confirmandoApagar.id
+        }
+        onConfirm={() => {
+          const alvo = confirmandoApagar;
+          if (!alvo) return;
+          agir(alvo.id, async () => {
+            const r = await apagarMensagemDenunciadaAction(alvo.alvoId);
+            if (r.ok) {
+              await resolverDenunciaAction(alvo.id, "RESOLVIDA", "mensagem apagada");
+              setConfirmandoApagar(null);
+            }
+            return r;
+          });
+        }}
+      >
+        Isso apaga o conteúdo da mensagem denunciada para sempre — não dá para
+        desfazer.
+        {confirmandoApagar?.snapshot ? (
+          <span className="mt-2 block rounded-sm border border-line-soft bg-base-950 px-3 py-2 text-ink-400">
+            “{confirmandoApagar.snapshot}”
+          </span>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

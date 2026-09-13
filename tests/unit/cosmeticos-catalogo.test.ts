@@ -38,6 +38,7 @@ const userUpdate = vi.fn();
 const ucFindMany = vi.fn();
 const ucFindUnique = vi.fn();
 const ucUpsert = vi.fn();
+const ucCount = vi.fn();
 
 vi.mock("@aether/db", () => ({
   prisma: {
@@ -56,6 +57,7 @@ vi.mock("@aether/db", () => ({
       findMany: ucFindMany,
       findUnique: ucFindUnique,
       upsert: ucUpsert,
+      count: ucCount,
     },
   },
   Prisma: { PrismaClientKnownRequestError: FakeKnownError },
@@ -133,8 +135,10 @@ beforeEach(() => {
     ucFindMany,
     ucFindUnique,
     ucUpsert,
+    ucCount,
   ].forEach((m) => m.mockReset());
   apagarAssetCosmetico.mockResolvedValue(undefined);
+  ucCount.mockResolvedValue(0);
 });
 
 describe("criarCosmetico", () => {
@@ -236,6 +240,18 @@ describe("excluirCosmetico", () => {
 
     expect(del).toHaveBeenCalledWith({ where: { id: "c1" } });
     expect(apagarAssetCosmetico).not.toHaveBeenCalled();
+  });
+
+  it("devolve quantas posses (UserCosmetic) somem junto, pra quem chama poder logar", async () => {
+    findUnique.mockResolvedValue(linha());
+    del.mockResolvedValue(linha());
+    ucCount.mockResolvedValue(3);
+
+    const resultado = await excluirCosmetico("c1", false);
+
+    expect(ucCount).toHaveBeenCalledWith({ where: { cosmeticId: "c1" } });
+    expect(resultado.possesApagadas).toBe(3);
+    expect(resultado.slug).toBe(META.slug);
   });
 
   it("apagarAsset=true: linha primeiro, depois o objeto", async () => {

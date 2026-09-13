@@ -7,6 +7,7 @@ import {
   type CosmeticType,
 } from "@aether/shared";
 import { prisma } from "@aether/db";
+import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
 import {
   CosmeticoNaoEncontrado,
@@ -268,7 +269,15 @@ export async function excluirCosmeticoAction(
     if (!sessao) return fail("Nao encontrado");
     if (typeof id !== "string" || !id) return fail("Cosmetico invalido");
 
-    await excluirCosmetico(id, apagarAsset === true);
+    const excluido = await excluirCosmetico(id, apagarAsset === true);
+    log.warn("equipe.cosmetico_excluido", "cosmético excluído do catálogo", {
+      por: sessao.user.id,
+      slug: excluido.slug,
+      nome: excluido.nome,
+      tipo: excluido.tipo,
+      arteApagada: apagarAsset === true,
+      possesApagadas: excluido.possesApagadas,
+    });
     return ok();
   } catch (error) {
     if (error instanceof CosmeticoNaoEncontrado) return fail("Nao encontrado");

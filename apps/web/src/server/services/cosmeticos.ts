@@ -242,6 +242,19 @@ export async function definirCosmeticoAtivo(
   return paraPainel(row);
 }
 
+/** O que a exclusao de fato afetou — para a action logar de verdade. */
+export interface ExclusaoDeCosmetico {
+  slug: string;
+  nome: string;
+  tipo: CosmeticType;
+  /**
+   * Quantas posses (`UserCosmetic`) foram apagadas em cascata junto — a
+   * exclusao do catalogo NAO e so "sumir da loja": quem ja tinha o item
+   * perde o registro de posse pra sempre (`onDelete: Cascade` no schema).
+   */
+  possesApagadas: number;
+}
+
 /**
  * Exclui o cosmetico do CATALOGO. `apagarAsset` decide se o objeto tambem sai
  * do R2 — sao dois passos distintos de proposito: tirar do catalogo e
@@ -249,13 +262,25 @@ export async function definirCosmeticoAtivo(
  *
  * A linha sai primeiro. Se o R2 falhar depois, o objeto vira orfao (faxina
  * futura), o que e melhor que uma linha que aponta para um objeto ja apagado.
+ *
+ * ISTO E DESTRUTIVO ALEM DO CATALOGO: `UserCosmetic.cosmeticId` tem
+ * `onDelete: Cascade` — apagar a linha do catalogo apaga junto o registro de
+ * posse de QUEM JA TINHA o item (quem comprou, quem ganhou, de onde, quando).
+ * Contamos quantas posses somem ANTES de apagar, so para a action poder
+ * registrar isso — sem essa contagem, essa perda de dado acontecia em
+ * silencio, sem log nenhum, diferente de toda outra acao destrutiva do
+ * painel.
  */
 export async function excluirCosmetico(
   id: string,
   apagarAsset: boolean,
-): Promise<void> {
+): Promise<ExclusaoDeCosmetico> {
   const row = await prisma.cosmetic.findUnique({ where: { id } });
   if (!row) throw new CosmeticoNaoEncontrado();
+
+  const possesApagadas = await prisma.userCosmetic.count({
+    where: { cosmeticId: id },
+  });
 
   await prisma.cosmetic.delete({ where: { id } });
 
@@ -266,6 +291,8 @@ export async function excluirCosmetico(
       thumbKey: row.thumbKey,
     });
   }
+
+  return { slug: row.slug, nome: row.nome, tipo: row.tipo, possesApagadas };
 }
 
 /** O catalogo PUBLICO — so o que esta ativo. Consumido pela loja/perfil. */

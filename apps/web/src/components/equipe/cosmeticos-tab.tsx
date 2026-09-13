@@ -762,8 +762,15 @@ function DialogoExcluir({
       className="max-w-[440px]"
     >
       <p className="text-[13px] leading-relaxed text-ink-300">
-        Tirar <b className="text-ink-100">{c.nome}</b> do catálogo. Ninguém
-        consegue mais equipar; quem já tinha para de exibir.
+        Isso apaga <b className="text-ink-100">{c.nome}</b> do catálogo{" "}
+        <b className="text-signal-dnd">e o registro de posse de quem já
+        tinha</b> — quem comprou ou recebeu esse item perde esse histórico
+        para sempre, não só o de exibir. Não dá para desfazer recadastrando
+        com o mesmo nome.
+      </p>
+      <p className="mt-2 text-[12px] leading-relaxed text-ink-400">
+        Se a intenção é só tirar da loja sem apagar nada, use o interruptor
+        “Publicado” na lista em vez de excluir — reversível a qualquer hora.
       </p>
 
       <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-md border border-line bg-base-900 px-3 py-2.5">
