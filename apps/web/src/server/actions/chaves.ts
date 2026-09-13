@@ -2,6 +2,7 @@
 
 import type { ActionResult } from "@aether/shared";
 import { PLAN_ORDER, type PlanTier } from "@aether/shared";
+import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
 import {
   criarChave,
@@ -132,7 +133,15 @@ export async function revogarChaveAction(
     if (typeof id !== "string" || id.length === 0 || id.length > 64) {
       return fail("Chave invalida.");
     }
-    await revogarChave(id);
+    const revogada = await revogarChave(id);
+    if (revogada) {
+      log.info("equipe.chave_revogada", "chave de plano revogada", {
+        por: sessao.user.id,
+        chaveId: id,
+        prefixo: revogada.prefixo,
+        tier: revogada.tier,
+      });
+    }
     return ok(await listarChaves());
   } catch (error) {
     return toActionError(error);

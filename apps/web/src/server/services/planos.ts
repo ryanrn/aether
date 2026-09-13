@@ -187,12 +187,27 @@ export async function listarChaves(limite = 60): Promise<ChaveNaLista[]> {
  * Cancela uma chave. Marca `revogadaEm` em vez de apagar — quem JA resgatou
  * continua com o plano; revogar so impede novos resgates, e o historico
  * segue dizendo que a chave existiu.
+ *
+ * Devolve o que foi revogado (ou `null` se a chave nao existia ou ja estava
+ * revogada) — sem isto a action nao tinha o que logar, e essa era a UNICA
+ * acao destrutiva do painel sem rastro nenhum, nem informal, de quem fez.
  */
-export async function revogarChave(id: string): Promise<void> {
-  await prisma.planKey.updateMany({
+export async function revogarChave(
+  id: string,
+): Promise<{ prefixo: string; tier: PlanTier } | null> {
+  const linha = await prisma.planKey.findUnique({
+    where: { id },
+    select: { prefixo: true, tier: true, revogadaEm: true },
+  });
+  if (!linha || linha.revogadaEm) return null;
+
+  const feito = await prisma.planKey.updateMany({
     where: { id, revogadaEm: null },
     data: { revogadaEm: new Date() },
   });
+  if (feito.count === 0) return null;
+
+  return { prefixo: linha.prefixo, tier: linha.tier };
 }
 
 export interface ResgateFeito {

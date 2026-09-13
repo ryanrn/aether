@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input, Label } from "@/components/ui/field";
 import { PLANS, type PlanTier } from "@aether/shared";
 import {
@@ -92,9 +93,24 @@ export function ChavesTab() {
     });
   }
 
-  function revogar(id: string) {
-    void revogarChaveAction(id).then((r) => {
-      if (r.ok) setLista(r.data);
+  /**
+   * Id da chave esperando confirmacao. Antes era um clique so — a unica acao
+   * destrutiva do painel sem nenhuma barreira, mesmo com impacto baixo (quem
+   * ja resgatou nao perde o plano).
+   */
+  const [confirmandoRevogar, setConfirmandoRevogar] =
+    useState<ChaveNaLista | null>(null);
+  const [revogando, startRevogando] = useTransition();
+
+  function revogar() {
+    const alvo = confirmandoRevogar;
+    if (!alvo) return;
+    startRevogando(async () => {
+      const r = await revogarChaveAction(alvo.id);
+      if (r.ok) {
+        setLista(r.data);
+        setConfirmandoRevogar(null);
+      }
     });
   }
 
@@ -300,7 +316,7 @@ export function ChavesTab() {
                   {c.estado === "ativa" ? (
                     <button
                       type="button"
-                      onClick={() => revogar(c.id)}
+                      onClick={() => setConfirmandoRevogar(c)}
                       className="rounded-sm border border-signal-dnd/40 px-2 py-1 text-[11px] font-medium text-signal-dnd transition-colors hover:bg-signal-dnd/15"
                     >
                       Revogar
@@ -317,6 +333,21 @@ export function ChavesTab() {
           plano.
         </p>
       </div>
+
+      <ConfirmDialog
+        open={confirmandoRevogar !== null}
+        onClose={() => setConfirmandoRevogar(null)}
+        title="Revogar chave"
+        confirmLabel="Revogar"
+        pendingLabel="Revogando..."
+        pending={revogando}
+        onConfirm={revogar}
+      >
+        Ninguém mais consegue resgatar{" "}
+        <b className="text-ink-100">{confirmandoRevogar?.prefixo}…</b>{" "}
+        ({confirmandoRevogar ? PLANS[confirmandoRevogar.tier].rotulo : ""}).
+        Quem já resgatou continua com o plano.
+      </ConfirmDialog>
     </div>
   );
 }
