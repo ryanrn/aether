@@ -270,7 +270,26 @@ export async function conferirQualidadeDaTela(params: {
      * escolheria algo que a tela oferece e o servidor derruba.
      */
     const altura = tela.height ?? 0;
-    if (!alturaExcedeOPlano(altura, params.alturaMax)) return null;
+    if (!alturaExcedeOPlano(altura, params.alturaMax)) {
+      /**
+       * Dentro do plano agora — se a faixa tinha sido silenciada por excesso
+       * antes (`tela.muted`), devolve a voz. Sem isto, baixar a qualidade
+       * depois de ser pego nunca restaurava a transmissao: a pessoa tinha
+       * que parar e comecar de novo do zero pra reaparecer aos outros.
+       */
+      if (tela.muted) {
+        try {
+          await client.mutePublishedTrack(room, params.userId, tela.sid, false);
+        } catch (error) {
+          log.error(
+            "gateway.livekit.desilenciar_tela",
+            "nao devolvi a tela apos a qualidade caber no plano",
+            { err: error },
+          );
+        }
+      }
+      return null;
+    }
 
     let silenciada = false;
     try {

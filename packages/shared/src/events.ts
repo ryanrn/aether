@@ -632,6 +632,13 @@ export interface ClientToServerEvents {
    * quem NAO esta na sala de midia — e o SFU so conhece a propria sala.
    */
   "voice:streaming": (streaming: boolean) => void;
+  /**
+   * "troquei a qualidade da transmissao ja em andamento" (sem parar e
+   * comecar de novo). Pede ao gateway pra reconferir a resolucao publicada
+   * contra o plano — sem isto, baixar a qualidade depois de silenciada por
+   * excesso nunca restaurava a transmissao sozinha.
+   */
+  "voice:tela-preset": () => void;
   /** sinaliza microfone/audio proprio; os demais campos sao de moderacao (fase 6) */
   "voice:state": (payload: {
     selfMuted?: boolean;

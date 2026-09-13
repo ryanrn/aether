@@ -389,6 +389,14 @@ export async function connectVoiceRoom({
      */
     adaptiveStream: false,
     dynacast: true,
+    /**
+     * Sem isto, mutar o microfone so desativa a faixa (`enabled=false`) sem
+     * soltar o dispositivo — o ponto de privacidade do SO (camera/microfone)
+     * ficava aceso o tempo todo mutado, mesmo sem nada saindo de verdade.
+     * So se aplica a audio no SDK (`isAudioTrack` dentro do `mute()`); a
+     * camera precisa do proprio tratamento — ver `setCameraEnabled` abaixo.
+     */
+    publishDefaults: { stopMicTrackOnMute: true },
   });
 
   /**
@@ -1543,6 +1551,23 @@ export async function connectVoiceRoom({
      */
     async setCameraEnabled(enabled, deviceId) {
       try {
+        /**
+         * DESLIGAR: o metodo de alto nivel do SDK so faz `track.mute()` para
+         * camera (so `ScreenShare` desfaz publicacao sozinho) — o video para
+         * de ir pro SFU, mas o `MediaStreamTrack` continua vivo e o ponto de
+         * camera do SO continua aceso. Desfazendo a publicacao (com
+         * `stopOnUnpublish`, o padrao) o dispositivo solta de verdade;
+         * religar de novo ja recria a faixa do zero, como sempre fez.
+         */
+        if (!enabled) {
+          const publicacao = room.localParticipant.getTrackPublication(
+            Track.Source.Camera,
+          );
+          if (publicacao?.track) {
+            await room.localParticipant.unpublishTrack(publicacao.track);
+          }
+          return true;
+        }
         await room.localParticipant.setCameraEnabled(
           enabled,
           deviceId ? { deviceId } : undefined,

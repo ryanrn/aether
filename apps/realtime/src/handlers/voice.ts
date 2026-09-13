@@ -345,6 +345,26 @@ export function registerVoiceHandlers(
   });
 
   /**
+   * "troquei a qualidade da transmissao ja em andamento" (`setSharePreset`,
+   * sem parar e comecar de novo). `voice:streaming` so reconfere qualidade no
+   * INICIO (`streaming` muda de false pra true); baixar a resolucao no meio
+   * de uma transmissao ja silenciada por excesso nunca reexecutava a
+   * conferencia, entao a tela nunca voltava sozinha — precisava parar e
+   * comecar de novo do zero. Reaproveita a MESMA funcao, com a mesma espera
+   * escalonada (o encoder leva um instante pra aplicar a resolucao nova).
+   *
+   * Sem payload: o servidor ja sabe quem e qual canal por `voiceLocation`.
+   * Sem permissao pra checar — so reexamina o que ja esta publicado, nao
+   * publica nada novo.
+   */
+  socket.on("voice:tela-preset", async () => {
+    if (!autoSinalLimiter.take(userId)) return;
+    const location = await voiceLocation(userId);
+    if (!location) return;
+    void conferirTelaEmSegundoPlano(userId, location.channelId);
+  });
+
+  /**
    * "estou com a camera ligada". So sinalizacao — o video vai pelo SFU.
    *
    * A checagem espelha a do `voice:streaming`, e pela mesma razao: o token do

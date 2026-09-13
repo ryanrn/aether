@@ -241,12 +241,21 @@ export function VoiceSession() {
           },
           /**
            * Troca a qualidade da transmissao ativa. Nao mexe em
-           * `localSharing` nem avisa o gateway: para os outros nada mudou —
-           * a mesma pessoa segue transmitindo a mesma faixa.
+           * `localSharing` nem avisa o `voice:streaming` — para os outros
+           * nada mudou ali, a mesma pessoa segue transmitindo a mesma faixa.
+           *
+           * `voice:tela-preset` E necessario: se a tela tinha sido silenciada
+           * por passar do teto do plano, baixar a qualidade agora e a unica
+           * chance de o gateway perceber que voltou a caber e devolver a
+           * transmissao — sem isto ela ficava muda ate parar e comecar de
+           * novo do zero.
            */
           setSharePreset: async (preset) => {
             const changed = await handle.setSharePreset(preset);
-            if (changed) setSharePreset(preset);
+            if (changed) {
+              setSharePreset(preset);
+              socket.emit("voice:tela-preset");
+            }
             return changed;
           },
           stopShare: async () => {
