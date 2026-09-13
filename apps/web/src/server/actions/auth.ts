@@ -171,13 +171,6 @@ export async function loginAction(
   formData: FormData,
 ): Promise<ActionResult<undefined>> {
   try {
-    const limit = await rateLimit(await clientKey("login"), 10, 5 * 60_000, {
-      failClosed: true,
-    });
-    if (!limit.ok) {
-      return fail(`Muitas tentativas de login. Aguarde ${limit.retryAfter}s.`);
-    }
-
     const parsed = loginSchema.safeParse({
       identifier: formData.get("identifier"),
       password: formData.get("password"),
@@ -191,6 +184,33 @@ export async function loginAction(
     }
 
     const identifier = parsed.data.identifier.toLowerCase();
+
+    // Por IP: impede varrer muitas contas de um so lugar.
+    const porIp = await rateLimit(await clientKey("login"), 10, 5 * 60_000, {
+      failClosed: true,
+    });
+    if (!porIp.ok) {
+      return fail(`Muitas tentativas de login. Aguarde ${porIp.retryAfter}s.`);
+    }
+    /**
+     * Por CONTA: sem isto, forca bruta distribuida (varios IPs) contra UMA
+     * conta especifica so esbarrava no custo do scrypt — nunca no rate
+     * limit, que so olhava o IP. Mesmo padrao de `reset-email` em
+     * password-reset.ts: chave pelo identificador digitado, nao pelo usuario
+     * resolvido — nao revela se a conta existe, e roda antes da consulta.
+     */
+    const porConta = await rateLimit(
+      `login-conta:${identifier}`,
+      8,
+      10 * 60_000,
+      { failClosed: true },
+    );
+    if (!porConta.ok) {
+      return fail(
+        `Muitas tentativas para esta conta. Aguarde ${porConta.retryAfter}s.`,
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: identifier }, { email: identifier }] },
       select: { id: true, passwordHash: true },
