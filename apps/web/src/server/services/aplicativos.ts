@@ -10,6 +10,13 @@ import { gerarTokenDeBot } from "@aether/access";
  * Nao-dono e tratado como inexistente — 404, nunca 403, como no resto do app.
  * O token de bot nunca sai daqui em claro: `gerarTokenDeApp` devolve o segredo
  * UMA vez, na geracao, e o banco guarda so o `sha256`.
+ *
+ * EXCECAO: as duas funcoes no fim do arquivo (`listarAplicacoesParaEquipe` /
+ * `definirAplicacaoBloqueada`) sao para a EQUIPE, cruzam qualquer dono — o
+ * `blockedAt` ("a equipe desligou a aplicacao inteira, abuso") ja era
+ * imposto em tres lugares (`bot-token.ts`, `bot-gateway.ts`,
+ * `instalacao.ts`) mas nao tinha nenhuma tela nem action pra ser ACIONADO —
+ * so dava pra ligar mexendo direto no banco.
  */
 
 export interface AppNaLista {
@@ -266,4 +273,97 @@ export async function gerarTokenDeApp(
   });
 
   return { token, prefixo };
+}
+
+/* ------------------------------------------------------- painel da equipe */
+
+export interface AppNoPainelDaEquipe {
+  id: string;
+  name: string;
+  /** username de quem criou — `null` se a conta foi removida depois. */
+  ownerUsername: string | null;
+  bloqueada: boolean;
+  botHabilitado: boolean;
+  instalacoes: number;
+  criadoEm: string;
+}
+
+/**
+ * Lista aplicacoes de QUALQUER dono, para a equipe encontrar uma pra
+ * bloquear. `busca` filtra por nome (o id tambem serve, pra quem tem o id
+ * de um log de erro/denuncia em maos). Sem paginacao de verdade — corte de
+ * 100 e suficiente pra um catalogo do tamanho que a Developer Platform tem
+ * hoje; se crescer, e o primeiro lugar a rever.
+ */
+export async function listarAplicacoesParaEquipe(
+  busca?: string,
+): Promise<AppNoPainelDaEquipe[]> {
+  const termo = busca?.trim();
+  const apps = await prisma.application.findMany({
+    where: termo
+      ? {
+          OR: [
+            { name: { contains: termo, mode: "insensitive" } },
+            { id: termo },
+          ],
+        }
+      : undefined,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      blockedAt: true,
+      botUserId: true,
+      createdAt: true,
+      _count: { select: { installations: { where: { revokedAt: null } } } },
+    },
+  });
+  if (apps.length === 0) return [];
+
+  // Application.ownerId nao e relacao viva (proposito: registro de auditoria,
+  // nao FK) — resolve o username numa segunda consulta em lote.
+  const ownerIds = [...new Set(apps.map((a) => a.ownerId))];
+  const owners = await prisma.user.findMany({
+    where: { id: { in: ownerIds } },
+    select: { id: true, username: true },
+  });
+  const usernamePorId = new Map(owners.map((o) => [o.id, o.username]));
+
+  return apps.map((a) => ({
+    id: a.id,
+    name: a.name,
+    ownerUsername: usernamePorId.get(a.ownerId) ?? null,
+    bloqueada: a.blockedAt !== null,
+    botHabilitado: a.botUserId !== null,
+    instalacoes: a._count.installations,
+    criadoEm: a.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Liga ou desliga o kill switch de uma aplicacao. Soft — so seta/limpa
+ * `blockedAt`, nunca apaga nada; o efeito (token recusa, gateway evita,
+ * instalacao nao resolve) ja estava implementado em tres lugares, so faltava
+ * quem acionasse.
+ *
+ * Devolve o nome pra quem chamou poder logar de forma legivel, ou `null` se
+ * o id nao existe.
+ */
+export async function definirAplicacaoBloqueada(
+  id: string,
+  bloquear: boolean,
+): Promise<{ name: string } | null> {
+  const feito = await prisma.application.updateMany({
+    where: { id },
+    data: { blockedAt: bloquear ? new Date() : null },
+  });
+  if (feito.count === 0) return null;
+
+  const app = await prisma.application.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  return app ? { name: app.name } : null;
 }

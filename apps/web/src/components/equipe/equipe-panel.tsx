@@ -11,6 +11,7 @@ import { ChavesTab } from "./chaves-tab";
 import { FlagsTab } from "./flags-tab";
 import { DenunciasTab } from "./denuncias-tab";
 import { CosmeticosTab } from "./cosmeticos-tab";
+import { AplicativosTab } from "./aplicativos-tab";
 
 type Aba =
   | "denuncias"
@@ -18,7 +19,8 @@ type Aba =
   | "comunidades"
   | "cosmeticos"
   | "chaves"
-  | "flags";
+  | "flags"
+  | "aplicativos";
 
 const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
   { id: "denuncias", rotulo: "Denúncias", icone: "shield-check" },
@@ -27,6 +29,7 @@ const ABAS: { id: Aba; rotulo: string; icone: AetherIconName }[] = [
   { id: "cosmeticos", rotulo: "Cosméticos", icone: "sparkle" },
   { id: "chaves", rotulo: "Chaves de plano", icone: "key" },
   { id: "flags", rotulo: "Kill switches", icone: "shield" },
+  { id: "aplicativos", rotulo: "Aplicativos", icone: "lock" },
 ];
 
 /**
@@ -129,8 +132,10 @@ export function EquipePanel() {
           <CosmeticosTab />
         ) : aba === "chaves" ? (
           <ChavesTab />
-        ) : (
+        ) : aba === "flags" ? (
           <FlagsTab />
+        ) : (
+          <AplicativosTab />
         )}
       </div>
     </div>
