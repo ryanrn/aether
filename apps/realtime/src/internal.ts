@@ -7,7 +7,7 @@ import { log } from "@aether/shared/log";
 import { env } from "./env";
 import { resyncEavisarServidor } from "./rooms";
 import { enviarMensagem } from "./enviar-mensagem";
-import { entrarNaVoz, sairDaVoz } from "./entrar-em-voz";
+import { entrarNaVoz, sairDaVoz, sairDaVozDoCanal } from "./entrar-em-voz";
 import type { AetherServer } from "./types";
 import {
   countInChannel,
@@ -240,10 +240,24 @@ export async function handleInternalRequest(
 
   if (request.url === "/internal/resync-rooms") {
     try {
-      const body = (await readJsonBody(request)) as { serverId?: unknown };
+      const body = (await readJsonBody(request)) as {
+        serverId?: unknown;
+        canalExcluidoId?: unknown;
+      };
       if (typeof body.serverId !== "string") {
         json(response, 400, { ok: false, error: "serverId e obrigatorio" });
         return true;
+      }
+
+      /**
+       * O canal em si sumiu (nao so uma mudanca de quem ve o que) — quem
+       * estava DENTRO da call precisa sair de verdade, nao so parar de
+       * receber a sala de roteamento de chat. `resyncEavisarServidor` sozinho
+       * nunca mexeu em ocupacao de voz; sem isto a call ficava orfa (LiveKit
+       * vivo, ocupacao apontando pra um canal que nao existe mais no banco).
+       */
+      if (typeof body.canalExcluidoId === "string") {
+        await sairDaVozDoCanal(io, body.serverId, body.canalExcluidoId);
       }
 
       await resyncEavisarServidor(io, body.serverId);

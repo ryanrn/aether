@@ -141,6 +141,18 @@ function service(): RoomServiceClient | null {
 }
 
 /**
+ * O que aconteceu ao tentar impor mudo/voz no SFU.
+ *
+ *  - `aplicado`: o SFU confirmou a mudanca na faixa de audio.
+ *  - `sem_faixa`: a pessoa nao tem faixa de audio publicada agora (sem SPEAK,
+ *    ou so entrou) — nao e falha, so nao ha o que mutar ainda.
+ *  - `falhou`: SFU fora do ar, participante nao encontrado, ou erro de rede —
+ *    a diferenca de `sem_faixa` importa porque SO ISTO deveria virar erro pro
+ *    moderador; `sem_faixa` e um estado normal do dia a dia.
+ */
+export type ResultadoDeMudoNoSfu = "aplicado" | "sem_faixa" | "falhou";
+
+/**
  * Silencia (ou devolve a voz de) alguem NO PROPRIO SFU.
  *
  * Este e o ponto que faz "silenciado pelo servidor" ser diferente de um icone:
@@ -148,27 +160,30 @@ function service(): RoomServiceClient | null {
  * nao contorna ligando o microfone de volta. O aviso pelo socket serve para a
  * interface acompanhar; a imposicao acontece aqui.
  *
- * Devolve `false` quando nao foi possivel aplicar — quem chama decide se
- * segue mesmo assim.
+ * Devolve o RESULTADO em vez de um booleano — `false` sozinho nao deixava
+ * quem chama distinguir "sem faixa ainda" (normal) de "o SFU nao confirmou"
+ * (a moderacao pode ter falhado de verdade). Ver `handlers/voice.ts::
+ * voice:moderate`, que usa essa distincao pra so avisar o moderador quando
+ * for `falhou`.
  */
 export async function applyServerMute(params: {
   channelId: string;
   userId: string;
   muted: boolean;
-}): Promise<boolean> {
+}): Promise<ResultadoDeMudoNoSfu> {
   const client = service();
-  if (!client) return false;
+  if (!client) return "falhou";
 
   const room = roomName(params.channelId);
   try {
     const participants = await client.listParticipants(room);
     const target = participants.find((p) => p.identity === params.userId);
-    if (!target) return false;
+    if (!target) return "falhou";
 
     const audioTracks = target.tracks.filter(
       (track) => track.type === TrackType.AUDIO,
     );
-    if (audioTracks.length === 0) return false;
+    if (audioTracks.length === 0) return "sem_faixa";
 
     for (const track of audioTracks) {
       await client.mutePublishedTrack(
@@ -178,10 +193,10 @@ export async function applyServerMute(params: {
         params.muted,
       );
     }
-    return true;
+    return "aplicado";
   } catch (error) {
     log.error("gateway.livekit.mudo", "falha ao aplicar mudo no SFU", { err: error });
-    return false;
+    return "falhou";
   }
 }
 

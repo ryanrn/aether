@@ -182,3 +182,26 @@ export async function sairDaVoz(
   void talvezRemoverSalaEfemera(io, left.channelId);
   return true;
 }
+
+/**
+ * Tira todo mundo de um canal de voz especifico — usado quando o CANAL em si
+ * deixou de existir (excluido pelo dono/admin).
+ *
+ * Antes disto, apagar um canal de voz so atualizava a arvore de quem via a
+ * lista (`resyncServerRooms`, que mexe em salas de ROTEAMENTO de chat, nunca
+ * em ocupacao de voz) — quem estava DENTRO da call continuava conectado ao
+ * LiveKit e com a ocupacao apontando para um `channelId` que nao existe mais
+ * no banco. `sairDaVoz` por pessoa (nao um "apagar ocupacao" em lote) porque e
+ * a MESMA funcao que qualquer saida de voz usa — a call encerra do jeito que
+ * a pessoa ja reconhece (evento de saida, sala efemera reavaliada), sem uma
+ * segunda forma de "desligar voz" so para este caso.
+ */
+export async function sairDaVozDoCanal(
+  io: AetherServer,
+  serverId: string,
+  channelId: string,
+): Promise<void> {
+  const participantes = await voiceOfServer(serverId);
+  const alvos = participantes.filter((p) => p.channelId === channelId);
+  await Promise.all(alvos.map((p) => sairDaVoz(io, { userId: p.userId })));
+}

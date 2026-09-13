@@ -64,6 +64,24 @@ const speakingLimiter = createRateLimiter({ capacity: 12, refillPerSecond: 6 });
  */
 const joinLimiter = createRateLimiter({ capacity: 5, refillPerSecond: 1 });
 
+/**
+ * Limite dos eventos de AUTO-sinalizacao (mudo/surdo proprios, camera,
+ * transmitindo) — cada um escreve no StateStore (HSET no Redis) e faz
+ * broadcast pra sala do servidor inteira a cada chamada, exatamente como
+ * `voice:join`, mas nenhum tinha limite: um cliente reescrito podia emitir em
+ * loop apertado sem freio nenhum. Generoso o bastante pra alternar mudo/
+ * camera varias vezes seguidas de proposito nao esbarrar nisso.
+ */
+const autoSinalLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 4 });
+
+/**
+ * Limite das acoes de MODERACAO (mutar/ensurdecer/mover/desconectar
+ * terceiro). Exigem cargo, entao a superficie de abuso e menor que a
+ * auto-sinalizacao — mas "exige cargo" nao e "sem custo": cada chamada ainda
+ * faz consultas ao banco (`loadMemberAccess`, `canActOnUser`) e broadcast.
+ */
+const moderarLimiter = createRateLimiter({ capacity: 8, refillPerSecond: 2 });
+
 export function registerVoiceHandlers(
   io: AetherServer,
   socket: AetherSocket,
@@ -203,6 +221,7 @@ export function registerVoiceHandlers(
   });
 
   socket.on("voice:state", async (patch) => {
+    if (!autoSinalLimiter.take(userId)) return;
     if (!patch || typeof patch !== "object") return;
     const updated = await setVoiceFlags(userId, {
       selfMuted:
@@ -270,6 +289,7 @@ export function registerVoiceHandlers(
   }
 
   socket.on("voice:streaming", async (streaming) => {
+    if (!autoSinalLimiter.take(userId)) return;
     if (typeof streaming !== "boolean") return;
 
     const location = await voiceLocation(userId);
@@ -337,6 +357,7 @@ export function registerVoiceHandlers(
    * para parar prenderia alguem ao indicador aceso depois de perde-lo.
    */
   socket.on("voice:camera", async (camera) => {
+    if (!autoSinalLimiter.take(userId)) return;
     if (typeof camera !== "boolean") return;
 
     const location = await voiceLocation(userId);
@@ -371,6 +392,10 @@ export function registerVoiceHandlers(
    */
   socket.on("voice:moderate", async (payload, ack) => {
     const respond = typeof ack === "function" ? ack : () => undefined;
+    if (!moderarLimiter.take(userId)) {
+      respond({ ok: false, error: "Espere um instante." });
+      return;
+    }
     const targetId = payload?.userId;
 
     if (typeof targetId !== "string" || targetId.length === 0) {
@@ -434,14 +459,37 @@ export function registerVoiceHandlers(
       /**
        * A imposicao acontece no SFU, nao na interface: desligamos a faixa de
        * audio na infraestrutura. O evento abaixo so mantem as telas em dia.
+       *
+       * Uma tentativa extra cobre uma instabilidade passageira do SFU sem
+       * incomodar o moderador por nada. Se `wantsMute` pediu de verdade uma
+       * mudanca de mudo e as duas tentativas devolverem `falhou` (SFU fora do
+       * ar, nao so "sem faixa ainda"), o moderador PRECISA saber — responder
+       * `ok:true` aqui e exatamente o bug que deixava alguem marcado como
+       * mudo na tela com o audio real continuando a sair.
        */
-      await applyServerMute({
+      let resultadoSfu = await applyServerMute({
         channelId: updated.channelId,
         userId: targetId,
         muted: updated.participant.serverMuted,
       });
+      if (resultadoSfu === "falhou") {
+        resultadoSfu = await applyServerMute({
+          channelId: updated.channelId,
+          userId: targetId,
+          muted: updated.participant.serverMuted,
+        });
+      }
 
       broadcast(updated.serverId, updated.participant);
+
+      if (wantsMute && resultadoSfu === "falhou") {
+        respond({
+          ok: false,
+          error:
+            "Marcado na interface, mas o servidor de audio nao confirmou — tente de novo em instantes.",
+        });
+        return;
+      }
       respond({ ok: true });
     } catch (error) {
       log.error("gateway.voice.moderate", "voice:moderate falhou", {
@@ -455,6 +503,10 @@ export function registerVoiceHandlers(
 
   socket.on("voice:move", async (payload, ack) => {
     const respond = typeof ack === "function" ? ack : () => undefined;
+    if (!moderarLimiter.take(userId)) {
+      respond({ ok: false, error: "Espere um instante." });
+      return;
+    }
     const targetId = payload?.userId;
     const channelId = payload?.channelId;
 
@@ -588,6 +640,10 @@ export function registerVoiceHandlers(
    */
   socket.on("voice:disconnect", async (payload, ack) => {
     const respond = typeof ack === "function" ? ack : () => undefined;
+    if (!moderarLimiter.take(userId)) {
+      respond({ ok: false, error: "Espere um instante." });
+      return;
+    }
     const targetId = payload?.userId;
 
     if (typeof targetId !== "string" || targetId.length === 0) {

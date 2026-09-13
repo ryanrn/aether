@@ -105,6 +105,22 @@ export function VoiceSession() {
              * — ai a `room.ts` para de tentar (e, se o socket voltar, o
              * `RealtimeProvider` religa a call por inteiro).
              */
+            /**
+             * Le o mudo ATUAL, nao a variavel `muted` capturada quando este
+             * efeito rodou — a conexao inicial e a recuperacao apos queda do
+             * SFU podem acontecer bem depois do mudo ter mudado. Sem isto, a
+             * camada de sala ligava o microfone sozinha ao entrar/reconectar
+             * mesmo com mudo proprio ou do servidor ativo.
+             */
+            deveEstarMutado: () => {
+              const estado = useRealtimeStore.getState();
+              const voz = estado.selfVoice;
+              return (
+                (voz?.selfMuted ?? false) ||
+                (voz?.serverMuted ?? false) ||
+                estado.micTest
+              );
+            },
             renovarCredencial: () =>
               new Promise<MediaGrant | null>((resolve) => {
                 if (!socket.connected) {

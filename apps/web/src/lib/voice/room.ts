@@ -112,6 +112,18 @@ export interface VoiceRoomCallbacks {
    * em canal) ou nao responde — nesse caso a sala para de tentar.
    */
   renovarCredencial: () => Promise<MediaGrant | null>;
+  /**
+   * "eu deveria estar mudo agora?" — consultado a cada vez que esta camada vai
+   * ligar o microfone sozinha (conexao inicial, recuperacao apos queda do
+   * SFU), para nunca destravar um mudo (proprio ou do servidor) que a pessoa
+   * nao pediu para tirar. Le o estado ATUAL, nao um valor capturado na hora de
+   * conectar — a recuperacao pode acontecer muito depois do mudo ter mudado.
+   *
+   * Sem isto: quem entra numa call ja mutado, ou cai de rede enquanto mutado,
+   * tinha o microfone destravado sozinho — bug de privacidade real, nao so
+   * cosmetico.
+   */
+  deveEstarMutado: () => boolean;
 }
 
 export interface VoiceRoomHandle {
@@ -804,9 +816,11 @@ export async function connectVoiceRoom({
             await room.startAudio().catch(() => undefined);
           }
           if (canPublish) {
-            await room.localParticipant
-              .setMicrophoneEnabled(true)
-              .catch(() => undefined);
+            if (!callbacks.deveEstarMutado()) {
+              await room.localParticipant
+                .setMicrophoneEnabled(true)
+                .catch(() => undefined);
+            }
             await aplicarFiltroDeRuido(room);
             detectorLocal?.retarget();
           }
@@ -882,7 +896,11 @@ export async function connectVoiceRoom({
    */
   room.on(RoomEvent.LocalTrackPublished, (publication) => {
     if (publication.source !== Track.Source.Microphone) return;
-    detectorLocal?.retarget();
+    // Se a pessoa entrou/reconectou ja mutada, `iniciarDetectorLocal` nao
+    // tinha faixa pra analisar e nunca criou o detector — so RETARGETAR nesse
+    // caso deixaria a bordinha de fala morta pelo resto da sessao ao desmutar.
+    if (detectorLocal) detectorLocal.retarget();
+    else void iniciarDetectorLocal();
     // A faixa de mic (re)apareceu — ao desmutar, numa reconexao, ao trocar de
     // aparelho. Reaplica a preferencia de RNNoise: sem isto, ligar a supressao
     // com o mic mutado so passava a valer depois de reconectar a call.
@@ -973,7 +991,9 @@ export async function connectVoiceRoom({
 
   if (canPublish) {
     try {
-      await room.localParticipant.setMicrophoneEnabled(true);
+      if (!callbacks.deveEstarMutado()) {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      }
       await aplicarFiltroDeRuido(room);
       await iniciarDetectorLocal();
     } catch (erro) {

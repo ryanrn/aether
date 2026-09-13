@@ -137,8 +137,9 @@ export async function deleteChannelAction(
     });
 
     await deleteChannel(channelId, serverId);
-    // Alem de atualizar a arvore, tira todo mundo da sala do canal que sumiu.
-    await resyncGatewayRooms({ serverId });
+    // Alem de atualizar a arvore, tira todo mundo da sala do canal que sumiu
+    // — inclusive de dentro da call, se for um canal de voz (canalExcluidoId).
+    await resyncGatewayRooms({ serverId, canalExcluidoId: channelId });
 
     await writeAudit({
       serverId,

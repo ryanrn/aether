@@ -132,6 +132,13 @@ export async function evictFromGateway(params: {
  */
 export async function resyncGatewayRooms(params: {
   serverId: string;
+  /**
+   * Passar quando a chamada vem de EXCLUIR um canal (nao so mudar quem o ve):
+   * o gateway tira de verdade quem estiver na call desse canal, alem de
+   * recalcular as salas de roteamento. Omitir nos demais casos (cargo
+   * editado, canal virou privado etc.) — esses nunca tiraram ninguem de voz.
+   */
+  canalExcluidoId?: string;
 }): Promise<void> {
   await callInternal("/internal/resync-rooms", params, "o recalculo de salas");
 }
