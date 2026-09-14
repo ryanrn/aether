@@ -48,6 +48,7 @@ import {
   savePreferredMicrophone,
   type AudioDevice,
 } from "@/lib/voice/devices";
+import { toast } from "@/lib/stores/toast-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -200,6 +201,9 @@ export function ControlBar({
      * fica guardada e vale quando ligar.
      */
     if (cameraLigada) await roomControls?.setCameraEnabled(true, deviceId);
+    // Unico fluxo de preferencia do app sem confirmacao nenhuma equivalente
+    // ao "Salvo." — o menu fechar sozinho nao diz que pegou.
+    toast.sucesso("Câmera alterada.");
   }
 
   async function pickMicrophone(deviceId: string) {
@@ -208,6 +212,7 @@ export function ControlBar({
     savePreferredMicrophone(deviceId);
     // Sem call ativa a escolha fica guardada e vale na proxima conexao.
     await roomControls?.setMicrophone(deviceId);
+    toast.sucesso("Microfone alterado.");
   }
 
   const roomControls = useRealtimeStore((state) => state.roomControls);

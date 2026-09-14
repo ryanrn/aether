@@ -9,6 +9,7 @@ import { HomeNavPanel } from "@/components/layout/home-nav-panel";
 import { QuickSwitcher } from "@/components/layout/quick-switcher";
 import { NavBackdrop } from "@/components/layout/nav-mobile";
 import { AparenciaProvider } from "@/components/ui/aparencia";
+import { Toaster } from "@/components/ui/toaster";
 import { ParedeDeVerificacao } from "@/components/auth/parede-de-verificacao";
 import { AceiteDeTermos } from "@/components/auth/aceite-de-termos";
 
@@ -62,6 +63,7 @@ export default async function AppLayout({
      */
     <>
       <AparenciaProvider />
+      <Toaster />
       <div className="flex h-full w-full overflow-hidden bg-base-950">
         {precisaTermos ? (
           <AceiteDeTermos atualizados={session.user.aceitouTermosEm !== null} />
