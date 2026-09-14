@@ -943,6 +943,17 @@ export async function connectVoiceRoom({
     if (encerrado) return;
     if (!MOTIVOS_RECUPERAVEIS.has(reason)) {
       mediaWarn(`SFU desconectou (${motivo}) — motivo terminal, sem recuperar`);
+      /**
+       * SEM ISTO a pessoa ficava sem NENHUM aviso — a call sumia da tela e
+       * nada dizia por que, nem que fazer a seguir. Um caso real: a sessao
+       * foi revogada (troca de senha) e o SFU derrubou a call por baixo dos
+       * panos; sem este aviso a interface parecia so "travada", e so fechar e
+       * abrir o app de novo resolvia — quando na verdade um F5/reentrar no
+       * canal ja bastava.
+       */
+      callbacks.onError(
+        "A conexao de voz caiu e nao foi possivel reconectar sozinha. Saia e entre no canal de novo.",
+      );
       return;
     }
     mediaWarn(`SFU desconectou (${motivo}) — tentando recuperar`);

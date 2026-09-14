@@ -692,6 +692,24 @@ if (!app.requestSingleInstanceLock()) {
     entregarDeepLink(caminhoDoDeepLink(url));
   });
 
+  /**
+   * O processo de GPU morreu (driver, falta de memoria, crash do Chromium) —
+   * SEPARADO do renderer: `render-process-gone` (dentro de `createWindow`)
+   * nao pega este caso, porque o RENDERER continua vivo; quem sumiu foi quem
+   * desenha os quadros novos. Sem isto a janela fica travada no ultimo quadro
+   * pintado — as vezes preto — para sempre, e so fechar e abrir o app de novo
+   * resolve. E exatamente onde WebRTC (call de voz/video) mais derruba o
+   * processo de GPU, porque e o uso mais pesado de composicao de video que o
+   * app faz.
+   */
+  app.on("child-process-gone", (_evento, detalhes) => {
+    if (detalhes.type !== "GPU") return;
+    registrar("processo-gpu-caiu", detalhes);
+    if (janelaPrincipal && !janelaPrincipal.isDestroyed()) {
+      recarregarQuandoAOrigemResponder(janelaPrincipal, "child-process-gone:GPU");
+    }
+  });
+
   void app.whenReady().then(() => {
     /**
      * Versoes no boot. O suporte a captura por loopback mudou bastante entre
