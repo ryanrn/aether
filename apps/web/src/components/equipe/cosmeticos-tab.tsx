@@ -20,6 +20,7 @@ import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { SkeletonGrid } from "@/components/ui/skeleton";
 import { SwitchVisual } from "@/components/ui/switch";
 import {
   criarCosmeticoAction,
@@ -110,7 +111,7 @@ export function CosmeticosTab() {
     return <p className="text-[13px] text-signal-dnd">{erro}</p>;
   }
   if (!itens || !porTipo) {
-    return <p className="text-[13px] text-ink-500">Carregando…</p>;
+    return <SkeletonGrid count={8} />;
   }
 
   return (

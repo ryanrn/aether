@@ -5,6 +5,7 @@ import { AetherIcon } from "@/components/ui/aether-icon";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input, Label } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { PLANS, type PlanTier } from "@aether/shared";
 import {
   gerarChaveAction,
@@ -269,7 +270,7 @@ export function ChavesTab() {
         </h2>
 
         {carregandoLista ? (
-          <p className="text-[13px] text-ink-500">Carregando…</p>
+          <SkeletonRows count={3} />
         ) : lista.length === 0 ? (
           <p className="text-[13px] text-ink-500">
             Nenhuma chave criada ainda.

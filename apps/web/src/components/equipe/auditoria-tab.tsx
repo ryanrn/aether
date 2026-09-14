@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { listarAuditoriaGlobalAction } from "@/server/actions/auditoria";
 import type { EntradaDeAuditoriaGlobal } from "@/server/audit";
 
@@ -47,7 +48,7 @@ export function AuditoriaTab() {
   }, []);
 
   if (erro) return <p className="text-[13px] text-signal-dnd">{erro}</p>;
-  if (itens === null) return <p className="text-[13px] text-ink-500">Carregando…</p>;
+  if (itens === null) return <SkeletonRows count={6} />;
   if (itens.length === 0) {
     return (
       <p className="text-[13px] text-ink-500">

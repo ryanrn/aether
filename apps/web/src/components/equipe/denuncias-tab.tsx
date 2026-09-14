@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import {
   apagarMensagemDenunciadaAction,
   listarDenunciasAction,
@@ -85,7 +86,7 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
   if (erro && !itens) {
     return <p className="text-[13px] text-signal-dnd">{erro}</p>;
   }
-  if (!itens) return <p className="text-[13px] text-ink-500">Carregando…</p>;
+  if (!itens) return <SkeletonRows count={4} />;
   if (itens.length === 0) {
     return (
       <p className="text-[13px] text-ink-500">Nenhuma denúncia aberta.</p>

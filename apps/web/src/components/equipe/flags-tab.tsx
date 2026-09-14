@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { SwitchVisual } from "@/components/ui/switch";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import {
   listarFlagsAction,
   virarFlagAction,
@@ -49,7 +50,7 @@ export function FlagsTab() {
     return <p className="text-[13px] text-signal-dnd">{erro}</p>;
   }
   if (!flags) {
-    return <p className="text-[13px] text-ink-500">Carregando…</p>;
+    return <SkeletonRows count={5} />;
   }
 
   return (

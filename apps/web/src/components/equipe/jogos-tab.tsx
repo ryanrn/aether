@@ -6,6 +6,7 @@ import type { JogoNaFila, StatusDeJogo } from "@aether/shared";
 import { listarFilaAction, revisarJogoAction } from "@/server/actions/jogos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -166,7 +167,7 @@ export function JogosTab({
       ) : null}
 
       {carregando ? (
-        <p className="text-xs text-ink-500">Carregando...</p>
+        <SkeletonRows count={4} />
       ) : fila.length === 0 ? (
         <p className="rounded-md border border-line bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
           Nada aqui.

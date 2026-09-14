@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import {
   definirAplicacaoBloqueadaAction,
   listarAplicacoesParaEquipeAction,
@@ -78,7 +79,7 @@ export function AplicativosTab() {
       {erro ? <p className="text-[12px] text-signal-dnd">{erro}</p> : null}
 
       {itens === null ? (
-        <p className="text-[13px] text-ink-500">Carregando…</p>
+        <SkeletonRows count={3} />
       ) : itens.length === 0 ? (
         <p className="text-[13px] text-ink-500">Nenhuma aplicação encontrada.</p>
       ) : (

@@ -13,6 +13,7 @@ import {
 } from "@/server/actions/descoberta";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -148,7 +149,7 @@ export function ComunidadesTab({
       ) : null}
 
       {carregando ? (
-        <p className="text-xs text-ink-500">Carregando...</p>
+        <SkeletonRows count={4} />
       ) : pedidos.length === 0 ? (
         <p className="rounded-md border border-line bg-base-850/60 px-3 py-6 text-center text-xs text-ink-500">
           Nada aqui.
