@@ -445,6 +445,65 @@
       );
   }
 
+  /*
+   * Atmosfera do cartao de entrar/criar conta/recuperar senha — releitura
+   * OpenDesign do login (projeto `55f7f8c1-...`). Mesmo espirito do
+   * `.marketing-glow` acima (halo fixo, `@theme` de cor), com dois blobs que
+   * derivam bem devagar — a `prefers-reduced-motion` global no fim do
+   * arquivo ja desliga a animacao pra quem pediu. Ficou de fora o campo de
+   * particulas piscando do mockup: numa tela funcional (entrar), dois blobs
+   * quietos bastam pra atmosfera sem competir com o formulario.
+   */
+  .auth-atmosphere::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(
+        120% 90% at 18% 8%,
+        color-mix(in oklch, var(--color-accent-500) 16%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        90% 70% at 85% 92%,
+        color-mix(in oklch, #5a4fe0 13%, transparent),
+        transparent 55%
+      );
+  }
+  .auth-atmosphere .auth-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .auth-atmosphere .auth-blob--a {
+    top: -140px;
+    left: -120px;
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(
+      circle at 40% 40%,
+      color-mix(in oklch, var(--color-accent-500) 55%, transparent),
+      transparent 70%
+    );
+    animation: aether-auth-drift-a 34s ease-in-out infinite;
+  }
+  .auth-atmosphere .auth-blob--b {
+    right: -100px;
+    bottom: -160px;
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(
+      circle at 60% 60%,
+      color-mix(in oklch, #5a4fe0 42%, transparent),
+      transparent 70%
+    );
+    animation: aether-auth-drift-b 40s ease-in-out infinite;
+  }
+
   /* Texto longo das paginas legais — spec do OpenDesign (doc-grid + prose). */
   .prose-legal {
     max-width: 68ch;
@@ -755,6 +814,25 @@
   }
   50% {
     --vl: 0.9;
+  }
+}
+
+@keyframes aether-auth-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(28px, 22px);
+  }
+}
+@keyframes aether-auth-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-24px, -18px);
   }
 }
 

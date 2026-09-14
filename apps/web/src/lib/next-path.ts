@@ -13,8 +13,15 @@
  * Sem dependencias: roda tambem no middleware (Edge).
  */
 
-/** Prefixos que um `next` pode apontar. O resto e ignorado. */
-const PERMITIDOS = ["/app", "/invite/"];
+/**
+ * Prefixos que um `next` pode apontar. O resto e ignorado.
+ *
+ * `/api/auth/desktop-handoff` e o unico destino fora de `/app`/`/invite/`: e
+ * pra onde o login Google com 2FA (que precisa passar por `/login` de novo
+ * pro segundo fator) manda o navegador depois de confirmado, pra so entao
+ * entregar a sessao pra janela do Electron. Ver `google/callback/route.ts`.
+ */
+const PERMITIDOS = ["/app", "/invite/", "/api/auth/desktop-handoff"];
 
 export function sanitizeNextPath(
   raw: string | null | undefined,

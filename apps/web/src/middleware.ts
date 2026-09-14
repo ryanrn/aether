@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@aether/access/tokens";
-import { sanitizeNextPath } from "@/lib/next-path";
 
 /**
  * Primeira barreira de acesso (Edge runtime).
@@ -9,9 +8,17 @@ import { sanitizeNextPath } from "@/lib/next-path";
  * Postgres. A checagem de revogacao/expiracao no banco acontece em getSession(),
  * dentro de cada pagina e action. Ou seja: o middleware evita render inutil,
  * ele nao e a fonte de verdade da autorizacao.
+ *
+ * POR ISSO NAO HA "ja logado, pula o /login" aqui — isso um dia morou aqui e
+ * causava loop de redirecionamento (ERR_TOO_MANY_REDIRECTS): um cookie com
+ * assinatura valida mas REVOGADO no banco (troca de senha, "sair de tudo")
+ * fazia o middleware mandar `/login` -> `/app`, e o layout de `/app` (que
+ * confere o banco de verdade) mandar `/app` -> `/login` de volta, pra sempre.
+ * Esse atalho agora mora em `login/page.tsx`/`register/page.tsx`, com
+ * `getSession()` — o mesmo que `/app/layout.tsx` ja usava, entao os dois
+ * lados sempre concordam sobre quem esta logado.
  */
 const PROTECTED_PREFIXES = ["/app"];
-const AUTH_ROUTES = ["/login", "/register"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -29,21 +36,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (claims && AUTH_ROUTES.includes(pathname)) {
-    // Ja logado numa tela de login/cadastro: pula direto para o destino. Sem
-    // isto, um `/login?next=/invite/xxx` clicado por quem ja tem sessao caia
-    // em `/app` e o convite se perdia.
-    const destino = sanitizeNextPath(request.nextUrl.searchParams.get("next"));
-    const url = request.nextUrl.clone();
-    const [caminho, query] = destino.split("?", 2);
-    url.pathname = caminho!;
-    url.search = query ? `?${query}` : "";
-    return NextResponse.redirect(url);
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/register"],
+  matcher: ["/app/:path*"],
 };

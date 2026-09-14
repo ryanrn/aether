@@ -106,5 +106,39 @@
         "texto": "Convites viraram link: em vez de passar o codigo, voce compartilha um endereco que mostra o servidor e entra com um clique. Funciona no navegador e, no aplicativo, o botao \"Abrir no AETHER Desktop\" leva direto ao servidor — se voce nao estiver logado, ele passa pelo login e volta pro convite sozinho."
       }
     ]
+  },
+  "0.1.30": {
+    "data": "2026-09-14",
+    "resumo": "Login com Google, tela de entrar nova, verificacao em dois fatores, e a chamada de voz para de piscar quando a conexao cai.",
+    "itens": [
+      {
+        "categoria": "recurso",
+        "texto": "Entrar com Google: um clique em \"Continuar com Google\" na tela de login, sem precisar de usuario e senha novos."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "Tela de entrar, criar conta e recuperar senha com visual novo."
+      },
+      {
+        "categoria": "recurso",
+        "texto": "Verificacao em dois fatores (2FA): protege sua conta com um segundo codigo, gerado por app autenticador, alem da senha. Ativa em Configuracoes > Seguranca."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Se a internet cair por um instante durante uma chamada ou no chat, o AETHER reconecta sozinho, sem banner de erro nem precisar clicar em nada."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Se voce trocar a senha (ou sair de todos os aparelhos) enquanto esta numa chamada de voz, a tela nao fica mais preta e travada — volta pro login sozinha."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Copiar os codigos de backup do 2FA, ou o codigo secreto manualmente, parava de funcionar em silencio em alguns casos. Agora avisa quando nao consegue copiar, e o texto pode ser selecionado na mao."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "O aplicativo de desktop abria mostrando o site (com a home, precos, etc.) antes de pedir login. Agora vai direto para a tela de entrar."
+      }
+    ]
   }
 }

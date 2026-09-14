@@ -605,11 +605,17 @@ function createWindow(caminhoInicial) {
    * `caminhoInicial` vem de um `aether://…` que abriu o app do zero. So aceita
    * caminho interno (comeca com `/`), nunca URL — quem valida o formato do
    * codigo e o `deep-link.js`, e o backend valida o convite de verdade.
+   *
+   * Sem deep link, o boot vai pra `/login`, NUNCA pra raiz (`/`) — a raiz e a
+   * home de marketing do site, e o app desktop nao tem por que mostrar isso:
+   * quem abre o .exe ja decidiu que quer entrar no AETHER. O `middleware.ts`
+   * do site ja resolve os dois casos sozinho a partir daqui: com sessao
+   * valida, redireciona pra `/app`; sem sessao, mostra o login.
    */
   const inicio =
     typeof caminhoInicial === "string" && caminhoInicial.startsWith("/")
       ? `${APP_ORIGIN}${caminhoInicial}`
-      : APP_ORIGIN;
+      : `${APP_ORIGIN}/login`;
   void window.loadURL(inicio);
 
   // Devolvida para o atualizador poder avisar a pagina quando a versao nova
@@ -627,6 +633,23 @@ function createWindow(caminhoInicial) {
   });
 
   window.webContents.on("will-navigate", (event, url) => {
+    if (isAllowedUrl(url)) return;
+    event.preventDefault();
+    void shell.openExternal(url);
+  });
+
+  /**
+   * `will-navigate` so cobre a navegacao ORIGINAL — um redirect HTTP no meio
+   * dela (302 do servidor) e outro evento, `will-redirect`. Sem isto, clicar
+   * em "Continuar com Google" navegaria pra `/api/auth/google` (mesma
+   * origem, passa no `will-navigate`), o servidor responderia 302 pra
+   * `accounts.google.com`, e ESSE redirect seguiria direto pra dentro da
+   * janela embutida — exatamente o que o Google recusa (webview embutida e
+   * bloqueada por politica deles desde 2016, erro `disallowed_useragent`).
+   * Aqui cai na mesma regra do `will-navigate`: fora da origem do app vai
+   * pro navegador do sistema.
+   */
+  window.webContents.on("will-redirect", (event, url) => {
     if (isAllowedUrl(url)) return;
     event.preventDefault();
     void shell.openExternal(url);

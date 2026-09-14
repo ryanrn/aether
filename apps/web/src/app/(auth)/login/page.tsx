@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { PENDENTE_2FA_COOKIE, verifyPendente2faToken } from "@aether/access";
 import { LoginForm } from "@/components/auth/login-form";
 import { sanitizeNextPath } from "@/lib/next-path";
+import { getSession } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -13,6 +15,19 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
+
+  /**
+   * Quem ja tem sessao (DB-checada, nao so o cookie assinado) pula direto pro
+   * destino. ISTO MORAVA NO `middleware.ts` — saiu de la porque o middleware
+   * (Edge) so confere a ASSINATURA do JWT, nunca revogacao no banco. Um
+   * cookie assinado mas revogado (troca de senha, "sair de tudo") fazia o
+   * middleware mandar de volta pra `/app`, o layout de `/app` (que ESSE sim
+   * confere o banco) mandar de volta pra `/login`, e dai em diante:
+   * ERR_TOO_MANY_REDIRECTS. Aqui a checagem ja fala com o banco mesmo (mesmo
+   * `getSession()` que `/app/layout.tsx` usa), entao nao ha essa divergencia.
+   */
+  if (await getSession()) redirect(sanitizeNextPath(next));
+
   // `""` quando nao ha destino valido — o form omite o campo e a action cai
   // no padrao `/app`.
   const destino =
@@ -35,28 +50,23 @@ export default async function LoginPage({
   return (
     <>
       <h1 className="font-brand text-2xl font-semibold tracking-[-0.005em] text-ink-100">
-        Bem-vindo de volta
+        Bem-vindo de volta.
       </h1>
       <p className="mt-1.5 text-sm text-ink-400">
-        Entre para acessar seus servidores e canais.
+        Entre na sua conta para continuar.
       </p>
 
       <div className="mt-7">
         <LoginForm next={destino} precisa2faInicial={precisa2faInicial} />
       </div>
 
-      <p className="mt-5 flex items-center justify-between text-[13px] text-ink-400">
-        <Link
-          href="/esqueci"
-          className="transition-colors hover:text-ink-200"
-        >
-          Esqueci minha senha
-        </Link>
+      <p className="mt-6 text-center text-[13px] text-ink-400">
+        Não tem uma conta?{" "}
         <Link
           href={registro}
           className="text-accent-300 transition-colors hover:text-accent-400"
         >
-          Criar conta
+          Crie sua conta
         </Link>
       </p>
     </>

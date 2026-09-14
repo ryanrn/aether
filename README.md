@@ -261,6 +261,74 @@ db:deploy` antes de usar.
 
 ---
 
+## Login com Google (OIDC) — codigo pronto, aguardando credenciais
+
+"Continuar com Google" na tela de login/cadastro. **Migracao
+`20260914140000_google_oauth` ainda nao aplicada em producao** — `npm run
+db:deploy` antes de usar. Sem `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` no
+`.env`, o botao responde "nao configurado" e o resto do login continua normal.
+
+### O que foi feito
+
+| Item | Onde |
+|---|---|
+| Cliente OAuth2 + PKCE (S256), OIDC, sem biblioteca de terceiros | `apps/web/src/server/auth/google.ts` — ver decisao abaixo sobre a `arctic` |
+| Identidade -> conta AETHER (acha, vincula ou cria) | `apps/web/src/server/services/google-auth.ts` |
+| Inicio/volta do fluxo | `apps/web/src/app/api/auth/google/route.ts` e `.../callback/route.ts` |
+| `User.googleId` (nulavel, `@unique`) | mesmo padrao de `email`/`passwordHash` — conta Google-only tem `passwordHash: null` |
+| Entrada visual | `google-button.tsx`, integrado em `login-form.tsx` (a tela nova, releitura OpenDesign do projeto `55f7f8c1-...` — ver "Cara de aplicativo, e nao de pagina" abaixo) |
+| Handoff pro app desktop | `CodigoLoginDesktop` (uso unico, 60s, hash sha256 — mesma doutrina do `PasswordReset`), rota `/api/auth/desktop-handoff`, pagina `/desktop-login/[code]`, `aether://login-callback/<codigo>` em `apps/desktop/src/deep-link.js` |
+
+### Decisoes que valem registrar
+
+- **Nao usamos a `arctic`.** Era o plano inicial, mas o pacote foi DEPRECADO
+  pelo proprio mantenedor em jul/2026 ("nao mexo nisto ha quase um ano") — o
+  repo dele agora recomenda copiar o codigo do provedor em vez de instalar.
+  Isso bate com o que o monorepo ja faz: Spotify/Twitch
+  (`packages/access/src/spotify.ts`) e o TOTP ja sao hand-rolled, fetch +
+  `node:crypto`, sem lib de OAuth. `google.ts` segue o mesmo padrao.
+- **O Google recusa OAuth dentro de uma webview embutida** (Electron cai
+  nisso — politica deles desde 2016, erro `disallowed_useragent`). No app
+  desktop o fluxo inteiro roda no navegador do sistema; o cookie de sessao
+  nasce la, e o `aether://login-callback/<codigo>` e a UNICA ponte de volta
+  pra janela do Electron. `apps/desktop/src/main.js` ganhou um handler de
+  `will-redirect` (alem do `will-navigate` que ja existia) — sem ele, o 302
+  do nosso `/api/auth/google` pro Google seguiria direto pra DENTRO da janela
+  embutida em vez de abrir o navegador do sistema.
+- **Vinculo automatico por e-mail.** Se o e-mail de uma conta Google bate com
+  uma conta AETHER existente, vincula direto — o Google so devolve
+  `email_verified: true` para quem provou ser dono, mesma confianca que ja
+  damos ao nosso proprio link de confirmacao por e-mail. Mesmo padrao de
+  GitHub/Discord/Slack. Decisao confirmada com o dono do produto.
+- **Login Google nunca pula o 2FA.** Se a conta ja tem TOTP habilitado, o
+  callback cai no MESMO cookie pendente (`aether_2fa_pendente`) que o login
+  por senha usa — `verificarTotpDoLoginAction` nao precisou mudar uma linha;
+  o "desktop" so viaja escondido dentro do proprio `next` (`sanitizeNextPath`
+  ganhou `/api/auth/desktop-handoff` como destino permitido).
+- **`id_token` do Google nao e verificado por assinatura.** Ele vem de uma
+  chamada SERVIDOR-A-SERVIDOR pro endpoint de token, autenticada com nosso
+  `client_secret`, por TLS — verificar assinatura importa no fluxo implicito
+  (onde o token chega pelo redirect do navegador), nao aqui.
+- **Entrada do app desktop deixou de ser a raiz do site.** `main.js` bootava
+  em `APP_ORIGIN` (a home de marketing); agora vai direto pra `/login` — o
+  `middleware.ts` que ja existia resolve sozinho: sessao valida manda pra
+  `/app`, sem sessao mostra o login. A home de marketing continua intacta
+  pra quem abre pelo navegador.
+
+### Limitacoes conhecidas
+
+- **Sem verificacao end-to-end com credenciais reais.** `typecheck` e
+  `vitest` (829 testes, sem nenhum novo especifico do Google ainda) passam, e
+  a tela/fluxo foram exercitados manualmente em dev — mas sem
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` reais e sem o app desktop
+  empacotado, o handoff via `aether://` nao foi testado ponta a ponta.
+- **Sem teste automatizado do fluxo OAuth.** `google.ts` fala com o Google de
+  verdade (fetch); testar isso exigiria mock de rede, ainda nao escrito.
+- **Cancelar no meio ("voltar") manda pra `/login?erro=google&motivo=...`**
+  sem UI dedicada pra explicar o motivo — a pessoa so ve o formulario de novo.
+
+---
+
 ## Fase 1 — prontidao para beta (codigo pronto, aguardando deploy)
 
 Antes de por o AETHER na mao de gente de fora, o que falta nao e produto — e

@@ -106,7 +106,9 @@ export type AetherIconName =
   | "tv"
   | "maximize"
   | "pip"
-  | "smile";
+  | "smile"
+  | "eye"
+  | "eye-off";
 
 const SIZE = {
   sm: "h-3.5 w-3.5",
@@ -513,6 +515,15 @@ export function AetherIconSprite() {
         <symbol id="ic-smile" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8.5" />
           <path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01" />
+        </symbol>
+        <symbol id="ic-eye" viewBox="0 0 24 24">
+          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="ic-eye-off" viewBox="0 0 24 24">
+          <path d="M3 3l18 18" />
+          <path d="M10.6 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a15.6 15.6 0 0 1-3.1 4.1M6.6 6.6C4 8.3 2 12 2 12s3.6 7 10 7c1.1 0 2.1-.2 3-.5" />
+          <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
         </symbol>
       </defs>
     </svg>

@@ -84,6 +84,13 @@ model User {
   /// tolerancia (RFC 6238 recomenda) — sem isto, um codigo visto de relance
   /// continuaria valido por ate ~90s depois de usado.
   totpUltimoPassoUsado      BigInt?
+  /// `sub` da conta Google (OIDC), quando a pessoa entrou ou vinculou pelo
+  /// "Continuar com Google". Nulo = nunca conectou. `@unique` impede duas
+  /// contas AETHER reivindicarem a mesma conta Google. Igual a `email`, so que
+  /// nesta o dono comprovado e o proprio Google, nao um link de confirmacao
+  /// nosso — por isso o vinculo automatico por e-mail (ver `google.ts`) e
+  /// seguro: o Google so devolve `email_verified: true` para quem provou dono.
+  googleId                  String?    @unique
   /// Aceite dos Termos/Privacidade. `aceitouTermosEm` nulo, ou `termosVersao`
   /// diferente da versao atual em `@aether/shared/legal`, dispara o modal de
   /// aceite em `/app`. Guardar a VERSAO permite pedir re-aceite quando os
@@ -169,6 +176,7 @@ model User {
   passwordResets     PasswordReset[]
   verificacoesEmail  VerificacaoEmail[]
   codigosDeBackup2fa TotpBackupCode[]
+  codigosLoginDesktop CodigoLoginDesktop[]
   denunciasFeitas    Denuncia[]         @relation("DenunciaReporter")
   friendsAsRequester Friendship[]        @relation("FriendshipRequester")
   friendsAsAddressee Friendship[]        @relation("FriendshipAddressee")
@@ -670,6 +678,28 @@ model VerificacaoEmail {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// A ponte entre "login Google terminou no navegador do sistema" e "a janela
+/// do app desktop precisa da sessao". O Google recusa OAuth dentro de uma
+/// webview embutida (Electron cai nisso) — por isso o fluxo desktop abre no
+/// navegador padrao, e o cookie de sessao nasce LA, nao na janela do Electron.
+///
+/// Mesma forma do `PasswordReset`/`VerificacaoEmail` de proposito: o codigo
+/// que vai no `aether://login-callback/<codigo>` NUNCA e gravado em claro, so
+/// o sha256; uso unico (`usedAt`); vida curta (60s, ver `desktop-handoff.ts`)
+/// porque a unica janela de uso e o tempo do proprio navegador redirecionar.
+model CodigoLoginDesktop {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
