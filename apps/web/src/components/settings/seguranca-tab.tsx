@@ -145,6 +145,7 @@ function PassoDeConfirmacao({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copiado, setCopiado] = useState(false);
+  const [erroCopiaSegredo, setErroCopiaSegredo] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [confirmando, startConfirmar] = useTransition();
@@ -156,8 +157,12 @@ function PassoDeConfirmacao({
   }, [dados.otpauthUri]);
 
   function copiarSegredo() {
+    setErroCopiaSegredo(false);
     void copiarTexto(dados.segredoBase32).then((ok) => {
-      if (!ok) return;
+      if (!ok) {
+        setErroCopiaSegredo(true);
+        return;
+      }
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     });
@@ -189,7 +194,7 @@ function PassoDeConfirmacao({
             codigo manualmente:
           </p>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-sm border border-line-strong bg-base-950 px-3 py-2 font-mono text-[13px] tracking-wide text-ink-100">
+            <code className="min-w-0 flex-1 truncate rounded-sm border border-line-strong bg-base-950 px-3 py-2 font-mono text-[13px] tracking-wide text-ink-100 select-text">
               {dados.segredoBase32}
             </code>
             <button
@@ -201,6 +206,12 @@ function PassoDeConfirmacao({
               {copiado ? "Copiado" : "Copiar"}
             </button>
           </div>
+          {erroCopiaSegredo ? (
+            <p className="text-[12px] text-signal-dnd">
+              Nao consegui copiar automaticamente. Selecione o codigo acima e
+              copie manualmente (Ctrl+C).
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -370,11 +381,19 @@ function CodigosDeBackupModal({
   onFechar: () => void;
 }) {
   const [copiado, setCopiado] = useState(false);
+  const [erroCopia, setErroCopia] = useState(false);
   const [salvei, setSalvei] = useState(false);
 
   function copiarTodos() {
+    setErroCopia(false);
     void copiarTexto(codigos.join("\n")).then((ok) => {
-      if (!ok) return;
+      if (!ok) {
+        // Falhou de verdade (permissao do navegador/app negada) — nao finge
+        // que copiou. Os codigos abaixo sao selecionaveis (`select-text`),
+        // entao selecionar a mao sempre funciona como saida.
+        setErroCopia(true);
+        return;
+      }
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     });
@@ -395,7 +414,7 @@ function CodigosDeBackupModal({
         fechar esta tela, eles nao aparecem de novo.
       </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-line-strong bg-base-950 p-3 font-mono text-[13px] text-ink-100">
+      <div className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-line-strong bg-base-950 p-3 font-mono text-[13px] text-ink-100 select-text">
         {codigos.map((c) => (
           <span key={c}>{c}</span>
         ))}
@@ -409,6 +428,12 @@ function CodigosDeBackupModal({
         <AetherIcon name={copiado ? "clipboard-check" : "copy"} className="h-3.5 w-3.5" />
         {copiado ? "Copiado" : "Copiar todos"}
       </button>
+      {erroCopia ? (
+        <p className="mt-1.5 text-[12px] text-signal-dnd">
+          Nao consegui copiar automaticamente. Selecione o texto acima e copie
+          manualmente (Ctrl+C).
+        </p>
+      ) : null}
 
       <label className="mt-4 flex items-center gap-2 text-[13px] text-ink-300">
         <input
