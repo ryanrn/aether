@@ -29,7 +29,7 @@ export async function GET(
     serverId,
     escrita: false,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const acesso = await loadMemberAccess(serverId, bot.botUserId);
   if (!acesso) return erroApi("not_found");
@@ -54,5 +54,5 @@ export async function GET(
     has(permissoes.get(c.id) ?? 0n, "VIEW_CHANNEL"),
   );
 
-  return okApi(visiveis);
+  return okApi(visiveis, 200, limite.headers);
 }

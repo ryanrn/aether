@@ -39,7 +39,7 @@ vi.mock("@aether/access", () => ({
   getChannelPermissionMap,
 }));
 
-const rateLimit = vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 });
+const rateLimit = vi.fn().mockResolvedValue({ ok: true, retryAfter: 0, usado: 1 });
 vi.mock("@/server/auth/rate-limit", () => ({ rateLimit }));
 
 const enviarMensagemPeloGateway = vi.fn();
@@ -102,7 +102,7 @@ beforeEach(() => {
   ]) {
     m.mockReset();
   }
-  rateLimit.mockReset().mockResolvedValue({ ok: true, retryAfter: 0 });
+  rateLimit.mockReset().mockResolvedValue({ ok: true, retryAfter: 0, usado: 1 });
 });
 
 describe("autenticação", () => {
@@ -160,10 +160,23 @@ describe("GET /servers/:id", () => {
 
   it("rate limit estourado -> 429 com Retry-After", async () => {
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
-    rateLimit.mockResolvedValue({ ok: false, retryAfter: 7 });
+    rateLimit.mockResolvedValue({ ok: false, retryAfter: 7, usado: 30 });
     const res = await getServer(req({ auth: "Bearer x" }), ctx({ serverId: "s_1" }));
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("7");
+  });
+
+  it("sucesso -> X-RateLimit-Limit/Remaining do limite mais apertado", async () => {
+    loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
+    serverFindUnique.mockResolvedValue({ id: "s_1", name: "Meu Server", iconUrl: null });
+    // global (30) tem 5 usados (sobra 25); por servidor (15) tem 12 usados (sobra 3) — o mais apertado.
+    rateLimit
+      .mockResolvedValueOnce({ ok: true, retryAfter: 0, usado: 5 })
+      .mockResolvedValueOnce({ ok: true, retryAfter: 0, usado: 12 });
+    const res = await getServer(req({ auth: "Bearer x" }), ctx({ serverId: "s_1" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-ratelimit-limit")).toBe("15");
+    expect(res.headers.get("x-ratelimit-remaining")).toBe("3");
   });
 });
 
@@ -186,6 +199,28 @@ describe("GET /channels/:id/messages", () => {
     const res = await getMsgs(req({ auth: "Bearer x" }), ctx({ channelId: "c_1" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ messages: [{ id: "m_1" }], hasMore: false });
+  });
+
+  it("?before=<id> repassa o cursor pro service — pagina pra tras de verdade", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT" });
+    loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
+    getChannelPermissions.mockResolvedValue(VIEW);
+    listRecentMessages.mockResolvedValue({ messages: [], hasMore: false });
+    const request = new Request(
+      "http://x/api/v1/channels/c_1/messages?before=m_100",
+      { headers: { authorization: "Bearer x" } },
+    );
+    await getMsgs(request, ctx({ channelId: "c_1" }));
+    expect(listRecentMessages).toHaveBeenCalledWith("c_1", "u_bot", "m_100");
+  });
+
+  it("sem ?before -> service recebe undefined (primeira pagina)", async () => {
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT" });
+    loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
+    getChannelPermissions.mockResolvedValue(VIEW);
+    listRecentMessages.mockResolvedValue({ messages: [], hasMore: false });
+    await getMsgs(req({ auth: "Bearer x" }), ctx({ channelId: "c_1" }));
+    expect(listRecentMessages).toHaveBeenCalledWith("c_1", "u_bot", undefined);
   });
 });
 

@@ -92,12 +92,15 @@ export async function redisEval(
 }
 
 /**
- * O resultado de aplicar um limite: passou, e em quantos segundos tentar de
- * novo se nao passou.
+ * O resultado de aplicar um limite: passou, em quantos segundos tentar de
+ * novo se nao passou, e quantas chamadas ja foram usadas na janela atual
+ * (contando esta, quando ela passou) — para expor `X-RateLimit-Remaining` na
+ * REST v1 sem uma segunda ida ao Redis so para contar.
  */
 export interface ResultadoDeLimite {
   ok: boolean;
   retryAfter: number;
+  usado: number;
 }
 
 /**
@@ -130,12 +133,12 @@ if count >= limit then
     retry = math.ceil((tonumber(oldest[2]) + window - now) / 1000)
     if retry < 1 then retry = 1 end
   end
-  return {0, retry}
+  return {0, retry, count}
 end
 
 redis.call('ZADD', key, now, member)
 redis.call('PEXPIRE', key, window)
-return {1, 0}
+return {1, 0, count + 1}
 `;
 
 /**
@@ -162,9 +165,13 @@ export async function limitarJanelaDeslizante(
     JANELA_DESLIZANTE_LUA,
     [`ratelimit:${chave}`],
     [agora, janelaMs, limite, membro],
-  )) as [number, number];
+  )) as [number, number, number];
 
-  return { ok: resultado[0] === 1, retryAfter: Number(resultado[1]) || 0 };
+  return {
+    ok: resultado[0] === 1,
+    retryAfter: Number(resultado[1]) || 0,
+    usado: Number(resultado[2]) || 0,
+  };
 }
 
 /**

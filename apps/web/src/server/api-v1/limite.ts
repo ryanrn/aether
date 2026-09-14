@@ -1,9 +1,22 @@
 import "server-only";
 
 import { API_LIMITES } from "@aether/shared";
-import { rateLimit } from "@/server/auth/rate-limit";
+import { rateLimit, type RateLimitResult } from "@/server/auth/rate-limit";
 import { erroApi } from "./resposta";
 import type { NextResponse } from "next/server";
+
+/**
+ * Resultado de checar o rate limit de um bot.
+ *
+ * `headers` traz `X-RateLimit-Limit`/`X-RateLimit-Remaining` do limite MAIS
+ * apertado entre os checados (global/servidor/canal) — o bot descobre o teto
+ * ANTES de estourar, e nao so pelo `Retry-After` do 429. So faz sentido
+ * quando `bloqueado` e `null`; anexar em cima do proprio `okApi(...)`.
+ */
+export interface LimiteBotResultado {
+  bloqueado: NextResponse | null;
+  headers: Record<string, string>;
+}
 
 /**
  * Rate limit da REST v1 — o MESMO mecanismo do login (`limitarJanelaDeslizante`
@@ -12,9 +25,6 @@ import type { NextResponse } from "next/server";
  *
  * Escrita é fail-CLOSED (Redis fora -> recusa, como o login); leitura é
  * fail-open (Redis fora -> libera, rate limit é defesa em profundidade).
- *
- * Devolve `null` quando passou, ou a resposta `429` já pronta (com
- * `Retry-After`) quando estourou.
  */
 export async function limitarBot(params: {
   applicationId: string;
@@ -23,48 +33,76 @@ export async function limitarBot(params: {
   channelId?: string;
   /** `true` = POST/PATCH/DELETE (fail-closed); `false` = GET (fail-open) */
   escrita: boolean;
-}): Promise<NextResponse | null> {
+}): Promise<LimiteBotResultado> {
   const { applicationId, serverId, channelId, escrita } = params;
   const opts = { failClosed: escrita };
 
-  const checagens: Array<Promise<{ ok: boolean; retryAfter: number }>> = [
-    rateLimit(
-      `bot:${applicationId}`,
-      API_LIMITES.global.limite,
-      API_LIMITES.global.janelaMs,
-      opts,
-    ),
+  const definicoes: Array<{ limite: number; check: Promise<RateLimitResult> }> = [
+    {
+      limite: API_LIMITES.global.limite,
+      check: rateLimit(
+        `bot:${applicationId}`,
+        API_LIMITES.global.limite,
+        API_LIMITES.global.janelaMs,
+        opts,
+      ),
+    },
   ];
 
   if (serverId) {
-    checagens.push(
-      rateLimit(
+    definicoes.push({
+      limite: API_LIMITES.porServidor.limite,
+      check: rateLimit(
         `bot:${applicationId}:srv:${serverId}`,
         API_LIMITES.porServidor.limite,
         API_LIMITES.porServidor.janelaMs,
         opts,
       ),
-    );
+    });
   }
 
   if (channelId) {
-    checagens.push(
-      rateLimit(
+    definicoes.push({
+      limite: API_LIMITES.envioPorCanal.limite,
+      check: rateLimit(
         `bot:${applicationId}:ch:${channelId}`,
         API_LIMITES.envioPorCanal.limite,
         API_LIMITES.envioPorCanal.janelaMs,
         opts,
       ),
-    );
+    });
   }
 
-  const resultados = await Promise.all(checagens);
+  const resultados = await Promise.all(definicoes.map((d) => d.check));
   const estourado = resultados.find((r) => !r.ok);
-  if (!estourado) return null;
+  if (estourado) {
+    return {
+      bloqueado: erroApi("rate_limited", {
+        headers: { "Retry-After": String(Math.max(1, estourado.retryAfter)) },
+      }),
+      headers: {},
+    };
+  }
 
-  return erroApi("rate_limited", {
-    headers: { "Retry-After": String(Math.max(1, estourado.retryAfter)) },
+  // O limite mais apertado (menor sobra) e o que vale a pena o bot ver — e o
+  // que vai estourar primeiro se ele continuar no mesmo ritmo.
+  let piorIndice = 0;
+  let menorSobra = Infinity;
+  resultados.forEach((r, i) => {
+    const sobra = definicoes[i]!.limite - r.usado;
+    if (sobra < menorSobra) {
+      menorSobra = sobra;
+      piorIndice = i;
+    }
   });
+
+  return {
+    bloqueado: null,
+    headers: {
+      "X-RateLimit-Limit": String(definicoes[piorIndice]!.limite),
+      "X-RateLimit-Remaining": String(Math.max(0, menorSobra)),
+    },
+  };
 }
 
 /**

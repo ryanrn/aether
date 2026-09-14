@@ -83,15 +83,15 @@ describe("com Redis configurado", () => {
   beforeEach(useRedisEnv);
 
   it("libera quando o script devolve 1", async () => {
-    stubUpstash([1, 0]);
+    stubUpstash([1, 0, 3]);
     const result = await rateLimit("login:1.2.3.4", 10, 300_000);
-    expect(result).toEqual({ ok: true, retryAfter: 0 });
+    expect(result).toEqual({ ok: true, retryAfter: 0, usado: 3 });
   });
 
   it("bloqueia e repassa o retryAfter que o script calculou", async () => {
-    stubUpstash([0, 42]);
+    stubUpstash([0, 42, 10]);
     const result = await rateLimit("login:1.2.3.4", 10, 300_000);
-    expect(result).toEqual({ ok: false, retryAfter: 42 });
+    expect(result).toEqual({ ok: false, retryAfter: 42, usado: 10 });
   });
 
   it("faz UMA chamada atomica de EVAL, nao uma sequencia de comandos", async () => {
@@ -160,7 +160,7 @@ describe("com Redis fora do ar", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const result = await rateLimit("login:1.2.3.4", 10, 300_000);
-    expect(result).toEqual({ ok: true, retryAfter: 0 });
+    expect(result).toEqual({ ok: true, retryAfter: 0, usado: 0 });
   });
 
   it("libera tambem quando o Upstash responde erro HTTP", async () => {

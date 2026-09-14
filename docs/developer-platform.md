@@ -108,11 +108,15 @@ Os canais que **o bot enxerga** (mesma regra da árvore de canais humana).
 
 #### `GET /channels/:channelId/messages`
 
-Histórico recente do canal.
+Histórico recente do canal, do mais antigo para o mais novo.
 
 ```json
 { "messages": [ /* ... */ ], "hasMore": true }
 ```
+
+`hasMore: true` → tem mais história pra trás. Pagine com `?before=<id da
+mensagem mais antiga que você já tem>` — mesmo cursor que o app usa por
+socket. Sem `before`, sempre volta a primeira página (a mais recente).
 
 #### `POST /channels/:channelId/messages`
 
@@ -179,6 +183,10 @@ chamar sem estar em voz não é erro.
 | envio de mensagem, por canal | 5 mensagens / 5 s |
 
 Estourou → `429` com `Retry-After`. Respeite o header.
+
+Toda resposta de sucesso traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`
+do limite mais apertado entre os checados na chamada (global/servidor/canal)
+— dá pra se auto-regular ANTES de levar o 429, e não só depois.
 
 ---
 

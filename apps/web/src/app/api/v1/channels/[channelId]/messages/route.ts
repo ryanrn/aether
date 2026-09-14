@@ -59,13 +59,20 @@ export async function GET(
     serverId: ctxCanal.serverId,
     escrita: false,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
+
+  // `before` (id de mensagem) pagina para tras — mesmo cursor do
+  // `message:history` por socket. Sem ele, GET sempre devolvia a mesma
+  // primeira pagina; um bot que ficou offline nao tinha como reconciliar o
+  // resto do historico, apesar da doc recomendar exatamente isso.
+  const before = new URL(request.url).searchParams.get("before") ?? undefined;
 
   const { messages, hasMore } = await listRecentMessages(
     channelId,
     bot.botUserId,
+    before,
   );
-  return okApi({ messages, hasMore });
+  return okApi({ messages, hasMore }, 200, limite.headers);
 }
 
 export async function POST(
@@ -105,7 +112,7 @@ export async function POST(
     channelId,
     escrita: true,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const resultado = await enviarMensagemPeloGateway({
     atorUserId: bot.botUserId,
@@ -127,5 +134,5 @@ export async function POST(
     return erroApi("bad_request", { message: resultado.error });
   }
 
-  return okApi(resultado.message, 201);
+  return okApi(resultado.message, 201, limite.headers);
 }

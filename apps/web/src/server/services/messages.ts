@@ -18,9 +18,18 @@ import {
  *
  * Sem checagem de permissao aqui de proposito: quem chama ja passou pelos
  * guards da pagina. Mesma convencao dos outros services.
+ *
+ * `before` (id de mensagem) pagina para tras — MESMO cursor que
+ * `message:history` do gateway usa por socket. Existe aqui tambem porque a
+ * REST v1 (bot) precisa reconciliar historico apos ficar offline sem abrir
+ * conexao de socket para isso.
  */
-export async function listRecentMessages(channelId: string, selfUserId: string) {
-  return historicoInicial({ channelId, deletedAt: null }, selfUserId);
+export async function listRecentMessages(
+  channelId: string,
+  selfUserId: string,
+  before?: string,
+) {
+  return historicoInicial({ channelId, deletedAt: null }, selfUserId, before);
 }
 
 /**
@@ -39,6 +48,8 @@ async function historicoInicial(
   where: { channelId?: string; dmChannelId?: string; deletedAt: null },
   /** Quem esta olhando, para marcar quais reacoes sao suas. */
   selfUserId: string,
+  /** Id da mensagem mais antiga ja vista — busca a pagina ANTES dela. */
+  before?: string,
 ): Promise<{
   messages: PublicMessage[];
   hasMore: boolean;
@@ -80,6 +91,7 @@ async function historicoInicial(
     // e nao varrer tudo; a ordem para a tela e invertida abaixo.
     orderBy: { createdAt: "desc" },
     take: MESSAGE_PAGE_SIZE + 1,
+    ...(before ? { cursor: { id: before }, skip: 1 } : {}),
   });
 
   const hasMore = rows.length > MESSAGE_PAGE_SIZE;

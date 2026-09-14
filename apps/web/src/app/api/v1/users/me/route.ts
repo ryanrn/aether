@@ -21,7 +21,7 @@ export async function GET(request: Request): Promise<Response> {
     applicationId: bot.applicationId,
     escrita: false,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const linha = await prisma.user.findUnique({
     where: { id: bot.botUserId },
@@ -37,5 +37,5 @@ export async function GET(request: Request): Promise<Response> {
     kind: "BOT",
     applicationId: bot.applicationId,
   };
-  return okApi(corpo);
+  return okApi(corpo, 200, limite.headers);
 }

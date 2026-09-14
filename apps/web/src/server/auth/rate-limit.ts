@@ -40,6 +40,8 @@ export interface RateLimitResult {
   ok: boolean;
   /** segundos ate liberar, quando bloqueado */
   retryAfter: number;
+  /** chamadas ja usadas na janela atual (contando esta, quando ela passou) */
+  usado: number;
 }
 
 /** Implementacao em memoria. Exportada para o teste comparar os dois backends. */
@@ -60,12 +62,13 @@ export function rateLimitInMemory(
     return {
       ok: false,
       retryAfter: Math.ceil((windowMs - (now - oldest)) / 1000),
+      usado: bucket.hits.length,
     };
   }
 
   bucket.hits.push(now);
   buckets.set(key, bucket);
-  return { ok: true, retryAfter: 0 };
+  return { ok: true, retryAfter: 0, usado: bucket.hits.length };
 }
 
 /**
@@ -107,7 +110,9 @@ export async function rateLimit(
       "Redis fora — liberando (fail-open)",
       { err: error },
     );
-    return { ok: true, retryAfter: 0 };
+    // `usado` fica desconhecido (Redis fora do ar): 0 so para o tipo fechar,
+    // quem monta os headers de resposta ignora este caso (ver `limite.ts`).
+    return { ok: true, retryAfter: 0, usado: 0 };
   }
 }
 

@@ -29,6 +29,10 @@ export function erroApi(
   );
 }
 
-export function okApi<T>(corpo: T, status = 200): NextResponse {
-  return NextResponse.json(corpo, { status });
+export function okApi<T>(
+  corpo: T,
+  status = 200,
+  headers?: Record<string, string>,
+): NextResponse {
+  return NextResponse.json(corpo, { status, headers });
 }

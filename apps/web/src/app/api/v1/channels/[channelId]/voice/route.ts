@@ -44,7 +44,7 @@ export async function POST(
     serverId: canal.serverId,
     escrita: true,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const resultado = await entrarEmVozPeloGateway({
     botUserId: bot.botUserId,
@@ -80,7 +80,7 @@ export async function POST(
     canUseCamera: resultado.media.canUseCamera,
     expiresAt: resultado.media.expiresAt,
   };
-  return okApi(corpo);
+  return okApi(corpo, 200, limite.headers);
 }
 
 export async function DELETE(request: Request): Promise<Response> {
@@ -88,9 +88,9 @@ export async function DELETE(request: Request): Promise<Response> {
   if (!ehIdentidade(bot)) return bot;
 
   const limite = await limitarBot({ applicationId: bot.applicationId, escrita: false });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const ok = await sairDaVozPeloGateway({ botUserId: bot.botUserId });
   if (!ok) return erroApi("gateway_unavailable");
-  return okApi({ ok: true });
+  return okApi({ ok: true }, 200, limite.headers);
 }

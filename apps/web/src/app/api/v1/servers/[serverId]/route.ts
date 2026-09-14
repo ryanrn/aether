@@ -28,7 +28,7 @@ export async function GET(
     serverId,
     escrita: false,
   });
-  if (limite) return limite;
+  if (limite.bloqueado) return limite.bloqueado;
 
   const acesso = await loadMemberAccess(serverId, bot.botUserId);
   if (!acesso) return erroApi("not_found");
@@ -40,5 +40,5 @@ export async function GET(
   if (!server) return erroApi("not_found");
 
   const corpo: ApiServer = server;
-  return okApi(corpo);
+  return okApi(corpo, 200, limite.headers);
 }
