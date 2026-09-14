@@ -109,15 +109,43 @@ export function ContextMenu({
     });
   }, [ponto]);
 
+  /** Todo item clicavel do menu, na ordem visual — usado pela seta e pelo foco inicial. */
+  function itens(): HTMLElement[] {
+    const elemento = menuRef.current;
+    if (!elemento) return [];
+    return Array.from(
+      elemento.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)'),
+    );
+  }
+
   useEffect(() => {
     if (!ponto) return;
     focoAnterior.current = document.activeElement as HTMLElement | null;
+
+    /**
+     * Move o foco JA para dentro do menu — sem isto a seta nao tem o que
+     * mover: o menu abre por clique direito, que nao foca nada sozinho, e o
+     * `role="menu"` promete navegacao por teclado que so existiria de fato
+     * com o foco ja dentro dele.
+     */
+    itens()[0]?.focus();
 
     function naTecla(evento: KeyboardEvent) {
       if (evento.key === "Escape") {
         evento.preventDefault();
         onClose();
+        return;
       }
+      if (evento.key !== "ArrowDown" && evento.key !== "ArrowUp") return;
+      const lista = itens();
+      if (lista.length === 0) return;
+      evento.preventDefault();
+      const atual = lista.indexOf(document.activeElement as HTMLElement);
+      const proximo =
+        evento.key === "ArrowDown"
+          ? (atual + 1) % lista.length
+          : (atual - 1 + lista.length) % lista.length;
+      lista[proximo]?.focus();
     }
     /**
      * Rolar fecha o menu, como em qualquer programa: ele fica preso ao ponto

@@ -8,7 +8,6 @@ import {
   useTransition,
 } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import type {
   PerfilParaCartao,
   PublicUser,
@@ -21,12 +20,12 @@ import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
-import { useSocket } from "@/components/realtime/realtime-provider";
 import {
   useListening,
   usePresenceStatus,
   useRealtimeStore,
 } from "@/lib/stores/realtime-store";
+import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { useElapsed } from "@/lib/use-elapsed";
 import { carregarPerfilAction } from "@/server/actions/perfil";
 import {
@@ -341,11 +340,9 @@ function AcoesSociais({
   onMudou: (p: PerfilParaCartao) => void;
   onClose: () => void;
 }) {
-  const socket = useSocket();
-  const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
-  const [abrindo, setAbrindo] = useState(false);
+  const { abrir, abrindo, erro: erroConversa } = useAbrirConversa();
 
   const relacao: RelacaoComUsuario = perfil?.relacao ?? "nenhuma";
 
@@ -386,18 +383,7 @@ function AcoesSociais({
   }
 
   function mandarMensagem() {
-    if (!socket || abrindo) return;
-    setAbrindo(true);
-    setErro(null);
-    socket.emit("dm:open", { userId: user.id }, (r) => {
-      setAbrindo(false);
-      if (!r.ok) {
-        setErro(r.error);
-        return;
-      }
-      onClose();
-      router.push(`/app/dm/${r.dm.id}`);
-    });
+    abrir(user.id, onClose);
   }
 
   return (
@@ -447,8 +433,10 @@ function AcoesSociais({
         </BotaoAcao>
       ) : null}
 
-      {erro ? (
-        <p className="text-[11px] leading-snug text-signal-dnd">{erro}</p>
+      {erro ?? erroConversa ? (
+        <p className="text-[11px] leading-snug text-signal-dnd">
+          {erro ?? erroConversa}
+        </p>
       ) : null}
     </div>
   );

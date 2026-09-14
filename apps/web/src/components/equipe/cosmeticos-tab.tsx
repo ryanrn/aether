@@ -698,39 +698,51 @@ function ArquivoInput({
   temAtual: boolean;
   onEscolher: (f: File | null) => void;
 }) {
+  /**
+   * Erro embaixo do campo, e nao `alert()` — era a unica caixa nativa do
+   * navegador sobrando no admin, junto do `prompt()` de silenciar autor.
+   */
+  const [erroTamanho, setErroTamanho] = useState<string | null>(null);
+
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded-md border border-line-strong bg-base-900 px-3 py-2 text-[13px] text-ink-300 transition-colors hover:border-line-strong hover:text-ink-100">
-      <AetherIcon name="upload" className="h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">
-        {arquivo
-          ? arquivo.name
-          : temAtual
-            ? "Trocar arquivo (mantém o atual)"
-            : "Escolher PNG ou WEBP"}
-      </span>
-      {arquivo ? (
-        <span className="shrink-0 font-mono text-[10px] text-ink-500">
-          {(arquivo.size / 1024).toFixed(0)} KB
+    <div className="flex flex-col gap-1.5">
+      <label className="flex cursor-pointer items-center gap-2 rounded-md border border-line-strong bg-base-900 px-3 py-2 text-[13px] text-ink-300 transition-colors hover:border-line-strong hover:text-ink-100">
+        <AetherIcon name="upload" className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">
+          {arquivo
+            ? arquivo.name
+            : temAtual
+              ? "Trocar arquivo (mantém o atual)"
+              : "Escolher PNG ou WEBP"}
         </span>
+        {arquivo ? (
+          <span className="shrink-0 font-mono text-[10px] text-ink-500">
+            {(arquivo.size / 1024).toFixed(0)} KB
+          </span>
+        ) : null}
+        <input
+          type="file"
+          accept="image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            if (f && f.size > COSMETIC_ASSET_MAX_BYTES) {
+              onEscolher(null);
+              e.target.value = "";
+              setErroTamanho(
+                `Imagem maior que ${Math.round(COSMETIC_ASSET_MAX_BYTES / 1024 / 1024)} MB`,
+              );
+              return;
+            }
+            setErroTamanho(null);
+            onEscolher(f);
+          }}
+        />
+      </label>
+      {erroTamanho ? (
+        <p className="text-[11px] text-signal-dnd">{erroTamanho}</p>
       ) : null}
-      <input
-        type="file"
-        accept="image/png,image/webp"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0] ?? null;
-          if (f && f.size > COSMETIC_ASSET_MAX_BYTES) {
-            onEscolher(null);
-            e.target.value = "";
-            alert(
-              `Imagem maior que ${Math.round(COSMETIC_ASSET_MAX_BYTES / 1024 / 1024)} MB`,
-            );
-            return;
-          }
-          onEscolher(f);
-        }}
-      />
-    </label>
+    </div>
   );
 }
 

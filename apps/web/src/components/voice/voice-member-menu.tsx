@@ -4,9 +4,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AetherIcon, type AetherIconName } from "@/components/ui/aether-icon";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
-import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { viewerCan } from "@/lib/permissions";
 import {
   DEFAULT_VOLUME,
@@ -60,8 +60,7 @@ export function VoiceMemberMenu({
   const socket = useSocket();
   const [error, setError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
-  const [abrindoConversa, setAbrindoConversa] = useState(false);
-  const router = useRouter();
+  const { abrir, abrindo: abrindoConversa, erro: erroConversa } = useAbrirConversa();
   const roomControls = useRealtimeStore((state) => state.roomControls);
   const selfUserId = useRealtimeStore((state) => state.selfUserId);
   const [volume, setVolume] = useState(
@@ -78,18 +77,7 @@ export function VoiceMemberMenu({
    * sendo ignorado.
    */
   function mandarMensagem() {
-    if (!socket || abrindoConversa) return;
-    setAbrindoConversa(true);
-    setError(null);
-    socket.emit("dm:open", { userId: participant.userId }, (resultado) => {
-      setAbrindoConversa(false);
-      if (!resultado.ok) {
-        setError(resultado.error);
-        return;
-      }
-      onClose();
-      router.push(`/app/dm/${resultado.dm.id}`);
-    });
+    abrir(participant.userId, onClose);
   }
 
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -175,6 +163,8 @@ export function VoiceMemberMenu({
       onClose();
     });
   }
+
+  const erroExibido = error ?? erroConversa;
 
   if (!canMute && !canDeafen && !canMove && !showVolume) return null;
   if (typeof document === "undefined") return null;
@@ -302,9 +292,9 @@ export function VoiceMemberMenu({
           </MenuItem>
         ) : null}
 
-        {error ? (
+        {erroExibido ? (
           <p className="border-t border-line px-2 py-1.5 text-[11px] leading-snug text-signal-dnd">
-            {error}
+            {erroExibido}
           </p>
         ) : null}
       </div>

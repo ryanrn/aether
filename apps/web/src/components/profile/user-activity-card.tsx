@@ -9,13 +9,13 @@ import type {
   UserStatus,
   ViewerContext,
 } from "@aether/shared";
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import {
   blockUserAction,
   sendFriendRequestFromServerAction,
 } from "@/server/actions/friends";
 import { useSocket } from "@/components/realtime/realtime-provider";
+import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { useListening, useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
@@ -112,9 +112,8 @@ export function UserActivityCard({
   const socket = useSocket();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState(anchor);
-  const router = useRouter();
-  const [abrindoConversa, setAbrindoConversa] = useState(false);
-  const [erroConversa, setErroConversa] = useState<string | null>(null);
+  const { abrir, abrindo: abrindoConversa, erro: erroConversa } = useAbrirConversa();
+  const [erro, setErro] = useState<string | null>(null);
   const [confirmandoBloqueio, setConfirmandoBloqueio] = useState(false);
   const [bloqueando, startBloqueio] = useTransition();
   const [pedidoEnviado, setPedidoEnviado] = useState(false);
@@ -141,18 +140,7 @@ export function UserActivityCard({
    * embora achando que esta sendo ignorado.
    */
   function mandarMensagem() {
-    if (!socket || abrindoConversa) return;
-    setAbrindoConversa(true);
-    setErroConversa(null);
-    socket.emit("dm:open", { userId: user.id }, (resultado) => {
-      setAbrindoConversa(false);
-      if (!resultado.ok) {
-        setErroConversa(resultado.error);
-        return;
-      }
-      onClose();
-      router.push(`/app/dm/${resultado.dm.id}`);
-    });
+    abrir(user.id, onClose);
   }
 
   /**
@@ -167,7 +155,7 @@ export function UserActivityCard({
     startBloqueio(async () => {
       const resultado = await blockUserAction(user.id);
       if (!resultado.ok) {
-        setErroConversa(resultado.error);
+        setErro(resultado.error);
         return;
       }
       onClose();
@@ -178,7 +166,7 @@ export function UserActivityCard({
     startPedido(async () => {
       const resultado = await sendFriendRequestFromServerAction(user.id);
       if (!resultado.ok) {
-        setErroConversa(resultado.error);
+        setErro(resultado.error);
         return;
       }
       /**
@@ -186,7 +174,7 @@ export function UserActivityCard({
        * janela deixaria a pessoa sem saber se o pedido foi. "Ja sao amigos"
        * aparece quando os dois pediram um ao outro.
        */
-      setErroConversa(null);
+      setErro(null);
       setPedidoEnviado(true);
     });
   }
@@ -554,9 +542,9 @@ export function UserActivityCard({
             </button>
           ) : null}
 
-          {erroConversa ? (
+          {erro ?? erroConversa ? (
             <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
-              {erroConversa}
+              {erro ?? erroConversa}
             </p>
           ) : null}
 

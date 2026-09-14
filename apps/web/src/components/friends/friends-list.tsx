@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicFriendship, UserStatus } from "@aether/shared";
 import {
@@ -12,7 +11,7 @@ import {
   sendFriendRequestAction,
 } from "@/server/actions/friends";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
-import { useSocket } from "@/components/realtime/realtime-provider";
+import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { SecaoAmigos } from "./friends-screen";
@@ -391,9 +390,7 @@ function Linha({ item }: { item: PublicFriendship }) {
   const musica = useRealtimeStore((estado) => estado.listening[item.user.id]);
   const [pendente, startTransition] = useTransition();
 
-  const router = useRouter();
-  const socket = useSocket();
-  const [abrindoConversa, setAbrindoConversa] = useState(false);
+  const { abrir, abrindo: abrindoConversa } = useAbrirConversa();
 
   function agir(acao: () => Promise<unknown>) {
     startTransition(async () => {
@@ -401,23 +398,8 @@ function Linha({ item }: { item: PublicFriendship }) {
     });
   }
 
-  /**
-   * Abrir conversa e um ida-e-volta pelo socket, e nao um `<Link>` direto:
-   * so o servidor sabe o id da conversa, e ele pode nem existir ainda. Pedir
-   * primeiro e navegar depois evita inventar rota para uma conversa que
-   * ainda nao foi criada.
-   *
-   * O `dm:open` e idempotente — clicar dez vezes cai sempre na mesma conversa,
-   * garantido pelo indice unico sobre o par ordenado no banco.
-   */
   function abrirConversa() {
-    if (!socket || abrindoConversa) return;
-    setAbrindoConversa(true);
-    socket.emit("dm:open", { userId: item.user.id }, (resultado) => {
-      setAbrindoConversa(false);
-      if (!resultado.ok) return;
-      router.push(`/app/dm/${resultado.dm.id}`);
-    });
+    abrir(item.user.id);
   }
 
   return (

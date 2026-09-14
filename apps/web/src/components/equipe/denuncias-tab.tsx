@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import type { DenunciaNaFila } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { Input, Label } from "@/components/ui/field";
 import {
   apagarMensagemDenunciadaAction,
   listarDenunciasAction,
@@ -48,6 +51,14 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
    */
   const [confirmandoApagar, setConfirmandoApagar] =
     useState<DenunciaNaFila | null>(null);
+  /**
+   * Denuncia esperando a duracao do silenciamento. Era `window.prompt` — a
+   * unica caixa nativa do navegador que sobrava no admin, contradizendo a
+   * propria decisao de `confirm-dialog.tsx` de nunca usar caixa do sistema.
+   */
+  const [confirmandoSilenciar, setConfirmandoSilenciar] =
+    useState<DenunciaNaFila | null>(null);
+  const [diasSilenciar, setDiasSilenciar] = useState("");
 
   const carregar = useCallback(() => {
     void listarDenunciasAction({ status: "ABERTA" }).then((r) => {
@@ -178,20 +189,8 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
                   type="button"
                   disabled={ocupado}
                   onClick={() => {
-                    const dias = prompt(
-                      "Silenciar por quantos dias? (vazio = indefinido)",
-                    );
-                    if (dias === null) return; // cancelou
-                    agir(d.id, async () => {
-                      const r = await silenciarUsuarioAction({
-                        userId: d.autorDoAlvoId!,
-                        motivo: MOTIVO_ROTULO[d.motivo],
-                        dias: dias.trim() ? Number(dias) : null,
-                      });
-                      if (r.ok)
-                        await resolverDenunciaAction(d.id, "RESOLVIDA", "autor silenciado");
-                      return r;
-                    });
+                    setDiasSilenciar("");
+                    setConfirmandoSilenciar(d);
                   }}
                   className="rounded-sm border border-amber-400/40 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-400/15 disabled:opacity-50"
                 >
@@ -241,6 +240,75 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
           </span>
         ) : null}
       </ConfirmDialog>
+
+      <Modal
+        open={confirmandoSilenciar !== null}
+        onClose={() => setConfirmandoSilenciar(null)}
+        title="Silenciar autor"
+        className="max-w-[380px]"
+      >
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="den-dias-silenciar">
+            Por quantos dias{" "}
+            <span className="font-normal text-ink-500">
+              — vazio = indefinido
+            </span>
+          </Label>
+          <Input
+            id="den-dias-silenciar"
+            inputMode="numeric"
+            autoFocus
+            value={diasSilenciar}
+            onChange={(e) => setDiasSilenciar(e.target.value)}
+            placeholder="7"
+          />
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmandoSilenciar(null)}
+            disabled={
+              pendente &&
+              confirmandoSilenciar !== null &&
+              agindoEm === confirmandoSilenciar.id
+            }
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            disabled={
+              pendente &&
+              confirmandoSilenciar !== null &&
+              agindoEm === confirmandoSilenciar.id
+            }
+            onClick={() => {
+              const alvo = confirmandoSilenciar;
+              if (!alvo?.autorDoAlvoId) return;
+              const dias = diasSilenciar.trim();
+              agir(alvo.id, async () => {
+                const r = await silenciarUsuarioAction({
+                  userId: alvo.autorDoAlvoId!,
+                  motivo: MOTIVO_ROTULO[alvo.motivo],
+                  dias: dias ? Number(dias) : null,
+                });
+                if (r.ok) {
+                  await resolverDenunciaAction(alvo.id, "RESOLVIDA", "autor silenciado");
+                  setConfirmandoSilenciar(null);
+                }
+                return r;
+              });
+            }}
+          >
+            {pendente &&
+            confirmandoSilenciar !== null &&
+            agindoEm === confirmandoSilenciar.id
+              ? "Silenciando..."
+              : "Silenciar"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
