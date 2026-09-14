@@ -148,19 +148,44 @@ dnd-kit (ver [Reordenar arrastando](#reordenar-arrastando-canais-e-servidores)).
 3 falhas, nenhuma causada pelo redesign nem pelo dnd-kit — sao pre-existentes,
 ver **achado colateral** abaixo.
 
-**Achado colateral (fora do escopo do redesign): `notFound()` devolve HTTP 200,
-nao 404.** Confirmado tanto em `next dev` quanto em `next build && next start`:
-acessar um servidor/canal privado/`/settings` sem permissao renderiza o
-conteudo de 404 CORRETO (a autorizacao em si nunca falha — `requireMember`
-recusa certo, os logs confirmam `notFound()` sendo chamado), mas a resposta
-HTTP vem com status 200 em vez de 404, porque o boundary mais proximo
-(`app/not-found.tsx`, na raiz) fica varios niveis de layout acima de onde
-`notFound()` e chamado. Tentativa de corrigir com um `not-found.tsx` colocado
-em `app/app/s/[serverId]/` nao resolveu — o comportamento parece ser uma
-limitacao conhecida do App Router do Next.js ao borbulhar `notFound()` por
-multiplos niveis de layout, nao um bug deste app. Sem vazamento de dado (o
-CONTEUDO certo aparece); o risco e so um crawler/scanner ver "200" onde
-esperaria "404". Nao corrigido — fica para investigacao dedicada.
+**Achado colateral (fora do escopo do redesign), investigado a fundo:
+`notFound()` devolve HTTP 200, nao 404.** Confirmado tanto em `next dev`
+quanto em `next build && next start`: acessar um servidor/canal privado/
+`/settings` sem permissao renderiza o conteudo de 404 CORRETO (a autorizacao
+em si nunca falha — `requireMember` recusa certo, os logs confirmam
+`notFound()` sendo chamado), mas a resposta HTTP vem com status 200.
+
+**Causa raiz confirmada** (docs oficiais do Next.js, secao "Status Codes" de
+[`loading.js`](https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes)):
+isto NAO e bug deste app nem do dnd-kit — e comportamento documentado do App
+Router. "Quando o corpo da resposta comeca a fazer streaming — o que acontece
+quando um Server Component suspende, mesmo sem `loading.tsx` — os headers ja
+foram enviados, e o status fica travado em 200." `requireMember()` e
+`getServerContext()` sao `await` dentro do layout do servidor; qualquer um
+deles pode disparar esse streaming antes do `notFound()` decidir. Um
+`not-found.tsx` colocado em `app/app/s/[serverId]/` (tentativa feita e
+descartada) nao muda nada, porque o problema nao e QUAL boundary renderiza —
+e QUANDO os headers ja saíram.
+
+**Mitigacao que o Next.js ja aplica sozinho:** toda resposta que passa por
+`notFound()` ganha `<meta name="robots" content="noindex">` automaticamente,
+mesmo com status 200 — e exatamente a recomendacao do proprio Next.js para
+"soft 404": nenhum crawler indexa a URL, apesar do status.
+
+**O fix de verdade exigiria mover a checagem de autorizacao para o
+`middleware.ts`** (rodando ANTES do render, onde dá pra devolver um
+`Response` com status real) — viavel desde o Next 15.5 (**runtime Node.js
+estavel no middleware**, o que permitiria falar com o Postgres via Prisma
+ali, coisa que o Edge runtime nunca permitiu). **Decisao: nao fazer isto.**
+O custo é real e o ganho não: (1) toda requisicao a rota protegida pagaria
+uma consulta a MAIS ao banco, so para o caso raro de acesso negado; (2) a
+regra de autorizacao passaria a existir em DOIS lugares (middleware +
+`requireMember`/`@aether/access`) — exatamente o que o `CLAUDE.md` deste
+projeto proíbe ("duas copias da regra de permissao divergem, e permissao
+divergente e falha de autorizacao"). Trocar isso por um status HTTP correto
+num caso sem nenhum vazamento de dado e sem indexacao (já coberta pelo
+`noindex` automático) não vale a pena. Fica documentado e sem correcao de
+codigo.
 - **`RemoteParticipant.audioLevel` do LiveKit pode ser esparso.** Se vier 0 para
   um remoto que esta falando, o card daquele participante usa a animacao
   `aether-breathe` em vez do nivel real — o glow nunca some, so perde a
