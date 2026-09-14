@@ -91,7 +91,7 @@ suite de testes automatizados de verdade.
 
 ---
 
-## Redesign visual (OpenDesign) — em andamento
+## Redesign visual (OpenDesign) — concluido
 
 O OpenDesign gerou uma releitura visual do AETHER como HTML/CSS/SVG isolados
 (pasta `design-redesign/`, fora do repo). A migracao para a arquitetura real
@@ -108,10 +108,12 @@ e feita em estagios, cada um com regressao verde:
 
 ### O que fechou no estagio 6
 
-- **Icones: app inteiro em `AetherIcon`.** O sprite cobre 81 icones (os 29 do
-  OpenDesign + 52 desenhados no mesmo padrao — grade 24, traco 1.75). `lucide-react`
-  nao e mais importado em `apps/web/src` (46 arquivos migrados). `<AetherIconSprite>`
-  saiu do layout de `/app` para o layout raiz — cobre login, registro e marketing.
+- **Icones: app inteiro em `AetherIcon`.** O sprite cobre 83 icones (os 29 do
+  OpenDesign + o resto desenhado no mesmo padrao — grade 24, traco 1.75).
+  `lucide-react` nao e mais importado em `apps/web/src` nem listado em
+  `apps/web/package.json` — dependencia removida por completo (a limpeza que
+  ficava pendente aqui ja aconteceu). `<AetherIconSprite>` saiu do layout de
+  `/app` para o layout raiz — cobre login, registro e marketing.
 - **Botao de ruido: RNNoise + as 3 nativas, ao vivo.** `room.ts::reaplicarTratamentoNativo`
   usa `restartTrack` para re-adquirir o microfone com as constraints novas sem
   derrubar a call; em falha reabre o mic e avisa. O popover trava as 3 durante a troca.
@@ -131,19 +133,38 @@ e feita em estagios, cada um com regressao verde:
 - **Painel de membros: grupo "Na chamada — N" no topo**, derivado do mapa `voice`,
   com icone de estado (mudo/falando). Os grupos por cargo seguem abaixo.
 
-### Limitacoes que ficaram
+### Verificacao end-to-end (contra producao)
 
-- **Sem verificacao E2E local nesta entrega.** `typecheck` (todos os workspaces),
-  `vitest` (364) e `next build` passam, e os 81 icones foram conferidos num
-  grid de QA. Mas os `verify-phase*.mjs` e o teste manual da call (mute, camera,
-  tela, teste de mic, ruido on/off, 2+ participantes, glow por nivel) precisam
-  de banco + gateway + LiveKit e ficam para o ambiente do time.
+Feita depois da entrega inicial do estagio 6, com `dev` + `dev:realtime` no ar
+e LiveKit real: `typecheck` (todos os workspaces) e `vitest` (801) limpos,
+`verify-phase2/3/4/5.mjs` rodados contra um `next build && next start` de
+verdade (nao so `next dev`), e sessao manual via cookie assinado (mesmo
+mecanismo dos scripts de verify) num servidor de producao real — mudo/desmudar,
+camera, popover de ruido com as 4 chaves, faixa de conexao, grupo "Na chamada",
+mobile (375px) sem scroll horizontal. Achou e corrigiu o bug de hidratacao do
+dnd-kit (ver [Reordenar arrastando](#reordenar-arrastando-canais-e-servidores)).
+
+`verify-phase3/4/5` fecharam 100% (43+18+5, zero falhas). `verify-phase2` teve
+3 falhas, nenhuma causada pelo redesign nem pelo dnd-kit — sao pre-existentes,
+ver **achado colateral** abaixo.
+
+**Achado colateral (fora do escopo do redesign): `notFound()` devolve HTTP 200,
+nao 404.** Confirmado tanto em `next dev` quanto em `next build && next start`:
+acessar um servidor/canal privado/`/settings` sem permissao renderiza o
+conteudo de 404 CORRETO (a autorizacao em si nunca falha — `requireMember`
+recusa certo, os logs confirmam `notFound()` sendo chamado), mas a resposta
+HTTP vem com status 200 em vez de 404, porque o boundary mais proximo
+(`app/not-found.tsx`, na raiz) fica varios niveis de layout acima de onde
+`notFound()` e chamado. Tentativa de corrigir com um `not-found.tsx` colocado
+em `app/app/s/[serverId]/` nao resolveu — o comportamento parece ser uma
+limitacao conhecida do App Router do Next.js ao borbulhar `notFound()` por
+multiplos niveis de layout, nao um bug deste app. Sem vazamento de dado (o
+CONTEUDO certo aparece); o risco e so um crawler/scanner ver "200" onde
+esperaria "404". Nao corrigido — fica para investigacao dedicada.
 - **`RemoteParticipant.audioLevel` do LiveKit pode ser esparso.** Se vier 0 para
   um remoto que esta falando, o card daquele participante usa a animacao
   `aether-breathe` em vez do nivel real — o glow nunca some, so perde a
   proporcionalidade. O proprio card sempre tem RMS real (analisador local).
-- **`lucide-react` ainda esta em `apps/web/package.json`.** Nenhum arquivo o
-  importa; remover a dependencia (e mexer no lockfile) fica para uma limpeza a parte.
 
 ### Chave liga/desliga unificada (`components/ui/switch.tsx`)
 
@@ -3174,9 +3195,10 @@ o droppable existe pela categoria VAZIA: sem area soltavel propria nao haveria
 sobre o que soltar ali, e mover um canal para uma categoria sem canais seria
 impossivel. Que e justamente o caso em que arrastar bate as setas.
 
-### Dois bugs de "a tela pula" que isto causou
+### Tres bugs que isto causou
 
-Achados por video de uso, e os dois eram desta rodada:
+Achados por video de uso (os dois primeiros) e por verificacao end-to-end do
+redesign OpenDesign (o terceiro):
 
 1. **O canal TREMIA ao arrastar.** `setNodeRef` estava no `<Link>` e o
    `transform` no `<li>`. O dnd-kit MEDE o no do `setNodeRef` e eu movia outro:
@@ -3197,6 +3219,24 @@ Achados por video de uso, e os dois eram desta rodada:
    `absolute` — fora do fluxo, entao ligar ou desligar nao move nada.
    Verificado com 30 amostras de altura ao longo de 6s durante o carregamento:
    722px em todas.
+
+3. **Erro de hidratacao a cada carga da tela do servidor** (React #418), achado
+   rodando a app de verdade contra producao apos o redesign OpenDesign.
+   `useDraggable`/`useSortable` geram `aria-describedby="DndDescribedBy-N"` por
+   um contador GLOBAL do dnd-kit (`ids[prefix]++`, modulo `@dnd-kit/utilities`)
+   quando o `DndContext` nao tem `id` proprio — e a app tem DOIS `DndContext`
+   na mesma tela (trilho de servidores + arvore de canais), cada um incrementando
+   o mesmo contador em ORDEM DIFERENTE no servidor e no cliente. O servidor
+   sempre recomeca do zero a cada requisicao; o cliente carrega os dois de uma
+   vez. Nao vazava dado nem quebrava a UI (React descarta o HTML do servidor e
+   renderiza de novo no cliente), mas sujava o console a cada carga.
+
+   Fix: `id` explicito em cada `<DndContext>` (`server-rail.tsx`,
+   `channel-sidebar.tsx`) — com um `value` proprio, `useUniqueId` devolve ele
+   direto e nunca toca no contador global. Confirmado por leitura do source do
+   dnd-kit (`useUniqueId(prefix, value)` em `@dnd-kit/utilities`) e por teste
+   real: HTML do servidor bate com o do cliente, zero erro no console numa aba
+   nova.
 
 ### Limitacoes
 

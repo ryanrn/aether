@@ -237,6 +237,10 @@ export function ChannelSidebar({
             `DndContext`.
           */}
           <DndContext
+            // `id` explicito — ver o comentario equivalente em `server-rail.tsx`:
+            // sem ele, o `aria-describedby` gerado pelo dnd-kit diverge entre
+            // servidor e cliente sempre que ha mais de um `DndContext` na pagina.
+            id="dnd-arvore-canais"
             sensors={sensores}
             collisionDetection={closestCenter}
             onDragEnd={aoSoltarCanal}

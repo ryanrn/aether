@@ -156,7 +156,15 @@ export function ServerRail({
 
         <span className="h-px w-8 bg-line" />
 
+        {/*
+          `id` explicito: sem ele, o dnd-kit numera `aria-describedby` com um
+          contador global (`DndDescribedBy-0`, `-1`...) que diverge entre
+          servidor e cliente sempre que ha MAIS de um `DndContext` na pagina
+          (este e o da arvore de canais) — hidratacao quebrada, sem UI visivel
+          quebrando, mas com o erro no console a cada carga.
+        */}
         <DndContext
+          id="dnd-trilho-servidores"
           sensors={sensores}
           collisionDetection={closestCenter}
           onDragEnd={aoSoltar}
