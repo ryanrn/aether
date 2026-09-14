@@ -153,6 +153,26 @@ async function gerarThumb(bytes: Uint8Array): Promise<Uint8Array | null> {
 }
 
 /**
+ * `true` se a imagem tem mais de um quadro (WEBP/PNG animado).
+ *
+ * Sem o `{ animated: true }` na leitura, o `sharp` sempre le so o PRIMEIRO
+ * quadro de um WEBP animado — nenhuma das chamadas de `normalizarDecoracao`
+ * pedia isso, e o pipeline geometrico (bbox por pixel, recorte, composicao)
+ * nao foi desenhado para quadro-a-quadro. Rodar um WEBP animado por ele hoje
+ * nao "erraria a leitura": acharia o quadro 1 e devolveria uma arte estatica,
+ * sem aviso nenhum de que a animacao sumiu.
+ */
+async function ehAnimado(bytes: Uint8Array): Promise<boolean> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const meta = await sharp(bytes, { animated: true }).metadata();
+    return (meta.pages ?? 1) > 1;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * NORMALIZA uma decoracao para a geometria canonica (ver `DECORACAO_ALVO_FURO`
  * em `@aether/shared`). Toda decoracao sai daqui como PNG 512x512 que:
  *
@@ -366,7 +386,17 @@ export async function uploadCosmeticAsset(params: {
   let trasMime: CosmeticMimeType = tras ? tras.mime : "image/png";
 
   if (tipo === "DECORATION") {
-    const canon = await normalizarDecoracao(frente.bytes, tras ? tras.bytes : null);
+    // Uma camada animada nao passa pelo pipeline geometrico (ele so enxerga o
+    // primeiro quadro e sempre re-codifica como PNG estatico ao final — rodar
+    // por ele apagaria a animacao em silencio). Cai no fluxo cru, como uma
+    // normalizacao que falhou: sem a posicao canonica, mas com a arte intacta.
+    const animada =
+      (await ehAnimado(frente.bytes)) ||
+      (tras ? await ehAnimado(tras.bytes) : false);
+
+    const canon = animada
+      ? null
+      : await normalizarDecoracao(frente.bytes, tras ? tras.bytes : null);
     if (canon) {
       frenteBytes = canon.frente;
       frenteMime = "image/png";
