@@ -1,50 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import {
-  useConnectionStatus,
-  useRealtimeStore,
-} from "@/lib/stores/realtime-store";
-import { useSocket } from "@/components/realtime/realtime-provider";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { cn } from "@/lib/utils";
 
 /**
- * Faixa de estado da conexao.
+ * Faixa de PROBLEMA REAL — nao de "a conexao caiu".
  *
- * Existe porque o sintoma de "gateway fora do ar" era invisivel demais: o
- * campo de mensagem se desabilitava e a unica pista era um texto cinza no
- * placeholder. Quem tentava escrever nao descobria o motivo.
+ * Uma queda de socket e um NAO-EVENTO de proposito, como o Discord: o
+ * `socket.io-client` reconecta sozinho, infinito, com backoff (ver
+ * `realtime-provider.tsx`), e ao reconectar ja religa a voz, resincroniza
+ * presenca e cobre o buraco de mensagens perdidas — tudo automatico, sem
+ * clique. Uma faixa vermelha nesse meio tempo so alarmaria por uma falha que
+ * ja esta sendo corrigida por conta propria; e por isso que este componente
+ * NUNCA reagiu a `useConnectionStatus()`. Quem tenta escrever durante a queda
+ * ainda ve o sinal certo, so discreto: o placeholder do composer avisa
+ * ("Sem conexao com o tempo real") e o campo desabilita — nao precisa de
+ * banner por cima disso.
  *
- * Nao aparece de imediato. Toda carga de pagina passa por "connecting" por
- * algumas centenas de milissegundos, e piscar um aviso vermelho a cada
- * navegacao treinaria a pessoa a ignorar o aviso. So depois do periodo de
- * carencia e que a faixa entra.
+ * O que fica aqui e so PROBLEMA QUE NAO SE RESOLVE SOZINHO: a entrada no
+ * servidor foi recusada (`error`, do ack de `server:join`) ou algo da voz
+ * falhou de um jeito que exige atencao (`voiceError` — mic bloqueado, SFU
+ * fora do ar). Nenhum dos dois e "espere e ja volta".
  */
-const GRACE_MS = 1500;
-
 export function ConnectionBanner() {
-  const status = useConnectionStatus();
   const error = useRealtimeStore((state) => state.error);
   const voiceError = useRealtimeStore((state) => state.voiceError);
-  const socket = useSocket();
-  const [showSlowState, setShowSlowState] = useState(false);
 
-  useEffect(() => {
-    if (status === "online") {
-      setShowSlowState(false);
-      return;
-    }
-    const timer = setTimeout(() => setShowSlowState(true), GRACE_MS);
-    return () => clearTimeout(timer);
-  }, [status]);
-
-  // Erro de servidor ou de microfone vale aviso mesmo com a conexao de pe.
   const problem = error ?? voiceError;
-  if (status === "online" && !problem) return null;
-  if (status !== "online" && !showSlowState) return null;
-
-  const offline = status === "offline";
+  if (!problem) return null;
 
   return (
     <div
@@ -53,38 +37,17 @@ export function ConnectionBanner() {
       className={cn(
         "flex shrink-0 items-center gap-2 border-b px-4 py-1.5 text-[12px]",
         // Microfone bloqueado e aviso, nao falha: a call continua funcionando.
-        offline || error
+        error
           ? "border-signal-dnd/25 bg-signal-dnd/10 text-signal-dnd"
           : "border-signal-idle/25 bg-signal-idle/10 text-signal-idle",
       )}
     >
-      {voiceError && !offline && !error ? (
-        <AetherIcon name="volume-off" size="sm" className="shrink-0" />
-      ) : offline || error ? (
-        <AetherIcon name="wifi-off" size="sm" className="shrink-0" />
-      ) : (
-        <AetherIcon name="loader" size="sm" className="shrink-0 animate-spin" />
-      )}
-
-      <span className="min-w-0 flex-1 truncate">
-        {problem
-          ? problem
-          : offline
-            ? "Sem conexao com o tempo real. Mensagens e presenca estao parados enquanto isso — tentando reconectar."
-            : "Conectando ao tempo real..."}
-      </span>
-
-      {offline ? (
-        <button
-          type="button"
-          // Forca uma tentativa agora em vez de esperar o proximo passo do
-          // backoff, que pode estar em 8 segundos.
-          onClick={() => socket?.connect()}
-          className="shrink-0 rounded-sm border border-signal-dnd/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] transition-colors hover:bg-signal-dnd/15"
-        >
-          tentar agora
-        </button>
-      ) : null}
+      <AetherIcon
+        name={error ? "alert" : "volume-off"}
+        size="sm"
+        className="shrink-0"
+      />
+      <span className="min-w-0 flex-1 truncate">{problem}</span>
     </div>
   );
 }
