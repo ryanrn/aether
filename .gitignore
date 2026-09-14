@@ -35,3 +35,8 @@ backups/
 
 # Twemoji: 3700 SVGs gerados de @twemoji/svg pelo predev/prebuild (scripts/build-twemoji.mjs).
 apps/web/public/twemoji/
+
+# Music Bot experimental — projeto EXTERNO ao AETHER, git proprio (ver
+# music-bot/README.md). Fica fisicamente aqui por conveniencia de sessao, mas
+# nunca faz parte deste repositorio nem do workspace do npm.
+music-bot/
