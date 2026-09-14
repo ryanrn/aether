@@ -14,6 +14,7 @@ import { AcessibilidadeTab } from "./acessibilidade-tab";
 import { ConexoesTab } from "./conexoes-tab";
 import { EsteComputadorTab } from "./este-computador-tab";
 import { PlanoTab } from "./plano-tab";
+import { SegurancaTab } from "./seguranca-tab";
 import { VoiceTab } from "./voice-tab";
 
 /**
@@ -34,6 +35,7 @@ import { VoiceTab } from "./voice-tab";
 
 export type Tab =
   | "conta"
+  | "seguranca"
   | "voz"
   | "aparencia"
   | "acessibilidade"
@@ -62,6 +64,14 @@ const TABS: {
     grupo: "Usuario",
     titulo: "Minha conta",
     sub: "Sua conta e seus dispositivos.",
+  },
+  {
+    id: "seguranca",
+    label: "Seguranca",
+    icon: "shield",
+    grupo: "Usuario",
+    titulo: "Seguranca",
+    sub: "Autenticacao de dois fatores.",
   },
   {
     id: "voz",
@@ -255,6 +265,8 @@ export function AppSettingsModal({
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {active === "conta" ? (
               <AccountTab user={user} server={server} />
+            ) : active === "seguranca" ? (
+              <SegurancaTab />
             ) : active === "voz" ? (
               <VoiceTab />
             ) : active === "aparencia" ? (

@@ -205,6 +205,62 @@ permissoes de cargo (`roles-tab`).
 
 ---
 
+## Autenticacao de dois fatores (2FA) — codigo pronto, aguardando deploy
+
+TOTP (RFC 6238), implementacao propria — zero biblioteca de terceiros na
+parte criptografica (`@aether/shared/totp`, so `node:crypto`). **Migracao
+`20260914130000_totp_2fa` ainda nao aplicada em producao** — `npm run
+db:deploy` antes de usar.
+
+### O que foi feito
+
+| Item | Onde |
+|---|---|
+| Matematica do TOTP/HOTP (RFC 4226/6238) + base32 + URI `otpauth://` | `packages/shared/src/totp.ts` — testado contra os vetores OFICIAIS da RFC |
+| Segredo cifrado em repouso (nao so hasheado — precisa ser lido de volta) | `User.totpSecretCifrado`, cifra `@aether/db/secret-box` (AES-256-GCM), mesma cifra das Conexoes OAuth |
+| Estado em 2 colunas, sem boolean solto | `totpSecretCifrado`/`totpHabilitadoEm` — nulo/nulo = nunca configurado, preenchido/nulo = configuracao pendente, os dois = ativo |
+| Codigos de backup (10, uso unico) | Tabela `TotpBackupCode`, hash sha256 (nao bcrypt/argon2 — o codigo tem entropia de token, nao de senha; ver decisao abaixo) |
+| Bloqueio de reuso do mesmo codigo TOTP dentro da janela de 30s | `User.totpUltimoPassoUsado` |
+| Segundo fator no login, sem sessao completa antes de confirmar | Cookie `aether_2fa_pendente` (JWT de 10min, `audience` propria — nunca aceito como sessao real), `packages/access/src/tokens.ts` |
+| Configuracao/gestao pela propria pessoa | Aba **Configuracoes › Seguranca** (`seguranca-tab.tsx`) — ativar (QR + confirmacao), desativar e regenerar codigos de backup exigem a SENHA de novo |
+| Segundo passo do login | `totp-2fa-step.tsx`, trocado por `login-form.tsx` sem navegar; sobrevive a reload da pagina (`login/page.tsx` confere o cookie no servidor) |
+
+### Decisoes que valem registrar
+
+- **Codigo de backup com sha256, nao bcrypt/argon2.** Hash lento protege
+  segredo de BAIXA entropia (senha que humano escolhe) contra forca bruta
+  offline. Um codigo de backup gerado por este app (10 caracteres, alfabeto
+  sem ambiguidade, ~32^10 combinacoes) tem entropia de token — mesma
+  doutrina do `PlanKey` (`services/planos.ts`), que tambem usa sha256.
+  Bcrypt/argon2 aqui so custaria uma dependencia nova sem ganho de seguranca.
+- **QR code depende de uma dependencia nova** (`qrcode`, pura JS, renderiza
+  no `<canvas>` do proprio navegador) — a UNICA do recurso inteiro. A
+  matematica do TOTP em si nao usa nada externo.
+- **Reset de senha por e-mail NAO desativa o 2FA.** Se desativasse, quem
+  comprometesse so o e-mail contornaria o segundo fator inteiro.
+- **Cookie de 2FA pendente nao tem tabela no banco.** E efemero (10min, usado
+  uma vez em minutos), a `audience` diferente do JWT ja impede que seja
+  aceito como sessao por engano, e o limite de tentativas mora no rate limit
+  por usuario — nao ha revogacao que valesse o custo de uma tabela nova.
+
+### Limitacoes conhecidas
+
+- **Sem verificacao end-to-end no navegador.** `typecheck` e `vitest` (28
+  testes novos, incluindo os vetores oficiais da RFC 6238) passam, mas a
+  migracao nao esta em producao ainda — o fluxo completo (ativar, escanear
+  QR de verdade, logar com o segundo fator) precisa do `db:deploy` primeiro.
+- **Sem recuperacao assistida pela equipe.** Quem perde o autenticador E os
+  codigos de backup, mas ainda sabe a senha, fica sem entrar — e o proprio
+  ponto de ter 2FA de verdade. Um fluxo de suporte para esse caso extremo
+  fica de fora desta entrega.
+- **Rotacionar `AUTH_SECRET` com 2FA ativo tranca quem usa.** O segredo
+  cifrado fica indecifravel (mesmo risco que ja existia pras Conexoes OAuth,
+  so que mais serio aqui — trava login, nao so desconecta um app externo).
+  Decifrar falha vira erro claro, nao 500 nem bypass silencioso, mas nao ha
+  plano de migracao para essa rotacao ainda.
+
+---
+
 ## Fase 1 — prontidao para beta (codigo pronto, aguardando deploy)
 
 Antes de por o AETHER na mao de gente de fora, o que falta nao e produto — e

@@ -10,6 +10,7 @@
     "./permissions": "./src/permissions.ts",
     "./brand": "./src/brand.ts",
     "./log": "./src/log.ts",
+    "./totp": "./src/totp.ts",
     "./sentry": "./src/sentry.ts"
   },
   "scripts": {

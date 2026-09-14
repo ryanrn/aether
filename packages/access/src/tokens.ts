@@ -64,3 +64,45 @@ export async function verifySessionToken(
     return null;
   }
 }
+
+/**
+ * Token de "senha certa, aguardando o segundo fator" — o estado entre a
+ * senha e a sessao de verdade, quando a conta tem TOTP ligado.
+ *
+ * NAO E SESSAO: nao cria linha em `Session`, dura so 10 minutos, e nunca
+ * pode ser aceito onde uma sessao real seria — a `audience` diferente
+ * ("aether-2fa-pendente" em vez de "aether-app") garante isso pelo proprio
+ * `jwtVerify` (aud errada = token rejeitado), sem precisar de campo extra
+ * pra checar manualmente. Sem tabela no banco de proposito: e efemero, usado
+ * uma vez em minutos, e o limite de tentativas mora no rate limit por
+ * usuario — nao ha o que revogar que valha o custo de uma tabela nova.
+ */
+export const PENDENTE_2FA_COOKIE = "aether_2fa_pendente";
+export const PENDENTE_2FA_TTL_SECONDS = 60 * 10; // 10 minutos
+
+export async function signPendente2faToken(userId: string): Promise<string> {
+  return new SignJWT({})
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setIssuer("aether")
+    .setAudience("aether-2fa-pendente")
+    .setExpirationTime(`${PENDENTE_2FA_TTL_SECONDS}s`)
+    .sign(secretKey());
+}
+
+/** Devolve o id do usuario, ou `null` se o token faltar/expirar/for invalido. */
+export async function verifyPendente2faToken(
+  token: string | undefined,
+): Promise<string | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secretKey(), {
+      issuer: "aether",
+      audience: "aether-2fa-pendente",
+    });
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}

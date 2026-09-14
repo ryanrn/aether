@@ -68,6 +68,22 @@ model User {
   /// loga, mas bate numa parede ("confirme seu e-mail") enquanto a flag
   /// `exige_email_verificado` estiver ligada. Ver `@aether/access/verificacao`.
   emailVerificadoEm         DateTime?
+  /// Segredo do autenticador (TOTP, RFC 6238) — CIFRADO com `cifrar()`
+  /// (`@aether/db/secret-box`, AES-256-GCM, chave derivada de `AUTH_SECRET`).
+  /// Precisa ser DECIFRADO a cada login para recalcular o codigo — diferente
+  /// de senha/codigo de backup, que so precisam de hash. Nulo = 2FA nunca
+  /// configurado. Preenchido com `totpHabilitadoEm` nulo = configuracao
+  /// pendente (QR mostrado, codigo de confirmacao ainda nao validado).
+  totpSecretCifrado         String?
+  /// Quando o 2FA passou a valer de verdade (depois do codigo de confirmacao
+  /// da configuracao). Nulo = nao exige segundo fator no login, mesmo que
+  /// `totpSecretCifrado` ja exista (configuracao pendente nao conta).
+  totpHabilitadoEm          DateTime?
+  /// Contador de passo (janela de 30s) do ULTIMO codigo TOTP aceito. Existe so
+  /// para bloquear reuso do mesmo codigo dentro da propria janela de
+  /// tolerancia (RFC 6238 recomenda) — sem isto, um codigo visto de relance
+  /// continuaria valido por ate ~90s depois de usado.
+  totpUltimoPassoUsado      BigInt?
   /// Aceite dos Termos/Privacidade. `aceitouTermosEm` nulo, ou `termosVersao`
   /// diferente da versao atual em `@aether/shared/legal`, dispara o modal de
   /// aceite em `/app`. Guardar a VERSAO permite pedir re-aceite quando os
@@ -152,6 +168,7 @@ model User {
   sessions           Session[]
   passwordResets     PasswordReset[]
   verificacoesEmail  VerificacaoEmail[]
+  codigosDeBackup2fa TotpBackupCode[]
   denunciasFeitas    Denuncia[]         @relation("DenunciaReporter")
   friendsAsRequester Friendship[]        @relation("FriendshipRequester")
   friendsAsAddressee Friendship[]        @relation("FriendshipAddressee")
@@ -659,6 +676,25 @@ model VerificacaoEmail {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// Um codigo de backup do 2FA — mesma doutrina do `PlanKey`: o codigo em
+/// claro so existe no momento em que e gerado e mostrado; o banco guarda so
+/// o hash. Tabela propria (nao array em `User`) porque cada codigo precisa do
+/// proprio status de uso e data — a mesma razao pela qual `PlanKeyRedemption`
+/// e `VerificacaoEmail` sao tabelas e nao coluna solta.
+///
+/// Gerar um lote novo (ativar o 2FA, ou "gerar novos codigos") APAGA os
+/// antigos — nunca acumula lote sobre lote.
+model TotpBackupCode {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codigoHash String    @unique
+  usadoEm    DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 enum FriendshipStatus {

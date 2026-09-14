@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@aether/db";
 import {
   loginSchema,
@@ -9,15 +9,23 @@ import {
   VERSAO_DOS_TERMOS,
   type ActionResult,
 } from "@aether/shared";
-import { flagLigada, criarTokenDeVerificacao } from "@aether/access";
+import {
+  flagLigada,
+  criarTokenDeVerificacao,
+  PENDENTE_2FA_COOKIE,
+  PENDENTE_2FA_TTL_SECONDS,
+  signPendente2faToken,
+  verifyPendente2faToken,
+} from "@aether/access";
 import { log } from "@aether/shared/log";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { clientKey, rateLimit } from "../auth/rate-limit";
 import { createSession, destroySession } from "../auth/session";
+import { verificarCodigoDeLogin } from "../services/totp";
 import { sanitizeNextPath } from "@/lib/next-path";
 import { verificarTurnstile } from "../turnstile";
 import { emailDeVerificacao, enviarEmail } from "../email";
-import { fail, toActionError } from "./action-result";
+import { fail, ok, toActionError } from "./action-result";
 
 /** IP do cliente, para passar ao siteverify do Turnstile. */
 async function ipDoCliente(): Promise<string | null> {
@@ -167,9 +175,9 @@ export async function registerAction(
 }
 
 export async function loginAction(
-  _prev: ActionResult<undefined> | null,
+  _prev: ActionResult<{ precisa2fa: true } | undefined> | null,
   formData: FormData,
-): Promise<ActionResult<undefined>> {
+): Promise<ActionResult<{ precisa2fa: true } | undefined>> {
   try {
     const parsed = loginSchema.safeParse({
       identifier: formData.get("identifier"),
@@ -213,7 +221,7 @@ export async function loginAction(
 
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: identifier }, { email: identifier }] },
-      select: { id: true, passwordHash: true },
+      select: { id: true, passwordHash: true, totpHabilitadoEm: true },
     });
 
     // Mensagem generica de proposito: nao revelamos se o usuario existe.
@@ -231,6 +239,25 @@ export async function loginAction(
     const valid = await verifyPassword(parsed.data.password, user.passwordHash);
     if (!valid) return invalid;
 
+    /**
+     * Senha certa, mas a conta tem 2FA — a sessao de verdade so nasce depois
+     * do segundo fator. `precisa2fa` troca a tela do formulario sem
+     * completar o login; o cookie curto (10min) e quem prova, na proxima
+     * action, que a senha ja foi confirmada.
+     */
+    if (user.totpHabilitadoEm !== null) {
+      const token = await signPendente2faToken(user.id);
+      const cookieStore = await cookies();
+      cookieStore.set(PENDENTE_2FA_COOKIE, token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: PENDENTE_2FA_TTL_SECONDS,
+      });
+      return ok({ precisa2fa: true });
+    }
+
     await createSession(user.id);
   } catch (error) {
     return toActionError(error);
@@ -238,6 +265,54 @@ export async function loginAction(
 
   // `next` do form — link de convite preservado pelo login (Cenario 4).
   redirect(sanitizeNextPath(formData.get("next")?.toString()));
+}
+
+/**
+ * Segundo passo do login quando a conta tem 2FA — chamado com o codigo do
+ * autenticador (ou um codigo de backup) depois que `loginAction` ja
+ * confirmou a senha e devolveu `precisa2fa`.
+ */
+export async function verificarTotpDoLoginAction(
+  _prev: ActionResult<undefined> | null,
+  formData: FormData,
+): Promise<ActionResult<undefined>> {
+  try {
+    const cookieStore = await cookies();
+    const userId = await verifyPendente2faToken(
+      cookieStore.get(PENDENTE_2FA_COOKIE)?.value,
+    );
+    if (!userId) {
+      return fail("Sessao de verificacao expirada. Faca login de novo.");
+    }
+
+    // Por conta: um codigo de 6 digitos tem so 10^6 valores — sem isto, o
+    // segundo fator inteiro seria forca-bruta-avel em poucos minutos.
+    const limite = await rateLimit(`totp-login:${userId}`, 8, 10 * 60_000, {
+      failClosed: true,
+    });
+    if (!limite.ok) {
+      return fail(`Muitas tentativas. Aguarde ${limite.retryAfter}s.`);
+    }
+
+    const codigo = formData.get("codigo")?.toString() ?? "";
+    if (!codigo.trim()) return fail("Digite o codigo.", "codigo");
+
+    const resultado = await verificarCodigoDeLogin(userId, codigo);
+    if (!resultado.ok) return fail(resultado.error, "codigo");
+
+    cookieStore.delete(PENDENTE_2FA_COOKIE);
+    await createSession(userId);
+  } catch (error) {
+    return toActionError(error);
+  }
+
+  redirect(sanitizeNextPath(formData.get("next")?.toString()));
+}
+
+/** Volta pro formulario de senha — descarta o cookie de 2FA pendente. */
+export async function cancelarLogin2faAction(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(PENDENTE_2FA_COOKIE);
 }
 
 export async function logoutAction(): Promise<void> {
