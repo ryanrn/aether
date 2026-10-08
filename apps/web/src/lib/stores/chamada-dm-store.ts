@@ -1,5 +1,24 @@
 import { create } from "zustand";
+import type { Track } from "livekit-client";
 import type { ChamadaDm } from "@/lib/voice/chamada-dm";
+import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
+import type { SharePresetId } from "@/lib/voice/screen-share";
+
+/**
+ * O que a interface pode pedir a sala de midia da chamada. Publicado pela
+ * `<ChamadaDmSession>` enquanto a conexao existe; `null` fora dela — o painel
+ * desabilita os botoes em vez de prometer o que nao tem como cumprir.
+ */
+export interface ControlesDaChamada {
+  setUserVolume: (userId: string, volume: number) => void;
+  setScreenAudioVolume: (volume: number) => void;
+  /** `false` se a pessoa cancelou o seletor de tela */
+  iniciarTela: (preset: SharePresetId, comAudio: boolean) => Promise<boolean>;
+  trocarQualidade: (preset: SharePresetId) => Promise<boolean>;
+  pararTela: () => Promise<void>;
+  /** `false` quando o dispositivo recusou */
+  setCamera: (ligada: boolean) => Promise<boolean>;
+}
 
 /**
  * Estado da chamada de voz em conversa direta, nesta aba.
@@ -23,6 +42,14 @@ interface ChamadaDmState {
   aviso: { dmId: string; texto: string } | null;
   /** erro de midia (microfone, SFU) — mostrado no painel da chamada */
   erro: string | null;
+  /** telas e cameras do OUTRO, vindas do SFU */
+  telas: RemoteScreenShare[];
+  cameras: RemoteCamera[];
+  /** as minhas faixas de video, para a previa (null = desligada) */
+  minhaTela: Track | null;
+  minhaCamera: Track | null;
+  qualidadeDaTela: SharePresetId | null;
+  controles: ControlesDaChamada | null;
 
   definir: (chamada: ChamadaDm | null) => void;
   setConectado: (conectado: boolean) => void;
@@ -31,16 +58,32 @@ interface ChamadaDmState {
   setSurdo: (surdo: boolean) => void;
   setAviso: (aviso: { dmId: string; texto: string } | null) => void;
   setErro: (erro: string | null) => void;
+  setTelas: (telas: RemoteScreenShare[]) => void;
+  setCameras: (cameras: RemoteCamera[]) => void;
+  setMinhaTela: (track: Track | null, qualidade?: SharePresetId | null) => void;
+  setMinhaCamera: (track: Track | null) => void;
+  setControles: (controles: ControlesDaChamada | null) => void;
 }
+
+/** Tudo que e da CONEXAO de midia — some junto com ela. */
+const SEM_MIDIA = {
+  conectado: false,
+  outroNaSala: false,
+  telas: [],
+  cameras: [],
+  minhaTela: null,
+  minhaCamera: null,
+  qualidadeDaTela: null,
+  controles: null,
+} satisfies Partial<ChamadaDmState>;
 
 export const useChamadaDmStore = create<ChamadaDmState>((set) => ({
   chamada: null,
-  conectado: false,
-  outroNaSala: false,
   mudo: false,
   surdo: false,
   aviso: null,
   erro: null,
+  ...SEM_MIDIA,
 
   definir: (chamada) =>
     set((estado) => {
@@ -53,8 +96,7 @@ export const useChamadaDmStore = create<ChamadaDmState>((set) => ({
         ? { chamada }
         : {
             chamada,
-            conectado: false,
-            outroNaSala: false,
+            ...SEM_MIDIA,
             mudo: false,
             surdo: false,
             erro: null,
@@ -66,4 +108,13 @@ export const useChamadaDmStore = create<ChamadaDmState>((set) => ({
   setSurdo: (surdo) => set({ surdo }),
   setAviso: (aviso) => set({ aviso }),
   setErro: (erro) => set({ erro }),
+  setTelas: (telas) => set({ telas }),
+  setCameras: (cameras) => set({ cameras }),
+  setMinhaTela: (minhaTela, qualidade) =>
+    set({
+      minhaTela,
+      qualidadeDaTela: minhaTela ? (qualidade ?? null) : null,
+    }),
+  setMinhaCamera: (minhaCamera) => set({ minhaCamera }),
+  setControles: (controles) => set({ controles }),
 }));

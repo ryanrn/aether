@@ -612,7 +612,7 @@ function StreamAction({
 /**
  * Liga uma faixa de video a um <video>. `attach`/`detach` sao do LiveKit.
  */
-function TrackVideo({
+export function TrackVideo({
   track,
   className,
   onElement,

@@ -719,6 +719,13 @@ export interface ClientToServerEvents {
    * nunca pode ficar esperando a rede para soltar o microfone.
    */
   "dmcall:end": (payload: { dmId: string; motivo: MotivoFimDeChamada }) => void;
+  /**
+   * "comecei a compartilhar a tela (ou troquei a qualidade)" na chamada
+   * direta. Pede ao gateway para conferir a resolucao publicada contra o
+   * PLANO e silenciar no SFU o que passar — o mesmo teto de `voice:streaming`.
+   * Excedeu: volta `voice:qualidade-excedida` para quem transmite.
+   */
+  "dmcall:tela": (payload: { dmId: string }) => void;
   /** Token novo para a sala da conversa — mesmo papel de `voice:refresh-token`. */
   "dmcall:refresh-token": (
     payload: { dmId: string },

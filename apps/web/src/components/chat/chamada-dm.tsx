@@ -6,6 +6,12 @@ import { Avatar } from "@/components/ui/avatar";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useChamadaDmStore } from "@/lib/stores/chamada-dm-store";
 import { useChamadaDm } from "@/lib/voice/use-chamada-dm";
+import {
+  BotaoCameraDm,
+  BotaoTelaDm,
+  BotaoVolumeDm,
+  PalcoDaChamada,
+} from "@/components/chat/chamada-dm-midia";
 import { useElapsed } from "@/lib/use-elapsed";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +72,14 @@ export function PainelChamadaDm({
   const setMudo = useChamadaDmStore((estado) => estado.setMudo);
   const setSurdo = useChamadaDmStore((estado) => estado.setSurdo);
   const setAviso = useChamadaDmStore((estado) => estado.setAviso);
+  // Com video no palco, os avatares grandes so roubariam altura.
+  const temVideo = useChamadaDmStore(
+    (estado) =>
+      estado.telas.length > 0 ||
+      estado.cameras.length > 0 ||
+      estado.minhaTela !== null ||
+      estado.minhaCamera !== null,
+  );
 
   const ativa = chamada?.dmId === dmId ? chamada : null;
   const desde =
@@ -105,14 +119,17 @@ export function PainelChamadaDm({
 
   return (
     <div className="flex shrink-0 flex-col items-center gap-4 border-b border-line bg-base-950 px-5 py-6">
-      <div className="flex items-center gap-6">
-        <ParticipanteDaChamada usuario={eu} presente />
-        <ParticipanteDaChamada
-          usuario={outro}
-          presente={ativa.fase === "em_chamada" && outroNaSala}
-          tocando={ativa.fase === "chamando"}
-        />
-      </div>
+      {ativa.fase === "em_chamada" ? <PalcoDaChamada outro={outro} eu={eu} /> : null}
+      {temVideo ? null : (
+        <div className="flex items-center gap-6">
+          <ParticipanteDaChamada usuario={eu} presente />
+          <ParticipanteDaChamada
+            usuario={outro}
+            presente={ativa.fase === "em_chamada" && outroNaSala}
+            tocando={ativa.fase === "chamando"}
+          />
+        </div>
+      )}
 
       <div className="text-center">
         <p className="text-[13px] font-medium text-ink-100">{status}</p>
@@ -144,6 +161,9 @@ export function PainelChamadaDm({
             >
               <AetherIcon name={surdo ? "headset-off" : "headset"} />
             </BotaoRedondo>
+            <BotaoCameraDm />
+            <BotaoTelaDm />
+            <BotaoVolumeDm outro={outro} />
           </>
         ) : null}
 

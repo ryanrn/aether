@@ -15,6 +15,7 @@ import {
   applyServerMute,
   conferirQualidadeDaTela,
   createMediaCredentials,
+  roomName,
 } from "../livekit";
 import {
   joinVoice,
@@ -265,7 +266,7 @@ export function registerVoiceHandlers(
       if (!aqui || aqui.channelId !== canal) return;
 
       const excedeu = await conferirQualidadeDaTela({
-        channelId: canal,
+        sala: roomName(canal),
         userId: quem,
         alturaMax: plano.limites.alturaMax,
       });

@@ -17,10 +17,16 @@ vi.mock("@aether/db", () => ({
 const flagLigada = vi.fn();
 const loadDmAccess = vi.fn();
 const participanteDaDm = vi.fn();
-vi.mock("@aether/access", () => ({ flagLigada, loadDmAccess, participanteDaDm }));
+const loadPlan = vi.fn();
+vi.mock("@aether/access", () => ({ flagLigada, loadDmAccess, participanteDaDm, loadPlan }));
 
 const createDmCallCredentials = vi.fn();
-vi.mock("../../apps/realtime/src/livekit", () => ({ createDmCallCredentials }));
+const conferirQualidadeDaTela = vi.fn();
+vi.mock("../../apps/realtime/src/livekit", () => ({
+  createDmCallCredentials,
+  conferirQualidadeDaTela,
+  dmRoomName: (dmId: string) => `dm:${dmId}`,
+}));
 
 const { registerDmCallHandlers } = await import(
   "../../apps/realtime/src/handlers/dm-call"
@@ -44,6 +50,8 @@ function montar() {
     id: "s1",
     data: { userId, user: { displayName: "Eu" } },
     on: (evento: string, fn: Handler) => handlers.set(evento, fn),
+    emit: (evento: string, payload: unknown) =>
+      emits.push({ salas: "socket", evento, payload }),
   };
   registerDmCallHandlers(io as never, socket as never);
 
@@ -166,5 +174,47 @@ describe("dmcall:end", () => {
 
     expect(participanteDaDm).not.toHaveBeenCalled();
     expect(emits).toHaveLength(0);
+  });
+});
+
+describe("dmcall:tela", () => {
+  it("confere a tela contra o plano na sala da conversa e avisa quem excedeu", async () => {
+    vi.useFakeTimers();
+    try {
+      const { userId, emits, chamar } = montar();
+      loadDmAccess.mockResolvedValue({ dmId: "dm1", outroId: "u-outro" });
+      loadPlan.mockResolvedValue({ tier: "FREE", limites: { alturaMax: 720 } });
+      conferirQualidadeDaTela.mockResolvedValue({
+        alturaPublicada: 1440,
+        alturaMax: 720,
+        silenciada: true,
+      });
+
+      await chamar("dmcall:tela", { dmId: "dm1" });
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(conferirQualidadeDaTela).toHaveBeenCalledWith({
+        sala: "dm:dm1",
+        userId,
+        alturaMax: 720,
+      });
+      expect(emits).toContainEqual({
+        salas: "socket",
+        evento: "voice:qualidade-excedida",
+        payload: { alturaPublicada: 1440, alturaMax: 720, plano: "FREE" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sem acesso a conversa, nem consulta o plano", async () => {
+    const { chamar } = montar();
+    loadDmAccess.mockResolvedValue(null);
+
+    await chamar("dmcall:tela", { dmId: "dm-alheia" });
+
+    expect(loadPlan).not.toHaveBeenCalled();
+    expect(conferirQualidadeDaTela).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,10 @@
 import { prisma } from "@aether/db";
-import { flagLigada, loadDmAccess, participanteDaDm } from "@aether/access";
+import {
+  flagLigada,
+  loadDmAccess,
+  loadPlan,
+  participanteDaDm,
+} from "@aether/access";
 import {
   SELECT_USUARIO_PUBLICO,
   room,
@@ -10,7 +15,11 @@ import {
 import { log } from "@aether/shared/log";
 import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
-import { createDmCallCredentials } from "../livekit";
+import {
+  conferirQualidadeDaTela,
+  createDmCallCredentials,
+  dmRoomName,
+} from "../livekit";
 
 /**
  * Chamada de voz numa conversa direta: tocar, atender, encerrar.
@@ -206,6 +215,59 @@ export function registerDmCallHandlers(
       );
     } catch (error) {
       log.error("gateway.dmcall.end", "dmcall:end falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
+    }
+  });
+
+  /**
+   * Confere a tela publicada contra o plano, em segundo plano.
+   *
+   * Mesma espera escalonada de `voice:streaming`: quando o aviso chega, a
+   * faixa quase nunca esta publicada ainda. Para na primeira resposta (dentro
+   * ou fora do teto). Silenciar acontece no SFU, entao cliente reescrito que
+   * pule o menu de qualidade nao contorna.
+   */
+  async function conferirTela(dmId: string): Promise<void> {
+    const plano = await loadPlan(userId).catch(() => null);
+    if (!plano) return;
+
+    for (const espera of [2000, 4000, 8000]) {
+      await new Promise((r) => setTimeout(r, espera));
+      const excedeu = await conferirQualidadeDaTela({
+        sala: dmRoomName(dmId),
+        userId,
+        alturaMax: plano.limites.alturaMax,
+      });
+      if (!excedeu) continue;
+
+      log.warn("gateway.dmcall.qualidade_excedida", "tela acima do plano", {
+        userId,
+        dmId,
+        alturaPublicada: excedeu.alturaPublicada,
+        alturaMax: excedeu.alturaMax,
+        plano: plano.tier,
+        silenciada: excedeu.silenciada,
+      });
+      socket.emit("voice:qualidade-excedida", {
+        alturaPublicada: excedeu.alturaPublicada,
+        alturaMax: excedeu.alturaMax,
+        plano: plano.tier,
+      });
+      return;
+    }
+  }
+
+  socket.on("dmcall:tela", async (payload) => {
+    if (!sinalLimiter.take(userId)) return;
+    try {
+      const auth = await autorizar(userId, payload?.dmId);
+      if (!auth.ok) return;
+      void conferirTela(payload.dmId);
+    } catch (error) {
+      log.error("gateway.dmcall.tela", "dmcall:tela falhou", {
         err: error,
         userId,
         socketId: socket.id,

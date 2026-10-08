@@ -130,9 +130,12 @@ export function dmRoomName(dmId: string): string {
  *
  * Quem chega aqui ja passou por `loadDmAccess` — a mesma porta das mensagens.
  * Nao ha cargo nem bitfield numa conversa, entao o que o token permite e fixo:
- * ouvir e publicar MICROFONE. Tela e camera ficam fora da lista de fontes de
- * proposito — a chamada direta nasce so de voz, e quem impoe isso e o SFU, nao
- * a ausencia de botao.
+ * microfone, tela (com o som dela) e camera. Os dois ja podem se falar, e e o
+ * mesmo par de pessoas — nao ha um "cargo sem SCREEN_SHARE" a respeitar.
+ *
+ * O que continua imposto e o TETO DO PLANO na tela: `dmcall:tela` faz o
+ * gateway conferir a resolucao publicada e silenciar no SFU o que passar,
+ * exatamente como na voz de servidor.
  */
 export async function createDmCallCredentials(params: {
   dmId: string;
@@ -152,7 +155,12 @@ export async function createDmCallCredentials(params: {
     roomJoin: true,
     canSubscribe: true,
     canPublish: true,
-    canPublishSources: [TrackSource.MICROPHONE],
+    canPublishSources: [
+      TrackSource.MICROPHONE,
+      TrackSource.SCREEN_SHARE,
+      TrackSource.SCREEN_SHARE_AUDIO,
+      TrackSource.CAMERA,
+    ],
     canUpdateOwnMetadata: false,
   });
 
@@ -160,8 +168,8 @@ export async function createDmCallCredentials(params: {
     url: config.url,
     token: await token.toJwt(),
     canPublish: true,
-    canShareScreen: false,
-    canUseCamera: false,
+    canShareScreen: true,
+    canUseCamera: true,
     expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000,
   };
 }
@@ -296,14 +304,19 @@ export interface QualidadeExcedida {
  * por dois pixels seria punir quem esta dentro do plano.
  */
 export async function conferirQualidadeDaTela(params: {
-  channelId: string;
+  /**
+   * Sala do SFU: `roomName(canal)` na voz de servidor, `dmRoomName(conversa)`
+   * na chamada direta. Recebe a sala pronta, e nao o canal, para as duas
+   * passarem pela MESMA regra de teto — uma copia por tipo de sala divergiria.
+   */
+  sala: string;
   userId: string;
   alturaMax: number;
 }): Promise<QualidadeExcedida | null> {
   const client = service();
   if (!client) return null;
 
-  const room = roomName(params.channelId);
+  const room = params.sala;
 
   try {
     const participants = await client.listParticipants(room);
