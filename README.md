@@ -3121,17 +3121,60 @@ ligar/atender respondem "Chamadas de voz indisponiveis no momento" depois de 8s
 carrega a URL de producao da Vercel, entao recebe a funcionalidade junto com a
 web, sem build novo.
 
+### Camera, tela e volume (segunda etapa)
+
+Na chamada em andamento, o painel da DM ganha:
+
+- **Camera**: liga/desliga, com a camera escolhida nas Configuracoes.
+- **Compartilhar tela**: menu com os mesmos perfis de qualidade da voz de
+  servidor, os acima do plano TRANCADOS, e a chave "levar o som do sistema".
+  Compartilhando, o mesmo botao troca a qualidade ou para.
+- **Volume**: do amigo (0-200%) e do som da tela dele. Grava nas MESMAS
+  preferencias da voz de servidor (`saveUserVolume`/`saveScreenVolume`), entao
+  o volume que voce deu a alguem vale nos dois lugares.
+- **Palco de video**: a tela do outro em destaque (com tela cheia), a camera
+  dele no lugar dela quando nao ha tela, e as suas faixas em miniatura.
+
+Decisoes:
+
+- **O token da chamada passou a permitir tela, som da tela e camera.** Numa
+  conversa nao ha cargo para negar SCREEN_SHARE/CAMERA: se os dois podem se
+  falar (`loadDmAccess`), podem se ver.
+- **O teto do plano na tela continua imposto no SFU.** Ao comecar a
+  compartilhar (ou trocar a qualidade), o cliente emite `dmcall:tela`; o
+  gateway revalida o acesso, le o plano e confere a resolucao publicada com a
+  MESMA funcao da voz de servidor (`conferirQualidadeDaTela`, que agora recebe
+  a sala pronta — `channel:<id>` ou `dm:<id>`). Passou do teto: silencia no SFU
+  e avisa quem transmite (`voice:qualidade-excedida`).
+- **Nada de indicador pelo gateway.** Na voz de servidor, "transmitindo" e
+  "camera ligada" passam pelo gateway porque a arvore de canais mostra isso a
+  quem nem entrou na sala. Numa chamada a dois, as proprias faixas do SFU ja
+  dizem ao outro lado.
+- **O som da tela toca sem o "Assistir".** La ele protege quem esta no canal
+  de ouvir a transmissao de qualquer um; aqui so ha uma pessoa transmitindo
+  para voce.
+
 ### Limitacoes conhecidas
 
 - **Exercitado de ponta a ponta so LOCALMENTE**: dois Chromium reais
-  (Playwright, microfone falso) contra gateway + web (`next build`) + LiveKit
-  1.8.4 `--dev` + Postgres. Coberto: ligar, cartao fora da DM, atender, os
-  dois publicando microfone no SFU, mudo, desligar esvaziando a sala, recusar e
-  cancelar. Nao foi testado contra a producao (Fly/Vercel/LiveKit Cloud), nem
-  com rede ruim ou celular. O teste achou e corrigiu dois bugs:
-  - quem LIGAVA nunca abria o microfone: `await room.startAudio()` ficava
-    pendente sem gesto recente do usuario (o aceite chega pela rede) e travava
-    o resto da conexao. Agora nao bloqueia, e o proximo clique libera o audio;
+  (Playwright, microfone/camera/tela falsos) contra gateway + web (`next build`)
+  + LiveKit `--dev` + Postgres. Coberto: ligar, cartao fora da DM, atender, os
+  dois publicando microfone no SFU, navegar sem derrubar, camera dos dois,
+  tela em destaque, volume salvo, mudo, desligar esvaziando a sala, recusar e
+  cancelar. Nao foi testado contra a producao nem com rede ruim ou celular
+  (a chamada de voz basica foi confirmada em producao pelo dono do produto).
+- **O LiveKit 1.8.4 (o do CI) e antigo demais para o `livekit-client` 2.22 do
+  app.** O servidor nao reconhece o canal `_data_track` que o cliente abre
+  ("unsupported datachannel added"), a renegociacao de cada publicacao nova
+  da timeout em 15s e o SDK reconecta — microfone de quem liga e camera
+  demoravam ~15s, e a chamada "piscava". Com o LiveKit 1.10.1 local, nada
+  disso acontece. O CI nao faz WebRTC (so emite token), entao nao pega; quem
+  testar localmente deve usar LiveKit >= 1.10. A producao usa LiveKit Cloud.
+- **Duas correcoes que sairam desses testes** (a primeira rodada foi contra o
+  1.8.4, entao o diagnostico do item 1 e parcial — a correcao continua valida):
+  - `await room.startAudio()` podia ficar pendente sem gesto recente do usuario
+    (o aceite chega pela rede) e travar o resto da conexao. Agora nao bloqueia,
+    e o proximo clique ou tecla libera o audio;
   - desligar nos primeiros segundos deixava a conexao com o SFU aberta (e o
     microfone transmitindo) ate a configuracao pos-conexao terminar. Agora um
     `AbortSignal` derruba a sala na hora. A voz de servidor tinha a mesma
@@ -3145,9 +3188,15 @@ web, sem build novo.
 - **Recarregar a aba encerra a chamada** do seu lado (o estado nao persiste em
   `sessionStorage`, ao contrario do `voiceIntent`). Ligar de novo reconecta: o
   outro lado atende sozinho.
-- **So voz.** Sem tela, camera, indicador de fala nem volume por pessoa na
-  chamada direta. Os dispositivos e o filtro de ruido escolhidos nas
-  Configuracoes valem.
+- **Sem indicador de fala** na chamada direta (a borda que acende em quem
+  fala). Os dispositivos e o filtro de ruido escolhidos nas Configuracoes
+  valem.
+- **Camera e tela so aparecem dentro da DM.** Fora dela, a pilula mostra so o
+  nome e o desligar — a transmissao continua, so nao ha onde ver.
+- **O menu de qualidade da tela repete o da barra da voz de servidor**
+  (`control-bar.tsx`), usando as mesmas pecas (`PRESET_LIST`,
+  `perfilCabeNoPlano`, `meuPlano`, a preferencia de som). Extrair um componente
+  unico mexeria na barra de controles, que nao era o escopo.
 - **Sem chamada perdida persistente.** Quem estava offline nao fica sabendo que
   ligaram — nada e gravado no historico da conversa.
 - **O toque pode nao soar** antes da primeira interacao com a pagina (politica

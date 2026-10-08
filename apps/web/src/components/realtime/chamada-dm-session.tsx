@@ -17,6 +17,7 @@ import {
   encerrarChamadaDm,
 } from "@/lib/voice/use-chamada-dm";
 import type { VoiceRoomHandle } from "@/lib/voice/room";
+import { readPreferredCamera } from "@/lib/voice/devices";
 import { iniciarToque, playJoinChime, playLeaveChime } from "@/lib/voice/sounds";
 
 /**
@@ -157,10 +158,22 @@ export function ChamadaDmSession() {
             onConnectionChange: (conectado) => store().setConectado(conectado),
             onRemoteParticipantsChange: (ids) =>
               store().setOutroNaSala(ids.includes(outroId)),
-            // O token da chamada nao permite tela nem camera.
-            onScreenSharesChange: () => undefined,
-            onCamerasChange: () => undefined,
-            onLocalShareEnded: () => undefined,
+            /**
+             * Telas e cameras do outro chegam pelo proprio SFU — numa chamada
+             * a dois nao ha "arvore de canais" de terceiros para avisar, entao
+             * nao passa nada pelo gateway.
+             *
+             * O audio da tela toca sem o "Assistir" da voz de servidor: la ele
+             * protege quem esta no canal de ouvir a transmissao de qualquer
+             * um; aqui so ha uma pessoa transmitindo para voce.
+             */
+            onScreenSharesChange: (telas) => {
+              store().setTelas(telas);
+              roomRef.current?.definirTelasOuvidas(telas.map((t) => t.userId));
+            },
+            onCamerasChange: (cameras) => store().setCameras(cameras),
+            // Inclui o "parar de compartilhar" da barra do proprio navegador.
+            onLocalShareEnded: () => store().setMinhaTela(null),
             onError: (mensagem) => store().setErro(mensagem),
             deveEstarMutado: () => store().mudo,
             renovarCredencial: () =>
@@ -197,6 +210,42 @@ export function ChamadaDmSession() {
         roomRef.current = handle;
         store().setErro(null);
         handle.setDeafened(store().surdo);
+        // Tela que ja estava no ar antes do handle voltar.
+        handle.definirTelasOuvidas(store().telas.map((t) => t.userId));
+
+        store().setControles({
+          setUserVolume: (userId, volume) => handle.setUserVolume(userId, volume),
+          setScreenAudioVolume: (volume) => handle.setScreenAudioVolume(volume),
+          iniciarTela: async (preset, comAudio) => {
+            const deu = await handle.startScreenShare(preset, comAudio);
+            if (deu) {
+              store().setMinhaTela(handle.localScreenTrack(), preset);
+              // O teto do plano e conferido no gateway, e imposto no SFU.
+              socket.emit("dmcall:tela", { dmId });
+            }
+            return deu;
+          },
+          trocarQualidade: async (preset) => {
+            const deu = await handle.setSharePreset(preset);
+            if (deu) {
+              store().setMinhaTela(handle.localScreenTrack(), preset);
+              socket.emit("dmcall:tela", { dmId });
+            }
+            return deu;
+          },
+          pararTela: async () => {
+            await handle.stopScreenShare();
+            store().setMinhaTela(null);
+          },
+          setCamera: async (ligada) => {
+            const deu = await handle.setCameraEnabled(
+              ligada,
+              readPreferredCamera() ?? undefined,
+            );
+            if (deu) store().setMinhaCamera(ligada ? handle.localCameraTrack() : null);
+            return deu;
+          },
+        });
       })
       .catch((erro: unknown) => {
         if (cancelado) return;
@@ -213,9 +262,34 @@ export function ChamadaDmSession() {
       roomRef.current = null;
       store().setConectado(false);
       store().setOutroNaSala(false);
+      store().setControles(null);
+      store().setTelas([]);
+      store().setCameras([]);
+      store().setMinhaTela(null);
+      store().setMinhaCamera(null);
       void handle?.disconnect();
     };
   }, [dmId, media, socket, outroId]);
+
+  /**
+   * Tela acima do plano: o gateway silenciou a faixa no SFU. Sem este aviso a
+   * pessoa so veria o amigo dizendo "sua tela ficou preta".
+   */
+  useEffect(() => {
+    if (!socket) return;
+    const aoExceder = ({ alturaMax }: { alturaMax: number }) => {
+      if (useChamadaDmStore.getState().chamada?.fase !== "em_chamada") return;
+      useChamadaDmStore
+        .getState()
+        .setErro(
+          `Sua tela passou do limite do seu plano (${alturaMax}p) e foi pausada. Escolha uma qualidade menor.`,
+        );
+    };
+    socket.on("voice:qualidade-excedida", aoExceder);
+    return () => {
+      socket.off("voice:qualidade-excedida", aoExceder);
+    };
+  }, [socket]);
 
   // 4. o outro sumiu da sala (fechou a aba, caiu de vez) — ou nunca chegou
   useEffect(() => {
