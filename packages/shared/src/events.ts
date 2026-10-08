@@ -327,6 +327,38 @@ export type VoiceJoinAck =
 export type VoiceRefreshAck =
   { ok: true; media: MediaGrant } | { ok: false; error: string };
 
+/* -------------------------------------------------------------------------
+ * Chamada de voz em conversa direta
+ *
+ * SINALIZACAO SEM ESTADO NO GATEWAY: tocar, atender, recusar e desligar sao
+ * avisos enderecados as salas pessoais (`user:<id>`) dos dois participantes.
+ * Quem esta DE FATO na chamada e a sala `dm:<dmId>` do SFU — nao ha um mapa
+ * de "chamadas ativas" para manter em sincronia entre instancias do gateway.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Resposta a `dmcall:ring` / `dmcall:accept`: credenciais da sala de midia da
+ * conversa. So sai depois de `loadDmAccess` — a mesma regra das mensagens.
+ */
+export type DmCallAck =
+  { ok: true; media: MediaGrant } | { ok: false; error: string };
+
+/**
+ * Por que a chamada acabou — a tela usa para escrever o aviso certo.
+ *
+ *  - `recusada`: quem recebeu clicou em recusar.
+ *  - `ocupado`: quem recebeu ja esta em outra chamada direta (recusa automatica).
+ *  - `sem_resposta`: tocou ate o limite e ninguem atendeu.
+ *  - `cancelada`: quem ligou desistiu antes de atenderem.
+ *  - `encerrada`: alguem desligou uma chamada em andamento (ou caiu de vez).
+ */
+export type MotivoFimDeChamada =
+  | "recusada"
+  | "ocupado"
+  | "sem_resposta"
+  | "cancelada"
+  | "encerrada";
+
 export interface ServerToClientEvents {
   /** primeiro evento apos o handshake: confirma quem o gateway achou que voce e */
   ready: (payload: ReadyPayload) => void;
@@ -418,6 +450,22 @@ export interface ServerToClientEvents {
    * token antigo nao vale na sala nova, e emitir aqui evita o cliente ter de
    * pedir e ficar mudo no intervalo.
    */
+  /**
+   * Alguem esta te ligando numa conversa direta. Chega em TODAS as suas abas
+   * (sala pessoal); a que atender avisa as outras via `dmcall:accepted`.
+   */
+  "dmcall:incoming": (payload: { dmId: string; de: PublicUser }) => void;
+  /**
+   * A chamada foi atendida. Vai para os DOIS participantes: quem ligou passa a
+   * "em chamada", e as outras abas de quem atendeu param de tocar.
+   */
+  "dmcall:accepted": (payload: { dmId: string; por: string }) => void;
+  /** A chamada acabou (ou nem comecou). Vai para os dois participantes. */
+  "dmcall:ended": (payload: {
+    dmId: string;
+    por: string;
+    motivo: MotivoFimDeChamada;
+  }) => void;
   "voice:moved": (payload: {
     channelId: string;
     media: MediaGrant | null;
@@ -652,6 +700,30 @@ export interface ClientToServerEvents {
    * conhece a propria sala.
    */
   "voice:camera": (camera: boolean) => void;
+  /**
+   * Liga para a outra pessoa da conversa. O ack traz o token da sala de midia
+   * (guardado ate atenderem); o outro lado recebe `dmcall:incoming`.
+   */
+  "dmcall:ring": (
+    payload: { dmId: string },
+    ack: (result: DmCallAck) => void,
+  ) => void;
+  /** Atende. O ack traz o token; os dois lados recebem `dmcall:accepted`. */
+  "dmcall:accept": (
+    payload: { dmId: string },
+    ack: (result: DmCallAck) => void,
+  ) => void;
+  /**
+   * Encerra: recusar (`recusada`/`ocupado`), desistir (`cancelada`), nao
+   * atendida (`sem_resposta`) ou desligar (`encerrada`). Sem ack — desligar
+   * nunca pode ficar esperando a rede para soltar o microfone.
+   */
+  "dmcall:end": (payload: { dmId: string; motivo: MotivoFimDeChamada }) => void;
+  /** Token novo para a sala da conversa — mesmo papel de `voice:refresh-token`. */
+  "dmcall:refresh-token": (
+    payload: { dmId: string },
+    ack: (result: VoiceRefreshAck) => void,
+  ) => void;
   /** medicao de latencia; o ack responde o timestamp do servidor */
   ping: (ack: (serverTime: number) => void) => void;
 }

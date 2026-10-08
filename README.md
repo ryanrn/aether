@@ -2774,9 +2774,10 @@ existente.
   `replyToId` e confere que a original e da mesma conversa e nao foi apagada —
   id de outra conversa ou inventado e ignorado (sai sem referencia, sem erro).
   **Precisa de `fly deploy` junto do deploy da web.**
-- **Sem mensagens de sistema de call** — nao ha chamada em DM nem em canal de
-  texto no AETHER, entao o unico "evento discreto" real e o separador de data.
-  O `<SeparadorDeData>` serve de molde para quando (se) houver eventos de call.
+- **Sem mensagens de sistema de call** — a chamada em DM existe (ver "Chamada
+  de voz em conversa direta"), mas nao grava nada no historico; o unico
+  "evento discreto" real continua sendo o separador de data. O
+  `<SeparadorDeData>` serve de molde para quando houver eventos de call.
 
 ## Transferencia de posse e exclusao de servidor
 
@@ -3042,6 +3043,115 @@ Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
   discorda do acesso e a forma mais silenciosa de a regra divergir. Na escala
   deste projeto sao dezenas; se um dia forem milhares, o jeito e resolver as
   duas portas em lote, nao afrouxar a checagem.
+
+## Chamada de voz em conversa direta
+
+Botao de telefone no cabecalho da DM: liga para a outra pessoa, que ve um
+cartao "esta te ligando" com Atender/Recusar em qualquer tela de `/app`. Em
+chamada, a DM mostra os dois avatares, o tempo, mudo/surdo e desligar; fora da
+DM, uma pilula no canto mantem o nome, o atalho de volta e o desligar.
+
+### Arquivos
+
+| Camada | Arquivo |
+| --- | --- |
+| Contrato | `packages/shared/src/events.ts` — `dmcall:ring/accept/end/refresh-token`, `dmcall:incoming/accepted/ended`, `DmCallAck`, `MotivoFimDeChamada` |
+| Regra | `packages/access/src/dm.ts` — `participanteDaDm` (novo); abrir midia continua em `loadDmAccess` |
+| Gateway | `apps/realtime/src/handlers/dm-call.ts` (novo), `livekit.ts` (`createDmCallCredentials`, sala `dm:<dmId>`) |
+| Cliente | `lib/voice/chamada-dm.ts` (maquina de estados pura), `lib/voice/use-chamada-dm.ts` (acoes), `lib/stores/chamada-dm-store.ts`, `components/realtime/chamada-dm-session.tsx` (motor), `components/realtime/chamada-dm-overlay.tsx`, `components/chat/chamada-dm.tsx` |
+| Reaproveitado | `lib/voice/room.ts` ganhou `onRemoteParticipantsChange` (opcional) — o resto (filtro de ruido, dispositivos, recuperacao de queda) e o mesmo da voz de servidor |
+
+### Decisoes
+
+- **O gateway NAO guarda chamada.** Tocar, atender e encerrar sao avisos para
+  as salas pessoais (`user:<id>`) dos dois; quem esta de fato na chamada e a
+  sala `dm:<dmId>` do LiveKit. Um mapa de "chamadas ativas" teria de existir
+  nas duas implementacoes do `StateStore` (memoria e Redis) e concordar entre
+  instancias, para guardar o que o SFU ja sabe. Funciona igual com uma ou
+  varias maquinas de gateway, porque o adapter Redis entrega os avisos.
+- **Autorizacao = a das mensagens.** `dmcall:ring`, `dmcall:accept` e
+  `dmcall:refresh-token` passam por `loadDmAccess` (participante + bloqueio +
+  amizade/servidor em comum) e pelo kill switch `voz_habilitada` — so entao o
+  token sai. Recusa de acesso responde "Conversa nao encontrada", como o 404
+  do resto do sistema. `dmcall:end` usa so `participanteDaDm`: se A bloqueia B
+  no meio da chamada, os dois ainda precisam conseguir desligar.
+- **O token so permite MICROFONE.** `canPublishSources: [MICROPHONE]` — tela e
+  camera ficam de fora no SFU, nao so na ausencia de botao.
+- **Voz de servidor e chamada direta se excluem.** Sao salas diferentes do
+  SFU; estar nas duas seria ouvir duas conversas misturadas. Ligar/atender sai
+  da voz de servidor (`sairDaVozDeServidor`); entrar num canal de voz encerra a
+  chamada direta (`encerrarChamadaDm`, chamado em `useEntrarNaVoz` e no cartao
+  de atividade).
+- **As corridas sao decididas no cliente, numa funcao pura** testada
+  (`chamada-dm.ts`): os dois ligam ao mesmo tempo -> atende sozinho; duas abas
+  tocando -> a que atende tira as outras do toque; ja em outra chamada ->
+  recusa automatica com `ocupado`; a pessoa recarregou e religou -> atende
+  sozinho sem derrubar a conexao.
+- **Fim por ausencia.** Sem estado no gateway, o jeito de perceber que o outro
+  fechou a aba sem desligar e ele sumir da sala de midia: depois de 20s
+  (`AUSENCIA_MS`, cobre reconexao curta) a chamada encerra com "A chamada
+  caiu.". O `pagehide` tambem manda `dmcall:end` (melhor esforco).
+- **Toque de 30s** (`TOQUE_MS`); quem liga encerra com `sem_resposta`, e quem
+  recebe ve "Chamada perdida de X". Toque sintetizado em `sounds.ts`, sem
+  arquivo de audio, como os avisos de entrada/saida.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/chamada-dm.test.ts tests/unit/dm-call-gateway.test.ts
+```
+
+22 testes: a maquina de estados (corridas acima) e o handler do gateway (token
+so depois de `loadDmAccess`, recusa sem tocar, desligar com a porta fechada,
+motivo invalido descartado).
+
+Na interface (precisa do LiveKit configurado, igual a voz de servidor): logar
+como `ryan` numa janela e `joao` noutra (anonima), abrir a DM entre os dois,
+clicar no telefone do cabecalho. Conferir: o cartao aparece no outro lado
+mesmo fora da DM; recusar mostra "recusou" para quem ligou; nao atender por
+30s mostra "nao atendeu" / "Chamada perdida"; atender conecta o audio;
+mudo/surdo funcionam; ir para um servidor mantem a chamada (pilula no canto);
+entrar num canal de voz encerra a chamada; fechar a aba de um lado encerra no
+outro.
+
+**Precisa de `fly deploy` do gateway junto do deploy da web** — os eventos
+`dmcall:*` sao novos. De preferencia o gateway PRIMEIRO. Se a web subir antes,
+ligar/atender respondem "Chamadas de voz indisponiveis no momento" depois de 8s
+(`socket.timeout` no ack), em vez de ficar parado sem resposta. O app desktop
+carrega a URL de producao da Vercel, entao recebe a funcionalidade junto com a
+web, sem build novo.
+
+### Limitacoes conhecidas
+
+- **Exercitado de ponta a ponta so LOCALMENTE**: dois Chromium reais
+  (Playwright, microfone falso) contra gateway + web (`next build`) + LiveKit
+  1.8.4 `--dev` + Postgres. Coberto: ligar, cartao fora da DM, atender, os
+  dois publicando microfone no SFU, mudo, desligar esvaziando a sala, recusar e
+  cancelar. Nao foi testado contra a producao (Fly/Vercel/LiveKit Cloud), nem
+  com rede ruim ou celular. O teste achou e corrigiu dois bugs:
+  - quem LIGAVA nunca abria o microfone: `await room.startAudio()` ficava
+    pendente sem gesto recente do usuario (o aceite chega pela rede) e travava
+    o resto da conexao. Agora nao bloqueia, e o proximo clique libera o audio;
+  - desligar nos primeiros segundos deixava a conexao com o SFU aberta (e o
+    microfone transmitindo) ate a configuracao pos-conexao terminar. Agora um
+    `AbortSignal` derruba a sala na hora. A voz de servidor tinha a mesma
+    janela e recebeu a mesma correcao (`voice-session.tsx`).
+- **Bloquear no meio da chamada nao derruba o audio na hora.** O bloqueio fecha
+  tocar/atender/renovar, mas o token ja emitido vale ate 1h e o gateway nao tira
+  ninguem da sala `dm:<id>`. Fechar isso pede o `/internal` do bloqueio chamar
+  `removeParticipant` no SFU.
+- **"Ocupado" so vale entre chamadas diretas.** Quem esta num canal de voz de
+  servidor recebe o toque normalmente (e, se atender, sai do canal).
+- **Recarregar a aba encerra a chamada** do seu lado (o estado nao persiste em
+  `sessionStorage`, ao contrario do `voiceIntent`). Ligar de novo reconecta: o
+  outro lado atende sozinho.
+- **So voz.** Sem tela, camera, indicador de fala nem volume por pessoa na
+  chamada direta. Os dispositivos e o filtro de ruido escolhidos nas
+  Configuracoes valem.
+- **Sem chamada perdida persistente.** Quem estava offline nao fica sabendo que
+  ligaram — nada e gravado no historico da conversa.
+- **O toque pode nao soar** antes da primeira interacao com a pagina (politica
+  de autoplay do navegador); o cartao visual aparece de qualquer jeito.
 
 ## Amizade a partir do servidor, e a chave que a governa
 

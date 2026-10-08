@@ -11,6 +11,7 @@ import { listRecentDmMessages } from "@/server/services/messages";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { Avatar } from "@/components/ui/avatar";
 import { NavToggle } from "@/components/layout/nav-mobile";
+import { BotaoLigarDm, PainelChamadaDm } from "@/components/chat/chamada-dm";
 
 /**
  * Pagina de uma conversa direta.
@@ -83,7 +84,10 @@ export default async function DmPage({
           {outro.displayName}
         </span>
         <span className="select-text text-[12px] text-ink-500">@{outro.username}</span>
+        <BotaoLigarDm dmId={dmId} outro={outro} />
       </div>
+
+      <PainelChamadaDm dmId={dmId} outro={outro} eu={selfUser} />
 
       {/*
         `channelId` recebe o id da CONVERSA. O nome da prop e do tempo em que

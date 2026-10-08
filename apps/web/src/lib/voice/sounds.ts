@@ -82,3 +82,25 @@ export function playJoinChime(): void {
 export function playLeaveChime(): void {
   playSequence([783.99, 523.25]);
 }
+
+/**
+ * Toque de chamada direta, em laco ate a funcao devolvida ser chamada.
+ *
+ *  - `recebendo`: tres notas subindo, a cada 2s — precisa ser notado mesmo com
+ *    a aba em segundo plano.
+ *  - `chamando`: duas notas iguais e graves, a cada 3s — o "tuuu" de quem
+ *    espera atenderem; so confirma que esta tocando do outro lado.
+ *
+ * Mesma sintese dos avisos acima (sem arquivo de audio). O navegador pode
+ * segurar o primeiro toque ate haver interacao com a pagina (politica de
+ * autoplay); a notificacao visual nao depende disso.
+ */
+export function iniciarToque(tipo: "recebendo" | "chamando"): () => void {
+  const notas =
+    tipo === "recebendo" ? [659.25, 783.99, 987.77] : [440, 440];
+  const intervalo = tipo === "recebendo" ? 2000 : 3000;
+
+  playSequence(notas);
+  const timer = setInterval(() => playSequence(notas), intervalo);
+  return () => clearInterval(timer);
+}

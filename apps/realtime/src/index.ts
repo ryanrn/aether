@@ -12,6 +12,7 @@ import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { registerDmHandlers } from "./handlers/dm";
+import { registerDmCallHandlers } from "./handlers/dm-call";
 import { registerReactionHandlers } from "./handlers/reactions";
 import { joinAllServerRooms } from "./rooms";
 import { limparCargosDeJogoNaConexao } from "./games/cargos-por-jogo";
@@ -191,6 +192,7 @@ io.on("connection", (socket) => {
   registerMessageHandlers(io, socket);
   registerVoiceHandlers(io, socket);
   registerDmHandlers(socket);
+  registerDmCallHandlers(io, socket);
   registerReactionHandlers(io, socket);
 
   socket.on("ping", (ack) => {
