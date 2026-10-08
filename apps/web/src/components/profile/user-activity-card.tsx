@@ -16,6 +16,7 @@ import {
 } from "@/server/actions/friends";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
+import { encerrarChamadaDm } from "@/lib/voice/use-chamada-dm";
 import { useListening, useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
@@ -340,6 +341,8 @@ export function UserActivityCard({
 
   function joinChannel() {
     if (!socket || !channel) return;
+    // Voz de servidor e chamada direta se excluem (salas diferentes do SFU).
+    encerrarChamadaDm(socket);
     socket.emit("voice:join", { channelId: channel.id }, (result) => {
       if (!result.ok) {
         setVoiceError(result.error);

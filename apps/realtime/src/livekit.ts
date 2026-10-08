@@ -120,6 +120,52 @@ export async function createMediaCredentials(params: {
   };
 }
 
+/** Sala de midia de uma conversa direta. Prefixo proprio: nunca colide com canal. */
+export function dmRoomName(dmId: string): string {
+  return `dm:${dmId}`;
+}
+
+/**
+ * Token da chamada de voz de uma conversa direta.
+ *
+ * Quem chega aqui ja passou por `loadDmAccess` — a mesma porta das mensagens.
+ * Nao ha cargo nem bitfield numa conversa, entao o que o token permite e fixo:
+ * ouvir e publicar MICROFONE. Tela e camera ficam fora da lista de fontes de
+ * proposito — a chamada direta nasce so de voz, e quem impoe isso e o SFU, nao
+ * a ausencia de botao.
+ */
+export async function createDmCallCredentials(params: {
+  dmId: string;
+  userId: string;
+  displayName: string;
+}): Promise<MediaCredentials | null> {
+  const config = env.livekit;
+  if (!config) return null;
+
+  const token = new AccessToken(config.apiKey, config.apiSecret, {
+    identity: params.userId,
+    name: params.displayName,
+    ttl: TOKEN_TTL_SECONDS,
+  });
+  token.addGrant({
+    room: dmRoomName(params.dmId),
+    roomJoin: true,
+    canSubscribe: true,
+    canPublish: true,
+    canPublishSources: [TrackSource.MICROPHONE],
+    canUpdateOwnMetadata: false,
+  });
+
+  return {
+    url: config.url,
+    token: await token.toJwt(),
+    canPublish: true,
+    canShareScreen: false,
+    canUseCamera: false,
+    expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000,
+  };
+}
+
 /**
  * Cliente administrativo do SFU.
  *

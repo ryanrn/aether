@@ -92,6 +92,13 @@ export interface VoiceRoomCallbacks {
    */
   onAudioLevels?: (levels: Record<string, number>) => void;
   onConnectionChange: (connected: boolean) => void;
+  /**
+   * Identidades (userIds) dos OUTROS participantes da sala, a cada entrada ou
+   * saida. Opcional: a voz de servidor sabe quem esta no canal pelo gateway;
+   * a chamada direta nao tem esse estado no gateway e usa isto para perceber
+   * que o outro lado caiu ou fechou a aba sem desligar.
+   */
+  onRemoteParticipantsChange?: (identities: string[]) => void;
   /** alguem comecou ou parou de compartilhar tela na sala */
   onScreenSharesChange: (shares: RemoteScreenShare[]) => void;
   /** alguem ligou ou desligou a camera na sala */
@@ -721,6 +728,13 @@ export async function connectVoiceRoom({
     },
   );
 
+  const publicarParticipantes = () =>
+    callbacks.onRemoteParticipantsChange?.(
+      [...room.remoteParticipants.values()].map((p) => p.identity),
+    );
+  room.on(RoomEvent.ParticipantConnected, publicarParticipantes);
+  room.on(RoomEvent.ParticipantDisconnected, publicarParticipantes);
+
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     const bucket = attachedAudio.get(participant.identity);
     for (const element of [...(bucket?.mic ?? []), ...(bucket?.screen ?? [])]) {
@@ -820,6 +834,7 @@ export async function connectVoiceRoom({
           await room.connect(cred.url, cred.token);
           mediaWarn("conexao de voz restabelecida");
           callbacks.onConnectionChange(true);
+          publicarParticipantes();
           if (!room.canPlaybackAudio) {
             await room.startAudio().catch(() => undefined);
           }
@@ -966,6 +981,7 @@ export async function connectVoiceRoom({
   room.on(RoomEvent.Reconnected, () => {
     mediaWarn("SFU reconectado");
     callbacks.onConnectionChange(true);
+    publicarParticipantes();
   });
   room.on(RoomEvent.MediaDevicesError, (erro: Error) => {
     mediaWarn("erro de dispositivo de midia", erro.message);
@@ -1001,6 +1017,7 @@ export async function connectVoiceRoom({
   }
   mediaLog("conectado a sala", room.name);
   callbacks.onConnectionChange(true);
+  publicarParticipantes();
 
   // Politica de autoplay: precisa acontecer dentro do gesto que originou a
   // entrada na call.

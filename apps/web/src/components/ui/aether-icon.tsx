@@ -34,6 +34,7 @@ export type AetherIconName =
   | "noise"
   | "settings"
   | "disconnect"
+  | "phone"
   | "signal"
   | "radio"
   // --- navegacao / estrutura ---
@@ -252,6 +253,11 @@ export function AetherIconSprite() {
           <path d="M10.7 13.3a15.6 15.6 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.45 12.5 12.5 0 0 0 2.8.7 2 2 0 0 1 1.7 2v2.9a2 2 0 0 1-2.2 2 19.7 19.7 0 0 1-8.6-3.05A19.4 19.4 0 0 1 8 15" />
           <path d="M8 15A19.7 19.7 0 0 1 5 6.4 2 2 0 0 1 7 4.2h2.9a2 2 0 0 1 2 1.7c.13 1 .35 1.9.66 2.8a2 2 0 0 1-.45 2.1L10.7 13.3" />
           <path d="M3.5 3.5 20.5 20.5" />
+        </symbol>
+        {/* o mesmo fone do `disconnect`, sem o risco — ligar, e nao sair */}
+        <symbol id="ic-phone" viewBox="0 0 24 24">
+          <path d="M10.7 13.3a15.6 15.6 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.45 12.5 12.5 0 0 0 2.8.7 2 2 0 0 1 1.7 2v2.9a2 2 0 0 1-2.2 2 19.7 19.7 0 0 1-8.6-3.05A19.4 19.4 0 0 1 8 15" />
+          <path d="M8 15A19.7 19.7 0 0 1 5 6.4 2 2 0 0 1 7 4.2h2.9a2 2 0 0 1 2 1.7c.13 1 .35 1.9.66 2.8a2 2 0 0 1-.45 2.1L10.7 13.3" />
         </symbol>
         <symbol id="ic-radio" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="2.25" />

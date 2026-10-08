@@ -148,6 +148,35 @@ export async function loadDmAccess(
 }
 
 /**
+ * Voce e um dos dois desta conversa? So isso — SEM `podeFalarCom`.
+ *
+ * Existe para o que precisa continuar funcionando depois que a porta fechou:
+ * DESLIGAR uma chamada. Se A bloqueia B no meio da chamada, `loadDmAccess`
+ * passa a devolver `null` para os dois — e se desligar dependesse dele, nenhum
+ * dos dois conseguiria mais avisar o outro de que a chamada acabou. Encerrar
+ * nao abre nada; so fecha. Para ABRIR (tocar, atender, renovar token) a regra
+ * continua sendo `loadDmAccess`.
+ *
+ * Devolve `null` para conversa inexistente e para conversa alheia, igual.
+ */
+export async function participanteDaDm(
+  userId: string,
+  dmId: string,
+): Promise<DmAccess | null> {
+  if (typeof dmId !== "string" || dmId.length === 0) return null;
+
+  const dm = await prisma.dmChannel.findUnique({
+    where: { id: dmId },
+    select: { id: true, userAId: true, userBId: true },
+  });
+  if (!dm) return null;
+
+  if (dm.userAId === userId) return { dmId: dm.id, outroId: dm.userBId };
+  if (dm.userBId === userId) return { dmId: dm.id, outroId: dm.userAId };
+  return null;
+}
+
+/**
  * As conversas de alguem, com quem esta do outro lado.
  *
  * Passa cada uma pela MESMA porta que `loadDmAccess` — nao por um filtro
