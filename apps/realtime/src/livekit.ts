@@ -146,11 +146,23 @@ function service(): RoomServiceClient | null {
  *  - `aplicado`: o SFU confirmou a mudanca na faixa de audio.
  *  - `sem_faixa`: a pessoa nao tem faixa de audio publicada agora (sem SPEAK,
  *    ou so entrou) — nao e falha, so nao ha o que mutar ainda.
- *  - `falhou`: SFU fora do ar, participante nao encontrado, ou erro de rede —
- *    a diferenca de `sem_faixa` importa porque SO ISTO deveria virar erro pro
- *    moderador; `sem_faixa` e um estado normal do dia a dia.
+ *  - `fora_da_sala`: o SFU respondeu, e a pessoa NAO esta conectada a sala de
+ *    midia (ainda conectando, ou ocupa o canal sem audio). Nada esta sendo
+ *    transmitido, entao nao ha o que vazar — mesmo caso de `sem_faixa`. O
+ *    cliente honesto ja entra mudo (`deveEstarMutado` le `serverMuted`).
+ *  - `falhou`: SFU fora do ar ou erro de rede — a diferenca para os dois de
+ *    cima importa porque SO ISTO deveria virar erro pro moderador.
+ *
+ * `fora_da_sala` ja foi `falhou`, e isso fazia silenciar quem ainda nao tinha
+ * conectado ao SFU responder "o servidor de audio nao confirmou" com o SFU
+ * perfeitamente no ar (o LiveKit lista sala inexistente como vazia, sem erro).
+ * Era o que derrubava o `verify-phase6` no CI desde a correcao de auditoria.
  */
-export type ResultadoDeMudoNoSfu = "aplicado" | "sem_faixa" | "falhou";
+export type ResultadoDeMudoNoSfu =
+  | "aplicado"
+  | "sem_faixa"
+  | "fora_da_sala"
+  | "falhou";
 
 /**
  * Silencia (ou devolve a voz de) alguem NO PROPRIO SFU.
@@ -178,7 +190,7 @@ export async function applyServerMute(params: {
   try {
     const participants = await client.listParticipants(room);
     const target = participants.find((p) => p.identity === params.userId);
-    if (!target) return "falhou";
+    if (!target) return "fora_da_sala";
 
     const audioTracks = target.tracks.filter(
       (track) => track.type === TrackType.AUDIO,
