@@ -49,6 +49,17 @@ export function encerrarChamadaDm(
  * Atende a chamada desta conversa. Usado pelo botao "Atender" e pela resposta
  * automatica quando os dois ligam ao mesmo tempo.
  */
+/**
+ * Quanto esperar o gateway responder a `dmcall:ring`/`dmcall:accept`.
+ *
+ * Sem limite, um gateway que nao conhece o evento (versao antiga no ar, na
+ * janela entre o deploy da web e o `fly deploy`) nunca responde — e o botao
+ * ficaria parado sem dizer nada. Com o `socket.timeout`, o callback recebe um
+ * erro e a tela explica.
+ */
+const ACK_MS = 8000;
+const SEM_RESPOSTA = "Chamadas de voz indisponiveis no momento. Tente de novo em instantes.";
+
 export function atenderChamadaDm(socket: TypedSocket, dmId: string): void {
   const store = useChamadaDmStore.getState();
   const atual = store.chamada;
@@ -57,11 +68,16 @@ export function atenderChamadaDm(socket: TypedSocket, dmId: string): void {
   sairDaVozDeServidor(socket);
   if (atual.fase === "recebendo") store.definir({ ...atual, fase: "atendendo" });
 
-  socket.emit("dmcall:accept", { dmId }, (resultado) => {
+  socket.timeout(ACK_MS).emit("dmcall:accept", { dmId }, (semResposta, resultado) => {
     const agora = useChamadaDmStore.getState();
     // Desligaram (ou recusei noutra aba) enquanto o ack viajava.
     if (agora.chamada?.dmId !== dmId) return;
 
+    if (semResposta) {
+      agora.definir(null);
+      toast.erro(SEM_RESPOSTA);
+      return;
+    }
     if (!resultado.ok) {
       agora.definir(null);
       toast.erro(resultado.error);
@@ -97,8 +113,12 @@ export function useChamadaDm() {
       sairDaVozDeServidor(socket);
       useChamadaDmStore.getState().setAviso(null);
 
-      socket.emit("dmcall:ring", { dmId }, (resultado) => {
+      socket.timeout(ACK_MS).emit("dmcall:ring", { dmId }, (semResposta, resultado) => {
         const store = useChamadaDmStore.getState();
+        if (semResposta) {
+          toast.erro(SEM_RESPOSTA);
+          return;
+        }
         if (!resultado.ok) {
           toast.erro(resultado.error);
           return;

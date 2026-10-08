@@ -3104,7 +3104,11 @@ entrar num canal de voz encerra a chamada; fechar a aba de um lado encerra no
 outro.
 
 **Precisa de `fly deploy` do gateway junto do deploy da web** — os eventos
-`dmcall:*` sao novos.
+`dmcall:*` sao novos. De preferencia o gateway PRIMEIRO. Se a web subir antes,
+ligar/atender respondem "Chamadas de voz indisponiveis no momento" depois de 8s
+(`socket.timeout` no ack), em vez de ficar parado sem resposta. O app desktop
+carrega a URL de producao da Vercel, entao recebe a funcionalidade junto com a
+web, sem build novo.
 
 ### Limitacoes conhecidas
 
