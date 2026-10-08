@@ -148,6 +148,17 @@ dnd-kit (ver [Reordenar arrastando](#reordenar-arrastando-canais-e-servidores)).
 3 falhas, nenhuma causada pelo redesign nem pelo dnd-kit — sao pre-existentes,
 ver **achado colateral** abaixo.
 
+> **CORRECAO (out/2026): o diagnostico abaixo estava errado.** O `notFound()`
+> devolve 404 normalmente. O 200 vinha da **parede de verificacao de e-mail**:
+> os usuarios de teste (o do seed e o "membro comum" que o `verify-phase2`
+> cria) nao tinham `emailVerificadoEm`, e com a flag `exige_email_verificado`
+> ligada (o padrao) o layout de `/app` devolve a parede, com 200, NO LUGAR da
+> pagina — o `notFound()` nem chegava a rodar. Isolado por bisseccao no layout
+> de `/app` (uma pagina com `notFound()` fora de `/app` dava 404; dentro, 200;
+> sem a parede, 404). Corrigido nos testes (`scripts/seed-ci.mjs` e
+> `verify-phase2.mjs` criam os usuarios ja confirmados); o app nao mudou. O
+> texto original fica abaixo como registro.
+
 **Achado colateral (fora do escopo do redesign), investigado a fundo:
 `notFound()` devolve HTTP 200, nao 404.** Confirmado tanto em `next dev`
 quanto em `next build && next start`: acessar um servidor/canal privado/

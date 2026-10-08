@@ -32,6 +32,7 @@ const user: PublicUser = {
   displayName: "Ryan",
   avatarUrl: null,
   status: "ONLINE",
+  kind: "HUMAN",
   plano: "FREE",
   moldura: null,
   decoracao: null,
