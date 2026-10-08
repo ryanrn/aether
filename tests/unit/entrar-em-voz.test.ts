@@ -1,3 +1,4 @@
+import type { PublicUser } from "@aether/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -84,7 +85,17 @@ function fakeIo() {
   return { io: io as any, emits };
 }
 
-const USER = { id: "u_1", username: "ryan", displayName: "Ryan", avatarUrl: null };
+const USER: PublicUser = {
+  id: "u_1",
+  username: "ryan",
+  displayName: "Ryan",
+  avatarUrl: null,
+  status: "ONLINE",
+  kind: "HUMAN",
+  plano: "FREE",
+  moldura: null,
+  decoracao: null,
+};
 
 beforeEach(() => {
   for (const m of [
@@ -188,7 +199,7 @@ describe("entrarNaVoz — recusas", () => {
       channelId: "c_1",
       socketId: "s_1",
     });
-    expect(r.codigo).toBe("nao_encontrada");
+    expect(r.ok ? null : r.codigo).toBe("nao_encontrada");
   });
 
   it("ve o canal mas sem CONNECT -> sem_permissao (mensagem revela, nao esconde)", async () => {

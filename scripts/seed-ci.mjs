@@ -13,6 +13,11 @@
  *  - "Servidor Alheio": servidor da `maria`, do qual `ryan` e `joao` NAO sao
  *    membros. O `verify-phase3` tem uma assercao ("servidor do qual nao e
  *    membro e recusado") que so roda se esse servidor existir.
+ *  - E-MAIL CONFIRMADO para os tres. Sem isto, a flag `exige_email_verificado`
+ *    (ligada por padrao) poe todo o `/app` atras da parede de verificacao: o
+ *    layout devolve a parede, com status 200, no lugar da pagina. O
+ *    `verify-phase2` testava a parede sem saber — os "404 esperados" saiam 200
+ *    e os "abre o servidor" passavam sem o servidor ter sido renderizado.
  *
  * Roda DEPOIS do `db:seed`. Fora do CI nao ha por que rodar — e por isso que
  * ele nao entra no `db:seed` normal.
@@ -123,7 +128,19 @@ async function main() {
     });
   }
 
-  console.log("seed-ci aplicado: maria, amizade ryan<->joao, Servidor Alheio");
+  // --- E-mail confirmado (ver cabecalho) ----------------------------------
+  // So quem ainda nao confirmou: rodar de novo nao reescreve a data.
+  await prisma.user.updateMany({
+    where: {
+      username: { in: ["ryan", "joao", "maria"] },
+      emailVerificadoEm: null,
+    },
+    data: { emailVerificadoEm: new Date() },
+  });
+
+  console.log(
+    "seed-ci aplicado: maria, amizade ryan<->joao, Servidor Alheio, e-mails confirmados",
+  );
 }
 
 main()

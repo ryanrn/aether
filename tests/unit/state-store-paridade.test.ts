@@ -224,8 +224,8 @@ describe("paridade state-memory vs state-redis (metodos de voz)", () => {
       serverMuted: boolean;
       serverDeafened: boolean;
     }>;
-    expect(aposEnsurdecer.serverMuted).toBe(false);
-    expect(aposEnsurdecer.serverDeafened).toBe(true);
+    expect(aposEnsurdecer?.serverMuted).toBe(false);
+    expect(aposEnsurdecer?.serverDeafened).toBe(true);
   });
 
   it("setVoiceFlags (self) + setVoiceCamera + setVoiceStreaming + setVoiceSpeaking: mesma sequencia, mesmo resultado", async () => {

@@ -108,6 +108,14 @@ async function main() {
       displayName: "Membro comum (teste)",
       email: `${marca}@local.test`,
       passwordHash: "scrypt$16384$8$1$naoimporta$naoimporta",
+      /**
+       * E-mail JA confirmado. Sem isto a flag `exige_email_verificado` (ligada
+       * por padrao) poe o `/app` inteiro atras da parede de verificacao — o
+       * layout devolve a parede, com 200, no lugar da pagina. As assercoes de
+       * 404 abaixo falhavam por isso, e nao por autorizacao: estavam testando
+       * a parede.
+       */
+      emailVerificadoEm: new Date(),
     },
     select: { id: true },
   });
