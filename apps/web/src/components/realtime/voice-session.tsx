@@ -64,6 +64,8 @@ export function VoiceSession() {
     if (!channelId || !media || !socket) return;
 
     let cancelled = false;
+    // Sair no meio da conexao derruba a sala na hora (ver `sinal` em room.ts).
+    const abortar = new AbortController();
 
     /**
      * `import()` dinamico DE PROPOSITO: `room.ts` arrasta o `livekit-client`
@@ -79,6 +81,7 @@ export function VoiceSession() {
           url: media.url,
           token: media.token,
           canPublish: media.canPublish,
+          sinal: abortar.signal,
           callbacks: {
             onSpeakingChange: (speaking) => {
               // O indicador continua sendo publicado pelo NOSSO gateway: a
@@ -278,6 +281,7 @@ export function VoiceSession() {
 
     return () => {
       cancelled = true;
+      abortar.abort();
       pararDiagnosticoRef.current?.();
       pararDiagnosticoRef.current = null;
       const handle = roomRef.current;

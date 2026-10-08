@@ -358,11 +358,21 @@ export async function connectVoiceRoom({
   token,
   canPublish,
   callbacks,
+  sinal,
 }: {
   url: string;
   token: string;
   canPublish: boolean;
   callbacks: VoiceRoomCallbacks;
+  /**
+   * Abortar = sair da sala JA, mesmo no meio da conexao.
+   *
+   * O handle so volta depois de microfone, filtro de ruido e detector de fala
+   * estarem prontos — segundos depois de o audio ja estar passando. Sem isto,
+   * quem desligava nessa janela continuava conectado (e transmitindo) ate a
+   * configuracao terminar, porque quem chamou ainda nao tinha o `disconnect`.
+   */
+  sinal?: AbortSignal;
 }): Promise<VoiceRoomHandle> {
   // Com ?debug=media na URL, o proprio SFU passa a relatar o que faz.
   if (mediaDebugEnabled()) setLogLevel("debug");
@@ -783,6 +793,16 @@ export async function connectVoiceRoom({
   let nivelTimer: ReturnType<typeof setInterval> | null = null;
   /** `disconnect()` foi chamado — nao tentar recuperar a conexao */
   let encerrado = false;
+
+  if (sinal?.aborted) throw new Error("conexao de voz cancelada");
+  sinal?.addEventListener(
+    "abort",
+    () => {
+      encerrado = true;
+      void room.disconnect();
+    },
+    { once: true },
+  );
   /** ha uma recuperacao de conexao em andamento */
   let recuperando = false;
 
@@ -1015,14 +1035,26 @@ export async function connectVoiceRoom({
     mediaWarn("falha ao conectar a sala de voz", String(erro));
     throw erro;
   }
+  if (sinal?.aborted) throw new Error("conexao de voz cancelada");
   mediaLog("conectado a sala", room.name);
   callbacks.onConnectionChange(true);
   publicarParticipantes();
 
-  // Politica de autoplay: precisa acontecer dentro do gesto que originou a
-  // entrada na call.
+  /**
+   * Politica de autoplay. SEM `await`: sem gesto recente do usuario, o
+   * `AudioContext.resume()` do Chrome fica pendente ate o proximo clique, e
+   * esperar aqui travava tudo o que vem depois — inclusive abrir o microfone.
+   * Na voz de servidor quase nunca acontecia (entrar e um clique); na chamada
+   * direta acontece sempre para quem LIGOU, porque o aceite chega pela rede,
+   * muitos segundos depois do clique em "ligar". Se o navegador bloquear, o
+   * proximo clique ou tecla na pagina libera (e o aviso de
+   * `AudioPlaybackStatusChanged` diz isso a pessoa).
+   */
   if (!room.canPlaybackAudio) {
-    await room.startAudio().catch(() => undefined);
+    void room.startAudio().catch(() => undefined);
+    const liberar = () => void room.startAudio().catch(() => undefined);
+    document.addEventListener("pointerdown", liberar, { once: true });
+    document.addEventListener("keydown", liberar, { once: true });
   }
 
   if (canPublish) {

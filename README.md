@@ -3123,10 +3123,19 @@ web, sem build novo.
 
 ### Limitacoes conhecidas
 
-- **Nao foi exercitado numa chamada real de duas pessoas** neste ambiente (sem
-  `.env`, banco nem LiveKit). Typecheck dos workspaces, a suite unitaria
-  inteira e os 22 testes novos passaram; os `verify-phase*` nao rodaram aqui
-  porque precisam dos servicos no ar.
+- **Exercitado de ponta a ponta so LOCALMENTE**: dois Chromium reais
+  (Playwright, microfone falso) contra gateway + web (`next build`) + LiveKit
+  1.8.4 `--dev` + Postgres. Coberto: ligar, cartao fora da DM, atender, os
+  dois publicando microfone no SFU, mudo, desligar esvaziando a sala, recusar e
+  cancelar. Nao foi testado contra a producao (Fly/Vercel/LiveKit Cloud), nem
+  com rede ruim ou celular. O teste achou e corrigiu dois bugs:
+  - quem LIGAVA nunca abria o microfone: `await room.startAudio()` ficava
+    pendente sem gesto recente do usuario (o aceite chega pela rede) e travava
+    o resto da conexao. Agora nao bloqueia, e o proximo clique libera o audio;
+  - desligar nos primeiros segundos deixava a conexao com o SFU aberta (e o
+    microfone transmitindo) ate a configuracao pos-conexao terminar. Agora um
+    `AbortSignal` derruba a sala na hora. A voz de servidor tinha a mesma
+    janela e recebeu a mesma correcao (`voice-session.tsx`).
 - **Bloquear no meio da chamada nao derruba o audio na hora.** O bloqueio fecha
   tocar/atender/renovar, mas o token ja emitido vale ate 1h e o gateway nao tira
   ninguem da sala `dm:<id>`. Fechar isso pede o `/internal` do bloqueio chamar

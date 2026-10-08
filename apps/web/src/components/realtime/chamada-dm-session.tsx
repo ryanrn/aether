@@ -139,6 +139,8 @@ export function ChamadaDmSession() {
   useEffect(() => {
     if (!dmId || !media || !socket || !outroId) return;
     let cancelado = false;
+    // Desligar no meio da conexao derruba a sala na hora (ver `sinal` em room.ts).
+    const abortar = new AbortController();
     const store = useChamadaDmStore.getState;
 
     import("@/lib/voice/room")
@@ -147,6 +149,7 @@ export function ChamadaDmSession() {
           url: media.url,
           token: media.token,
           canPublish: media.canPublish,
+          sinal: abortar.signal,
           callbacks: {
             // Sem indicador de fala publicado: so os dois estao na sala, e a
             // fala se ouve. Nada vai para o gateway.
@@ -205,6 +208,7 @@ export function ChamadaDmSession() {
 
     return () => {
       cancelado = true;
+      abortar.abort();
       const handle = roomRef.current;
       roomRef.current = null;
       store().setConectado(false);
