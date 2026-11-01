@@ -4,6 +4,7 @@ import { prisma } from "@aether/db";
 import {
   MESSAGE_PAGE_SIZE,
   SELECT_USUARIO_PUBLICO,
+  SELECT_MENCOES,
   toPublicMessage,
   type PublicMessage,
 } from "@aether/shared";
@@ -78,12 +79,14 @@ async function historicoInicial(
       author: {
         select: SELECT_USUARIO_PUBLICO,
       },
+      ...SELECT_MENCOES,
       replyTo: {
         select: {
           id: true,
           content: true,
           deletedAt: true,
           author: { select: { displayName: true } },
+          ...SELECT_MENCOES,
         },
       },
     },

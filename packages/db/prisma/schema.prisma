@@ -186,6 +186,7 @@ model User {
   bloqueiosFeitos    Block[]             @relation("Blocker")
   bloqueiosRecebidos Block[]             @relation("Blocked")
   reacoes            Reaction[]
+  mencoesRecebidas   MessageMention[]
   memberships        ServerMember[]
   ownedServers       Server[]            @relation("ServerOwner")
   assinatura         Subscription?
@@ -417,6 +418,7 @@ model Role {
 
   members    MemberRole[]
   overwrites ChannelOverwrite[] @relation("RoleOverwrite")
+  mencoes    MessageMention[]
 
   @@unique([serverId, name])
   @@index([serverId, position])
@@ -523,9 +525,14 @@ model Message {
   editedAt    DateTime?
   deletedAt   DateTime?
   createdAt   DateTime   @default(now())
+  /// `@everyone` valido (o autor tinha MENTION_EVERYONE no canal). Coluna, e
+  /// nao uma linha por membro em `MessageMention`: um @everyone num servidor
+  /// de mil pessoas seriam mil linhas por mensagem.
+  mencionaTodos Boolean  @default(false)
 
   reactions Reaction[]
   anexos    Attachment[]
+  mencoes   MessageMention[]
 
   @@index([channelId, createdAt])
   @@index([dmChannelId, createdAt])
@@ -586,6 +593,30 @@ model DmChannel {
   /// A busca "minhas conversas" olha as duas colunas; sem este, metade sairia
   /// de varredura sequencial. Mesma razao dos dois indices em Friendship.
   @@index([userBId])
+}
+
+/// Uma mencao VALIDA numa mensagem (P1-2): a uma pessoa OU a um cargo.
+///
+/// So entra aqui o que o gateway aceitou — pessoa que enxerga a conversa,
+/// cargo mencionado por quem tem MENTION_EVERYONE. O texto da mensagem guarda
+/// o marcador (`<@id>`, `<@&id>`); esta tabela e o que CONTA, e e por ela que
+/// o contador de mencoes e a tela sabem quem foi chamado.
+///
+/// Mesmo molde de `ReadState`: exatamente uma das duas colunas, por CHECK.
+model MessageMention {
+  id        String  @id @default(cuid())
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId    String?
+  role      Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@unique([messageId, roleId])
+  /// "minhas mencoes" percorre por pessoa e por cargo.
+  @@index([userId])
+  @@index([roleId])
 }
 
 /// Ate onde uma pessoa leu uma conversa (P1-3). Fonte das nao lidas que

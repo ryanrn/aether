@@ -11,7 +11,7 @@ import {
 } from "@/lib/chat/prefs";
 import { MessageGroup } from "@/components/chat/message-group";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
-import type { PublicUser } from "@aether/shared";
+import { SEM_MENCOES, type PublicUser } from "@aether/shared";
 import { cn } from "@/lib/utils";
 
 /**
@@ -213,6 +213,7 @@ function Preview({ user }: { user: PublicUser }) {
     createdAt: new Date(Date.now() - (5 - i) * 60000).toISOString(),
     editedAt: null,
     reactions: i === 1 ? [{ emoji: "\u{1F44B}", count: 2, mine: false }] : [],
+    mencoes: SEM_MENCOES,
     anexos: [],
     replyTo: null,
   });

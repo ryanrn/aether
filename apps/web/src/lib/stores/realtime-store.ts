@@ -19,6 +19,8 @@ import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import type { MediaDebug } from "@/lib/voice/media-debug";
 import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
+import type { PessoaMencionavel } from "@/lib/chat/autocompletar-mencao";
+import { SEM_MENCOES } from "@aether/shared";
 
 /**
  * Estado global de tempo real: presenca, voz e mensagens.
@@ -235,6 +237,11 @@ interface RealtimeState {
    * do SSR); o `<MessageGroup>` so LE, para o nome do autor no chat.
    */
   corPorMembro: Record<string, string>;
+  /**
+   * Quem o autocompletar de `@` oferece no servidor aberto. Mesma origem das
+   * cores: o `<MemberPanel>`, que ja recebe os membros do SSR.
+   */
+  pessoasParaMencao: PessoaMencionavel[];
   /** canal aberto agora — mensagem que chega nele ja nasce lida */
   activeChannelId: string | null;
   /** mensagens nao lidas por canal */
@@ -250,6 +257,13 @@ interface RealtimeState {
    * Conversa direta nao entra: ela nao pertence a servidor nenhum.
    */
   serverDoCanal: Record<string, string>;
+  /**
+   * Quantas das nao lidas de cada conversa chamam voce (P1-2). Subconjunto de
+   * `unread`: sempre zera junto com ela.
+   */
+  mencoes: Record<string, number>;
+  /** servidor -> os seus cargos nele, para reconhecer `@cargo` ao vivo. */
+  meusCargos: Record<string, string[]>;
 
   /**
    * As conversas diretas conhecidas, `dmId -> a outra pessoa`.
@@ -309,6 +323,7 @@ interface RealtimeState {
   marcarLidaAqui: (conversationId: string) => void;
   /** Substitui o mapa inteiro — chamado pelo `<MemberPanel>` do servidor aberto. */
   definirCoresDeMembro: (cores: Record<string, string>) => void;
+  definirPessoasParaMencao: (pessoas: PessoaMencionavel[]) => void;
   receiveMessage: (
     message: PublicMessage,
     nonce: string | null,
@@ -460,10 +475,13 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   roomControls: null,
   messages: {},
   corPorMembro: {},
+  pessoasParaMencao: [],
   history: {},
   activeChannelId: null,
   unread: {},
   serverDoCanal: {},
+  mencoes: {},
+  meusCargos: {},
   conversasDm: {},
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
@@ -772,7 +790,8 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
     set((state) => {
       if (!activeChannelId) return { activeChannelId };
       const { [activeChannelId]: _read, ...rest } = state.unread;
-      return { activeChannelId, unread: rest };
+      const { [activeChannelId]: _vista, ...mencoes } = state.mencoes;
+      return { activeChannelId, unread: rest, mencoes };
     }),
 
   /**
@@ -838,28 +857,36 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
       return mudou ? { messages: proximas } : {};
     }),
 
-  hidratarNaoLidas: ({ naoLidas, serverDoCanal }) =>
+  hidratarNaoLidas: ({ naoLidas, serverDoCanal, mencoes, meusCargos }) =>
     set((state) => {
       /**
        * A conversa aberta fica de fora: quem esta olhando para ela ja leu, e
        * a tela vai marcar no servidor logo em seguida. Contar ali faria o
        * numero piscar e sumir.
        */
-      const { [state.activeChannelId ?? ""]: _aberta, ...resto } = naoLidas;
+      const aberta = state.activeChannelId ?? "";
+      const { [aberta]: _aberta, ...resto } = naoLidas;
+      const { [aberta]: _abertaMencoes, ...mencoesResto } = mencoes;
       return {
         unread: resto,
+        mencoes: mencoesResto,
+        meusCargos,
         serverDoCanal: { ...state.serverDoCanal, ...serverDoCanal },
       };
     }),
 
   marcarLidaAqui: (conversationId) =>
     set((state) => {
-      if (!state.unread[conversationId]) return {};
+      if (!state.unread[conversationId] && !state.mencoes[conversationId]) {
+        return {};
+      }
       const { [conversationId]: _lida, ...rest } = state.unread;
-      return { unread: rest };
+      const { [conversationId]: _vista, ...mencoes } = state.mencoes;
+      return { unread: rest, mencoes };
     }),
 
   definirCoresDeMembro: (cores) => set({ corPorMembro: cores }),
+  definirPessoasParaMencao: (pessoasParaMencao) => set({ pessoasParaMencao }),
 
   receiveMessage: (message, nonce, serverId) =>
     set((state) => {
@@ -884,6 +911,22 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
             }
           : state.unread;
 
+      const chamaVoce =
+        isElsewhere &&
+        isFromSomeoneElse &&
+        mencionaVoce(
+          message,
+          state.selfUserId,
+          serverId === null ? null : (state.meusCargos[serverId] ?? []),
+        );
+      const mencoes = chamaVoce
+        ? {
+            ...state.mencoes,
+            [message.conversationId]:
+              (state.mencoes[message.conversationId] ?? 0) + 1,
+          }
+        : state.mencoes;
+
       /**
        * Conversa direta (`serverId` nulo) de outra pessoa: registra a conversa
        * pelo autor. E o que da rosto ao contador de nao-lidas — e, se a
@@ -904,6 +947,7 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
           [message.conversationId]: mergeById(withoutPending, [message]),
         },
         unread,
+        mencoes,
         conversasDm,
         /**
          * O mapa e alimentado SEMPRE, mesmo quando a mensagem nao conta como
@@ -1061,6 +1105,48 @@ export function useUnreadByServer(): Record<string, number> {
         const serverId = state.serverDoCanal[channelId];
         // Sem origem conhecida = conversa direta, ou canal de que ainda nao
         // chegou mensagem nenhuma nesta sessao. Nao pertence a servidor algum.
+        if (!serverId) continue;
+        total[serverId] = (total[serverId] ?? 0) + quantas;
+      }
+      return total;
+    }),
+  );
+}
+
+/**
+ * A mensagem chama esta pessoa? Pela pessoa, por `@everyone` ou por um dos
+ * cargos dela. `cargos` nulo = conversa direta, onde toda mensagem e para
+ * voce.
+ */
+export function mencionaVoce(
+  message: Pick<PublicMessage, "mencoes">,
+  selfUserId: string | null,
+  cargos: string[] | null,
+): boolean {
+  if (cargos === null) return true;
+  /**
+   * `?? SEM_MENCOES`: mensagem vinda de um gateway anterior ao P1-2 nao traz o
+   * campo. Web e gateway nao sobem juntos, e sem isto a janela entre os dois
+   * deploys derrubaria o chat inteiro.
+   */
+  const { usuarios, todos, cargos: chamados } = message.mencoes ?? SEM_MENCOES;
+  if (todos) return true;
+  if (selfUserId && usuarios.some((u) => u.id === selfUserId)) return true;
+  return chamados.some((c) => cargos.includes(c.id));
+}
+
+/** Mencoes nao lidas por conversa. */
+export function useMencoesCounts(): Record<string, number> {
+  return useRealtimeStore((state) => state.mencoes);
+}
+
+/** Mencoes por servidor — derivadas, como `useUnreadByServer`. */
+export function useMencoesByServer(): Record<string, number> {
+  return useRealtimeStore(
+    useShallow((state) => {
+      const total: Record<string, number> = {};
+      for (const [channelId, quantas] of Object.entries(state.mencoes)) {
+        const serverId = state.serverDoCanal[channelId];
         if (!serverId) continue;
         total[serverId] = (total[serverId] ?? 0) + quantas;
       }

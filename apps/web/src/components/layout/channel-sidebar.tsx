@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useEntrarNaVoz } from "@/lib/voice/use-entrar-na-voz";
 import {
+  useMencoesCounts,
   useUnreadCounts,
   useVoiceParticipants,
 } from "@/lib/stores/realtime-store";
@@ -514,6 +515,7 @@ function ChannelRow({
   // Quem esta na call vem do gateway: e ele que sabe, nao o banco.
   const connected = useVoiceParticipants(channel.id);
   const unread = useUnreadCounts()[channel.id] ?? 0;
+  const mencoes = useMencoesCounts()[channel.id] ?? 0;
   const nomeIcone: AetherIconName = channel.isPrivate
     ? "lock"
     : channel.type === "VOICE"
@@ -683,10 +685,21 @@ function ChannelRow({
               {channel.jogo ? "grupo" : "tmp"}
             </span>
           ) : null}
+          {mencoes > 0 ? (
+            <span
+              title={`${mencoes} mencao${mencoes > 1 ? "oes" : ""} a voce`}
+              className="ml-auto shrink-0 rounded-full bg-signal-dnd px-1.5 py-px font-mono text-[10px] font-bold leading-4 text-white"
+            >
+              @{mencoes > 99 ? "99+" : mencoes}
+            </span>
+          ) : null}
           {unread > 0 ? (
             <span
               title={`${unread} mensagem${unread > 1 ? "ns" : ""} nao lida${unread > 1 ? "s" : ""}`}
-              className="ml-auto shrink-0 rounded-full bg-accent-600 px-1.5 py-px font-mono text-[10px] font-semibold leading-4 text-base-950"
+              className={cn(
+                "shrink-0 rounded-full bg-accent-600 px-1.5 py-px font-mono text-[10px] font-semibold leading-4 text-base-950",
+                mencoes > 0 ? "ml-1" : "ml-auto",
+              )}
             >
               {unread > 99 ? "99+" : unread}
             </span>

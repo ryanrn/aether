@@ -7,7 +7,7 @@ import { AnexosDaMensagem } from "@/components/chat/anexos-pendentes";
 import { DenunciarDialog } from "@/components/chat/denunciar-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSocket } from "@/components/realtime/realtime-provider";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { mencionaVoce, useRealtimeStore } from "@/lib/stores/realtime-store";
 import {
   ContextMenu,
   ItemDoMenu,
@@ -46,6 +46,21 @@ export function MessageItem({
   const time = new Date(message.createdAt);
   const socket = useSocket();
   const selfUserId = useRealtimeStore((s) => s.selfUserId);
+  /**
+   * A mensagem chama voce? Em conversa direta so a mencao EXPLICITA destaca
+   * (cargos vazios): la toda mensagem conta no contador, mas pintar todas nao
+   * diria nada. A propria mensagem nunca destaca.
+   */
+  const chamaVoce = useRealtimeStore((s) => {
+    if (message.author.id === s.selfUserId) return false;
+    const serverId = s.serverDoCanal[message.conversationId] ?? s.serverId;
+    const ehDm = s.conversasDm[message.conversationId] !== undefined;
+    return mencionaVoce(
+      message,
+      s.selfUserId,
+      ehDm || !serverId ? [] : (s.meusCargos[serverId] ?? []),
+    );
+  });
   const retrySending = useRealtimeStore((s) => s.retrySending);
   const failPending = useRealtimeStore((s) => s.failPending);
   const removerMensagemLocal = useRealtimeStore((s) => s.removerMensagem);
@@ -164,6 +179,8 @@ export function MessageItem({
       className={cn(
         "chat-msg group/msg relative rounded-md px-2 transition-colors hover:bg-base-900/45",
         message.pending && "opacity-55",
+        chamaVoce &&
+          "bg-accent-500/[0.07] shadow-[inset_2px_0_0_var(--color-accent-400)] hover:bg-accent-500/[0.11]",
       )}
     >
       {message.replyTo ? (
@@ -251,7 +268,7 @@ export function MessageItem({
             jumbo && "chat-msg__texto--jumbo leading-none",
           )}
         >
-          <TextoDeMensagem texto={message.content} />
+          <TextoDeMensagem texto={message.content} mencoes={message.mencoes} />
         </p>
       )}
 

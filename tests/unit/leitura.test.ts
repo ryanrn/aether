@@ -116,6 +116,44 @@ describe("calcularNaoLidas", () => {
   });
 });
 
+describe("calcularNaoLidas — mencoes (P1-2)", () => {
+  it("conta mencao so onde ha nao lida, por pessoa, @everyone ou cargo seu; DM conta tudo", async () => {
+    db.serverMember.findMany.mockResolvedValue([{ serverId: "srv", joinedAt: d("08:00") }]);
+    db.dmChannel.findMany.mockResolvedValue([{ id: "dm-1", createdAt: d("07:00") }]);
+    db.readState.findMany.mockResolvedValue([]);
+    loadMemberAccess.mockResolvedValue({ serverId: "srv", roleIds: ["mod"] });
+    getChannelPermissionMap.mockResolvedValue(
+      new Map([
+        ["com", combine("VIEW_CHANNEL")],
+        ["sem", combine("VIEW_CHANNEL")],
+      ]),
+    );
+    db.channel.findMany.mockResolvedValue([
+      { id: "com", createdAt: d("06:00") },
+      { id: "sem", createdAt: d("06:00") },
+    ]);
+    db.message.count.mockImplementation(async ({ where }) => {
+      if (where.OR) return 1; // contagem de mencoes
+      return where.channelId === "com" ? 4 : where.channelId === "sem" ? 0 : 3;
+    });
+
+    const r = await calcularNaoLidas("eu");
+
+    expect(r.mencoes).toEqual({ com: 1, "dm-1": 3 });
+    expect(r.meusCargos).toEqual({ srv: ["mod"] });
+    const consultaDeMencao = db.message.count.mock.calls
+      .map((c) => c[0].where)
+      .filter((w) => w.OR);
+    // So o canal com nao lida pergunta ao banco; DM nao pergunta.
+    expect(consultaDeMencao).toHaveLength(1);
+    expect(consultaDeMencao[0]!.OR).toEqual([
+      { mencionaTodos: true },
+      { mencoes: { some: { userId: "eu" } } },
+      { mencoes: { some: { roleId: { in: ["mod"] } } } },
+    ]);
+  });
+});
+
 describe("marcarLeitura", () => {
   beforeEach(() => {
     autorizarConversa.mockResolvedValue({
