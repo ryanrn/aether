@@ -90,6 +90,8 @@ model User {
   /// nesta o dono comprovado e o proprio Google, nao um link de confirmacao
   /// nosso — por isso o vinculo automatico por e-mail (ver `google.ts`) e
   /// seguro: o Google so devolve `email_verified: true` para quem provou dono.
+  /// Conta local que nunca confirmou o e-mail e assumida com limpeza, nao
+  /// vinculada (ver `services/google-auth.ts`).
   googleId                  String?    @unique
   /// Aceite dos Termos/Privacidade. `aceitouTermosEm` nulo, ou `termosVersao`
   /// diferente da versao atual em `@aether/shared/legal`, dispara o modal de

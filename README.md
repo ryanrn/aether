@@ -311,6 +311,13 @@ db:deploy` antes de usar. Sem `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` no
   `email_verified: true` para quem provou ser dono, mesma confianca que ja
   damos ao nosso proprio link de confirmacao por e-mail. Mesmo padrao de
   GitHub/Discord/Slack. Decisao confirmada com o dono do produto.
+  **Correcao de 01/11/2026:** isso so vale para conta que JA confirmou o
+  e-mail. Conta que nunca confirmou e assumida com limpeza
+  (`assumirContaNaoVerificada` em `services/google-auth.ts`): numa transacao
+  so, perde senha, sessoes, 2FA e codigos de backup, links de redefinicao e
+  de verificacao pendentes e codigos de login do desktop. Fecha o
+  pre-sequestro de conta (cadastrar o e-mail da vitima com senha propria e
+  esperar ela entrar com o Google). Teste: `tests/unit/google-vinculo.test.ts`.
 - **Login Google nunca pula o 2FA.** Se a conta ja tem TOTP habilitado, o
   callback cai no MESMO cookie pendente (`aether_2fa_pendente`) que o login
   por senha usa — `verificarTotpDoLoginAction` nao precisou mudar uma linha;
@@ -337,6 +344,22 @@ db:deploy` antes de usar. Sem `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` no
   verdade (fetch); testar isso exigiria mock de rede, ainda nao escrito.
 - **Cancelar no meio ("voltar") manda pra `/login?erro=google&motivo=...`**
   sem UI dedicada pra explicar o motivo — a pessoa so ve o formulario de novo.
+- **Assumir conta nao verificada (01/11):**
+  - Conta antiga que era mesmo da pessoa, mas nunca confirmou o e-mail, perde
+    a senha e o 2FA ao entrar pelo Google pela primeira vez, sem aviso na
+    tela. Ela segue entrando pelo Google e pode criar senha por "esqueci a
+    senha"; o evento fica so no log estruturado (`web.google.assumiu_conta`),
+    nao no `AuditLog`.
+  - O que a conta acumulou antes (servidores, amigos, conexoes como Spotify)
+    continua nela. Se quem cadastrou era um atacante, isso fica para o dono
+    da caixa limpar.
+  - Revogar a `Session` derruba o web na proxima requisicao; um socket do
+    gateway ja aberto so cai na revalidacao periodica da fase 7b.
+  - Uma conta "verificada" porque a vitima clicou num link de confirmacao de
+    uma conta que ela nao criou continua sendo vinculada. Fechar isso exigiria
+    a confirmacao de e-mail pedir a senha.
+  - Validado so por teste unitario com banco dublado; nao houve teste ponta a
+    ponta com credenciais Google reais.
 
 ---
 
