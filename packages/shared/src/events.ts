@@ -238,6 +238,14 @@ export type MessageHistoryAck =
  */
 export type CodigoDeRecusaDeExclusao = "nao_encontrada" | "sem_permissao";
 
+/** `read:state`: quantas nao lidas por conversa, e de que servidor e cada canal. */
+export interface NaoLidasIniciais {
+  /** conversa -> quantas. So entram as que tem pelo menos uma. */
+  naoLidas: Record<string, number>;
+  /** canal -> servidor, de todo canal de texto visivel */
+  serverDoCanal: Record<string, string>;
+}
+
 export type DeleteMessageAck =
   | { ok: true }
   | { ok: false; error: string; codigo?: CodigoDeRecusaDeExclusao };
@@ -444,6 +452,23 @@ export interface ServerToClientEvents {
     conversationId: string;
   }) => void;
   /**
+   * As nao lidas de tudo que a pessoa enxerga, mandado uma vez por conexao.
+   * Substitui o contador em memoria, que zerava a cada recarregar.
+   *
+   * `serverDoCanal` vem junto porque o cliente so conhece a arvore do
+   * servidor aberto: sem ele, nao saberia somar no icone de um servidor que
+   * nunca abriu. Conversa direta nao aparece nele.
+   */
+  "read:state": (payload: NaoLidasIniciais) => void;
+  /**
+   * Voce leu uma conversa em OUTRA aba ou aparelho. Vai so para a sua sala
+   * pessoal; o cliente zera o contador dela.
+   */
+  "read:updated": (payload: {
+    conversationId: string;
+    lastReadAt: string;
+  }) => void;
+  /**
    * Voce foi movido para outro canal de voz por um moderador.
    *
    * Vem com credenciais novas porque cada canal e uma sala propria no SFU: o
@@ -591,6 +616,15 @@ export interface ClientToServerEvents {
    * servidor, quem tem MANAGE_MESSAGES pode apagar a de outro tambem. DM nao
    * tem moderador: so o autor.
    */
+  /**
+   * Marca a conversa como lida ate a mensagem mais nova que a tela mostra.
+   * O servidor confere que a pessoa enxerga a conversa e que a mensagem e
+   * dela; a data salva so avanca, nunca volta.
+   */
+  "read:mark": (
+    payload: { conversationId: string; messageId: string },
+    ack?: (result: { ok: boolean }) => void,
+  ) => void;
   "message:delete": (
     payload: { messageId: string },
     ack: (result: DeleteMessageAck) => void,

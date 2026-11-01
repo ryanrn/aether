@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import type {
   MediaGrant,
   MusicActivity,
+  NaoLidasIniciais,
   PresenceEntry,
   PublicMessage,
   PublicReaction,
@@ -299,6 +300,13 @@ interface RealtimeState {
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   aplicarReacoes: (messageId: string, reactions: PublicReaction[]) => void;
   removerMensagem: (messageId: string) => void;
+  /**
+   * As nao lidas salvas no servidor (`read:state`), que chegam a cada conexao.
+   * SUBSTITUEM o contador em memoria: o servidor e a fonte de verdade.
+   */
+  hidratarNaoLidas: (estado: NaoLidasIniciais) => void;
+  /** A conversa foi lida em outra aba ou aparelho (`read:updated`). */
+  marcarLidaAqui: (conversationId: string) => void;
   /** Substitui o mapa inteiro — chamado pelo `<MemberPanel>` do servidor aberto. */
   definirCoresDeMembro: (cores: Record<string, string>) => void;
   receiveMessage: (
@@ -470,17 +478,11 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         ? { serverId }
         : {
             /**
-             * `unread` zera porque o cliente so conhece a arvore do servidor
-             * aberto — mas as nao-lidas de DM ficam: conversa direta nao e de
-             * servidor nenhum, e o contador dela nao pode piscar e sumir toda
-             * vez que voce entra num servidor.
+             * `unread` e `serverDoCanal` NAO zeram mais (P1-3). Zeravam porque
+             * o cliente so conhecia a arvore do servidor aberto; agora o
+             * `read:state` traz as nao lidas e a origem de todo canal visivel,
+             * e trocar de servidor apagaria o contador do icone dos outros.
              */
-            unread: Object.fromEntries(
-              Object.keys(state.conversasDm)
-                .filter((id) => state.unread[id])
-                .map((id) => [id, state.unread[id]!]),
-            ),
-            serverDoCanal: {},
             activeChannelId: null,
             serverId,
             presence: {},
@@ -834,6 +836,27 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         proximas[conversa] = mudouAqui ? nova : lista;
       }
       return mudou ? { messages: proximas } : {};
+    }),
+
+  hidratarNaoLidas: ({ naoLidas, serverDoCanal }) =>
+    set((state) => {
+      /**
+       * A conversa aberta fica de fora: quem esta olhando para ela ja leu, e
+       * a tela vai marcar no servidor logo em seguida. Contar ali faria o
+       * numero piscar e sumir.
+       */
+      const { [state.activeChannelId ?? ""]: _aberta, ...resto } = naoLidas;
+      return {
+        unread: resto,
+        serverDoCanal: { ...state.serverDoCanal, ...serverDoCanal },
+      };
+    }),
+
+  marcarLidaAqui: (conversationId) =>
+    set((state) => {
+      if (!state.unread[conversationId]) return {};
+      const { [conversationId]: _lida, ...rest } = state.unread;
+      return { unread: rest };
     }),
 
   definirCoresDeMembro: (cores) => set({ corPorMembro: cores }),

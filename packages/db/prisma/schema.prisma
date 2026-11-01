@@ -177,6 +177,7 @@ model User {
   verificacoesEmail  VerificacaoEmail[]
   codigosDeBackup2fa TotpBackupCode[]
   codigosLoginDesktop CodigoLoginDesktop[]
+  leituras           ReadState[]
   denunciasFeitas    Denuncia[]         @relation("DenunciaReporter")
   friendsAsRequester Friendship[]        @relation("FriendshipRequester")
   friendsAsAddressee Friendship[]        @relation("FriendshipAddressee")
@@ -471,6 +472,7 @@ model Channel {
   messages   Message[]
   overwrites ChannelOverwrite[]
   webhooks   Webhook[]
+  leituras   ReadState[]
 
   @@index([serverId, position])
   @@index([categoryId])
@@ -578,11 +580,47 @@ model DmChannel {
   createdAt DateTime @default(now())
 
   messages Message[]
+  leituras ReadState[]
 
   @@unique([userAId, userBId])
   /// A busca "minhas conversas" olha as duas colunas; sem este, metade sairia
   /// de varredura sequencial. Mesma razao dos dois indices em Friendship.
   @@index([userBId])
+}
+
+/// Ate onde uma pessoa leu uma conversa (P1-3). Fonte das nao lidas que
+/// sobrevivem a recarregar e valem em todo aparelho.
+///
+/// MESMO MOLDE da `Message`: um canal de servidor OU uma conversa direta,
+/// nunca os dois, nunca nenhum — garantido por CHECK no banco, nao por
+/// convencao (ver a migracao `..._read_state`).
+///
+/// `lastReadAt` e uma DATA, e nao o id da ultima mensagem lida: os ids sao
+/// `cuid`, que nao ordenam no tempo. Contar "o que chegou depois" vira um range
+/// no indice `(channelId, createdAt)` que a `Message` ja tem.
+///
+/// Linha ausente nao e "nada lido": a contagem comeca de quando a pessoa ganhou
+/// acesso (entrada no servidor, criacao do canal ou da conversa). A migracao
+/// preenche as linhas de quem ja tinha acesso, com `lastReadAt` = momento da
+/// migracao, para o primeiro acesso depois do deploy nao acender o historico
+/// inteiro como nao lido.
+model ReadState {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId   String?
+  channel     Channel?   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  dmChannelId String?
+  dmChannel   DmChannel? @relation(fields: [dmChannelId], references: [id], onDelete: Cascade)
+  lastReadAt  DateTime
+  updatedAt   DateTime   @updatedAt
+
+  /// Uma linha por pessoa e conversa. Postgres trata NULL como distinto, entao
+  /// cada unique so morde quando a sua coluna esta preenchida.
+  @@unique([userId, channelId])
+  @@unique([userId, dmChannelId])
+  @@index([channelId])
+  @@index([dmChannelId])
 }
 
 model Invite {
