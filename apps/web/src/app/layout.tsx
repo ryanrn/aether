@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, JetBrains_Mono, Rubik } from "next/font/google";
+import localFont from "next/font/local";
 import { BRAND } from "@aether/shared";
 import "./globals.css";
 import { TitleBar } from "@/components/layout/title-bar";
@@ -20,9 +20,17 @@ import { SCRIPT_APARENCIA } from "@/components/ui/aparencia";
  *
  * Saiu do Inter porque Inter e a fonte padrao de todo mundo — correta e sem
  * identidade nenhuma.
+ *
+ * ARQUIVOS LOCAIS (`./fonts`), e nao `next/font/google`. Este baixava as fontes
+ * do Google a cada build, e em 01/11/2026 o Google passou a devolver, as vezes,
+ * uma resposta que o carregador do Next nao entende: o build quebrava no CI e na
+ * Vercel sem nada ter mudado no codigo. Os `.woff2` sao os mesmos que o Google
+ * servia (subconjunto `latin`), com as licencas OFL ao lado. Para trocar de
+ * versao, baixe de novo do Google Fonts e substitua os arquivos.
  */
-const rubik = Rubik({
-  subsets: ["latin"],
+const rubik = localFont({
+  src: "./fonts/rubik-variable-latin.woff2",
+  weight: "300 900",
   variable: "--font-sans-ui",
   display: "swap",
 });
@@ -31,8 +39,11 @@ const rubik = Rubik({
  * O caractere "gamer" mora AQUI, na marca — que aparece grande e em dois
  * lugares. Custo zero de legibilidade, e e onde a identidade e vista.
  */
-const chakra = Chakra_Petch({
-  subsets: ["latin"],
+const chakra = localFont({
+  src: [
+    { path: "./fonts/chakra-petch-600-latin.woff2", weight: "600" },
+    { path: "./fonts/chakra-petch-700-latin.woff2", weight: "700" },
+  ],
   /**
    * Nome DIFERENTE do token `--font-brand` do tema, de proposito. Com o mesmo
    * nome nos dois lados, o `@theme` vira `--font-brand: var(--font-brand)` —
@@ -40,14 +51,14 @@ const chakra = Chakra_Petch({
    */
   variable: "--font-brand-face",
   display: "swap",
-  weight: ["600", "700"],
 });
 
-const jetbrains = JetBrains_Mono({
-  subsets: ["latin"],
+/** Arquivo variavel: o mesmo cobre os pesos 400 e 500 que o app usa. */
+const jetbrains = localFont({
+  src: "./fonts/jetbrains-mono-variable-latin.woff2",
+  weight: "400 500",
   variable: "--font-mono-jet",
   display: "swap",
-  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
