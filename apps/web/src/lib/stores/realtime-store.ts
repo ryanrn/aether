@@ -18,6 +18,7 @@ import type { RemoteCamera, RemoteScreenShare } from "@/lib/voice/room";
 import type { ConnectionStats } from "@/lib/voice/connection-stats";
 import type { MediaDebug } from "@/lib/voice/media-debug";
 import { DEFAULT_PRESET, type SharePresetId } from "@/lib/voice/screen-share";
+import { trechoDeResposta } from "@aether/shared";
 
 /**
  * Estado global de tempo real: presenca, voz e mensagens.
@@ -299,6 +300,12 @@ interface RealtimeState {
   seedMessages: (channelId: string, messages: PublicMessage[]) => void;
   aplicarReacoes: (messageId: string, reactions: PublicReaction[]) => void;
   removerMensagem: (messageId: string) => void;
+  aplicarEdicao: (edicao: {
+    messageId: string;
+    conversationId: string;
+    content: string;
+    editedAt: string;
+  }) => void;
   /** Substitui o mapa inteiro — chamado pelo `<MemberPanel>` do servidor aberto. */
   definirCoresDeMembro: (cores: Record<string, string>) => void;
   receiveMessage: (
@@ -834,6 +841,41 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
         proximas[conversa] = mudouAqui ? nova : lista;
       }
       return mudou ? { messages: proximas } : {};
+    }),
+
+  /**
+   * Troca o texto de uma mensagem editada. Diferente de `removerMensagem`, o
+   * evento traz a conversa, entao so ELA e percorrida — resposta so cita
+   * mensagem da mesma conversa (o gateway garante no envio).
+   *
+   * Duas coisas mudam: a propria mensagem e o trecho de toda resposta que a
+   * cita, refeito pela mesma regra do servidor (`trechoDeResposta`).
+   *
+   * `editedAt` mais antigo que o que ja esta na tela e ignorado: dois eventos
+   * de edicao podem chegar fora de ordem, e o velho nao pode desfazer o novo.
+   */
+  aplicarEdicao: ({ messageId, conversationId, content, editedAt }) =>
+    set((state) => {
+      const lista = state.messages[conversationId];
+      if (!lista) return {};
+      let mudou = false;
+      const nova = lista.map((m) => {
+        if (m.id === messageId) {
+          if (m.editedAt && m.editedAt >= editedAt) return m;
+          mudou = true;
+          return { ...m, content, editedAt };
+        }
+        if (m.replyTo?.id === messageId && !m.replyTo.apagada) {
+          const trecho = trechoDeResposta(content);
+          if (trecho === m.replyTo.trecho) return m;
+          mudou = true;
+          return { ...m, replyTo: { ...m.replyTo, trecho } };
+        }
+        return m;
+      });
+      return mudou
+        ? { messages: { ...state.messages, [conversationId]: nova } }
+        : {};
     }),
 
   definirCoresDeMembro: (cores) => set({ corPorMembro: cores }),
