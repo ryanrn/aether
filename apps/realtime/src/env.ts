@@ -23,6 +23,23 @@ if (authSecret.length < 32) {
 }
 
 /**
+ * Credencial da porta interna (`/internal/*`), separada do `AUTH_SECRET`.
+ * Opcional para a transicao nao derrubar producao: sem ela, a porta segue
+ * aceitando so o `AUTH_SECRET` (comportamento antigo). Com ela, o legado vale
+ * ate `INTERNAL_API_ACEITA_LEGADO=nao`. Ver `internal-auth.ts`.
+ */
+const internalApiSecret = process.env.INTERNAL_API_SECRET || null;
+if (internalApiSecret !== null && internalApiSecret.length < 32) {
+  throw new Error("INTERNAL_API_SECRET curto demais (minimo 32 caracteres).");
+}
+if (internalApiSecret !== null && internalApiSecret === authSecret) {
+  // Mesmo valor nos dois e ter um segredo so com dois nomes.
+  throw new Error("INTERNAL_API_SECRET precisa ser diferente do AUTH_SECRET.");
+}
+const internalApiAceitaLegado =
+  process.env.INTERNAL_API_ACEITA_LEGADO?.trim().toLowerCase() !== "nao";
+
+/**
  * LiveKit e OPCIONAL de proposito. Sem as chaves o gateway continua subindo e
  * registrando ocupacao de canal — o app fica exatamente como estava antes da
  * fase 4, so sem audio. Falhar o boot inteiro por falta de uma credencial de
@@ -90,6 +107,10 @@ export const env = {
   livekit,
   /** so validamos a presenca: quem usa o segredo e @aether/access */
   authSecret,
+  /** null = porta interna ainda so no `AUTH_SECRET` (antes da transicao) */
+  internalApiSecret,
+  /** false fecha a porta interna para o `AUTH_SECRET` (fim da transicao) */
+  internalApiAceitaLegado,
   databaseUrl: required("DATABASE_URL"),
   port: Number(process.env.REALTIME_PORT ?? 4000),
   /** 0 = sem teto; ver o comentario acima da constante */
