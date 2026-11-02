@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { esquecerPerfil } from "@/lib/perfil-cache";
 import {
   COSMETIC_TYPES,
   formatarMoedas,
@@ -201,6 +202,8 @@ export function LojaScreen({
       if (!r.ok) {
         setEquipado((e) => ({ ...e, [tipo]: anterior }));
         setErro(r.error);
+      } else {
+        esquecerPerfil(user.id);
       }
     });
   }

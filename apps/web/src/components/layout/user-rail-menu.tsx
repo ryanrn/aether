@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { preCarregarPerfil } from "@/lib/perfil-cache";
 import type { PublicUser } from "@aether/shared";
 import { logoutAction } from "@/server/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
@@ -70,6 +71,7 @@ export function UserRailMenu({
         ref={botaoRef}
         type="button"
         onClick={abrir}
+        onPointerEnter={() => preCarregarPerfil(user.id)}
         title={`${user.displayName} — conta e configuracoes`}
         aria-label="Sua conta e configuracoes"
         className={cn(

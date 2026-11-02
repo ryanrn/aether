@@ -34,6 +34,7 @@ export function MessageGroup({
   grupo,
   ehConversaDireta = false,
   onAbrirPerfil,
+  onPreCarregarPerfil,
   onResponder,
   onIrParaMensagem,
 }: {
@@ -47,6 +48,8 @@ export function MessageGroup({
   ehConversaDireta?: boolean;
   /** ausente = so no preview de configuracoes, onde o cartao nao faz sentido */
   onAbrirPerfil?: (user: PublicUser, ancora: DOMRect) => void;
+  /** ponteiro no avatar/nome -> o cartao abre ja com banner */
+  onPreCarregarPerfil?: (userId: string) => void;
   onResponder?: (message: GrupoDeMensagens["mensagens"][number]) => void;
   onIrParaMensagem?: (id: string) => void;
 }) {
@@ -80,6 +83,7 @@ export function MessageGroup({
         type="button"
         onClick={abrir}
         onMouseDown={semPropagar}
+        onPointerEnter={() => onPreCarregarPerfil?.(grupo.autor.id)}
         aria-label={`Perfil de ${grupo.autor.displayName}`}
         className="absolute left-4 top-0 rounded-full transition-transform hover:scale-105"
       >
@@ -112,6 +116,7 @@ export function MessageGroup({
           type="button"
           onClick={abrir}
           onMouseDown={semPropagar}
+          onPointerEnter={() => onPreCarregarPerfil?.(grupo.autor.id)}
           className={cn(
             "text-[13px] font-semibold hover:underline",
             !corDoCargo && "text-ink-100",

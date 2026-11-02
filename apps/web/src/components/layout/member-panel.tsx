@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { preCarregarPerfil } from "@/lib/perfil-cache";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import {
   corDoCargoPrincipal,
@@ -239,6 +240,7 @@ export function MemberPanel({
                             type="button"
                             title={member.nickname ?? member.user.displayName}
                             onClick={(event) => abrirCartao(member, event)}
+                            onPointerEnter={() => preCarregarPerfil(member.user.id)}
                             className="rounded-full transition-transform hover:scale-110"
                           >
                             <Avatar
@@ -412,6 +414,7 @@ function MemberRow({
         <button
           type="button"
           onClick={(event) => onOpenCard(member, event)}
+          onPointerEnter={() => preCarregarPerfil(member.user.id)}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
           <Avatar

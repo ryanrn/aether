@@ -379,7 +379,7 @@ export function UserActivityCard({
       >
         {imagens.efeito ? <CamadaDeEfeito url={imagens.efeito} /> : null}
         {/* Faixa superior: o banner, ou so cor, para o avatar se apoiar. */}
-        <FaixaDeBanner url={imagens.banner} />
+        <FaixaDeBanner url={imagens.banner} pronto={imagens.pronto} />
 
         <div className="px-3.5 pb-3.5">
           <div className="-mt-6 mb-2.5">

@@ -25,12 +25,22 @@ export function FundoDePlaca({ url }: { url: string }) {
 
 /**
  * A faixa do topo dos cartoes compactos (lista de membros, o proprio
- * usuario): o banner, se houver, ou a faixa de cor de sempre. Sobe de 48 para
- * 64px com banner — a 3:1 a arte cortaria demais numa faixa tao baixa.
+ * usuario): o banner, se houver, ou a faixa de cor de sempre.
+ *
+ * Altura FIXA (64px) nos tres estados, para nada pular quando a resposta
+ * chega. Antes da resposta (`pronto` falso) a faixa e neutra: mostrar a cor
+ * padrao e trocar pelo banner logo depois era o "pisca" relatado.
  */
-export function FaixaDeBanner({ url }: { url: string | null }) {
+export function FaixaDeBanner({
+  url,
+  pronto = true,
+}: {
+  url: string | null;
+  pronto?: boolean;
+}) {
+  if (!pronto) return <div className="h-16 bg-base-800" />;
   if (!url) {
-    return <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />;
+    return <div className="h-16 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />;
   }
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={url} alt="" className="h-16 w-full object-cover" />;

@@ -27,6 +27,7 @@ export function MessageList({
   channelName,
   ehConversaDireta = false,
   onAbrirPerfil,
+  onPreCarregarPerfil,
   onResponder,
 }: {
   channelId: string;
@@ -39,6 +40,8 @@ export function MessageList({
   ehConversaDireta?: boolean;
   /** clique no avatar/nome de um grupo -> abre o cartao de perfil */
   onAbrirPerfil: (user: PublicUser, ancora: DOMRect) => void;
+  /** ponteiro no avatar/nome -> busca o perfil antes do clique */
+  onPreCarregarPerfil?: (userId: string) => void;
   /** "responder" no hover -> o composer entra em modo resposta */
   onResponder: (message: ChatMessage) => void;
 }) {
@@ -220,6 +223,7 @@ export function MessageList({
                   grupo={grupo}
                   ehConversaDireta={ehConversaDireta}
                   onAbrirPerfil={onAbrirPerfil}
+                  onPreCarregarPerfil={onPreCarregarPerfil}
                   onResponder={onResponder}
                   onIrParaMensagem={irParaMensagem}
                 />

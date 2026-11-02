@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { esquecerPerfil } from "@/lib/perfil-cache";
 import {
   ROTULO_COSMETIC_TYPE,
   raridadePorId,
@@ -71,6 +72,8 @@ export function SeletorDeCosmeticos({
         setEquipadoId(anterior);
         onEquipar?.(anterior ? (itens!.find((c) => c.id === anterior) ?? null) : null);
         setErro(r.error);
+      } else {
+        esquecerPerfil(userId);
       }
     });
   }
