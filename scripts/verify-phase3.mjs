@@ -14,6 +14,7 @@ import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
 import { connectedClients, requireSeedFixture, skipped, warnBusyGateway } from "./lib/fixture.mjs";
+import { carenciaMs } from "./lib/presenca.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -591,10 +592,12 @@ async function main() {
   await sleep(800);
   check("fechar UMA aba nao marca o usuario como offline", !sawFalseOffline);
 
+  // O gateway espera a carencia antes de anunciar a saida (G-1).
   const sawRealOffline = waitFor(
     ownerConn.socket,
     "presence:update",
     (p) => p.entry.userId === member.id && p.entry.status === "OFFLINE",
+    4000 + carenciaMs(),
   );
   memberConn.socket.close();
   const offlineAnnounced = (await sawRealOffline) !== null;
