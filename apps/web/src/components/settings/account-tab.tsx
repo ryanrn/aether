@@ -277,8 +277,11 @@ export function AccountTab({
            * (o wrapper, por padrao, so ocupa os 72px do avatar em si). O
            * `relative` fica no filho de dentro, do tamanho real do avatar,
            * pra nao deslocar o selo de GIF (que se posiciona contra ele).
+           *
+           * A reserva vale SEMPRE, com ou sem decoracao: reservar so com ela
+           * fazia a foto pular ~44px para o lado ao equipar.
            */
-          style={decoracao ? { width: 160, display: "flex", justifyContent: "center" } : undefined}
+          style={{ width: 160, display: "flex", justifyContent: "center" }}
         >
           <div className="relative">
             {decoracao ? (

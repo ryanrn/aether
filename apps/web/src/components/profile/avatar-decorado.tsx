@@ -23,6 +23,12 @@ import { DECORACAO_ESCALA, type UserStatus } from "@aether/shared";
  * enorme e jogada para um lado (bug relatado). Com `w`/`h` explicitos +
  * `translate(-50%,-50%)` ela fica do tamanho certo e no centro, sempre.
  *
+ * `max-width: none` E OBRIGATORIO. O preflight do Tailwind poe
+ * `img { max-width: 100% }`: a largura de 220% voltava a 100% da footprint,
+ * a altura nao, e o `object-contain` desenhava a arte do TAMANHO DA FOTO —
+ * o anel caia em cima da foto, com o furo na metade dela (bug relatado). A
+ * moldura nunca teve isso porque e borda CSS do proprio avatar, nao `<img>`.
+ *
  * Quem clipa (`overflow:hidden` num ancestral) corta a decoracao — os poucos
  * lugares assim precisam de folga (ver o cartao de perfil).
  */
@@ -70,7 +76,7 @@ export function AvatarDecorado({
   const camada =
     "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 object-contain";
   const tamanho = `${DECORACAO_ESCALA * 100}%`;
-  const camadaStyle = { width: tamanho, height: tamanho } as const;
+  const camadaStyle = { width: tamanho, height: tamanho, maxWidth: "none" } as const;
 
   return (
     <div
