@@ -7,6 +7,11 @@ import type { PublicChannel, PublicUser, UserStatus } from "@aether/shared";
 import { useSocket } from "@/components/realtime/realtime-provider";
 import { useRealtimeStore, useSelfVoice } from "@/lib/stores/realtime-store";
 import { Avatar } from "@/components/ui/avatar";
+import {
+  CamadaDeEfeito,
+  FaixaDeBanner,
+} from "@/components/profile/cosmeticos-de-perfil";
+import { useImagensDoPerfil } from "@/lib/use-imagens-do-perfil";
 import { cn } from "@/lib/utils";
 
 /**
@@ -72,6 +77,7 @@ export function SelfUserCard({
 }) {
   const socket = useSocket();
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const imagens = useImagensDoPerfil(user.id);
   const [position, setPosition] = useState(anchor);
 
   const presence = useRealtimeStore((state) => state.presence);
@@ -133,7 +139,8 @@ export function SelfUserCard({
         style={{ left: position.x, top: position.y, width: CARD_WIDTH }}
         className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-line bg-base-800 shadow-[var(--shadow-pop)]"
       >
-        <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />
+        {imagens.efeito ? <CamadaDeEfeito url={imagens.efeito} /> : null}
+        <FaixaDeBanner url={imagens.banner} />
 
         <div className="px-3.5 pb-3.5">
           <div className="-mt-6 mb-2.5">

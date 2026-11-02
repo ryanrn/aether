@@ -31,6 +31,11 @@ import { VolumeSlider } from "@/components/ui/volume-slider";
 import { useElapsed } from "@/lib/use-elapsed";
 import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
+import {
+  CamadaDeEfeito,
+  FaixaDeBanner,
+} from "@/components/profile/cosmeticos-de-perfil";
+import { useImagensDoPerfil } from "@/lib/use-imagens-do-perfil";
 
 /**
  * AETHER Activity — o cartao de perfil com o que a pessoa esta fazendo agora.
@@ -112,6 +117,7 @@ export function UserActivityCard({
 }) {
   const socket = useSocket();
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const imagens = useImagensDoPerfil(user.id);
   const [position, setPosition] = useState(anchor);
   const { abrir, abrindo: abrindoConversa, erro: erroConversa } = useAbrirConversa();
   const [erro, setErro] = useState<string | null>(null);
@@ -371,8 +377,9 @@ export function UserActivityCard({
         style={{ left: position.x, top: position.y, width: CARD_WIDTH }}
         className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-line bg-base-900 shadow-xl"
       >
-        {/* Faixa superior: so cor, para o avatar ter onde se apoiar. */}
-        <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />
+        {imagens.efeito ? <CamadaDeEfeito url={imagens.efeito} /> : null}
+        {/* Faixa superior: o banner, ou so cor, para o avatar se apoiar. */}
+        <FaixaDeBanner url={imagens.banner} />
 
         <div className="px-3.5 pb-3.5">
           <div className="-mt-6 mb-2.5">

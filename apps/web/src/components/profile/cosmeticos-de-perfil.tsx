@@ -24,6 +24,19 @@ export function FundoDePlaca({ url }: { url: string }) {
 }
 
 /**
+ * A faixa do topo dos cartoes compactos (lista de membros, o proprio
+ * usuario): o banner, se houver, ou a faixa de cor de sempre. Sobe de 48 para
+ * 64px com banner — a 3:1 a arte cortaria demais numa faixa tao baixa.
+ */
+export function FaixaDeBanner({ url }: { url: string | null }) {
+  if (!url) {
+    return <div className="h-12 bg-gradient-to-r from-accent-700/40 to-accent-500/20" />;
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="h-16 w-full object-cover" />;
+}
+
+/**
  * O efeito por cima do cartao de perfil. O pai precisa estar posicionado
  * (`relative`/`fixed`). Nao captura clique (`pointer-events-none`) — o cartao
  * continua usavel embaixo.
