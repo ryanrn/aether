@@ -18,6 +18,7 @@ import {
   ConcessaoInvalida,
   ItemNaoAVenda,
   JaPossui,
+  resgatarCosmetico,
   SaldoInsuficiente,
 } from "../services/moedas";
 import { fail, ok, toActionError } from "./action-result";
@@ -58,6 +59,34 @@ export async function comprarCosmeticoAction(
       return fail(
         `Faltam ${formatarMoedas(error.preco - error.saldo)} para este item.`,
       );
+    }
+    return toActionError(error);
+  }
+}
+
+/**
+ * Resgata um item gratis de colecao com prazo (vira seu para sempre). Resgatar
+ * de novo responde sucesso: o que a pessoa queria — ter o item — ja e verdade.
+ */
+export async function resgatarCosmeticoAction(
+  cosmeticId: unknown,
+): Promise<ActionResult<undefined>> {
+  try {
+    const session = await requireUser();
+    if (!(await flagLigada("loja_de_cosmeticos"))) return fail("Nao encontrado");
+    if (typeof cosmeticId !== "string" || !cosmeticId) {
+      return fail("Cosmético inválido");
+    }
+    try {
+      await resgatarCosmetico(session.user.id, session.user.plano, cosmeticId);
+    } catch (erro) {
+      if (!(erro instanceof JaPossui)) throw erro;
+    }
+    revalidatePath("/app/loja");
+    return ok();
+  } catch (error) {
+    if (error instanceof ItemNaoAVenda) {
+      return fail("Esse item não está disponível para resgate.");
     }
     return toActionError(error);
   }

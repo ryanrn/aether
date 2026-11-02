@@ -4,7 +4,10 @@ import { Prisma, prisma, type Cosmetic } from "@aether/db";
 import { log } from "@aether/shared/log";
 import {
   COSMETIC_TYPES,
+  exigeResgate,
   imagemEfetiva,
+  itemNoAr,
+  podeEquiparItem,
   planoAtende,
   type CosmeticoDeLoja,
   type CosmeticoNoPainel,
@@ -45,6 +48,16 @@ export class SlugEmUso extends Error {
 export class CosmeticoNaoEncontrado extends Error {
   override name = "CosmeticoNaoEncontrado";
 }
+export class ColecaoInexistente extends Error {
+  override name = "ColecaoInexistente";
+}
+
+/** FK violada — o `colecaoId` do formulario nao existe. */
+function ehColecaoInexistente(erro: unknown): boolean {
+  return (
+    erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2003"
+  );
+}
 
 function paraPainel(row: Cosmetic): CosmeticoNoPainel {
   return {
@@ -66,6 +79,7 @@ function paraPainel(row: Cosmetic): CosmeticoNoPainel {
     criadoPor: row.criadoPor,
     criadoEm: row.createdAt.toISOString(),
     atualizadoEm: row.updatedAt.toISOString(),
+    colecaoId: row.colecaoId,
   };
 }
 
@@ -153,6 +167,7 @@ export async function criarCosmetico(
         precoMoedas: meta.precoMoedas,
         tierMinimo: meta.tierMinimo,
         ordem: meta.ordem,
+        colecaoId: meta.colecaoId,
         ativo: false,
         assetKey: asset.assetKey,
         assetUrl: asset.assetUrl,
@@ -174,6 +189,7 @@ export async function criarCosmetico(
     ) {
       throw new SlugEmUso();
     }
+    if (ehColecaoInexistente(erro)) throw new ColecaoInexistente();
     throw erro;
   }
 }
@@ -193,7 +209,8 @@ export async function editarCosmetico(
   const atual = await prisma.cosmetic.findUnique({ where: { id } });
   if (!atual) throw new CosmeticoNaoEncontrado();
 
-  const row = await prisma.cosmetic.update({
+  const row = await prisma.cosmetic
+    .update({
     where: { id },
     data: {
       nome: meta.nome,
@@ -202,6 +219,7 @@ export async function editarCosmetico(
       precoMoedas: meta.precoMoedas,
       tierMinimo: meta.tierMinimo,
       ordem: meta.ordem,
+      colecaoId: meta.colecaoId,
       ...(asset
         ? {
             assetKey: asset.assetKey,
@@ -216,7 +234,11 @@ export async function editarCosmetico(
           }
         : {}),
     },
-  });
+  })
+    .catch((erro: unknown) => {
+      if (ehColecaoInexistente(erro)) throw new ColecaoInexistente();
+      throw erro;
+    });
 
   if (asset && atual.assetKey !== asset.assetKey) {
     await apagarAssetCosmetico({
@@ -344,19 +366,30 @@ export async function cosmeticosEquipados(
   };
 }
 
+/** A colecao do item, so o que a regra do periodo precisa. */
+const SELECT_COLECAO = {
+  select: { ativa: true, inicioEm: true, fimEm: true },
+} as const;
+
 /**
  * O catalogo do tipo, com o estado desta pessoa em cada item.
  *
- * Ordena por raridade (raro primeiro) e depois `ordem`, como uma vitrine faz.
  * Item bloqueado por plano continua na lista — esconder o que existe atras do
  * plano nao vende, so avisa que voce nao pertence.
+ *
+ * COLECAO FORA DO AR (ver `@aether/shared/colecoes`): o item sai da lista,
+ * EXCETO para quem o possui ou o tem equipado — "Meus cosmeticos" nao pode
+ * perder o que a pessoa tem porque a vitrine trocou.
  */
 export async function catalogoParaUsuario(
   userId: string,
   plano: PlanTier,
   tipo: CosmeticType,
+  agora: Date = new Date(),
 ): Promise<CosmeticoDeLoja[]> {
-  let rows: Cosmetic[];
+  let rows: (Cosmetic & {
+    colecao: { ativa: boolean; inicioEm: Date | null; fimEm: Date | null } | null;
+  })[];
   let posses: { cosmeticId: string }[];
   let equip: Record<CampoEquipado, string | null>;
   try {
@@ -364,6 +397,7 @@ export async function catalogoParaUsuario(
       prisma.cosmetic.findMany({
         where: { ativo: true, tipo },
         orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
+        include: { colecao: SELECT_COLECAO },
       }),
       prisma.userCosmetic.findMany({
         where: { userId, cosmetic: { tipo } },
@@ -388,43 +422,76 @@ export async function catalogoParaUsuario(
   const temPosse = new Set(posses.map((p) => p.cosmeticId));
   const equipadoId = equip[CAMPO_EQUIPADO[tipo]];
 
-  return rows.map((row) => {
-    const bloqueado = !planoAtende(plano, row.tierMinimo);
-    const possui =
-      !bloqueado && (row.precoMoedas == null || temPosse.has(row.id));
-    return {
-      ...paraPublico(row),
-      bloqueado,
-      possui,
-      equipado: row.id === equipadoId,
-    };
-  });
+  return rows
+    .filter(
+      (row) =>
+        itemNoAr(row.colecao, agora) ||
+        temPosse.has(row.id) ||
+        row.id === equipadoId,
+    )
+    .map((row) => {
+      const bloqueado = !planoAtende(plano, row.tierMinimo);
+      const posse = temPosse.has(row.id);
+      const possui =
+        !bloqueado &&
+        podeEquiparItem({
+          precoMoedas: row.precoMoedas,
+          colecao: row.colecao,
+          temPosse: posse,
+          agora,
+        });
+      return {
+        ...paraPublico(row),
+        bloqueado,
+        possui,
+        equipado: row.id === equipadoId,
+        colecaoId: row.colecaoId,
+        fimEm: row.colecao?.fimEm?.toISOString() ?? null,
+        exigeResgate: !posse && exigeResgate(row.precoMoedas, row.colecao),
+        criadoEm: row.createdAt.toISOString(),
+      };
+    });
 }
 
 /**
  * Verifica se a pessoa PODE equipar um cosmetico agora: existe, esta ativo, e
- * do tipo certo, o plano cobre, e (se pago) ela possui.
+ * do tipo certo, o plano cobre, e a regra de posse/periodo deixa
+ * (`podeEquiparItem`).
  */
 async function podeEquipar(
   userId: string,
   plano: PlanTier,
   tipo: CosmeticType,
   cosmeticId: string,
+  agora: Date,
 ): Promise<boolean> {
   const c = await prisma.cosmetic.findUnique({
     where: { id: cosmeticId },
-    select: { tipo: true, ativo: true, tierMinimo: true, precoMoedas: true },
+    select: {
+      tipo: true,
+      ativo: true,
+      tierMinimo: true,
+      precoMoedas: true,
+      colecao: SELECT_COLECAO,
+    },
   });
   if (!c || !c.ativo || c.tipo !== tipo) return false;
   if (!planoAtende(plano, c.tierMinimo)) return false;
-  if (c.precoMoedas != null) {
-    const posse = await prisma.userCosmetic.findUnique({
-      where: { userId_cosmeticId: { userId, cosmeticId } },
-      select: { userId: true },
-    });
-    if (!posse) return false;
-  }
-  return true;
+
+  // Gratis no ar e sem exigencia de resgate: nao precisa consultar posse.
+  const semPosse = podeEquiparItem({
+    precoMoedas: c.precoMoedas,
+    colecao: c.colecao,
+    temPosse: false,
+    agora,
+  });
+  if (semPosse) return true;
+
+  const posse = await prisma.userCosmetic.findUnique({
+    where: { userId_cosmeticId: { userId, cosmeticId } },
+    select: { userId: true },
+  });
+  return posse !== null;
 }
 
 /**
@@ -440,9 +507,10 @@ export async function equiparCosmetico(
   plano: PlanTier,
   tipo: CosmeticType,
   cosmeticId: string | null,
+  agora: Date = new Date(),
 ): Promise<string | null> {
   if (cosmeticId !== null) {
-    const ok = await podeEquipar(userId, plano, tipo, cosmeticId);
+    const ok = await podeEquipar(userId, plano, tipo, cosmeticId, agora);
     if (!ok) throw new CosmeticoIndisponivel();
   }
   await prisma.user.update({

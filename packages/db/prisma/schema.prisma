@@ -1068,6 +1068,12 @@ model Cosmetic {
   /// viva — mesmo criterio de `PlanKey.criadaPor`.
   criadoPor String?
 
+  /// A colecao a que o item pertence (no maximo uma). Apagar a colecao so
+  /// solta o item (SET NULL). Coleção com periodo decide quando o item esta a
+  /// venda — ver `ColecaoDeCosmeticos`.
+  colecaoId String?
+  colecao   ColecaoDeCosmeticos? @relation(fields: [colecaoId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1079,6 +1085,40 @@ model Cosmetic {
 
   /// A loja e o painel filtram sempre por (tipo, ativo) e ordenam por `ordem`.
   @@index([tipo, ativo, ordem])
+  @@index([colecaoId])
+}
+
+/// Um grupo de cosmeticos na loja ("Neon", "Halloween"), com periodo
+/// opcional de venda.
+///
+/// FORA DO PERIODO (antes de `inicioEm`, depois de `fimEm`) ou com
+/// `ativa = false`, os itens da colecao saem da loja e nao se compram nem se
+/// equipam de novo — mas quem ja os POSSUI fica com eles para sempre. Item
+/// gratis numa colecao com `fimEm` precisa ser RESGATADO (vira posse) para
+/// continuar seu depois do prazo. A regra mora em `@aether/shared/colecoes`.
+model ColecaoDeCosmeticos {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  nome      String
+  descricao String?
+
+  /// Nulos = sem limite daquele lado. CHECK no banco: fim depois do inicio.
+  inicioEm DateTime?
+  fimEm    DateTime?
+
+  /// A colecao que abre a aba Destaques. Mais de uma marcada: vale a de menor
+  /// `ordem` que estiver no ar.
+  destaque Boolean @default(false)
+  ativa    Boolean @default(false)
+  ordem    Int     @default(0)
+
+  criadoPor String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens Cosmetic[]
+
+  @@index([ativa, ordem])
 }
 
 /// Quem POSSUI qual cosmetico.
