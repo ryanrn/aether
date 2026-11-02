@@ -2,9 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
+  formatarMoedas,
+  MOEDA,
+  MOTIVO_LABEL,
   raridadePorId,
+  type Carteira,
   type CosmeticoDeLoja,
   type CosmeticType,
+  type MovimentoPublico,
   type PlanTier,
 } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
@@ -12,15 +17,16 @@ import { AvatarDecorado } from "@/components/profile/avatar-decorado";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { equiparCosmeticoAction } from "@/server/actions/profile";
+import { comprarCosmeticoAction } from "@/server/actions/moedas";
 import { cn } from "@/lib/utils";
 
 /**
- * A Loja de cosmeticos — Estagio 1.
+ * A Loja de cosmeticos.
  *
  * Reproduz a vitrine do redesign (OpenDesign) com o que o backend ja entrega:
- * decoracoes de avatar e banners, gratis ou plano-gated. SEM economia de
- * moedas — item pago que a pessoa nao possui mostra o preco e "em breve", e
- * nao equipa (so a equipe concede peca paga por enquanto).
+ * decoracoes de avatar e banners, gratis, por plano, ou PAGAS EM MOEDAS (a
+ * carteira, `services/moedas.ts`). Comprar debita o saldo e entrega o item na
+ * mesma transacao; a tela so atualiza o que o servidor devolveu.
  *
  * O trilho "Loja / Perfil" do mock NAO e reconstruido: o `HomeNavPanel` ja e
  * a navegacao do AETHER. Aqui e so o conteudo.
@@ -29,13 +35,14 @@ import { cn } from "@/lib/utils";
  * a tela so esconde o que seria recusado.
  */
 
-type Aba = "destaques" | "DECORATION" | "BANNER" | "meus";
+type Aba = "destaques" | "DECORATION" | "BANNER" | "meus" | "moedas";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "destaques", label: "Destaques" },
   { id: "DECORATION", label: "Decorações" },
   { id: "BANNER", label: "Banners" },
   { id: "meus", label: "Meus cosméticos" },
+  { id: "moedas", label: `Minhas ${MOEDA.plural}` },
 ];
 
 const TIPO_LABEL: Record<CosmeticType, string> = {
@@ -62,15 +69,31 @@ function pesoRaridade(id: string): number {
 }
 
 export function LojaScreen({
-  itens,
+  itens: itensDoServidor,
+  carteira,
   plano: _plano,
   user,
 }: {
   itens: CosmeticoDeLoja[];
+  carteira: Carteira;
   plano: PlanTier;
   user: UserInfo;
 }) {
   const [aba, setAba] = useState<Aba>("destaques");
+  const [saldo, setSaldo] = useState(carteira.saldo);
+  /**
+   * Comprados NESTA visita. O servidor ja gravou; marcar aqui evita recarregar
+   * a pagina para o item aparecer como seu. O extrato atualiza na proxima
+   * visita (a compra nova entra no topo dele).
+   */
+  const [compradas, setCompradas] = useState<Set<string>>(() => new Set());
+  const itens = useMemo(
+    () =>
+      itensDoServidor.map((c) =>
+        compradas.has(c.id) ? { ...c, possui: true } : c,
+      ),
+    [itensDoServidor, compradas],
+  );
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<{
     possui: boolean;
@@ -90,6 +113,21 @@ export function LojaScreen({
   const [pending, startTransition] = useTransition();
 
   const estaEquipado = (c: CosmeticoDeLoja) => equipado[c.tipo] === c.id;
+
+  function comprar(c: CosmeticoDeLoja) {
+    setErro(null);
+    startTransition(async () => {
+      const r = await comprarCosmeticoAction(c.id);
+      if (!r.ok) {
+        setErro(r.error);
+        return;
+      }
+      setSaldo(r.data.saldo);
+      setCompradas((s) => new Set(s).add(c.id));
+      // A previa continua aberta, agora com o item como seu e "Equipar".
+      setPrevia({ ...c, possui: true });
+    });
+  }
 
   function equipar(c: CosmeticoDeLoja | null, tipo: CosmeticType) {
     const anterior = equipado[tipo];
@@ -151,6 +189,18 @@ export function LojaScreen({
                 Personalize seu perfil no AETHER.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setAba("moedas")}
+              title={`Seu saldo de ${MOEDA.plural}`}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-line bg-base-900 px-4 text-[13px] font-semibold text-ink-100 transition-colors hover:border-line-strong"
+            >
+              <AetherIcon name="sparkle" className="h-4 w-4 text-accent-400" />
+              <span className="font-mono tabular-nums">
+                {saldo.toLocaleString("pt-BR")}
+              </span>
+              <span className="text-ink-400">{MOEDA.plural}</span>
+            </button>
           </header>
 
           {/* abas */}
@@ -173,7 +223,8 @@ export function LojaScreen({
             ))}
           </div>
 
-          {/* toolbar */}
+          {/* toolbar — busca e filtros sao de cosmetico; o extrato nao usa */}
+          {aba === "moedas" ? null : (
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <label className="relative min-w-[200px] flex-1">
               <span className="sr-only">Buscar cosméticos</span>
@@ -222,13 +273,16 @@ export function LojaScreen({
               ))}
             </div>
           </div>
+          )}
 
           {erro ? (
             <p className="mt-3 text-[13px] text-signal-dnd">{erro}</p>
           ) : null}
 
           {/* conteúdo */}
-          {aba === "meus" ? (
+          {aba === "moedas" ? (
+            <Extrato saldo={saldo} movimentos={carteira.movimentos} />
+          ) : aba === "meus" ? (
             <Inventario
               itens={ordenar(filtrado.filter((c) => c.possui))}
               user={user}
@@ -267,7 +321,10 @@ export function LojaScreen({
           cosmetico={previa}
           user={user}
           equipado={estaEquipado(previa)}
+          saldo={saldo}
+          erro={erro}
           pending={pending}
+          onComprar={() => comprar(previa)}
           onFechar={() => setPrevia(null)}
           onEquipar={() => {
             equipar(previa, previa.tipo);
@@ -539,7 +596,7 @@ function Preco({ cosmetico }: { cosmetico: CosmeticoDeLoja }) {
       <span className="font-mono tabular-nums">
         {cosmetico.precoMoedas.toLocaleString("pt-BR")}
       </span>
-      <span className="text-ink-500">· em breve</span>
+      <span className="text-ink-500">{MOEDA.plural}</span>
     </span>
   );
 }
@@ -604,7 +661,10 @@ function PreviaDialog({
   cosmetico,
   user,
   equipado,
+  saldo,
+  erro,
   pending,
+  onComprar,
   onFechar,
   onEquipar,
   onRemover,
@@ -612,7 +672,10 @@ function PreviaDialog({
   cosmetico: CosmeticoDeLoja;
   user: UserInfo;
   equipado: boolean;
+  saldo: number;
+  erro: string | null;
   pending: boolean;
+  onComprar: () => void;
   onFechar: () => void;
   onEquipar: () => void;
   onRemover: () => void;
@@ -620,6 +683,8 @@ function PreviaDialog({
   const [fundo, setFundo] = useState<"escuro" | "claro">("escuro");
   const rar = raridadePorId(cosmetico.raridade);
   const usavel = cosmetico.possui && !cosmetico.bloqueado;
+  const preco = cosmetico.precoMoedas ?? 0;
+  const falta = Math.max(0, preco - saldo);
 
   return (
     <Modal
@@ -737,9 +802,22 @@ function PreviaDialog({
                 {TIER_LABEL[cosmetico.tierMinimo] || "Bloqueado"}
               </span>
             ) : !usavel ? (
-              <span className="rounded-md border border-line px-3 py-2 text-[13px] text-ink-400">
-                Chega à loja em breve.
-              </span>
+              <div className="grid gap-1.5">
+                <button
+                  type="button"
+                  disabled={pending || falta > 0}
+                  onClick={onComprar}
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-500 px-4 text-[13px] font-bold text-[#04122b] transition-colors hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <AetherIcon name="sparkle" className="h-4 w-4" />
+                  {pending ? "Comprando…" : `Comprar por ${formatarMoedas(preco)}`}
+                </button>
+                <span className="text-[12px] text-ink-400">
+                  {falta > 0
+                    ? `Faltam ${formatarMoedas(falta)}. Você tem ${formatarMoedas(saldo)}.`
+                    : `Você tem ${formatarMoedas(saldo)}.`}
+                </span>
+              </div>
             ) : equipado ? (
               <button
                 type="button"
@@ -761,8 +839,85 @@ function PreviaDialog({
               </button>
             )}
           </div>
+          {erro ? <p className="text-[12px] text-signal-dnd">{erro}</p> : null}
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ---------------------------------------------------------------- extrato */
+
+function Extrato({
+  saldo,
+  movimentos,
+}: {
+  saldo: number;
+  movimentos: MovimentoPublico[];
+}) {
+  return (
+    <section className="mt-7">
+      <div className="rounded-xl border border-line bg-base-850 p-5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-500">
+          Saldo
+        </span>
+        <p className="mt-1 flex items-center gap-2 text-[26px] font-semibold text-ink-100">
+          <AetherIcon name="sparkle" className="h-5 w-5 text-accent-400" />
+          <span className="font-mono tabular-nums">{saldo.toLocaleString("pt-BR")}</span>
+          <span className="text-[15px] font-medium text-ink-400">{MOEDA.plural}</span>
+        </p>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink-400">
+          Use para comprar decorações e banners. Logo dará para ganhar{" "}
+          {MOEDA.plural} com missões: tempo em voz, horas jogando e dias seguidos.
+        </p>
+      </div>
+
+      <h2 className="mt-7 text-[14px] font-semibold text-ink-100">Extrato</h2>
+      {movimentos.length === 0 ? (
+        <p className="mt-3 text-[13px] text-ink-400">
+          Nada por aqui ainda. Cada {MOEDA.singular} que entrar ou sair aparece
+          nesta lista.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
+          {movimentos.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-center justify-between gap-3 bg-base-900 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-medium text-ink-100">
+                  {MOTIVO_LABEL[m.motivo]}
+                  {m.descricao ? (
+                    <span className="font-normal text-ink-400"> · {m.descricao}</span>
+                  ) : null}
+                </p>
+                <time
+                  dateTime={m.createdAt}
+                  className="text-[11.5px] text-ink-500"
+                  suppressHydrationWarning
+                >
+                  {new Date(m.createdAt).toLocaleString("pt-BR")}
+                </time>
+              </div>
+              <div className="shrink-0 text-right">
+                <p
+                  className={cn(
+                    "font-mono text-[13px] font-semibold tabular-nums",
+                    m.valor > 0 ? "text-signal-online" : "text-ink-200",
+                  )}
+                >
+                  {m.valor > 0 ? "+" : "−"}
+                  {Math.abs(m.valor).toLocaleString("pt-BR")}
+                </p>
+                <p className="font-mono text-[11px] tabular-nums text-ink-500">
+                  saldo {m.saldoDepois.toLocaleString("pt-BR")}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

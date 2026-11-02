@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { flagLigada } from "@aether/access";
 import { getSession } from "@/server/auth/session";
 import { catalogoParaUsuario } from "@/server/services/cosmeticos";
+import { carteiraDe } from "@/server/services/moedas";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { NavToggle } from "@/components/layout/nav-mobile";
 import { LojaScreen } from "@/components/loja/loja-screen";
@@ -65,6 +66,7 @@ export default async function LojaPage() {
   return (
     <LojaScreen
       itens={itens}
+      carteira={await carteiraDe(session.user.id)}
       plano={session.user.plano}
       user={{
         id: session.user.id,

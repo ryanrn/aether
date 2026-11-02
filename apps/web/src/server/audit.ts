@@ -51,6 +51,7 @@ export type AuditAction =
   | "global.cosmetico_editado"
   | "global.cosmetico_excluido"
   | "global.cosmetico_publicado"
+  | "global.moedas_concedidas"
   | "global.aplicacao_bloqueada"
   | "global.aplicacao_desbloqueada"
   | "global.usuario_silenciado"

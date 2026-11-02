@@ -3938,6 +3938,78 @@ A troca so faz sentido QUANDO os anexos existirem. Hoje o storage guarda icone
 de servidor e avatar, que sao poucos e pequenos; migrar agora seria trabalho
 sem retorno.
 
+## Loja: moedas (Estagio 1 da economia, 02/11/2026)
+
+A loja deixou de ser vitrine. Item pago mostra **"Comprar por N moedas"** no
+lugar do "em breve", o saldo aparece no topo, e a aba **"Minhas moedas"** traz
+o extrato. A equipe envia ou retira moedas pela aba **Moedas** do painel. O
+Estagio 2 (missoes: tempo em voz, horas jogando, dias seguidos) e o que faz a
+pessoa GANHAR moedas; ate ele entrar, so a equipe da moedas.
+
+Pesquisa que motivou o desenho: `docs/pesquisa-discord/loja-e-cosmeticos.md`.
+
+### Arquivos
+
+- `packages/db/prisma/schema.prisma` + migracao `20261102180000_moedas`:
+  `User.saldoMoedas`, `MovimentoDeMoedas` (o extrato), enum `MotivoDeMoedas`.
+- `packages/shared/src/moedas.ts`: o NOME da moeda (`MOEDA`, como o `brand.ts`),
+  `formatarMoedas`, limites e tipos do extrato.
+- `apps/web/src/server/services/moedas.ts`: `comprarCosmetico`,
+  `concederMoedas`, `carteiraDe`.
+- `apps/web/src/server/actions/moedas.ts`: `comprarCosmeticoAction`,
+  `carteiraAction`, `concederMoedasAction` (equipe, com auditoria global
+  `global.moedas_concedidas`).
+- `components/loja/loja-screen.tsx` (saldo, comprar, extrato),
+  `components/equipe/moedas-tab.tsx`.
+
+### Decisoes
+
+- **Saldo e o resumo, o extrato e a verdade.** Toda mudanca de saldo escreve
+  uma linha em `MovimentoDeMoedas` na mesma transacao, com o saldo resultante.
+  A linha nunca e editada nem apagada.
+- **Debito condicional no proprio UPDATE** (`WHERE saldoMoedas >= preco`), e
+  nao "ler, checar, gravar": duas compras ao mesmo tempo nao gastam o mesmo
+  saldo. O CHECK `User_saldo_nao_negativo` e a segunda defesa.
+- **Item, debito e extrato numa transacao so.** Clique duplo na mesma peca bate
+  no unique de `UserCosmetic` e desfaz o segundo debito inteiro.
+- **`chave` unica** no extrato torna operacoes idempotentes (compra
+  `compra:<user>:<item>`; concessao reenviada com a mesma chave nao credita de
+  novo). O Estagio 2 usa a mesma chave para o resgate de missao.
+- **Moeda compra a peca, nao o plano:** item de plano continua exigindo o plano.
+- **Preco zero** entrega o item sem movimento no extrato (o banco recusa
+  movimento de valor zero).
+- **Equipe tira moedas so ate zero:** tirar mais do que a pessoa tem e recusado
+  inteiro. Teto de 100.000 por envio, contra erro de digitacao.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/moedas.test.ts
+```
+
+A migracao foi aplicada, com as 38 anteriores, num Postgres em memoria
+(PGlite): usuario existente comeca com saldo 0; o banco barra saldo negativo,
+movimento de valor zero, saldo registrado negativo e chave repetida; o debito
+condicional nao afeta a linha quando falta saldo; apagar a pessoa leva o
+extrato; RLS ligado.
+
+Ao vivo (depois de `npm run db:deploy`): equipe envia 500 moedas pela aba
+Moedas → a pessoa ve o saldo e a linha no extrato → compra um item de 300 → o
+item vira "Seu", o saldo vai a 200, o extrato mostra a compra → tentar comprar
+um de 300 mostra "Faltam 100 moedas".
+
+### Limitacoes
+
+- **Nao testado ao vivo.** Teste unitario com banco dublado, migracao no
+  PGlite, typecheck, build de producao.
+- **Ainda nao da para GANHAR moedas sozinho:** isso e o Estagio 2 (missoes).
+- **Sem presentear, sem reembolso, sem coleções/rotacao** (Estagio 3).
+- **O extrato mostra as 50 linhas mais recentes**, sem paginacao.
+- **Comprar a mesma peca em duas abas ao mesmo tempo**: a segunda recebe "Esse
+  item ja e seu" e nao e cobrada (o unique desfaz a transacao dela).
+- **Item tirado da loja (inativo) continua de quem comprou**, como hoje com as
+  pecas concedidas; o extrato mostra o nome enquanto o item existir no banco.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:
