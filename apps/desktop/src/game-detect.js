@@ -49,6 +49,9 @@ function diag(assunto, dados) {
  *
  *  - XBOX: instala em `<disco>:/XboxGames/<Nome>/`, e a pasta e o nome.
  *
+ *  - BATTLE.NET: cada jogo se registra em "Programas instalados" com o
+ *    desinstalador da Blizzard; dali saem nome e pasta.
+ *
  * Isso cobre qualquer jogo dessas lojas, inclusive os instalados depois, sem
  * cadastrar nada.
  *
@@ -58,7 +61,8 @@ function diag(assunto, dados) {
  * cadastrou e envelhece a cada lancamento. Perguntar a loja onde ela instalou
  * cobre a biblioteca inteira de graca, hoje e daqui a um ano.
  *
- * O que ainda NAO cobre: Battle.net, EA e jogos avulsos. Anotado no README.
+ * O que ainda NAO cobre: jogos avulsos (para eles existe a biblioteca da
+ * comunidade). Anotado no README.
  *
  * PRIVACIDADE — a regra que decide o desenho deste arquivo:
  * a lista de processos NUNCA sai desta maquina. Ela e lida aqui, no processo
@@ -439,6 +443,135 @@ async function jogosGog() {
 }
 
 /**
+ * Battle.net (Blizzard e Activision).
+ *
+ * O catalogo de verdade da Battle.net e o `product.db`, um protobuf binario.
+ * Nao precisamos dele: cada jogo instalado pela Battle.net tambem se registra
+ * em "Programas instalados" do Windows (`...\CurrentVersion\Uninstall\<id>`),
+ * com `DisplayName` e `InstallLocation` — e o `UninstallString` aponta para o
+ * desinstalador da Blizzard (`Blizzard Uninstaller.exe`), que e o que separa
+ * o jogo da Battle.net do resto da maquina. E a mesma via que o Playnite usa.
+ *
+ * O APP da Battle.net nao usa esse desinstalador, entao fica de fora sozinho
+ * — o mesmo cuidado do Riot Client: launcher aberto nao e "jogando".
+ */
+const UNINSTALL_32 =
+  "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+const UNINSTALL_64 =
+  "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+
+/** Executavel na pasta do jogo que nao e o jogo. */
+const RE_EXE_DE_APOIO =
+  /launcher|uninstall|crash|error|setup|redist|updater|helper|bootstrap|report|agent/i;
+
+/**
+ * Os executaveis do jogo, na raiz e um nivel abaixo (`_retail_/`).
+ *
+ * Servem para o casamento EXATO por nome de processo (`exes`), como os do
+ * anti-cheat na EA: o Call of Duty roda como `cod.exe`, e nenhum prefixo de
+ * "Call of Duty" casaria. Launcher, desinstalador e relator de erro ficam de
+ * fora — senao abrir o launcher do jogo ja diria "jogando".
+ */
+function exesDoJogo(raiz) {
+  const achados = [];
+  const olhar = (dir, descer) => {
+    let itens = [];
+    try {
+      itens = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of itens) {
+      if (item.isFile() && /\.exe$/i.test(item.name)) {
+        if (!RE_EXE_DE_APOIO.test(item.name)) {
+          achados.push(path.join(dir, item.name));
+        }
+      } else if (descer && item.isDirectory()) {
+        olhar(path.join(dir, item.name), false);
+      }
+    }
+  };
+  olhar(raiz, true);
+  return achados;
+}
+
+/** Entradas da Battle.net dentro da saida de `reg query ...\Uninstall /s`. */
+function jogosBattleNetNoRegistro(texto) {
+  const jogos = [];
+  for (const bloco of blocosDoRegistro(texto)) {
+    const desinstalar = bloco.valores.get("uninstallstring") ?? "";
+    if (!/blizzard uninstaller/i.test(desinstalar)) continue;
+    const nome = bloco.valores.get("displayname");
+    const dir = bloco.valores.get("installlocation");
+    if (!nome || !dir) continue;
+    if (/^battle\.net$/i.test(nome.trim())) continue;
+    jogos.push({ nome: nome.trim(), dir });
+  }
+  return jogos;
+}
+
+/**
+ * As chaves cujo `UninstallString` cita o desinstalador da Blizzard.
+ *
+ * `reg query /f ... /d` filtra NO `reg`: medido nesta maquina, ~110ms contra
+ * ~2,4s para ler o registro de desinstalacao inteiro (32 + 64 bits) — e isto
+ * roda em segundo plano enquanto se joga.
+ */
+async function chavesDaBattleNet(raiz) {
+  try {
+    const texto = await executar("reg", [
+      "query",
+      raiz,
+      "/s",
+      "/f",
+      "Blizzard Uninstaller",
+      "/d",
+    ]);
+    return blocosDoRegistro(texto)
+      .filter((b) => /blizzard uninstaller/i.test(b.valores.get("uninstallstring") ?? ""))
+      .map((b) => b.chave);
+  } catch {
+    // Nada encontrado faz o `reg` sair com erro: e o caso de quem nao tem
+    // Battle.net, nao uma falha.
+    return [];
+  }
+}
+
+/** Jogo instalado agora aparece na proxima leitura, em ate um minuto. */
+const BATTLENET_TTL_MS = 60_000;
+let battleNetCache = { em: 0, jogos: [] };
+
+async function jogosBattleNet() {
+  if (Date.now() - battleNetCache.em < BATTLENET_TTL_MS) {
+    return battleNetCache.jogos;
+  }
+  const chaves = (
+    await Promise.all([chavesDaBattleNet(UNINSTALL_32), chavesDaBattleNet(UNINSTALL_64)])
+  ).flat();
+  // So as chaves achadas sao lidas por inteiro — poucas, uma por jogo.
+  const textos = await Promise.all(chaves.map((c) => lerRegistro(c)));
+  const vistos = new Set();
+  const jogos = [];
+  for (const { nome, dir } of jogosBattleNetNoRegistro(textos.join("\n"))) {
+    const pasta = comoPasta(dir);
+    if (vistos.has(pasta)) continue;
+    vistos.add(pasta);
+    const exes = exesDoJogo(dir);
+    jogos.push({
+      pasta,
+      nome,
+      // O primeiro exe do jogo serve de candidato a icone mesmo com o
+      // processo escondido; `melhorIcone` escolhe o melhor entre os vistos.
+      launch: exes[0] ?? null,
+      icone: null,
+      exes: exes.map((c) => path.basename(c).toLowerCase()),
+    });
+  }
+  battleNetCache = { em: Date.now(), jogos };
+  return jogos;
+}
+
+/**
  * Xbox / Microsoft Store.
  *
  * Instala em `<disco>:/XboxGames/<Nome do Jogo>/`, e ali a pasta e o nome de
@@ -768,6 +901,7 @@ async function catalogoDeLojas() {
     jogosUbisoft(),
     jogosGog(),
     jogosSteam(),
+    jogosBattleNet(),
   ]);
   return [
     ...jogosEpic(),
@@ -1818,6 +1952,9 @@ module.exports = {
   bibliotecasSteam,
   jogosDaBibliotecaSteam,
   jogosSteamEm,
+  jogosBattleNetNoRegistro,
+  chavesDaBattleNet,
+  exesDoJogo,
   acharExecutavel,
   nomesProtegidosPorAntiCheat,
   catalogoDeLojas,

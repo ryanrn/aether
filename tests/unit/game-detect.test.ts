@@ -975,3 +975,73 @@ describe("Steam — catalogo (anti-cheat que ja escondeu o caminho)", () => {
     expect(acharExecutavel(path.join(gunz, "EasyAntiCheat"), ["nada.exe"])).toBeNull();
   });
 });
+
+describe("Battle.net — pelo registro de desinstalacao", () => {
+  const os = require("node:os") as typeof import("node:os");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+  const { jogosBattleNetNoRegistro, exesDoJogo } = detect as {
+    jogosBattleNetNoRegistro: (t: string) => { nome: string; dir: string }[];
+    exesDoJogo: (raiz: string) => string[];
+  };
+
+  /**
+   * Saida no formato do `reg query /s`, em CRLF como o `reg` escreve (o
+   * `blocosDoRegistro` ja quebrou uma vez por causa do `\r`).
+   */
+  const SAIDA = [
+    String.raw`HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Overwatch`,
+    String.raw`    DisplayName    REG_SZ    Overwatch`,
+    String.raw`    InstallLocation    REG_SZ    D:\Jogos\Overwatch`,
+    String.raw`    UninstallString    REG_SZ    "C:\ProgramData\Battle.net\Agent\Blizzard Uninstaller.exe" --lang=ptBR --uid=prometheus --displayname="Overwatch"`,
+    String.raw`    Publisher    REG_SZ    Blizzard Entertainment`,
+    "",
+    String.raw`HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Call of Duty`,
+    String.raw`    DisplayName    REG_SZ    Call of Duty`,
+    String.raw`    InstallLocation    REG_SZ    C:\Program Files (x86)\Call of Duty`,
+    String.raw`    UninstallString    REG_SZ    "C:\ProgramData\Battle.net\Agent\Blizzard Uninstaller.exe" --uid=auks`,
+    String.raw`    Publisher    REG_SZ    Activision`,
+    "",
+    String.raw`HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Battle.net`,
+    String.raw`    DisplayName    REG_SZ    Battle.net`,
+    String.raw`    InstallLocation    REG_SZ    C:\Program Files (x86)\Battle.net`,
+    String.raw`    UninstallString    REG_SZ    "C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe" --uninstall`,
+    "",
+    String.raw`HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip`,
+    String.raw`    DisplayName    REG_SZ    7-Zip`,
+    String.raw`    InstallLocation    REG_SZ    C:\Program Files\7-Zip`,
+    String.raw`    UninstallString    REG_SZ    C:\Program Files\7-Zip\Uninstall.exe`,
+  ].join("\r\n");
+
+  it("pega so os jogos do desinstalador da Blizzard, nao o app nem o resto", () => {
+    expect(jogosBattleNetNoRegistro(SAIDA)).toEqual([
+      { nome: "Overwatch", dir: String.raw`D:\Jogos\Overwatch` },
+      { nome: "Call of Duty", dir: String.raw`C:\Program Files (x86)\Call of Duty` },
+    ]);
+  });
+
+  it("exes do jogo: raiz e um nivel abaixo, sem launcher, desinstalador nem relator de erro", () => {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "aether-bnet-"));
+    fs.mkdirSync(path.join(raiz, "_retail_"));
+    for (const f of ["cod.exe", "Call of Duty Launcher.exe", "Uninstall.exe", "readme.txt"]) {
+      fs.writeFileSync(path.join(raiz, f), "");
+    }
+    fs.writeFileSync(path.join(raiz, "_retail_", "Overwatch.exe"), "");
+    fs.writeFileSync(path.join(raiz, "_retail_", "BlizzardError.exe"), "");
+    const nomes = exesDoJogo(raiz).map((c) => path.basename(c)).sort();
+    expect(nomes).toEqual(["Overwatch.exe", "cod.exe"]);
+  });
+
+  it("o processo cod.exe casa o Call of Duty pelo exe conhecido", () => {
+    const catalogo = [
+      {
+        pasta: "c:/program files (x86)/call of duty/",
+        nome: "Call of Duty",
+        launch: null,
+        icone: null,
+        exes: ["cod.exe"],
+      },
+    ];
+    expect(entradaPorNomeDeProcesso("cod.exe", catalogo)?.nome).toBe("Call of Duty");
+  });
+});
