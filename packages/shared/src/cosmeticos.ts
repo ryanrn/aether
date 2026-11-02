@@ -158,8 +158,10 @@ export const PASTA_DO_COSMETICO: Record<CosmeticType, string> = {
  *    encaixa. A spec pede ~512x512 (ou 640 com sangria), miolo transparente.
  *  - BANNER: 3:1, como o resto do mercado. ~1500x500.
  *
- * `ladoMin` evita arte que some na tela; `ladoMax` evita peso a toa (o R2
- * serve isto com CDN, mas 8000px de PNG ainda e download pesado).
+ * `ladoMin` vale para os DOIS lados (largura e altura), entao e o minimo do
+ * lado MENOR: evita arte que some na tela. `ladoMax` evita peso a toa (o R2
+ * serve isto com CDN, mas 8000px de PNG ainda e download pesado). O tamanho
+ * do `alvo` tem de passar nos dois — ver o teste `cosmeticos-regras`.
  */
 export interface RegraDeDimensao {
   ratioMin: number;
@@ -192,7 +194,9 @@ export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
   BANNER: {
     ratioMin: 2.6,
     ratioMax: 3.4,
-    ladoMin: 600,
+    // e a ALTURA minima: 3:1 com 400 de altura ja e 1200 de largura. Com 600
+    // aqui o proprio alvo (1500x500) era recusado.
+    ladoMin: 400,
     ladoMax: 4096,
     alvo: "3:1, ~1500x500, PNG ou WEBP",
   },
