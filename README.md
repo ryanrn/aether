@@ -2068,9 +2068,27 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   mas os nomes ficam em texto claro) no momento em que o catalogo e montado; o
   `entradaPorNomeDeProcesso` casa o processo contra ESSA lista, exata. Verificado
   contra o EA SPORTS FC 26 rodando.
-- **Battle.net e jogos avulsos ainda nao sao detectados.** A Battle.net guarda
-  o catalogo num `product.db` BINARIO (protobuf), que e trabalho de outra
-  ordem — nao um XML de dois campos. Jogo avulso, fora de qualquer loja, nao
+- **Battle.net (02/11/2026), sem ler o `product.db`.** O catalogo dela e um
+  protobuf binario, mas nao precisamos dele: cada jogo instalado pela
+  Battle.net (Blizzard e Activision) se registra em "Programas instalados"
+  (`...\CurrentVersion\Uninstall\<id>`) com `DisplayName`,
+  `InstallLocation` e um `UninstallString` que aponta para o
+  `Blizzard Uninstaller.exe`. E esse desinstalador que separa o jogo do resto
+  da maquina — e o APP da Battle.net, que nao o usa, fica de fora sozinho.
+  - `reg query ... /s /f "Blizzard Uninstaller" /d` filtra no proprio `reg`:
+    medido, ~110ms contra ~2,4s para ler o registro de desinstalacao inteiro
+    (32 + 64 bits). So as chaves achadas sao lidas por inteiro. Releitura a
+    cada 60s; jogo recem-instalado aparece em ate um minuto.
+  - `exes` = executaveis na raiz e um nivel abaixo (`_retail_/`), sem
+    launcher, desinstalador, relator de erro etc. Servem para o casamento
+    EXATO por processo: o Call of Duty roda como `cod.exe`, e nenhum prefixo de
+    "Call of Duty" casaria.
+  - **Nao verificado contra uma Battle.net real** — nao ha uma na maquina de
+    desenvolvimento. O formato vem do que outros launchers documentam (o
+    Playnite le a Battle.net por essa mesma via). O parser foi conferido
+    contra a saida REAL do `reg` com uma chave falsa criada e apagada em
+    `HKCU`. Se o formato divergir, a loja nao devolve jogo (falha fechada).
+- **Jogos avulsos ainda nao sao detectados.** Jogo fora de qualquer loja nao
   tem quem responda "onde voce instalou": a saida ali e a tela de sugerir jogo
   para a biblioteca da comunidade.
 - **GOG e Xbox foram escritos, mas NAO verificados contra uma instalacao
