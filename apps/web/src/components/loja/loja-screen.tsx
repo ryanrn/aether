@@ -3,10 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import {
   formatarMoedas,
+  formatarProgresso,
   MOEDA,
   MOTIVO_LABEL,
   raridadePorId,
   type Carteira,
+  type MissaoDaPessoa,
   type CosmeticoDeLoja,
   type CosmeticType,
   type MovimentoPublico,
@@ -18,6 +20,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { equiparCosmeticoAction } from "@/server/actions/profile";
 import { comprarCosmeticoAction } from "@/server/actions/moedas";
+import { resgatarMissaoAction } from "@/server/actions/missoes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -71,11 +74,13 @@ function pesoRaridade(id: string): number {
 export function LojaScreen({
   itens: itensDoServidor,
   carteira,
+  missoes,
   plano: _plano,
   user,
 }: {
   itens: CosmeticoDeLoja[];
   carteira: Carteira;
+  missoes: MissaoDaPessoa[];
   plano: PlanTier;
   user: UserInfo;
 }) {
@@ -281,7 +286,10 @@ export function LojaScreen({
 
           {/* conteúdo */}
           {aba === "moedas" ? (
-            <Extrato saldo={saldo} movimentos={carteira.movimentos} />
+            <>
+              <Missoes inicial={missoes} onResgatar={setSaldo} />
+              <Extrato saldo={saldo} movimentos={carteira.movimentos} />
+            </>
           ) : aba === "meus" ? (
             <Inventario
               itens={ordenar(filtrado.filter((c) => c.possui))}
@@ -846,6 +854,115 @@ function PreviaDialog({
   );
 }
 
+/* ---------------------------------------------------------------- missões */
+
+function Missoes({
+  inicial,
+  onResgatar,
+}: {
+  inicial: MissaoDaPessoa[];
+  onResgatar: (saldo: number) => void;
+}) {
+  const [missoes, setMissoes] = useState(inicial);
+  const [resgatando, setResgatando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function resgatar(m: MissaoDaPessoa) {
+    setErro(null);
+    setResgatando(m.id);
+    startTransition(async () => {
+      const r = await resgatarMissaoAction(m.id);
+      setResgatando(null);
+      if (!r.ok) {
+        setErro(r.error);
+        return;
+      }
+      onResgatar(r.data.saldo);
+      setMissoes((lista) =>
+        lista.map((x) => (x.id === m.id ? { ...x, resgatada: true } : x)),
+      );
+    });
+  }
+
+  if (missoes.length === 0) return null;
+
+  return (
+    <section className="mt-7">
+      <h2 className="text-[14px] font-semibold text-ink-100">Missões</h2>
+      <p className="mt-1 text-[12.5px] text-ink-400">
+        As diárias recomeçam à meia-noite (Brasília); as semanais, toda segunda.
+        Tempo em voz conta com mais alguém no canal; tempo jogando conta com o
+        app de desktop detectando o jogo.
+      </p>
+      {erro ? <p className="mt-2 text-[13px] text-signal-dnd">{erro}</p> : null}
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {missoes.map((m) => {
+          const pct = Math.min(100, Math.round((m.valor / m.meta) * 100));
+          return (
+            <li
+              key={m.id}
+              className="grid gap-2 rounded-xl border border-line bg-base-900 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13.5px] font-semibold text-ink-100">
+                    {m.titulo}
+                    <span className="ml-2 rounded border border-line px-1.5 py-px align-middle text-[10px] font-medium uppercase tracking-[0.06em] text-ink-500">
+                      {m.periodo === "DIARIA" ? "Diária" : "Semanal"}
+                    </span>
+                  </p>
+                  {m.descricao ? (
+                    <p className="mt-0.5 text-[12px] text-ink-400">{m.descricao}</p>
+                  ) : null}
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[12.5px] font-semibold text-accent-300">
+                  <AetherIcon name="sparkle" className="h-3.5 w-3.5" />+{m.recompensa}
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={m.meta}
+                aria-valuenow={Math.min(m.valor, m.meta)}
+                aria-label={m.titulo}
+                className="h-1.5 overflow-hidden rounded-full bg-base-750"
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width]",
+                    m.concluida ? "bg-signal-online" : "bg-accent-500",
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {formatarProgresso(m.metrica, m.valor, m.meta)}
+                </span>
+                {m.resgatada ? (
+                  <span className="text-[12px] font-semibold text-signal-online">
+                    Resgatada ✓
+                  </span>
+                ) : m.concluida ? (
+                  <button
+                    type="button"
+                    disabled={resgatando === m.id}
+                    onClick={() => resgatar(m)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-500 px-3 text-[12px] font-bold text-[#04122b] transition-colors hover:bg-accent-400 disabled:opacity-60"
+                  >
+                    {resgatando === m.id ? "Resgatando…" : "Resgatar"}
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------------- extrato */
 
 function Extrato({
@@ -867,8 +984,8 @@ function Extrato({
           <span className="text-[15px] font-medium text-ink-400">{MOEDA.plural}</span>
         </p>
         <p className="mt-2 text-[12.5px] leading-relaxed text-ink-400">
-          Use para comprar decorações e banners. Logo dará para ganhar{" "}
-          {MOEDA.plural} com missões: tempo em voz, horas jogando e dias seguidos.
+          Use para comprar decorações e banners. Ganhe {MOEDA.plural} com as
+          missões acima: tempo em voz, horas jogando e dias em que você aparece.
         </p>
       </div>
 

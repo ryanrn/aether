@@ -207,6 +207,7 @@ model User {
   cosmeticos         UserCosmetic[]
   movimentosDeMoedas MovimentoDeMoedas[] @relation("MovimentoDono")
   moedasConcedidas   MovimentoDeMoedas[] @relation("MovimentoAtor")
+  progressoDeMissoes ProgressoDeMissao[]
   /// So quando `kind = BOT`: a `Application` dona desta identidade. Nulo em
   /// humano e webhook.
   application        Application?       @relation("AppBot")
@@ -1118,6 +1119,69 @@ model MovimentoDeMoedas {
 
   /// o extrato de uma pessoa, mais recente primeiro
   @@index([userId, createdAt])
+}
+
+/// O que uma missao mede.
+enum MetricaDeMissao {
+  /// minutos em canal de voz com mais alguem, sem estar ensurdecido
+  MINUTOS_EM_VOZ
+  /// minutos com jogo detectado pelo app de desktop (e nao invisivel)
+  MINUTOS_JOGANDO
+  /// dias em que a pessoa abriu o app (conta 1 por dia)
+  DIAS_ATIVOS
+}
+
+/// De quanto em quanto tempo a missao recomeca.
+enum PeriodoDeMissao {
+  /// todo dia, a meia-noite de Brasilia
+  DIARIA
+  /// toda segunda-feira, a meia-noite de Brasilia
+  SEMANAL
+}
+
+/// Uma missao do catalogo (Estagio 2 da loja). Cadastrada e ajustada pela
+/// equipe; a migracao ja cria as cinco primeiras.
+model Missao {
+  id         String          @id @default(cuid())
+  slug       String          @unique
+  titulo     String
+  descricao  String?
+  metrica    MetricaDeMissao
+  /// quanto da metrica completa a missao (minutos, dias)
+  meta       Int
+  /// moedas ao resgatar
+  recompensa Int
+  periodo    PeriodoDeMissao
+  ativa      Boolean         @default(true)
+  ordem      Int             @default(0)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  progresso ProgressoDeMissao[]
+
+  @@index([ativa, metrica])
+}
+
+/// O progresso de uma pessoa numa missao, NUM periodo (`2026-11-02` para a
+/// diaria, `2026-W45` para a semanal). Periodo novo = linha nova: a missao
+/// "recomeca" sem apagar nada, e o historico fica.
+///
+/// A chave composta e o que impede resgatar duas vezes: so existe UMA linha
+/// por pessoa, missao e periodo, e `resgatadaEm` so e marcado uma vez (com
+/// `resgatadaEm IS NULL` no WHERE).
+model ProgressoDeMissao {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missaoId    String
+  missao      Missao    @relation(fields: [missaoId], references: [id], onDelete: Cascade)
+  periodo     String
+  valor       Int       @default(0)
+  resgatadaEm DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@id([userId, missaoId, periodo])
+  /// "minhas missoes deste periodo"
+  @@index([userId, periodo])
 }
 
 model UserCosmetic {

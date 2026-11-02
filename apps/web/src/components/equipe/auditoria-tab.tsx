@@ -21,6 +21,7 @@ const ROTULO_ACAO: Record<string, string> = {
   "global.cosmetico_excluido": "Cosmético excluído",
   "global.cosmetico_publicado": "Cosmético publicado/despublicado",
   "global.moedas_concedidas": "Moedas enviadas/retiradas",
+  "global.missao_ajustada": "Missão ajustada",
   "global.aplicacao_bloqueada": "Aplicação bloqueada",
   "global.aplicacao_desbloqueada": "Aplicação desbloqueada",
   "global.usuario_silenciado": "Usuário silenciado",
