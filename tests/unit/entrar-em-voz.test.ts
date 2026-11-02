@@ -95,6 +95,7 @@ const USER: PublicUser = {
   plano: "FREE",
   moldura: null,
   decoracao: null,
+  placa: null,
 };
 
 beforeEach(() => {

@@ -11,6 +11,7 @@ import { log } from "@aether/shared/log";
 import { sessaoDaEquipe } from "../guards";
 import { writeAudit } from "../audit";
 import {
+  ColecaoInexistente,
   CosmeticoNaoEncontrado,
   SlugEmUso,
   concederCosmetico,
@@ -51,6 +52,7 @@ function lerMeta(formData: FormData) {
     precoMoedas: formData.get("precoMoedas"),
     tierMinimo: formData.get("tierMinimo"),
     ordem: formData.get("ordem"),
+    colecaoId: formData.get("colecaoId"),
   });
 }
 
@@ -145,6 +147,9 @@ export async function criarCosmeticoAction(
       if (erro instanceof SlugEmUso) {
         return fail("Ja existe um cosmetico com esse slug", "slug");
       }
+      if (erro instanceof ColecaoInexistente) {
+        return fail("Essa colecao nao existe mais", "colecaoId");
+      }
       throw erro;
     }
   } catch (error) {
@@ -177,6 +182,7 @@ export async function editarCosmeticoAction(
       precoMoedas: parsed.data.precoMoedas,
       tierMinimo: parsed.data.tierMinimo,
       ordem: parsed.data.ordem,
+      colecaoId: parsed.data.colecaoId,
     };
 
     let asset: AssetDeCosmetico | null = null;
@@ -198,6 +204,9 @@ export async function editarCosmeticoAction(
     } catch (erro) {
       if (asset) await limparAsset(asset);
       if (erro instanceof CosmeticoNaoEncontrado) return fail("Nao encontrado");
+      if (erro instanceof ColecaoInexistente) {
+        return fail("Essa colecao nao existe mais", "colecaoId");
+      }
       throw erro;
     }
   } catch (error) {

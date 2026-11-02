@@ -4089,6 +4089,173 @@ nada.
 - **Mudar a metrica de uma missao** nao e possivel pelo painel (so meta,
   recompensa e ativa); o gateway relê o catalogo em ate 5 minutos.
 
+## Loja: placa de nome e efeito de perfil (Estagio 3a da economia, 02/11/2026)
+
+Dois tipos novos de cosmetico, alem de decoracao e banner. A equipe cadastra
+pelo painel (aba Cosmeticos), a loja vende em moedas ou por plano como os
+outros, e a pessoa equipa na loja ou em **Minha conta**.
+
+| Tipo | Onde aparece | Arte |
+| --- | --- | --- |
+| **Placa de nome** (`NAMEPLATE`) | atras da linha da pessoa na lista de membros | faixa ~6:1 (ex.: 720x120), PNG ou WEBP, pode ser animada |
+| **Efeito de perfil** (`PROFILE_EFFECT`) | por cima do cartao de perfil (o popup e a tela `/app/perfil`) | em pe ~3:4 (ex.: 600x800), fundo transparente, normalmente WEBP animado |
+
+### Como funciona
+
+- **Banco** (`20261102220000_placa_e_efeito`): dois valores novos no enum
+  `CosmeticType` (`ADD VALUE IF NOT EXISTS`, por causa do drift antigo de
+  producao) e `User.placaId` / `User.efeitoId`, com FK `ON DELETE SET NULL`:
+  apagar o item desequipa.
+- **Qual coluna recebe cada tipo** mora num lugar so: `CAMPO_EQUIPADO` em
+  `services/cosmeticos.ts`. E um `Record` por tipo, entao tipo novo sem
+  coluna nao compila. Antes, um ternario mandava qualquer tipo que nao fosse
+  decoracao para o banner.
+- **Placa viaja no `PublicUser`** (`placa: string | null`), porque a lista de
+  membros e desenhada a partir dele. Ela sai de `SELECT_USUARIO_PUBLICO`, um
+  LEFT JOIN por chave primaria, e e resolvida em `toPublicUser` contra o plano
+  e contra `ativo` (`imagemEfetiva`), como a decoracao. Gateway e web usam a
+  mesma funcao.
+- **Efeito NAO viaja no `PublicUser`.** Como o banner, so o cartao usa: ele
+  vem em `PerfilParaCartao.efeito`, buscado quando o cartao abre.
+- **Render** (`components/profile/cosmeticos-de-perfil.tsx`):
+  - `FundoDePlaca` traz um degrade escuro do lado do avatar e do nome, para o
+    texto continuar legivel sobre arte de terceiros.
+  - `CamadaDeEfeito` fica por cima e nao captura clique. O recorte pelo
+    arredondado do cartao fica na propria camada, para nao cortar a
+    decoracao do avatar, que estoura o topo de proposito.
+- **Envio**: as regras de proporcao estao em `COSMETIC_REGRAS`, e a mensagem
+  de erro agora mostra o `alvo` do tipo. Nao ha normalizacao: so a decoracao
+  passa por ela.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/cosmeticos-catalogo.test.ts tests/unit/usuario-publico.test.ts
+```
+
+A migracao foi aplicada no PGlite com as 40 anteriores:
+
+- o enum fica com os quatro valores;
+- repetir o `ADD VALUE` nao quebra;
+- equipar grava nas colunas;
+- apagar o item zera as duas;
+- a FK barra id inexistente.
+
+Ao vivo, com a flag `loja_de_cosmeticos` ligada:
+
+1. No painel da equipe, crie uma placa (720x120) e um efeito (600x800,
+   transparente).
+2. Equipe os dois em Minha conta.
+3. Confira a placa atras do seu nome na lista de membros de um servidor.
+4. Abra o seu cartao: o efeito deve aparecer por cima.
+
+### Limitacoes
+
+- **Nao testado ao vivo** (so testes, PGlite e build).
+- **Migracao aplicada em producao em 02/11/2026**, junto com as de moedas,
+  missoes e colecoes.
+- **A placa so aparece na lista de membros do servidor.** Ela nao aparece na
+  lista de DMs nem na de amigos.
+- **Com o gateway antigo, a placa pisca.** Ele monta o `PublicUser` sem o
+  campo `placa`. Quando chega uma atualizacao de perfil por ele, a linha
+  perde a placa ate a pagina recarregar. Com o gateway novo publicado, a
+  placa nova chega a todos pelo `profile:changed`.
+- **O efeito usa o arquivo cheio na previa da loja**, nao a miniatura, que e
+  estatica e mataria a animacao.
+- **Sem limite de peso para efeito animado** alem do `ladoMax` (2048px). Um
+  WEBP animado longo pode pesar no cartao.
+- **Colecoes, rotacao e destaque com prazo**: ver o Estagio 3b, logo abaixo.
+
+## Loja: colecoes, prazo e previa no perfil (Estagio 3b da economia, 03/11/2026)
+
+A vitrine passa a ter **colecoes** ("Neon", "Halloween"), com periodo de venda
+opcional. A aba Destaques abre com a colecao em destaque. Na previa de cada
+item, a aba **No seu perfil** mostra o cartao com o item aplicado sobre o que
+a pessoa ja usa.
+
+### Regras do periodo
+
+A regra mora em `packages/shared/src/colecoes.ts`; servidor e tela usam a
+mesma.
+
+| Situacao | Na loja | Comprar / resgatar | Equipar |
+| --- | --- | --- | --- |
+| Item sem colecao | aparece | sim | como antes |
+| Colecao no ar | aparece, com "Sai em N dias" se tiver fim | sim | sim |
+| Colecao agendada, encerrada ou despublicada | some (fica para quem tem ou usa) | nao | so quem possui |
+| Item gratis em colecao **com fim** | "Resgatar gratis" | o resgate grava a posse | so depois de resgatar; fica seu apos o prazo |
+
+- **No ar** quer dizer: publicada, ja comecou e ainda nao acabou. O fim e
+  exclusivo.
+- **Quem possui o item fica com ele para sempre.** Isso vale para compra,
+  resgate ou concessao da equipe, mesmo depois que a colecao sai do ar.
+- **O servidor confere o periodo** na compra, no resgate e ao equipar. A
+  tela so esconde.
+
+### Como funciona
+
+- **Banco** (`20261103000000_colecoes`):
+  - tabela `ColecaoDeCosmeticos`, com CHECK de fim depois do inicio, slug unico
+    e RLS;
+  - `Cosmetic.colecaoId`, com FK `SET NULL`: apagar a colecao solta os itens,
+    que voltam a valer sem prazo, e nao mexe em posse.
+- **Resgate gratis** (`resgatarCosmetico` em `services/moedas.ts`): grava
+  `UserCosmetic` com `origem = "resgate"`. Nao mexe em saldo nem em extrato.
+  O unique da posse barra o resgate duplo, e a action trata a repeticao como
+  sucesso.
+- **Vitrine** (`/app/loja`):
+  - o topo e a primeira colecao marcada como destaque que tenha item
+    visivel; sem nenhuma, volta o heroi por raridade;
+  - cada colecao no ar ganha uma secao;
+  - "Novidades" agora sao os itens cadastrados por ultimo.
+- **O "agora" e um so por pagina:** o servidor passa `agoraIso`, e o selo de
+  prazo sai igual no HTML e na hidratacao.
+- **Painel da equipe** (aba Cosmeticos):
+  - a secao **Colecoes** cria, edita e exclui, e mostra o estado (No ar,
+    Agendada, Encerrada, Rascunho);
+  - o formulario do item ganha o campo **Colecao**;
+  - as datas sao convertidas para ISO no navegador, no fuso de quem digita;
+  - criar, editar e excluir colecao entram na auditoria global.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/colecoes.test.ts tests/unit/colecoes-loja.test.ts
+```
+
+A migracao foi aplicada no PGlite com as 41 anteriores. Ela barra fim antes
+do inicio, slug repetido e item em colecao inexistente; apagar a colecao
+solta o item e mantem a posse; o RLS fica ligado.
+
+Ao vivo, com a flag `loja_de_cosmeticos` ligada:
+
+1. No painel, crie a colecao "Teste", publicada, em destaque, com fim daqui a
+   2 dias.
+2. Coloque nela um banner pago e um banner gratis.
+3. Na loja, a aba Destaques deve abrir com "Teste" e o selo "Sai em 2 dias".
+4. O gratis deve mostrar "Resgatar gratis"; resgate e equipe.
+5. Edite o fim da colecao para ontem. Os dois somem da vitrine, o resgatado
+   continua em "Meus cosmeticos" e equipado, e o pago nao se compra mais.
+
+### Limitacoes
+
+- **Nao testado ao vivo** (so testes, PGlite e build).
+- **Migracao aplicada em producao em 02/11/2026**, antes do deploy do web.
+  Esta versao do codigo consulta `colecaoId`; num banco sem a migracao, o
+  catalogo cai para vazio e a loja mostra "abre em breve".
+- **Despublicar a colecao nao tira o item de quem ja usa o gratis sem
+  prazo.** A leitura no perfil olha so `Cosmetic.ativo`. Para recolher um
+  item, desative o item.
+- **Mover para uma colecao agendada um item gratis que ja estava em uso nao
+  o tira de quem usa.** O catalogo o esconde de quem nao usa ate o inicio,
+  mas quem ja o tinha equipado continua com ele.
+- **A vitrine nao vira sozinha no instante do fim:** a pagina so troca no
+  proximo carregamento. O servidor recusa a compra depois do fim, entao nada
+  se vende fora do prazo.
+- **Cada item pertence a no maximo uma colecao.**
+- **Fica de fora:** presente para outra pessoa (moedas farmaveis permitiriam
+  lavar moeda entre contas), pacote com desconto e aviso de colecao nova.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:

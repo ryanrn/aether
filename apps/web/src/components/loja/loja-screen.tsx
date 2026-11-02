@@ -2,12 +2,15 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
+  COSMETIC_TYPES,
   formatarMoedas,
   formatarProgresso,
   MOEDA,
   MOTIVO_LABEL,
   raridadePorId,
+  rotuloDoPrazo,
   type Carteira,
+  type ColecaoDaLoja,
   type MissaoDaPessoa,
   type CosmeticoDeLoja,
   type CosmeticType,
@@ -16,10 +19,17 @@ import {
 } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import {
+  CamadaDeEfeito,
+  FundoDePlaca,
+} from "@/components/profile/cosmeticos-de-perfil";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { equiparCosmeticoAction } from "@/server/actions/profile";
-import { comprarCosmeticoAction } from "@/server/actions/moedas";
+import {
+  comprarCosmeticoAction,
+  resgatarCosmeticoAction,
+} from "@/server/actions/moedas";
 import { resgatarMissaoAction } from "@/server/actions/missoes";
 import { cn } from "@/lib/utils";
 
@@ -38,20 +48,29 @@ import { cn } from "@/lib/utils";
  * a tela so esconde o que seria recusado.
  */
 
-type Aba = "destaques" | "DECORATION" | "BANNER" | "meus" | "moedas";
-
-const ABAS: { id: Aba; label: string }[] = [
-  { id: "destaques", label: "Destaques" },
-  { id: "DECORATION", label: "Decorações" },
-  { id: "BANNER", label: "Banners" },
-  { id: "meus", label: "Meus cosméticos" },
-  { id: "moedas", label: `Minhas ${MOEDA.plural}` },
-];
+type Aba = "destaques" | CosmeticType | "meus" | "moedas";
 
 const TIPO_LABEL: Record<CosmeticType, string> = {
   DECORATION: "Decoração",
   BANNER: "Banner",
+  NAMEPLATE: "Placa de nome",
+  PROFILE_EFFECT: "Efeito de perfil",
 };
+
+/** O nome de cada tipo no plural — abas, secoes e grupos do inventario. */
+const TIPO_PLURAL: Record<CosmeticType, string> = {
+  DECORATION: "Decorações",
+  BANNER: "Banners",
+  NAMEPLATE: "Placas de nome",
+  PROFILE_EFFECT: "Efeitos de perfil",
+};
+
+const ABAS: { id: Aba; label: string }[] = [
+  { id: "destaques", label: "Destaques" },
+  ...COSMETIC_TYPES.map((tipo) => ({ id: tipo, label: TIPO_PLURAL[tipo] })),
+  { id: "meus", label: "Meus cosméticos" },
+  { id: "moedas", label: `Minhas ${MOEDA.plural}` },
+];
 
 const TIER_LABEL: Record<PlanTier, string> = {
   FREE: "",
@@ -75,15 +94,25 @@ export function LojaScreen({
   itens: itensDoServidor,
   carteira,
   missoes,
+  colecoes,
+  agoraIso,
   plano: _plano,
   user,
 }: {
   itens: CosmeticoDeLoja[];
   carteira: Carteira;
   missoes: MissaoDaPessoa[];
+  /** as colecoes no ar, na ordem da vitrine (a de destaque primeiro) */
+  colecoes: ColecaoDaLoja[];
+  /**
+   * O "agora" do servidor, para o selo de prazo sair igual no HTML e na
+   * hidratacao (calcular `new Date()` dos dois lados poderia divergir).
+   */
+  agoraIso: string;
   plano: PlanTier;
   user: UserInfo;
 }) {
+  const agora = useMemo(() => new Date(agoraIso), [agoraIso]);
   const [aba, setAba] = useState<Aba>("destaques");
   const [saldo, setSaldo] = useState(carteira.saldo);
   /**
@@ -95,7 +124,7 @@ export function LojaScreen({
   const itens = useMemo(
     () =>
       itensDoServidor.map((c) =>
-        compradas.has(c.id) ? { ...c, possui: true } : c,
+        compradas.has(c.id) ? { ...c, possui: true, exigeResgate: false } : c,
       ),
     [itensDoServidor, compradas],
   );
@@ -108,16 +137,44 @@ export function LojaScreen({
 
   // Estado local do equipado, por tipo — otimista, volta atras se o servidor recusa.
   const [equipado, setEquipado] = useState<Record<CosmeticType, string | null>>(
-    () => ({
-      DECORATION: itens.find((c) => c.tipo === "DECORATION" && c.equipado)?.id ?? null,
-      BANNER: itens.find((c) => c.tipo === "BANNER" && c.equipado)?.id ?? null,
-    }),
+    () =>
+      Object.fromEntries(
+        COSMETIC_TYPES.map((tipo) => [
+          tipo,
+          itens.find((c) => c.tipo === tipo && c.equipado)?.id ?? null,
+        ]),
+      ) as Record<CosmeticType, string | null>,
   );
   const [previa, setPrevia] = useState<CosmeticoDeLoja | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const estaEquipado = (c: CosmeticoDeLoja) => equipado[c.tipo] === c.id;
+
+  /** O que a pessoa usa agora, por tipo — a base da previa "No seu perfil". */
+  const equipados = useMemo(
+    () =>
+      Object.fromEntries(
+        COSMETIC_TYPES.map((tipo) => [
+          tipo,
+          itens.find((c) => c.id === equipado[tipo]) ?? null,
+        ]),
+      ) as Record<CosmeticType, CosmeticoDeLoja | null>,
+    [itens, equipado],
+  );
+
+  function resgatar(c: CosmeticoDeLoja) {
+    setErro(null);
+    startTransition(async () => {
+      const r = await resgatarCosmeticoAction(c.id);
+      if (!r.ok) {
+        setErro(r.error);
+        return;
+      }
+      setCompradas((s) => new Set(s).add(c.id));
+      setPrevia({ ...c, possui: true, exigeResgate: false });
+    });
+  }
 
   function comprar(c: CosmeticoDeLoja) {
     setErro(null);
@@ -171,6 +228,23 @@ export function LojaScreen({
           a.nome.localeCompare(b.nome),
       )[0];
   }, [itens]);
+
+  /**
+   * A colecao que abre Destaques: a primeira marcada como destaque que tenha
+   * algum item visivel. Sem ela, vale o heroi por raridade de antes.
+   */
+  const colecaoDestaque = useMemo(
+    () =>
+      colecoes.find(
+        (c) => c.destaque && itens.some((i) => i.colecaoId === c.id),
+      ) ?? null,
+    [colecoes, itens],
+  );
+
+  /** "Novidades" e o que entrou por ultimo no catalogo. */
+  function maisNovos(lista: CosmeticoDeLoja[]) {
+    return [...lista].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+  }
 
   function ordenar(lista: CosmeticoDeLoja[]) {
     return [...lista].sort(
@@ -294,28 +368,64 @@ export function LojaScreen({
             <Inventario
               itens={ordenar(filtrado.filter((c) => c.possui))}
               user={user}
+              agora={agora}
               estaEquipado={estaEquipado}
               onAbrir={setPrevia}
             />
           ) : aba === "destaques" ? (
             <>
-              {heroi ? (
+              {colecaoDestaque ? (
+                <ColecaoEmDestaque
+                  colecao={colecaoDestaque}
+                  itens={ordenar(
+                    filtrado.filter((c) => c.colecaoId === colecaoDestaque.id),
+                  )}
+                  user={user}
+                  agora={agora}
+                  estaEquipado={estaEquipado}
+                  onAbrir={setPrevia}
+                />
+              ) : heroi ? (
                 <Hero cosmetico={heroi} user={user} onVisualizar={setPrevia} />
               ) : null}
+              {colecoes
+                .filter((col) => col.id !== colecaoDestaque?.id)
+                .map((col) => {
+                  const doGrupo = filtrado.filter((c) => c.colecaoId === col.id);
+                  if (doGrupo.length === 0) return null;
+                  return (
+                    <Secao
+                      key={col.id}
+                      titulo={col.nome}
+                      subtitulo={
+                        [col.descricao, rotuloDoPrazo(col.fimEm, agora)]
+                          .filter(Boolean)
+                          .join(" · ") || undefined
+                      }
+                      itens={ordenar(doGrupo)}
+                      user={user}
+                      agora={agora}
+                      estaEquipado={estaEquipado}
+                      onAbrir={setPrevia}
+                    />
+                  );
+                })}
               <Secao
                 titulo="Novidades"
-                itens={ordenar(filtrado).slice(0, 8)}
+                itens={maisNovos(filtrado).slice(0, 8)}
                 user={user}
+                agora={agora}
                 estaEquipado={estaEquipado}
-                heroiId={heroi?.id}
+                heroiId={colecaoDestaque ? undefined : heroi?.id}
                 onAbrir={setPrevia}
               />
             </>
           ) : (
             <Secao
-              titulo={aba === "DECORATION" ? "Decorações" : "Banners"}
+              titulo={TIPO_PLURAL[aba]}
               itens={ordenar(filtrado.filter((c) => c.tipo === aba))}
               user={user}
+              agora={agora}
               estaEquipado={estaEquipado}
               heroiId={heroi?.id}
               onAbrir={setPrevia}
@@ -333,6 +443,9 @@ export function LojaScreen({
           erro={erro}
           pending={pending}
           onComprar={() => comprar(previa)}
+          onResgatar={() => resgatar(previa)}
+          equipados={equipados}
+          agora={agora}
           onFechar={() => setPrevia(null)}
           onEquipar={() => {
             equipar(previa, previa.tipo);
@@ -352,15 +465,19 @@ export function LojaScreen({
 
 function Secao({
   titulo,
+  subtitulo,
   itens,
   user,
+  agora,
   estaEquipado,
   heroiId,
   onAbrir,
 }: {
   titulo: string;
+  subtitulo?: string;
   itens: CosmeticoDeLoja[];
   user: UserInfo;
+  agora: Date;
   estaEquipado: (c: CosmeticoDeLoja) => boolean;
   heroiId?: string;
   onAbrir: (c: CosmeticoDeLoja) => void;
@@ -369,6 +486,11 @@ function Secao({
     <section className="mt-8">
       <h2 className="mb-3.5 font-brand text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-300">
         {titulo}
+        {subtitulo ? (
+          <span className="ml-3 font-sans text-[12px] font-normal normal-case tracking-normal text-ink-500">
+            {subtitulo}
+          </span>
+        ) : null}
       </h2>
       {itens.length === 0 ? (
         <div className="rounded-md border border-dashed border-line px-5 py-11 text-center text-[13px] text-ink-400">
@@ -382,6 +504,7 @@ function Secao({
               key={c.id}
               cosmetico={c}
               user={user}
+              agora={agora}
               equipado={estaEquipado(c)}
               destaque={c.id === heroiId}
               onAbrir={() => onAbrir(c)}
@@ -396,18 +519,16 @@ function Secao({
 function Inventario({
   itens,
   user,
+  agora,
   estaEquipado,
   onAbrir,
 }: {
   itens: CosmeticoDeLoja[];
   user: UserInfo;
+  agora: Date;
   estaEquipado: (c: CosmeticoDeLoja) => boolean;
   onAbrir: (c: CosmeticoDeLoja) => void;
 }) {
-  const grupos: { tipo: CosmeticType; label: string }[] = [
-    { tipo: "DECORATION", label: "Decorações" },
-    { tipo: "BANNER", label: "Banners" },
-  ];
   const temAlgum = itens.length > 0;
 
   return (
@@ -421,13 +542,13 @@ function Inventario({
           Peças grátis já contam — equipe uma nas outras abas.
         </div>
       ) : (
-        grupos.map(({ tipo, label }) => {
+        COSMETIC_TYPES.map((tipo) => {
           const doTipo = itens.filter((c) => c.tipo === tipo);
           if (doTipo.length === 0) return null;
           return (
             <div key={tipo} className="mt-6 first:mt-0">
               <span className="mb-2.5 block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-400">
-                {label}
+                {TIPO_PLURAL[tipo]}
               </span>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4">
                 {doTipo.map((c) => (
@@ -435,6 +556,7 @@ function Inventario({
                     key={c.id}
                     cosmetico={c}
                     user={user}
+                    agora={agora}
                     equipado={estaEquipado(c)}
                     onAbrir={() => onAbrir(c)}
                   />
@@ -505,29 +627,102 @@ function Hero({
   );
 }
 
+/* ------------------------------------------------------ colecao em destaque */
+
+/**
+ * O topo de Destaques quando ha uma colecao marcada: nome, descricao e prazo
+ * da colecao, e os itens dela logo abaixo.
+ */
+function ColecaoEmDestaque({
+  colecao,
+  itens,
+  user,
+  agora,
+  estaEquipado,
+  onAbrir,
+}: {
+  colecao: ColecaoDaLoja;
+  itens: CosmeticoDeLoja[];
+  user: UserInfo;
+  agora: Date;
+  estaEquipado: (c: CosmeticoDeLoja) => boolean;
+  onAbrir: (c: CosmeticoDeLoja) => void;
+}) {
+  const prazo = rotuloDoPrazo(colecao.fimEm, agora);
+  return (
+    <section
+      className="mt-5 rounded-2xl border border-line bg-base-850 p-6 shadow-[var(--shadow-pop)] sm:p-8"
+      style={{
+        backgroundImage:
+          "radial-gradient(80% 130% at 88% 0, color-mix(in oklch, var(--color-accent-700) 26%, transparent), transparent 60%)",
+      }}
+    >
+      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent-300">
+        Coleção em destaque{prazo ? ` · ${prazo}` : ""}
+      </span>
+      <h2 className="mt-2 font-brand text-[clamp(22px,3vw,30px)] font-semibold tracking-[0.02em] text-ink-100">
+        {colecao.nome}
+      </h2>
+      {colecao.descricao ? (
+        <p className="mt-1 max-w-[56ch] text-[13px] text-ink-300">
+          {colecao.descricao}
+        </p>
+      ) : null}
+      {itens.length === 0 ? (
+        <p className="mt-5 text-[13px] text-ink-400">
+          Nenhum item desta coleção bate com a busca ou os filtros.
+        </p>
+      ) : (
+        <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4">
+          {itens.map((c) => (
+            <Card
+              key={c.id}
+              cosmetico={c}
+              user={user}
+              agora={agora}
+              equipado={estaEquipado(c)}
+              onAbrir={() => onAbrir(c)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ------------------------------------------------------------------ card */
 
 function Card({
   cosmetico,
   user,
+  agora,
   equipado,
   destaque,
   onAbrir,
 }: {
   cosmetico: CosmeticoDeLoja;
   user: UserInfo;
+  agora: Date;
   equipado: boolean;
   destaque?: boolean;
   onAbrir: () => void;
 }) {
   const rar = raridadePorId(cosmetico.raridade);
+  // "Adquirido": comprado, ou resgatado de uma colecao com prazo.
+  const seu =
+    cosmetico.possui &&
+    (cosmetico.precoMoedas != null || cosmetico.fimEm != null);
+  // O prazo so interessa a quem ainda nao tem o item.
+  const prazo = seu ? null : rotuloDoPrazo(cosmetico.fimEm, agora);
   const tag = equipado
     ? { texto: "Equipado ✓", cls: "border-accent-500/45 text-accent-300" }
-    : cosmetico.possui && cosmetico.precoMoedas != null
+    : seu
       ? { texto: "Adquirido", cls: "border-signal-online/40 text-signal-online" }
-      : destaque
-        ? { texto: "Em destaque", cls: "border-[#e5626b]/40 text-[#e5626b]" }
-        : null;
+      : prazo
+        ? { texto: prazo, cls: "border-signal-idle/40 text-signal-idle" }
+        : destaque
+          ? { texto: "Em destaque", cls: "border-[#e5626b]/40 text-[#e5626b]" }
+          : null;
 
   return (
     <button
@@ -592,7 +787,9 @@ function Card({
 function Preco({ cosmetico }: { cosmetico: CosmeticoDeLoja }) {
   if (cosmetico.precoMoedas == null) {
     return (
-      <span className="text-[12px] font-semibold text-signal-online">Grátis</span>
+      <span className="text-[12px] font-semibold text-signal-online">
+        {cosmetico.exigeResgate ? "Grátis · resgate" : "Grátis"}
+      </span>
     );
   }
   if (cosmetico.possui) {
@@ -630,6 +827,47 @@ function MediaDoCosmetico({
    */
   preferThumb?: boolean;
 }) {
+  const url =
+    preferThumb && cosmetico.thumbUrl ? cosmetico.thumbUrl : cosmetico.assetUrl;
+  if (cosmetico.tipo === "NAMEPLATE") {
+    // A linha da lista de membros, com a placa atras — como ela aparece.
+    return (
+      <div className="relative isolate flex w-[90%] items-center gap-2 overflow-hidden rounded-md px-2 py-[7px]">
+        <FundoDePlaca url={url} />
+        <Avatar
+          userId={user.id}
+          name={user.displayName}
+          src={user.avatarUrl}
+          moldura={user.moldura}
+          px={Math.max(24, Math.round(px * 0.3))}
+        />
+        <span className="truncate text-[13px] font-medium text-ink-100">
+          {user.displayName}
+        </span>
+      </div>
+    );
+  }
+  if (cosmetico.tipo === "PROFILE_EFFECT") {
+    // Um cartao de perfil em miniatura, com o efeito por cima.
+    return (
+      <div className="relative aspect-[3/4] w-[58%] rounded-lg border border-line bg-base-850">
+        <div className="h-[28%] rounded-t-lg bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+        <div className="-mt-[14%] px-[10%]">
+          <Avatar
+            userId={user.id}
+            name={user.displayName}
+            src={user.avatarUrl}
+            moldura={user.moldura}
+            px={Math.max(28, Math.round(px * 0.4))}
+          />
+          <span className="mt-1 block truncate text-[12px] font-semibold text-ink-100">
+            {user.displayName}
+          </span>
+        </div>
+        <CamadaDeEfeito url={cosmetico.assetUrl} />
+      </div>
+    );
+  }
   if (cosmetico.tipo === "BANNER") {
     return (
       <div
@@ -652,13 +890,7 @@ function MediaDoCosmetico({
       src={user.avatarUrl}
       moldura={user.moldura}
       px={px}
-      decoracao={{
-        frenteUrl:
-          preferThumb && cosmetico.thumbUrl
-            ? cosmetico.thumbUrl
-            : cosmetico.assetUrl,
-        trasUrl: cosmetico.assetTrasUrl,
-      }}
+      decoracao={{ frenteUrl: url, trasUrl: cosmetico.assetTrasUrl }}
     />
   );
 }
@@ -669,10 +901,13 @@ function PreviaDialog({
   cosmetico,
   user,
   equipado,
+  equipados,
+  agora,
   saldo,
   erro,
   pending,
   onComprar,
+  onResgatar,
   onFechar,
   onEquipar,
   onRemover,
@@ -680,15 +915,21 @@ function PreviaDialog({
   cosmetico: CosmeticoDeLoja;
   user: UserInfo;
   equipado: boolean;
+  /** o que a pessoa usa hoje, por tipo — para a previa "No seu perfil" */
+  equipados: Record<CosmeticType, CosmeticoDeLoja | null>;
+  agora: Date;
   saldo: number;
   erro: string | null;
   pending: boolean;
   onComprar: () => void;
+  onResgatar: () => void;
   onFechar: () => void;
   onEquipar: () => void;
   onRemover: () => void;
 }) {
   const [fundo, setFundo] = useState<"escuro" | "claro">("escuro");
+  const [modo, setModo] = useState<"item" | "perfil">("item");
+  const prazo = cosmetico.possui ? null : rotuloDoPrazo(cosmetico.fimEm, agora);
   const rar = raridadePorId(cosmetico.raridade);
   const usavel = cosmetico.possui && !cosmetico.bloqueado;
   const preco = cosmetico.precoMoedas ?? 0;
@@ -704,6 +945,41 @@ function PreviaDialog({
       <div className="grid gap-6 sm:grid-cols-[240px_1fr]">
         <div className="flex flex-col items-center gap-3">
           <div
+            role="tablist"
+            aria-label="Modo da prévia"
+            className="flex rounded-md border border-line bg-base-900 p-0.5 text-[12px]"
+          >
+            {(
+              [
+                ["item", "Item"],
+                ["perfil", "No seu perfil"],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={modo === m}
+                onClick={() => setModo(m)}
+                className={cn(
+                  "rounded px-2.5 py-1 font-medium transition-colors",
+                  modo === m
+                    ? "bg-base-750 text-ink-100"
+                    : "text-ink-400 hover:text-ink-100",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {modo === "perfil" ? (
+            <PreviaNoPerfil
+              cosmetico={cosmetico}
+              equipados={equipados}
+              user={user}
+            />
+          ) : (
+          <div
             className={cn(
               "grid aspect-square w-[200px] place-items-center rounded-lg border border-line",
               fundo === "escuro"
@@ -711,7 +987,10 @@ function PreviaDialog({
                 : "bg-ink-100",
             )}
           >
-            {cosmetico.tipo === "BANNER" ? (
+            {cosmetico.tipo === "NAMEPLATE" ||
+            cosmetico.tipo === "PROFILE_EFFECT" ? (
+              <MediaDoCosmetico cosmetico={cosmetico} user={user} px={110} />
+            ) : cosmetico.tipo === "BANNER" ? (
               <div className="w-[88%]">
                 <div
                   className="overflow-hidden rounded-md border border-line"
@@ -756,7 +1035,8 @@ function PreviaDialog({
               />
             )}
           </div>
-          <div className="flex gap-2">
+          )}
+          <div className={cn("flex gap-2", modo === "perfil" && "hidden")}>
             {(["escuro", "claro"] as const).map((f) => (
               <button
                 key={f}
@@ -801,6 +1081,11 @@ function PreviaDialog({
               Preço
             </span>
             <Preco cosmetico={cosmetico} />
+            {prazo ? (
+              <span className="text-[12px] font-semibold text-signal-idle">
+                · {prazo}
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-1 flex flex-wrap gap-2">
@@ -809,6 +1094,21 @@ function PreviaDialog({
                 <AetherIcon name="lock" className="h-3.5 w-3.5" />
                 {TIER_LABEL[cosmetico.tierMinimo] || "Bloqueado"}
               </span>
+            ) : cosmetico.exigeResgate ? (
+              <div className="grid gap-1.5">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={onResgatar}
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-500 px-4 text-[13px] font-bold text-[#04122b] transition-colors hover:bg-accent-400 disabled:opacity-60"
+                >
+                  <AetherIcon name="sparkle" className="h-4 w-4" />
+                  {pending ? "Resgatando…" : "Resgatar grátis"}
+                </button>
+                <span className="text-[12px] text-ink-400">
+                  Por tempo limitado. Resgatado, fica seu depois do prazo.
+                </span>
+              </div>
             ) : !usavel ? (
               <div className="grid gap-1.5">
                 <button
@@ -851,6 +1151,82 @@ function PreviaDialog({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * O cartao de perfil da pessoa com o item APLICADO sobre o que ela ja usa:
+ * cada tipo mostra o item da previa se for dele, senao o equipado hoje. So
+ * visual — nada aqui equipa.
+ */
+function PreviaNoPerfil({
+  cosmetico,
+  equipados,
+  user,
+}: {
+  cosmetico: CosmeticoDeLoja;
+  equipados: Record<CosmeticType, CosmeticoDeLoja | null>;
+  user: UserInfo;
+}) {
+  const com = (tipo: CosmeticType) =>
+    cosmetico.tipo === tipo ? cosmetico : equipados[tipo];
+  const banner = com("BANNER");
+  const deco = com("DECORATION");
+  const placa = com("NAMEPLATE");
+  const efeito = com("PROFILE_EFFECT");
+
+  return (
+    <div className="grid w-[220px] gap-2">
+      <div className="relative rounded-xl border border-line bg-base-900">
+        <div className="overflow-hidden rounded-t-xl">
+          {banner ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={banner.assetUrl} alt="" className="h-[60px] w-full object-cover" />
+          ) : (
+            <div className="h-[52px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+          )}
+        </div>
+        <div className="-mt-7 px-3 pb-4">
+          {deco ? (
+            <AvatarDecorado
+              userId={user.id}
+              name={user.displayName}
+              src={user.avatarUrl}
+              moldura={user.moldura}
+              px={52}
+              ring="border-base-900"
+              decoracao={{ frenteUrl: deco.assetUrl, trasUrl: deco.assetTrasUrl }}
+            />
+          ) : (
+            <Avatar
+              userId={user.id}
+              name={user.displayName}
+              src={user.avatarUrl}
+              moldura={user.moldura}
+              px={52}
+              ring="border-base-900"
+            />
+          )}
+          <p className="mt-1.5 truncate text-[14px] font-semibold text-ink-100">
+            {user.displayName}
+          </p>
+        </div>
+        {efeito ? <CamadaDeEfeito url={efeito.assetUrl} /> : null}
+      </div>
+      <div className="relative isolate flex items-center gap-2 overflow-hidden rounded-md border border-line bg-base-900 px-2 py-[7px]">
+        {placa ? <FundoDePlaca url={placa.assetUrl} /> : null}
+        <Avatar
+          userId={user.id}
+          name={user.displayName}
+          src={user.avatarUrl}
+          moldura={user.moldura}
+          size="sm"
+        />
+        <span className="truncate text-[13px] font-medium text-ink-100">
+          {user.displayName}
+        </span>
+      </div>
+    </div>
   );
 }
 

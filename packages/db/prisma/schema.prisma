@@ -146,6 +146,13 @@ model User {
   /// cartao de perfil, entao NAO viaja no `PublicUser` (seria peso em toda
   /// mensagem) — o cartao resolve sob demanda, como a bio.
   bannerId                  String?
+  /// A PLACA DE NOME equipada (`Cosmetic` tipo NAMEPLATE): o fundo atras da
+  /// linha da pessoa na lista de membros. Viaja no `PublicUser`, como a
+  /// decoracao, porque a lista de membros e desenhada a partir dele.
+  placaId                   String?
+  /// O EFEITO DE PERFIL equipado (tipo PROFILE_EFFECT): so aparece no cartao de
+  /// perfil, entao, como o banner, NAO viaja no `PublicUser`.
+  efeitoId                  String?
   /// Saldo de moedas da loja. Nunca negativo — garantido por CHECK no banco
   /// (`User_saldo_nao_negativo`), e nao so pelo codigo. So muda junto de uma
   /// linha em `MovimentoDeMoedas`, na mesma transacao: o saldo e o resumo, o
@@ -204,6 +211,8 @@ model User {
   conexoes           Connection[]
   decoracao          Cosmetic?          @relation("UserDecoracao", fields: [decoracaoId], references: [id], onDelete: SetNull)
   banner             Cosmetic?          @relation("UserBanner", fields: [bannerId], references: [id], onDelete: SetNull)
+  placa              Cosmetic?          @relation("UserPlaca", fields: [placaId], references: [id], onDelete: SetNull)
+  efeito             Cosmetic?          @relation("UserEfeito", fields: [efeitoId], references: [id], onDelete: SetNull)
   cosmeticos         UserCosmetic[]
   movimentosDeMoedas MovimentoDeMoedas[] @relation("MovimentoDono")
   moedasConcedidas   MovimentoDeMoedas[] @relation("MovimentoAtor")
@@ -970,6 +979,8 @@ model PlanKeyRedemption {
 enum CosmeticType {
   DECORATION
   BANNER
+  NAMEPLATE
+  PROFILE_EFFECT
 }
 
 /// Um cosmetico de perfil cadastrado pela equipe — decoracao de avatar ou
@@ -1057,15 +1068,57 @@ model Cosmetic {
   /// viva — mesmo criterio de `PlanKey.criadaPor`.
   criadoPor String?
 
+  /// A colecao a que o item pertence (no maximo uma). Apagar a colecao so
+  /// solta o item (SET NULL). Coleção com periodo decide quando o item esta a
+  /// venda — ver `ColecaoDeCosmeticos`.
+  colecaoId String?
+  colecao   ColecaoDeCosmeticos? @relation(fields: [colecaoId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   equipadaComoDecoracao User[]         @relation("UserDecoracao")
   equipadoComoBanner    User[]         @relation("UserBanner")
+  equipadaComoPlaca     User[]         @relation("UserPlaca")
+  equipadoComoEfeito    User[]         @relation("UserEfeito")
   posses                UserCosmetic[]
 
   /// A loja e o painel filtram sempre por (tipo, ativo) e ordenam por `ordem`.
   @@index([tipo, ativo, ordem])
+  @@index([colecaoId])
+}
+
+/// Um grupo de cosmeticos na loja ("Neon", "Halloween"), com periodo
+/// opcional de venda.
+///
+/// FORA DO PERIODO (antes de `inicioEm`, depois de `fimEm`) ou com
+/// `ativa = false`, os itens da colecao saem da loja e nao se compram nem se
+/// equipam de novo — mas quem ja os POSSUI fica com eles para sempre. Item
+/// gratis numa colecao com `fimEm` precisa ser RESGATADO (vira posse) para
+/// continuar seu depois do prazo. A regra mora em `@aether/shared/colecoes`.
+model ColecaoDeCosmeticos {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  nome      String
+  descricao String?
+
+  /// Nulos = sem limite daquele lado. CHECK no banco: fim depois do inicio.
+  inicioEm DateTime?
+  fimEm    DateTime?
+
+  /// A colecao que abre a aba Destaques. Mais de uma marcada: vale a de menor
+  /// `ordem` que estiver no ar.
+  destaque Boolean @default(false)
+  ativa    Boolean @default(false)
+  ordem    Int     @default(0)
+
+  criadoPor String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens Cosmetic[]
+
+  @@index([ativa, ordem])
 }
 
 /// Quem POSSUI qual cosmetico.

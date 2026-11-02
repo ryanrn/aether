@@ -203,6 +203,7 @@ function Preview({ user }: { user: PublicUser }) {
     plano: "FREE",
     moldura: null,
     decoracao: null,
+    placa: null,
   }));
 
   const msg = (autor: PublicUser, texto: string, i: number): ChatMessage => ({
