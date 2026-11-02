@@ -3,6 +3,7 @@ import { flagLigada } from "@aether/access";
 import { COSMETIC_TYPES } from "@aether/shared";
 import { getSession } from "@/server/auth/session";
 import { catalogoParaUsuario } from "@/server/services/cosmeticos";
+import { colecoesDaLoja } from "@/server/services/colecoes";
 import { carteiraDe } from "@/server/services/moedas";
 import { missoesDe } from "@/server/services/missoes";
 import { AetherIcon } from "@/components/ui/aether-icon";
@@ -30,12 +31,16 @@ export default async function LojaPage() {
   if (!session) redirect("/login");
 
   const aberta = await flagLigada("loja_de_cosmeticos");
+  // Um "agora" so para a pagina inteira: catalogo, colecoes e o selo de prazo
+  // decidem o periodo pelo mesmo instante.
+  const agora = new Date();
+
   // Um catalogo por tipo; cada um degrada sozinho para vazio se falhar.
   const itens = aberta
     ? (
         await Promise.all(
           COSMETIC_TYPES.map((tipo) =>
-            catalogoParaUsuario(session.user.id, session.user.plano, tipo),
+            catalogoParaUsuario(session.user.id, session.user.plano, tipo, agora),
           ),
         )
       ).flat()
@@ -72,6 +77,8 @@ export default async function LojaPage() {
       itens={itens}
       carteira={await carteiraDe(session.user.id)}
       missoes={await missoesDe(session.user.id)}
+      colecoes={await colecoesDaLoja(agora)}
+      agoraIso={agora.toISOString()}
       plano={session.user.plano}
       user={{
         id: session.user.id,

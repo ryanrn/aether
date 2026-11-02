@@ -3,6 +3,8 @@ import "server-only";
 import { Prisma, prisma } from "@aether/db";
 import {
   CONCESSAO_MAXIMA,
+  exigeResgate,
+  itemNoAr,
   planoAtende,
   type Carteira,
   type MotivoDeMoedas,
@@ -55,23 +57,31 @@ function ehDuplicado(erro: unknown): boolean {
  * Compra um cosmetico com moedas. Devolve o saldo que sobrou.
  *
  * Recusa (sem cobrar nada): item inexistente, inativo, gratis (nao se compra o
- * que ja e de todo mundo), fora do plano, ja possuido, ou saldo menor que o
- * preco.
+ * que ja e de todo mundo), com a colecao fora do ar, fora do plano, ja
+ * possuido, ou saldo menor que o preco.
  */
 export async function comprarCosmetico(
   userId: string,
   plano: PlanTier,
   cosmeticId: string,
+  agora: Date = new Date(),
 ): Promise<{ saldo: number }> {
   try {
     return await prisma.$transaction(async (tx) => {
       const c = await tx.cosmetic.findUnique({
         where: { id: cosmeticId },
-        select: { ativo: true, tierMinimo: true, precoMoedas: true },
+        select: {
+          ativo: true,
+          tierMinimo: true,
+          precoMoedas: true,
+          colecao: { select: { ativa: true, inicioEm: true, fimEm: true } },
+        },
       });
       if (!c || !c.ativo || c.precoMoedas == null) {
         throw new ItemNaoAVenda();
       }
+      // Fora do periodo da colecao nao se vende, nem com saldo sobrando.
+      if (!itemNoAr(c.colecao, agora)) throw new ItemNaoAVenda();
       // O plano continua valendo: moeda compra a peca, nao o plano que ela exige.
       if (!planoAtende(plano, c.tierMinimo)) throw new ItemNaoAVenda();
 
@@ -122,6 +132,48 @@ export async function comprarCosmetico(
         });
       }
       return { saldo: saldoMoedas };
+    });
+  } catch (erro) {
+    if (ehDuplicado(erro)) throw new JaPossui();
+    throw erro;
+  }
+}
+
+/**
+ * RESGATA um item gratis de uma colecao com prazo: grava a posse, sem mexer em
+ * saldo nem extrato (nao houve dinheiro). E a posse que mantem o item da pessoa
+ * depois do fim da colecao.
+ *
+ * So vale para o que `exigeResgate` diz, com a colecao no ar e o plano ok.
+ * Resgatar de novo e recusado com `JaPossui` (a tela trata como sucesso).
+ */
+export async function resgatarCosmetico(
+  userId: string,
+  plano: PlanTier,
+  cosmeticId: string,
+  agora: Date = new Date(),
+): Promise<void> {
+  const c = await prisma.cosmetic.findUnique({
+    where: { id: cosmeticId },
+    select: {
+      ativo: true,
+      tierMinimo: true,
+      precoMoedas: true,
+      colecao: { select: { ativa: true, inicioEm: true, fimEm: true } },
+    },
+  });
+  if (
+    !c ||
+    !c.ativo ||
+    !exigeResgate(c.precoMoedas, c.colecao) ||
+    !itemNoAr(c.colecao, agora) ||
+    !planoAtende(plano, c.tierMinimo)
+  ) {
+    throw new ItemNaoAVenda();
+  }
+  try {
+    await prisma.userCosmetic.create({
+      data: { userId, cosmeticId, origem: "resgate" },
     });
   } catch (erro) {
     if (ehDuplicado(erro)) throw new JaPossui();

@@ -8,6 +8,7 @@ import {
   PLAN_ORDER,
   PLANS,
   RARIDADES,
+  type ColecaoNoPainel,
   ROTULO_COSMETIC_TYPE,
   raridadePorId,
   type CosmeticoNoPainel,
@@ -33,6 +34,8 @@ import {
   excluirCosmeticoAction,
   listarCosmeticosAction,
 } from "@/server/actions/cosmeticos";
+import { listarColecoesAction } from "@/server/actions/colecoes";
+import { ColecoesSecao } from "./colecoes-secao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -70,7 +73,14 @@ export function CosmeticosTab() {
   );
   const [excluindo, setExcluindo] = useState<CosmeticoNoPainel | null>(null);
   const [ativando, setAtivando] = useState<string | null>(null);
+  const [colecoes, setColecoes] = useState<ColecaoNoPainel[]>([]);
   const [pending, startTransition] = useTransition();
+
+  const carregarColecoes = useCallback(() => {
+    listarColecoesAction().then((r) => {
+      if (r.ok) setColecoes(r.data);
+    });
+  }, []);
 
   const carregar = useCallback(() => {
     listarCosmeticosAction().then((r) => {
@@ -86,7 +96,8 @@ export function CosmeticosTab() {
 
   useEffect(() => {
     carregar();
-  }, [carregar]);
+    carregarColecoes();
+  }, [carregar, carregarColecoes]);
 
   const visiveis = useMemo(() => {
     if (!itens) return [];
@@ -122,9 +133,9 @@ export function CosmeticosTab() {
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] leading-snug text-ink-400">
-          Decorações de avatar e banners de perfil. O arquivo vai para o
-          Cloudflare R2; o banco guarda só a referência. Adicionar um cosmético
-          não precisa de deploy.
+          Decorações, banners, placas de nome e efeitos de perfil. O arquivo
+          vai para o Cloudflare R2; o banco guarda só a referência. Adicionar
+          um cosmético não precisa de deploy.
         </p>
         <Button
           size="sm"
@@ -135,6 +146,14 @@ export function CosmeticosTab() {
           Novo cosmético
         </Button>
       </div>
+
+      <ColecoesSecao
+        colecoes={colecoes}
+        onMudou={() => {
+          carregarColecoes();
+          carregar();
+        }}
+      />
 
       <div className="flex gap-1">
         {FILTROS.map((f) => {
@@ -192,6 +211,7 @@ export function CosmeticosTab() {
         <FormularioCosmetico
           inicial={editando === "novo" ? null : editando}
           tipoPadrao={filtro !== "TODOS" ? (filtro as CosmeticType) : "DECORATION"}
+          colecoes={colecoes}
           onFechar={() => setEditando(null)}
           onSalvo={() => {
             setEditando(null);
@@ -474,6 +494,8 @@ interface Rascunho {
   precoMoedas: string;
   tierMinimo: PlanTier;
   ordem: string;
+  /** "" = sem colecao */
+  colecaoId: string;
 }
 
 function slugify(texto: string): string {
@@ -489,11 +511,13 @@ function slugify(texto: string): string {
 function FormularioCosmetico({
   inicial,
   tipoPadrao,
+  colecoes,
   onFechar,
   onSalvo,
 }: {
   inicial: CosmeticoNoPainel | null;
   tipoPadrao: CosmeticType;
+  colecoes: ColecaoNoPainel[];
   onFechar: () => void;
   onSalvo: () => void;
 }) {
@@ -508,6 +532,7 @@ function FormularioCosmetico({
     precoMoedas: inicial?.precoMoedas != null ? String(inicial.precoMoedas) : "",
     tierMinimo: inicial?.tierMinimo ?? "FREE",
     ordem: String(inicial?.ordem ?? 0),
+    colecaoId: inicial?.colecaoId ?? "",
   }));
   const [slugManual, setSlugManual] = useState(editando);
   const [asset, setAsset] = useState<File | null>(null);
@@ -546,6 +571,7 @@ function FormularioCosmetico({
     fd.set("precoMoedas", r.precoMoedas);
     fd.set("tierMinimo", r.tierMinimo);
     fd.set("ordem", r.ordem);
+    fd.set("colecaoId", r.colecaoId);
     if (asset) fd.set("asset", asset);
     if (assetTras) fd.set("assetTras", assetTras);
 
@@ -586,6 +612,24 @@ function FormularioCosmetico({
             />
           </Field>
         </div>
+
+        <Field
+          label="Coleção"
+          hint="Coleção com período decide quando o item se vende."
+        >
+          <select
+            value={r.colecaoId}
+            onChange={(e) => set("colecaoId", e.target.value)}
+            className="h-10 w-full rounded-md border border-line-strong bg-base-900 px-3 text-sm text-ink-100 focus:border-accent-600 focus:outline-none"
+          >
+            <option value="">Sem coleção</option>
+            {colecoes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label="Descrição">
           <textarea

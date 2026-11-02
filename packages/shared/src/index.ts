@@ -4,6 +4,7 @@
 // lado servidor.
 
 export * from "./brand";
+export * from "./colecoes";
 export * from "./comunidades";
 export * from "./cosmeticos";
 export * from "./denuncia";

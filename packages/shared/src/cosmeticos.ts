@@ -354,6 +354,8 @@ export interface CosmeticoNoPainel {
   criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
+  /** a colecao do item, ou `null` */
+  colecaoId: string | null;
 }
 
 /**
@@ -370,6 +372,17 @@ export interface CosmeticoDeLoja extends PublicCosmetic {
   possui: boolean;
   bloqueado: boolean;
   equipado: boolean;
+  /** a colecao do item (para agrupar na vitrine), ou `null` */
+  colecaoId: string | null;
+  /** ISO do fim da colecao — o selo "sai em N dias"; `null` sem prazo */
+  fimEm: string | null;
+  /**
+   * Gratis numa colecao com prazo e ainda nao resgatado: a tela mostra
+   * "Resgatar gratis" em vez de "Equipar".
+   */
+  exigeResgate: boolean;
+  /** ISO de quando foi cadastrado — a ordem de "Novidades" */
+  criadoEm: string;
 }
 
 /**

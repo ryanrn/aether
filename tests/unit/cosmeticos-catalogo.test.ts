@@ -94,6 +94,7 @@ const META = {
   precoMoedas: 4100,
   tierMinimo: "FREE" as const,
   ordem: 1,
+  colecaoId: null,
 };
 
 const ASSET = {
