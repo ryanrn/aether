@@ -78,6 +78,8 @@ const {
   equiparCosmetico,
   concederCosmetico,
   bannerEquipado,
+  efeitoEquipado,
+  CAMPO_EQUIPADO,
   SlugEmUso,
   CosmeticoNaoEncontrado,
   CosmeticoIndisponivel,
@@ -288,7 +290,7 @@ describe("contarCosmeticosPorTipo", () => {
   it("preenche zero para o tipo sem linha nenhuma", async () => {
     groupBy.mockResolvedValue([{ tipo: "DECORATION", _count: { _all: 3 } }]);
     const r = await contarCosmeticosPorTipo();
-    expect(r).toEqual({ DECORATION: 3, BANNER: 0 });
+    expect(r).toEqual({ DECORATION: 3, BANNER: 0, NAMEPLATE: 0, PROFILE_EFFECT: 0 });
   });
 });
 
@@ -379,6 +381,30 @@ describe("catalogoParaUsuario", () => {
     });
   });
 
+  it("placa: o equipado vem de `placaId`, nao do banner", async () => {
+    findMany.mockResolvedValue([
+      linha({ id: "p1", tipo: "NAMEPLATE", precoMoedas: null, tierMinimo: "FREE", ativo: true }),
+    ]);
+    ucFindMany.mockResolvedValue([]);
+    userFindUnique.mockResolvedValue({
+      decoracaoId: null,
+      bannerId: "p1",
+      placaId: "p1",
+      efeitoId: null,
+    });
+    const cat = await catalogoParaUsuario("u1", "FREE", "NAMEPLATE");
+    expect(cat[0]).toMatchObject({ equipado: true });
+
+    userFindUnique.mockResolvedValue({
+      decoracaoId: null,
+      bannerId: "p1",
+      placaId: null,
+      efeitoId: null,
+    });
+    const cat2 = await catalogoParaUsuario("u1", "FREE", "NAMEPLATE");
+    expect(cat2[0]).toMatchObject({ equipado: false });
+  });
+
   it("peca paga COM posse conta como possuida", async () => {
     findMany.mockResolvedValue([
       linha({ id: "paga", precoMoedas: 500, tierMinimo: "FREE", ativo: true }),
@@ -417,6 +443,32 @@ describe("equiparCosmetico", () => {
       where: { id: "u1" },
       data: { bannerId: "b1" },
     });
+  });
+
+  it("cada tipo grava na sua coluna", async () => {
+    expect(CAMPO_EQUIPADO).toEqual({
+      DECORATION: "decoracaoId",
+      BANNER: "bannerId",
+      NAMEPLATE: "placaId",
+      PROFILE_EFFECT: "efeitoId",
+    });
+    for (const [tipo, campo] of [
+      ["NAMEPLATE", "placaId"],
+      ["PROFILE_EFFECT", "efeitoId"],
+    ] as const) {
+      findUnique.mockResolvedValue({ tipo, ativo: true, tierMinimo: "FREE", precoMoedas: null });
+      userUpdate.mockReset().mockResolvedValue({});
+      await equiparCosmetico("u1", "FREE", tipo, "x");
+      expect(userUpdate).toHaveBeenCalledWith({ where: { id: "u1" }, data: { [campo]: "x" } });
+    }
+  });
+
+  it("placa nao equipa como efeito (tipo errado)", async () => {
+    findUnique.mockResolvedValue({ tipo: "NAMEPLATE", ativo: true, tierMinimo: "FREE", precoMoedas: null });
+    await expect(
+      equiparCosmetico("u1", "PRO", "PROFILE_EFFECT", "x"),
+    ).rejects.toBeInstanceOf(CosmeticoIndisponivel);
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 
   it("recusa: inativa, tipo errado, plano de menos, ou paga sem posse", async () => {
@@ -468,6 +520,21 @@ describe("bannerEquipado", () => {
       banner: { assetUrl: "https://cdn/b.png", ativo: true, tierMinimo: "PLUS" },
     });
     expect(await bannerEquipado("u1", "PRO")).toBe("https://cdn/b.png");
+  });
+});
+
+describe("efeitoEquipado", () => {
+  it("resolve como o banner: some inativo ou acima do plano", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      efeito: { assetUrl: "u", ativo: true, tierMinimo: "PRO" },
+    });
+    expect(await efeitoEquipado("u1", "FREE")).toBeNull();
+    userFindUnique.mockResolvedValueOnce({ efeito: null });
+    expect(await efeitoEquipado("u1", "PRO")).toBeNull();
+    userFindUnique.mockResolvedValueOnce({
+      efeito: { assetUrl: "https://cdn/e.webp", ativo: true, tierMinimo: "FREE" },
+    });
+    expect(await efeitoEquipado("u1", "FREE")).toBe("https://cdn/e.webp");
   });
 });
 

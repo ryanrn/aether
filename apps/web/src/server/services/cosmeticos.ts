@@ -4,6 +4,7 @@ import { Prisma, prisma, type Cosmetic } from "@aether/db";
 import { log } from "@aether/shared/log";
 import {
   COSMETIC_TYPES,
+  imagemEfetiva,
   planoAtende,
   type CosmeticoDeLoja,
   type CosmeticoNoPainel,
@@ -312,15 +313,35 @@ export class CosmeticoIndisponivel extends Error {
   override name = "CosmeticoIndisponivel";
 }
 
-/** O que esta pessoa tem equipado — os dois ids. */
+/**
+ * A coluna de `User` que guarda o item equipado de cada tipo. Um `Record` (e
+ * nao um `if`) para que tipo novo sem coluna nao compile — antes, com dois
+ * tipos, um ternario mandava qualquer tipo que nao fosse decoracao para o
+ * banner.
+ */
+export const CAMPO_EQUIPADO = {
+  DECORATION: "decoracaoId",
+  BANNER: "bannerId",
+  NAMEPLATE: "placaId",
+  PROFILE_EFFECT: "efeitoId",
+} as const satisfies Record<CosmeticType, string>;
+
+type CampoEquipado = (typeof CAMPO_EQUIPADO)[CosmeticType];
+
+/** O que esta pessoa tem equipado — um id por tipo. */
 export async function cosmeticosEquipados(
   userId: string,
-): Promise<{ decoracaoId: string | null; bannerId: string | null }> {
+): Promise<Record<CampoEquipado, string | null>> {
   const u = await prisma.user.findUnique({
     where: { id: userId },
-    select: { decoracaoId: true, bannerId: true },
+    select: { decoracaoId: true, bannerId: true, placaId: true, efeitoId: true },
   });
-  return { decoracaoId: u?.decoracaoId ?? null, bannerId: u?.bannerId ?? null };
+  return {
+    decoracaoId: u?.decoracaoId ?? null,
+    bannerId: u?.bannerId ?? null,
+    placaId: u?.placaId ?? null,
+    efeitoId: u?.efeitoId ?? null,
+  };
 }
 
 /**
@@ -337,7 +358,7 @@ export async function catalogoParaUsuario(
 ): Promise<CosmeticoDeLoja[]> {
   let rows: Cosmetic[];
   let posses: { cosmeticId: string }[];
-  let equip: { decoracaoId: string | null; bannerId: string | null };
+  let equip: Record<CampoEquipado, string | null>;
   try {
     [rows, posses, equip] = await Promise.all([
       prisma.cosmetic.findMany({
@@ -365,7 +386,7 @@ export async function catalogoParaUsuario(
   }
 
   const temPosse = new Set(posses.map((p) => p.cosmeticId));
-  const equipadoId = tipo === "DECORATION" ? equip.decoracaoId : equip.bannerId;
+  const equipadoId = equip[CAMPO_EQUIPADO[tipo]];
 
   return rows.map((row) => {
     const bloqueado = !planoAtende(plano, row.tierMinimo);
@@ -407,7 +428,7 @@ async function podeEquipar(
 }
 
 /**
- * Equipa (ou, com `null`, desequipa) a decoracao ou o banner. Devolve o id que
+ * Equipa (ou, com `null`, desequipa) o item de um tipo. Devolve o id que
  * ficou valendo.
  *
  * A ESCOLHA fica guardada mesmo que o plano caia depois — a leitura
@@ -424,10 +445,9 @@ export async function equiparCosmetico(
     const ok = await podeEquipar(userId, plano, tipo, cosmeticId);
     if (!ok) throw new CosmeticoIndisponivel();
   }
-  const campo = tipo === "DECORATION" ? "decoracaoId" : "bannerId";
   await prisma.user.update({
     where: { id: userId },
-    data: { [campo]: cosmeticId },
+    data: { [CAMPO_EQUIPADO[tipo]]: cosmeticId },
   });
   return cosmeticId;
 }
@@ -446,9 +466,21 @@ export async function bannerEquipado(
       banner: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
     },
   });
-  const b = u?.banner;
-  if (!b || !b.ativo || !planoAtende(plano, b.tierMinimo)) return null;
-  return b.assetUrl;
+  return imagemEfetiva(u?.banner, plano);
+}
+
+/** O EFEITO DE PERFIL equipado, resolvido como o banner — para a tela de perfil. */
+export async function efeitoEquipado(
+  userId: string,
+  plano: PlanTier,
+): Promise<string | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      efeito: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
+    },
+  });
+  return imagemEfetiva(u?.efeito, plano);
 }
 
 /**

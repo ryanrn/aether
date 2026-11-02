@@ -4089,6 +4089,83 @@ nada.
 - **Mudar a metrica de uma missao** nao e possivel pelo painel (so meta,
   recompensa e ativa); o gateway relê o catalogo em ate 5 minutos.
 
+## Loja: placa de nome e efeito de perfil (Estagio 3a da economia, 02/11/2026)
+
+Dois tipos novos de cosmetico, alem de decoracao e banner. A equipe cadastra
+pelo painel (aba Cosmeticos), a loja vende em moedas ou por plano como os
+outros, e a pessoa equipa na loja ou em **Minha conta**.
+
+| Tipo | Onde aparece | Arte |
+| --- | --- | --- |
+| **Placa de nome** (`NAMEPLATE`) | atras da linha da pessoa na lista de membros | faixa ~6:1 (ex.: 720x120), PNG ou WEBP, pode ser animada |
+| **Efeito de perfil** (`PROFILE_EFFECT`) | por cima do cartao de perfil (o popup e a tela `/app/perfil`) | em pe ~3:4 (ex.: 600x800), fundo transparente, normalmente WEBP animado |
+
+### Como funciona
+
+- **Banco** (`20261102220000_placa_e_efeito`): dois valores novos no enum
+  `CosmeticType` (`ADD VALUE IF NOT EXISTS`, por causa do drift antigo de
+  producao) e `User.placaId` / `User.efeitoId`, com FK `ON DELETE SET NULL`:
+  apagar o item desequipa.
+- **Qual coluna recebe cada tipo** mora num lugar so: `CAMPO_EQUIPADO` em
+  `services/cosmeticos.ts`. E um `Record` por tipo, entao tipo novo sem
+  coluna nao compila. Antes, um ternario mandava qualquer tipo que nao fosse
+  decoracao para o banner.
+- **Placa viaja no `PublicUser`** (`placa: string | null`), porque a lista de
+  membros e desenhada a partir dele. Ela sai de `SELECT_USUARIO_PUBLICO`, um
+  LEFT JOIN por chave primaria, e e resolvida em `toPublicUser` contra o plano
+  e contra `ativo` (`imagemEfetiva`), como a decoracao. Gateway e web usam a
+  mesma funcao.
+- **Efeito NAO viaja no `PublicUser`.** Como o banner, so o cartao usa: ele
+  vem em `PerfilParaCartao.efeito`, buscado quando o cartao abre.
+- **Render** (`components/profile/cosmeticos-de-perfil.tsx`):
+  - `FundoDePlaca` traz um degrade escuro do lado do avatar e do nome, para o
+    texto continuar legivel sobre arte de terceiros.
+  - `CamadaDeEfeito` fica por cima e nao captura clique. O recorte pelo
+    arredondado do cartao fica na propria camada, para nao cortar a
+    decoracao do avatar, que estoura o topo de proposito.
+- **Envio**: as regras de proporcao estao em `COSMETIC_REGRAS`, e a mensagem
+  de erro agora mostra o `alvo` do tipo. Nao ha normalizacao: so a decoracao
+  passa por ela.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/cosmeticos-catalogo.test.ts tests/unit/usuario-publico.test.ts
+```
+
+A migracao foi aplicada no PGlite com as 40 anteriores:
+
+- o enum fica com os quatro valores;
+- repetir o `ADD VALUE` nao quebra;
+- equipar grava nas colunas;
+- apagar o item zera as duas;
+- a FK barra id inexistente.
+
+Ao vivo, com a flag `loja_de_cosmeticos` ligada:
+
+1. No painel da equipe, crie uma placa (720x120) e um efeito (600x800,
+   transparente).
+2. Equipe os dois em Minha conta.
+3. Confira a placa atras do seu nome na lista de membros de um servidor.
+4. Abra o seu cartao: o efeito deve aparecer por cima.
+
+### Limitacoes
+
+- **Nao testado ao vivo** (so testes, PGlite e build).
+- **Migracao NAO aplicada em producao.** Sem ela, as abas novas da loja ficam
+  vazias: a consulta degrada para lista vazia em vez de derrubar a pagina.
+- **A placa so aparece na lista de membros do servidor.** Ela nao aparece na
+  lista de DMs nem na de amigos.
+- **Com o gateway antigo, a placa pisca.** Ele monta o `PublicUser` sem o
+  campo `placa`. Quando chega uma atualizacao de perfil por ele, a linha
+  perde a placa ate a pagina recarregar. Com o gateway novo publicado, a
+  placa nova chega a todos pelo `profile:changed`.
+- **O efeito usa o arquivo cheio na previa da loja**, nao a miniatura, que e
+  estatica e mataria a animacao.
+- **Sem limite de peso para efeito animado** alem do `ladoMax` (2048px). Um
+  WEBP animado longo pode pesar no cartao.
+- **Colecoes, rotacao e destaque com prazo** ficam para o Estagio 3b.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:

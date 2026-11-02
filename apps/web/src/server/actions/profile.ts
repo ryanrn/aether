@@ -143,7 +143,7 @@ function lerTipo(valor: unknown): CosmeticType | null {
   return ehCosmeticType(valor) ? valor : null;
 }
 
-/** O catalogo de um tipo (DECORATION | BANNER), com o estado desta pessoa. */
+/** O catalogo de um tipo de cosmetico, com o estado desta pessoa. */
 export async function listarCatalogoDeCosmeticosAction(
   tipo: unknown,
 ): Promise<ActionResult<CosmeticoDeLoja[]>> {
@@ -161,7 +161,7 @@ export async function listarCatalogoDeCosmeticosAction(
 }
 
 /**
- * Equipa (ou, com `null`, desequipa) a decoracao ou o banner.
+ * Equipa (ou, com `null`, desequipa) o item de um tipo.
  *
  * A autorizacao e AQUI: a tela esconde o bloqueado, mas quem impede de mandar
  * o id de uma peca paga/inativa direto e esta funcao. Guarda a escolha mesmo

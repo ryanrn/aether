@@ -17,6 +17,10 @@ import {
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import {
+  CamadaDeEfeito,
+  FundoDePlaca,
+} from "@/components/profile/cosmeticos-de-perfil";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
@@ -50,7 +54,7 @@ const FILTROS: { id: Filtro; rotulo: string }[] = [
   { id: "TODOS", rotulo: "Todos" },
   ...COSMETIC_TYPES.map((t) => ({
     id: t,
-    rotulo: `${ROTULO_COSMETIC_TYPE[t]}s`,
+    rotulo: ROTULO_COSMETIC_TYPE[t],
   })),
 ];
 
@@ -305,8 +309,27 @@ type ArteDoCosmetico = Pick<
   "tipo" | "nome" | "assetUrl" | "assetTrasUrl" | "thumbUrl"
 >;
 
-/** O item na lista: decoracao sobre um avatar de teste, ou a faixa 3:1. */
+/**
+ * O item na lista: decoracao sobre um avatar de teste, ou a propria imagem
+ * (banner 3:1, placa ~6:1, efeito em pe).
+ */
 function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px?: number }) {
+  if (c.tipo === "NAMEPLATE" || c.tipo === "PROFILE_EFFECT") {
+    const placa = c.tipo === "NAMEPLATE";
+    return (
+      <div
+        className="overflow-hidden rounded-md border border-line bg-base-900"
+        style={placa ? { width: px * 1.8, height: (px * 1.8) / 6 } : { width: px * 0.75, height: px }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={c.thumbUrl ?? c.assetUrl}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
   if (c.tipo === "BANNER") {
     return (
       <div
@@ -361,6 +384,32 @@ function PreviaCosmetico({ cosmetico: c }: { cosmetico: ArteDoCosmetico }) {
   const [fundo, setFundo] = useState<(typeof FUNDOS)[number]["id"]>("escuro");
   const corFundo = FUNDOS.find((f) => f.id === fundo)!.cor;
 
+  if (c.tipo === "NAMEPLATE") {
+    // A linha da lista de membros, com a placa atras — como ela aparece.
+    return (
+      <div className="w-full max-w-[260px] rounded-lg border border-line bg-base-900 p-2">
+        <div className="relative isolate flex items-center gap-2.5 overflow-hidden rounded-md px-2 py-[7px]">
+          <FundoDePlaca url={c.assetUrl} />
+          <Avatar userId="pv-placa" name="AE" size="sm" />
+          <span className="text-[13px] font-medium text-ink-100">Nome</span>
+        </div>
+      </div>
+    );
+  }
+  if (c.tipo === "PROFILE_EFFECT") {
+    // Um cartao de perfil de mentira, com o efeito por cima.
+    return (
+      <div className="relative w-full max-w-[240px] rounded-lg border border-line bg-base-900">
+        <div className="h-16 rounded-t-lg bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+        <div className="-mt-8 px-4 pb-16">
+          <Avatar userId="pv-efeito" name="AE" px={56} ring="border-base-900" />
+          <p className="mt-1.5 text-[14px] font-semibold text-ink-100">Nome</p>
+          <p className="font-mono text-[11px] text-ink-500">@usuario</p>
+        </div>
+        <CamadaDeEfeito url={c.assetUrl} />
+      </div>
+    );
+  }
   if (c.tipo === "BANNER") {
     return (
       <div className="w-full max-w-[300px] overflow-hidden rounded-lg border border-line bg-base-900">
@@ -614,7 +663,7 @@ function FormularioCosmetico({
         {/* asset */}
         <div className="flex flex-col gap-3">
           <Field
-            label={r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem do banner"}
+            label={r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem"}
             required={!editando}
             hint={regra.alvo}
           >

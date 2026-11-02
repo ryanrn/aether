@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
+  COSMETIC_TYPES,
   formatarMoedas,
   formatarProgresso,
   MOEDA,
@@ -16,6 +17,10 @@ import {
 } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import {
+  CamadaDeEfeito,
+  FundoDePlaca,
+} from "@/components/profile/cosmeticos-de-perfil";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { equiparCosmeticoAction } from "@/server/actions/profile";
@@ -38,20 +43,29 @@ import { cn } from "@/lib/utils";
  * a tela so esconde o que seria recusado.
  */
 
-type Aba = "destaques" | "DECORATION" | "BANNER" | "meus" | "moedas";
-
-const ABAS: { id: Aba; label: string }[] = [
-  { id: "destaques", label: "Destaques" },
-  { id: "DECORATION", label: "Decorações" },
-  { id: "BANNER", label: "Banners" },
-  { id: "meus", label: "Meus cosméticos" },
-  { id: "moedas", label: `Minhas ${MOEDA.plural}` },
-];
+type Aba = "destaques" | CosmeticType | "meus" | "moedas";
 
 const TIPO_LABEL: Record<CosmeticType, string> = {
   DECORATION: "Decoração",
   BANNER: "Banner",
+  NAMEPLATE: "Placa de nome",
+  PROFILE_EFFECT: "Efeito de perfil",
 };
+
+/** O nome de cada tipo no plural — abas, secoes e grupos do inventario. */
+const TIPO_PLURAL: Record<CosmeticType, string> = {
+  DECORATION: "Decorações",
+  BANNER: "Banners",
+  NAMEPLATE: "Placas de nome",
+  PROFILE_EFFECT: "Efeitos de perfil",
+};
+
+const ABAS: { id: Aba; label: string }[] = [
+  { id: "destaques", label: "Destaques" },
+  ...COSMETIC_TYPES.map((tipo) => ({ id: tipo, label: TIPO_PLURAL[tipo] })),
+  { id: "meus", label: "Meus cosméticos" },
+  { id: "moedas", label: `Minhas ${MOEDA.plural}` },
+];
 
 const TIER_LABEL: Record<PlanTier, string> = {
   FREE: "",
@@ -108,10 +122,13 @@ export function LojaScreen({
 
   // Estado local do equipado, por tipo — otimista, volta atras se o servidor recusa.
   const [equipado, setEquipado] = useState<Record<CosmeticType, string | null>>(
-    () => ({
-      DECORATION: itens.find((c) => c.tipo === "DECORATION" && c.equipado)?.id ?? null,
-      BANNER: itens.find((c) => c.tipo === "BANNER" && c.equipado)?.id ?? null,
-    }),
+    () =>
+      Object.fromEntries(
+        COSMETIC_TYPES.map((tipo) => [
+          tipo,
+          itens.find((c) => c.tipo === tipo && c.equipado)?.id ?? null,
+        ]),
+      ) as Record<CosmeticType, string | null>,
   );
   const [previa, setPrevia] = useState<CosmeticoDeLoja | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -313,7 +330,7 @@ export function LojaScreen({
             </>
           ) : (
             <Secao
-              titulo={aba === "DECORATION" ? "Decorações" : "Banners"}
+              titulo={TIPO_PLURAL[aba]}
               itens={ordenar(filtrado.filter((c) => c.tipo === aba))}
               user={user}
               estaEquipado={estaEquipado}
@@ -404,10 +421,6 @@ function Inventario({
   estaEquipado: (c: CosmeticoDeLoja) => boolean;
   onAbrir: (c: CosmeticoDeLoja) => void;
 }) {
-  const grupos: { tipo: CosmeticType; label: string }[] = [
-    { tipo: "DECORATION", label: "Decorações" },
-    { tipo: "BANNER", label: "Banners" },
-  ];
   const temAlgum = itens.length > 0;
 
   return (
@@ -421,13 +434,13 @@ function Inventario({
           Peças grátis já contam — equipe uma nas outras abas.
         </div>
       ) : (
-        grupos.map(({ tipo, label }) => {
+        COSMETIC_TYPES.map((tipo) => {
           const doTipo = itens.filter((c) => c.tipo === tipo);
           if (doTipo.length === 0) return null;
           return (
             <div key={tipo} className="mt-6 first:mt-0">
               <span className="mb-2.5 block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-400">
-                {label}
+                {TIPO_PLURAL[tipo]}
               </span>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4">
                 {doTipo.map((c) => (
@@ -630,6 +643,47 @@ function MediaDoCosmetico({
    */
   preferThumb?: boolean;
 }) {
+  const url =
+    preferThumb && cosmetico.thumbUrl ? cosmetico.thumbUrl : cosmetico.assetUrl;
+  if (cosmetico.tipo === "NAMEPLATE") {
+    // A linha da lista de membros, com a placa atras — como ela aparece.
+    return (
+      <div className="relative isolate flex w-[90%] items-center gap-2 overflow-hidden rounded-md px-2 py-[7px]">
+        <FundoDePlaca url={url} />
+        <Avatar
+          userId={user.id}
+          name={user.displayName}
+          src={user.avatarUrl}
+          moldura={user.moldura}
+          px={Math.max(24, Math.round(px * 0.3))}
+        />
+        <span className="truncate text-[13px] font-medium text-ink-100">
+          {user.displayName}
+        </span>
+      </div>
+    );
+  }
+  if (cosmetico.tipo === "PROFILE_EFFECT") {
+    // Um cartao de perfil em miniatura, com o efeito por cima.
+    return (
+      <div className="relative aspect-[3/4] w-[58%] rounded-lg border border-line bg-base-850">
+        <div className="h-[28%] rounded-t-lg bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+        <div className="-mt-[14%] px-[10%]">
+          <Avatar
+            userId={user.id}
+            name={user.displayName}
+            src={user.avatarUrl}
+            moldura={user.moldura}
+            px={Math.max(28, Math.round(px * 0.4))}
+          />
+          <span className="mt-1 block truncate text-[12px] font-semibold text-ink-100">
+            {user.displayName}
+          </span>
+        </div>
+        <CamadaDeEfeito url={cosmetico.assetUrl} />
+      </div>
+    );
+  }
   if (cosmetico.tipo === "BANNER") {
     return (
       <div
@@ -652,13 +706,7 @@ function MediaDoCosmetico({
       src={user.avatarUrl}
       moldura={user.moldura}
       px={px}
-      decoracao={{
-        frenteUrl:
-          preferThumb && cosmetico.thumbUrl
-            ? cosmetico.thumbUrl
-            : cosmetico.assetUrl,
-        trasUrl: cosmetico.assetTrasUrl,
-      }}
+      decoracao={{ frenteUrl: url, trasUrl: cosmetico.assetTrasUrl }}
     />
   );
 }
@@ -711,7 +759,10 @@ function PreviaDialog({
                 : "bg-ink-100",
             )}
           >
-            {cosmetico.tipo === "BANNER" ? (
+            {cosmetico.tipo === "NAMEPLATE" ||
+            cosmetico.tipo === "PROFILE_EFFECT" ? (
+              <MediaDoCosmetico cosmetico={cosmetico} user={user} px={110} />
+            ) : cosmetico.tipo === "BANNER" ? (
               <div className="w-[88%]">
                 <div
                   className="overflow-hidden rounded-md border border-line"

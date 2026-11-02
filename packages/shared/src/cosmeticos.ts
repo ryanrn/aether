@@ -95,7 +95,9 @@ export function podeAvatarAnimado(plano: PlanTier): boolean {
 /* ---------------------------------------------------------------------------
  * Cosmeticos com asset (cadastrados pela equipe, arquivo no R2)
  *
- * Escopo: DECORACAO em volta do avatar e BANNER do perfil. So isso.
+ * Escopo: DECORACAO em volta do avatar, BANNER do perfil, PLACA DE NOME (o
+ * fundo atras do nome na lista de membros) e EFEITO DE PERFIL (animacao sobre
+ * o cartao de perfil).
  *
  * Diferente das MOLDURAS acima (aneis em gradiente CSS, catalogo em codigo,
  * fixas): estes a equipe cria e publica pelo painel, sem deploy — o binario e
@@ -112,7 +114,12 @@ export function podeAvatarAnimado(plano: PlanTier): boolean {
  * shared nao importa `@aether/db` (direcao de dependencia), entao a uniao e
  * declarada aqui, do mesmo jeito que `MessageRow` em `types.ts`.
  */
-export const COSMETIC_TYPES = ["DECORATION", "BANNER"] as const;
+export const COSMETIC_TYPES = [
+  "DECORATION",
+  "BANNER",
+  "NAMEPLATE",
+  "PROFILE_EFFECT",
+] as const;
 export type CosmeticType = (typeof COSMETIC_TYPES)[number];
 
 export function ehCosmeticType(valor: unknown): valor is CosmeticType {
@@ -126,6 +133,8 @@ export function ehCosmeticType(valor: unknown): valor is CosmeticType {
 export const ROTULO_COSMETIC_TYPE: Record<CosmeticType, string> = {
   DECORATION: "Decoracao do avatar",
   BANNER: "Banner do perfil",
+  NAMEPLATE: "Placa de nome",
+  PROFILE_EFFECT: "Efeito de perfil",
 };
 
 /**
@@ -137,6 +146,8 @@ export const ROTULO_COSMETIC_TYPE: Record<CosmeticType, string> = {
 export const PASTA_DO_COSMETICO: Record<CosmeticType, string> = {
   DECORATION: "decorations",
   BANNER: "banners",
+  NAMEPLATE: "nameplates",
+  PROFILE_EFFECT: "profile-effects",
 };
 
 /**
@@ -184,6 +195,34 @@ export const COSMETIC_REGRAS: Record<CosmeticType, RegraDeDimensao> = {
     ladoMin: 600,
     ladoMax: 4096,
     alvo: "3:1, ~1500x500, PNG ou WEBP",
+  },
+  /**
+   * A placa fica atras de uma LINHA da lista de membros (avatar + nome), que e
+   * larga e baixa: perto de 6:1. A arte e esticada para cobrir a linha, entao o
+   * que importa e a proporcao, nao a medida exata. Pode ser WEBP animado.
+   */
+  NAMEPLATE: {
+    ratioMin: 4.5,
+    ratioMax: 8,
+    ladoMin: 80,
+    ladoMax: 2400,
+    alvo:
+      "faixa larga, ~6:1 (ex.: 720x120), PNG ou WEBP (pode ser animado). " +
+      "Deixe o lado esquerdo e o centro mais calmos: ali ficam o avatar e o nome.",
+  },
+  /**
+   * O efeito cobre o cartao de perfil inteiro, que e em pe. Tem de ter fundo
+   * TRANSPARENTE — ele fica por cima do cartao, e um fundo opaco esconderia o
+   * perfil. Normalmente animado (WEBP animado).
+   */
+  PROFILE_EFFECT: {
+    ratioMin: 0.5,
+    ratioMax: 0.9,
+    ladoMin: 300,
+    ladoMax: 2048,
+    alvo:
+      "em pe, ~3:4 (ex.: 600x800), WEBP animado ou PNG, com fundo " +
+      "TRANSPARENTE: o efeito fica por cima do cartao de perfil.",
   },
 };
 
@@ -363,4 +402,28 @@ export function decoracaoEfetiva(
   if (!row || !row.ativo) return null;
   if (!planoAtende(plano, row.tierMinimo)) return null;
   return { frente: row.assetUrl, tras: row.assetTrasUrl };
+}
+
+/**
+ * A linha crua de um cosmetico de UMA imagem (banner, placa, efeito): so o
+ * que a resolucao precisa.
+ */
+export interface CosmeticoDeImagemRow {
+  assetUrl: string;
+  tierMinimo: PlanTier;
+  ativo: boolean;
+}
+
+/**
+ * A URL que de fato VALE de um cosmetico de uma imagem — mesma regra da
+ * decoracao: desativado no catalogo, ou acima do plano de quem escolheu, some
+ * da tela; a escolha continua no banco.
+ */
+export function imagemEfetiva(
+  row: CosmeticoDeImagemRow | null | undefined,
+  plano: PlanTier,
+): string | null {
+  if (!row || !row.ativo) return null;
+  if (!planoAtende(plano, row.tierMinimo)) return null;
+  return row.assetUrl;
 }

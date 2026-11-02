@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { flagLigada } from "@aether/access";
+import { COSMETIC_TYPES } from "@aether/shared";
 import { getSession } from "@/server/auth/session";
 import { catalogoParaUsuario } from "@/server/services/cosmeticos";
 import { carteiraDe } from "@/server/services/moedas";
@@ -29,14 +30,16 @@ export default async function LojaPage() {
   if (!session) redirect("/login");
 
   const aberta = await flagLigada("loja_de_cosmeticos");
-  const [decoracoes, banners] = aberta
-    ? await Promise.all([
-        catalogoParaUsuario(session.user.id, session.user.plano, "DECORATION"),
-        catalogoParaUsuario(session.user.id, session.user.plano, "BANNER"),
-      ])
-    : [[], []];
-
-  const itens = [...decoracoes, ...banners];
+  // Um catalogo por tipo; cada um degrada sozinho para vazio se falhar.
+  const itens = aberta
+    ? (
+        await Promise.all(
+          COSMETIC_TYPES.map((tipo) =>
+            catalogoParaUsuario(session.user.id, session.user.plano, tipo),
+          ),
+        )
+      ).flat()
+    : [];
 
   if (itens.length === 0) {
     return (
