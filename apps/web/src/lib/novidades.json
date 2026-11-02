@@ -140,5 +140,31 @@
         "texto": "O aplicativo de desktop abria mostrando o site (com a home, precos, etc.) antes de pedir login. Agora vai direto para a tela de entrar."
       }
     ]
+  },
+  "0.1.31": {
+    "data": "2026-11-02",
+    "resumo": "Deteccao de jogos mais rapida e mais completa: jogos da Battle.net, jogos da Steam com anti-cheat e o jogo certo quando ha dois abertos.",
+    "itens": [
+      {
+        "categoria": "recurso",
+        "texto": "Jogos da Battle.net (Overwatch, Diablo, World of Warcraft, Call of Duty e outros) agora aparecem na sua atividade."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Jogos da Steam com anti-cheat (Easy Anti-Cheat, BattlEye) so apareciam se o AETHER ja estivesse aberto antes do jogo. Agora aparecem em qualquer ordem."
+      },
+      {
+        "categoria": "correcao",
+        "texto": "Com dois jogos abertos, a sua atividade mostra o que voce abriu por ultimo, e nao mais o primeiro em ordem alfabetica."
+      },
+      {
+        "categoria": "performance",
+        "texto": "Abrir ou fechar um jogo aparece na sua atividade em ate 5 segundos (antes, ate 15)."
+      },
+      {
+        "categoria": "performance",
+        "texto": "No Windows 11 mais recente, a deteccao de jogos ficou bem mais leve para o computador."
+      }
+    ]
   }
 }
