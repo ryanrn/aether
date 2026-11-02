@@ -61,6 +61,7 @@ export default async function DmPage({
     plano: session.user.plano,
     moldura: session.user.moldura,
     decoracao: session.user.decoracao,
+    placa: session.user.placa,
   };
 
   const history = await listRecentDmMessages(dmId, session.user.id);

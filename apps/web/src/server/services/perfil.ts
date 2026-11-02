@@ -1,8 +1,9 @@
 import "server-only";
 
 import { prisma } from "@aether/db";
-import { planoAtende, planoEfetivo } from "@aether/shared";
+import { imagemEfetiva, planoEfetivo } from "@aether/shared";
 import type {
+  CosmeticoDeImagemRow,
   PerfilParaCartao,
   PlanTier,
   PublicRole,
@@ -33,6 +34,7 @@ export async function perfilParaCartao(
         bio: true,
         assinatura: { select: { tier: true, expiraEm: true } },
         banner: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
+        efeito: { select: { assetUrl: true, ativo: true, tierMinimo: true } },
       },
     }),
     calcularRelacao(viewerId, alvoId),
@@ -41,7 +43,7 @@ export async function perfilParaCartao(
 
   return {
     bio: alvo?.bio?.trim() || null,
-    banner: bannerResolvido(alvo),
+    ...imagensDoCartao(alvo),
     nickname: dadosServidor?.nickname ?? null,
     roles: dadosServidor?.roles ?? [],
     relacao: alvoId === viewerId ? "eu" : relacao.estado,
@@ -50,20 +52,22 @@ export async function perfilParaCartao(
 }
 
 /**
- * O banner equipado que de fato vale — resolvido contra o plano (vencimento
- * aplicado) e contra `ativo`, como a moldura e a decoracao. Some se o plano
- * caiu; a escolha continua no banco.
+ * O banner e o efeito equipados que de fato valem — resolvidos contra o plano
+ * (vencimento aplicado) e contra `ativo`, como a moldura e a decoracao. Somem
+ * se o plano caiu; a escolha continua no banco.
  */
-function bannerResolvido(
+function imagensDoCartao(
   alvo: {
     assinatura: { tier: PlanTier; expiraEm: Date | null } | null;
-    banner: { assetUrl: string; ativo: boolean; tierMinimo: PlanTier } | null;
+    banner: CosmeticoDeImagemRow | null;
+    efeito: CosmeticoDeImagemRow | null;
   } | null,
-): string | null {
-  const b = alvo?.banner;
-  if (!b || !b.ativo) return null;
+): { banner: string | null; efeito: string | null } {
   const plano = planoEfetivo(alvo?.assinatura ?? null);
-  return planoAtende(plano, b.tierMinimo) ? b.assetUrl : null;
+  return {
+    banner: imagemEfetiva(alvo?.banner, plano),
+    efeito: imagemEfetiva(alvo?.efeito, plano),
+  };
 }
 
 async function cargosNoServidor(

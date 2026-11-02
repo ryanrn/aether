@@ -4,6 +4,7 @@
 // lado servidor.
 
 export * from "./brand";
+export * from "./colecoes";
 export * from "./comunidades";
 export * from "./cosmeticos";
 export * from "./denuncia";
@@ -12,6 +13,8 @@ export * from "./events";
 export * from "./flags";
 export * from "./jogos";
 export * from "./legal";
+export * from "./missoes";
+export * from "./moedas";
 export * from "./permissions";
 export * from "./plans";
 export * from "./redis";

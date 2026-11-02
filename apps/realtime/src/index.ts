@@ -19,13 +19,18 @@ import { limparCargosDeJogoNaConexao } from "./games/cargos-por-jogo";
 import { varrerSalasEfemeras } from "./voz/salas-efemeras";
 import {
   attachSocket,
+  countInChannel,
   isConnected,
+  presenceEntryOf,
   presenceOfFriends,
   setFriends,
   socketIdsOf,
   stats,
   statusOf,
+  voiceParticipant,
+  voiceSocketOf,
 } from "./state";
+import { contarMinuto, gravar, marcarDiaAtivo } from "./missoes";
 import { socketsAcimaDoTeto } from "./socket-cap";
 import { redisClients } from "./redis-client";
 import { handleInternalRequest } from "./internal";
@@ -288,6 +293,15 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
     });
   });
 
+  // Missao "abrir o app hoje" (Estagio 2 da loja). Sem `await`: o handshake
+  // nao depende dela.
+  void marcarDiaAtivo(user.id).catch((erro) => {
+    log.warn("gateway.missoes.dia_ativo", "não marquei o dia ativo", {
+      err: erro,
+      userId: user.id,
+    });
+  });
+
   /**
    * Cargo por jogo: apaga o que sobrou de um restart do gateway (o estado de
    * "jogando" e so memoria; o `MemberRole` nao). Sem `await` — o handshake nao
@@ -364,6 +378,34 @@ const salasEfemerasTimer = setInterval(() => {
 }, 3 * 60 * 1000);
 salasEfemerasTimer.unref?.();
 
+/**
+ * Missoes (Estagio 2 da loja): um minuto de voz/jogo por minuto, somado em
+ * memoria, e gravado no banco a cada 5. Ver `missoes.ts`.
+ */
+const minutoDeMissaoTimer = setInterval(() => {
+  const socketsLocais = new Map<string, Set<string>>();
+  for (const s of io.of("/").sockets.values()) {
+    const userId = (s as AetherSocket).data?.userId;
+    if (!userId) continue;
+    const set = socketsLocais.get(userId) ?? new Set<string>();
+    set.add(s.id);
+    socketsLocais.set(userId, set);
+  }
+  void contarMinuto({
+    socketsLocais,
+    voiceSocketOf,
+    voiceParticipant,
+    countInChannel,
+    socketIdsOf,
+    presenceEntryOf,
+  }).catch((erro) =>
+    log.error("gateway.missoes.minuto", "contagem do minuto falhou", { err: erro }),
+  );
+}, 60 * 1000);
+minutoDeMissaoTimer.unref?.();
+const gravarMissoesTimer = setInterval(() => void gravar(), 5 * 60 * 1000);
+gravarMissoesTimer.unref?.();
+
 httpServer.listen(env.port, () => {
   log.info("gateway.boot", `gateway ouvindo na porta ${env.port}`, {
     porta: env.port,
@@ -389,6 +431,10 @@ async function shutdown(signal: string) {
 
   stopSessionGuard();
   clearInterval(salasEfemerasTimer);
+  clearInterval(minutoDeMissaoTimer);
+  clearInterval(gravarMissoesTimer);
+  // O que foi acumulado desde a ultima gravacao nao se perde no deploy.
+  await gravar().catch(() => undefined);
   spotifyPoller.parar();
 
   // Sem isso, uma conexao keep-alive ociosa segura a porta ate o timeout dela.
