@@ -2246,9 +2246,20 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   Conferida nesta maquina contra o `wmic`: os mesmos 191 processos (so o
   proprio `wmic.exe` difere). **Nao foi rodada num Windows 11 24H2 de verdade**
   — aqui o `wmic` existe; a sessao foi exercitada chamando-a diretamente.
-- **Mais de um jogo aberto mostra so um** — o primeiro em ordem alfabetica.
-  Escolha estavel, nao "a melhor": sem ordenar, o nome ficaria alternando entre
-  os dois a cada verificacao.
+- **Mais de um jogo aberto mostra so um — o ABERTO POR ULTIMO (02/11/2026).**
+  Era o primeiro em ordem alfabetica: estavel, mas quem deixava um jogo
+  minimizado e abria outro continuava "jogando" o primeiro. O horario de
+  inicio vem na MESMA leitura de processos (`CreationDate` no `wmic`,
+  `CreationDate` em ms na sessao de PowerShell), sem custo medido a mais, e
+  tambem nao muda entre verificacoes — entao nao ha alternancia.
+  - O inicio de um jogo e o do seu processo MAIS ANTIGO, casado por caminho ou
+    pelo nome do processo que o identificou (anti-cheat esconde o caminho, nao
+    o horario).
+  - Sem horario conhecido o jogo conta como antigo; empate cai na ordem
+    alfabetica, como antes.
+  - Conferido nesta maquina: `wmic` e sessao de PowerShell devolvem o mesmo
+    horario (83 processos, diferenca zero) e o fuso sai certo. **Nao foi visto
+    com dois jogos abertos de verdade** — so por teste.
 - **Nao persiste.** Reiniciar o gateway limpa o jogo de todo mundo, como a
   presenca.
 - **A varredura de processos em si nao tem teste automatizado**, e nem daria:
