@@ -857,3 +857,121 @@ describe("entradaPorNomeDeProcesso por exe conhecido", () => {
     expect(entradaPorNomeDeProcesso("algo_aleatorio.exe", catalogo)).toBeNull();
   });
 });
+
+describe("Steam — catalogo (anti-cheat que ja escondeu o caminho)", () => {
+  const os = require("node:os") as typeof import("node:os");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+  type Entrada = {
+    nome: string;
+    exes: string[];
+    raiz: string;
+    chaveSteam: string;
+  };
+  const {
+    bibliotecasNoVdf,
+    jogosSteamEm,
+    acharExecutavel,
+  } = detect as {
+    bibliotecasNoVdf: (t: string) => string[];
+    jogosSteamEm: (raiz: string) => Entrada[];
+    acharExecutavel: (raiz: string, nomes: string[]) => string | null;
+  };
+
+  function manifesto(steamapps: string, id: number, dir: string, nome: string) {
+    fs.mkdirSync(path.join(steamapps, "common", dir), { recursive: true });
+    fs.writeFileSync(
+      path.join(steamapps, `appmanifest_${id}.acf`),
+      `"AppState"\n{\n\t"appid"\t\t"${id}"\n\t"name"\t\t"${nome}"\n\t"installdir"\t\t"${dir}"\n}\n`,
+    );
+  }
+
+  /**
+   * Uma Steam falsa: a biblioteca da propria Steam e uma segunda num "outro
+   * disco", apontada pelo `libraryfolders.vdf` com as barras escapadas como a
+   * Steam escreve.
+   */
+  /** A Steam escreve o caminho com a barra invertida dobrada. */
+  const vdf = (c: string) => c.split("\\").join("\\\\");
+
+  function steamFalsa() {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "aether-steam-"));
+    const raiz = path.join(base, "Steam");
+    const outra = path.join(base, "SteamLibrary");
+    const apps1 = path.join(raiz, "steamapps");
+    const apps2 = path.join(outra, "steamapps");
+    fs.mkdirSync(apps1, { recursive: true });
+    fs.mkdirSync(apps2, { recursive: true });
+    fs.writeFileSync(
+      path.join(apps1, "libraryfolders.vdf"),
+      `"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"${vdf(raiz)}"\n\t}\n\t"1"\n\t{\n\t\t"path"\t\t"${vdf(outra)}"\n\t}\n}\n`,
+    );
+
+    // GunZ: EAC EOS, exe protegido em Binaries/Win64
+    manifesto(apps2, 1, "GunZ The Duel", "GunZ: The Duel");
+    const gunz = path.join(apps2, "common", "GunZ The Duel");
+    fs.mkdirSync(path.join(gunz, "EasyAntiCheat"), { recursive: true });
+    fs.writeFileSync(
+      path.join(gunz, "EasyAntiCheat", "Settings.json"),
+      JSON.stringify({ executable: "Binaries/Win64/Gunz.exe" }),
+    );
+    fs.mkdirSync(path.join(gunz, "Binaries", "Win64"), { recursive: true });
+    fs.writeFileSync(path.join(gunz, "Binaries", "Win64", "Gunz.exe"), "");
+
+    manifesto(apps1, 2, "Hollow Knight", "Hollow Knight");
+    manifesto(apps1, 3, "wallpaper_engine", "Wallpaper Engine");
+    // manifesto sem a pasta: jogo meio instalado
+    fs.writeFileSync(
+      path.join(apps1, "appmanifest_4.acf"),
+      `"AppState"\n{\n\t"name"\t\t"Fantasma"\n\t"installdir"\t\t"Fantasma"\n}\n`,
+    );
+    return { raiz, gunz };
+  }
+
+  it("le as bibliotecas do libraryfolders.vdf, desfazendo o escape", () => {
+    const texto = [
+      '"libraryfolders"',
+      "{",
+      '\t"0" { "path"\t\t"C:\\\\Program Files (x86)\\\\Steam" }',
+      '\t"1" { "path"\t\t"D:\\\\SteamLibrary" }',
+      "}",
+    ].join("\n");
+    expect(bibliotecasNoVdf(texto)).toEqual([
+      "C:\\Program Files (x86)\\Steam",
+      "D:\\SteamLibrary",
+    ]);
+  });
+
+  it("monta o catalogo de todas as bibliotecas, sem app e sem jogo meio instalado", () => {
+    const { raiz } = steamFalsa();
+    const nomes = jogosSteamEm(raiz).map((j) => j.nome).sort();
+    expect(nomes).toEqual(["GunZ: The Duel", "Hollow Knight"]);
+  });
+
+  it("guarda o exe que o anti-cheat protege e a pasta como chave", () => {
+    const { raiz } = steamFalsa();
+    const gunz = jogosSteamEm(raiz).find((j) => j.nome === "GunZ: The Duel")!;
+    expect(gunz.exes).toEqual(["gunz.exe"]);
+    expect(gunz.chaveSteam).toBe("GunZ The Duel");
+  });
+
+  it("casa o processo protegido pelo nome, com o nome oficial e a pasta como chave", () => {
+    const { raiz, gunz } = steamFalsa();
+    const catalogo = jogosSteamEm(raiz);
+    const achados = jogosPorNomes("Gunz.exe\nexplorer.exe", catalogo) as JogoAchado[];
+    expect(achados).toHaveLength(1);
+    expect(achados[0]).toMatchObject({ chave: "GunZ The Duel", nome: "GunZ: The Duel" });
+    // icone: o exe protegido achado no DISCO entra como candidato
+    expect(achados[0]!.caminhos).toEqual([
+      path.join(gunz, "Binaries", "Win64", "Gunz.exe"),
+    ]);
+  });
+
+  it("acha o executavel ate 3 niveis abaixo, sem diferenciar caixa", () => {
+    const { gunz } = steamFalsa();
+    expect(acharExecutavel(gunz, ["GUNZ.EXE"])).toBe(
+      path.join(gunz, "Binaries", "Win64", "Gunz.exe"),
+    );
+    expect(acharExecutavel(path.join(gunz, "EasyAntiCheat"), ["nada.exe"])).toBeNull();
+  });
+});

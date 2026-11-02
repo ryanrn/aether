@@ -86,6 +86,9 @@ const POLL_MS = 15_000;
  */
 const NAO_SAO_JOGOS = new Set([
   "wallpaper_engine",
+  // O NOME no manifesto da Steam, para o catalogo — a pasta e a de cima.
+  "wallpaper engine",
+  "steamworks common redistributables",
   "steamvr",
   "steamworks shared",
   "steam controller configs",
@@ -463,6 +466,202 @@ function jogosXbox() {
 }
 
 /* -------------------------------------------------------------------------
+ * Steam — catalogo
+ *
+ * A Steam sempre foi reconhecida pelo CAMINHO do processo
+ * (`steamapps/common/<Jogo>/`), sem catalogo. Isso deixava um buraco: jogo do
+ * Steam com anti-cheat que ja estava PROTEGIDO quando a deteccao olhou (o
+ * Aether aberto depois do jogo, ou a deteccao ligada no meio da partida). Sem
+ * caminho legivel e sem catalogo, nao havia o que casar pelo nome — o
+ * `jogoFixado` so cobre quem foi visto por caminho ANTES de o anti-cheat
+ * esconder.
+ *
+ * O catalogo fecha isso do mesmo jeito que o da EA: lista o que esta
+ * instalado, com o nome oficial e os executaveis que o anti-cheat protege,
+ * ANTES de o jogo abrir.
+ *
+ *  - `libraryfolders.vdf` diz onde estao as bibliotecas (uma por disco);
+ *  - cada `appmanifest_*.acf` diz `installdir` e `name` de um jogo;
+ *  - o config do anti-cheat na raiz do jogo diz os executaveis protegidos.
+ *
+ * O casamento por CAMINHO continua vindo primeiro e continua sendo o da
+ * pasta: ele traz os executaveis rodando, de onde sai o melhor icone.
+ * ------------------------------------------------------------------------- */
+
+/** Onde a Steam se instala quando o registro nao diz. */
+const STEAM_PADRAO = "C:/Program Files (x86)/Steam";
+
+/** A raiz da Steam, lida uma vez do registro. A Steam nao muda de lugar. */
+let raizSteamResolvida = null;
+
+async function raizDaSteam() {
+  if (raizSteamResolvida) return raizSteamResolvida;
+  const texto = await lerRegistro("HKCU\\Software\\Valve\\Steam");
+  for (const bloco of blocosDoRegistro(texto)) {
+    const caminho = bloco.valores.get("steampath");
+    if (caminho) {
+      raizSteamResolvida = caminho;
+      return caminho;
+    }
+  }
+  return STEAM_PADRAO;
+}
+
+/**
+ * Os caminhos das bibliotecas dentro de um `libraryfolders.vdf`.
+ *
+ * VDF, como o `.acf`: dois campos nao justificam um parser. As barras vem
+ * ESCAPADAS (`"D:\\SteamLibrary"`), e desfazer isso e o unico cuidado.
+ */
+function bibliotecasNoVdf(texto) {
+  const caminhos = [];
+  for (const m of String(texto).matchAll(/"path"\s+"([^"]+)"/g)) {
+    caminhos.push(m[1].replace(/\\\\/g, "\\"));
+  }
+  return caminhos;
+}
+
+/** Todas as bibliotecas: a da propria Steam e as do `libraryfolders.vdf`. */
+function bibliotecasSteam(raiz) {
+  const vistas = new Map();
+  const somar = (caminho) => {
+    const chave = comoPasta(caminho);
+    if (!vistas.has(chave)) vistas.set(chave, caminho);
+  };
+  somar(raiz);
+  // O lugar mudou entre versoes da Steam; vale o que existir.
+  for (const vdf of [
+    path.join(raiz, "steamapps", "libraryfolders.vdf"),
+    path.join(raiz, "config", "libraryfolders.vdf"),
+  ]) {
+    try {
+      for (const caminho of bibliotecasNoVdf(fs.readFileSync(vdf, "utf8"))) {
+        somar(caminho);
+      }
+    } catch {
+      // Arquivo ausente nesta versao.
+    }
+  }
+  return [...vistas.values()];
+}
+
+/**
+ * Os jogos de UMA biblioteca, como entradas de catalogo.
+ *
+ * `chaveSteam` e a pasta (`installdir`): e a MESMA chave que o casamento por
+ * caminho usa (`pastaDoJogo`). Sem isso, o jogo achado pelo caminho e o
+ * mesmo jogo achado pelo nome contariam como dois.
+ */
+function jogosDaBibliotecaSteam(biblioteca) {
+  const steamapps = path.join(biblioteca, "steamapps");
+  const jogos = [];
+  let arquivos = [];
+  try {
+    arquivos = fs.readdirSync(steamapps);
+  } catch {
+    return jogos; // disco removido ou biblioteca apagada
+  }
+  for (const arquivo of arquivos) {
+    if (!arquivo.startsWith("appmanifest_") || !arquivo.endsWith(".acf")) continue;
+    try {
+      // utf8 de proposito: sem isso, "Marvel's" vira "Marvelâ€™s".
+      const conteudo = fs.readFileSync(path.join(steamapps, arquivo), "utf8");
+      const dir = conteudo.match(/"installdir"\s+"([^"]+)"/);
+      const nome = conteudo.match(/"name"\s+"([^"]+)"/);
+      if (!dir || !nome) continue;
+      if (!ehJogo(dir[1]) || !ehJogo(nome[1])) continue;
+
+      const raiz = path.join(steamapps, "common", dir[1]);
+      if (!fs.existsSync(raiz)) continue; // manifesto de jogo meio instalado
+
+      jogos.push({
+        pasta: comoPasta(raiz),
+        nome: nome[1],
+        launch: null,
+        icone: null,
+        // Os protegidos pelo anti-cheat, como no EA app. `_.exe` e so um
+        // caminho DENTRO da raiz: a busca comeca na pasta dele.
+        exes: nomesProtegidosPorAntiCheat(path.join(raiz, "_.exe")) ?? [],
+        raiz,
+        chaveSteam: dir[1],
+      });
+    } catch {
+      // Manifesto sendo escrito: perde este jogo, nao a biblioteca.
+    }
+  }
+  return jogos;
+}
+
+/**
+ * Cache invalidado pela data das pastas `steamapps` de TODAS as bibliotecas:
+ * instalar, atualizar ou desinstalar mexe nos manifestos dali.
+ */
+let steamCache = { assinatura: null, jogos: [] };
+
+function jogosSteamEm(raiz) {
+  const bibliotecas = bibliotecasSteam(raiz);
+  const assinatura = bibliotecas
+    .map((b) => {
+      try {
+        return `${b}=${fs.statSync(path.join(b, "steamapps")).mtimeMs}`;
+      } catch {
+        return `${b}=-`;
+      }
+    })
+    .join("|");
+  if (steamCache.assinatura === assinatura) return steamCache.jogos;
+
+  const jogos = bibliotecas.flatMap(jogosDaBibliotecaSteam);
+  // Vazio nao vira cache, pelo mesmo motivo da Epic.
+  if (jogos.length > 0) steamCache = { assinatura, jogos };
+  return jogos;
+}
+
+async function jogosSteam() {
+  return jogosSteamEm(await raizDaSteam());
+}
+
+/**
+ * Um executavel de verdade, em disco, para tirar o icone de um jogo achado SO
+ * pelo nome (o anti-cheat esconde o processo, mas nao o arquivo).
+ *
+ * Procura os nomes protegidos ate 3 niveis abaixo da raiz — o exe costuma
+ * estar em `Binaries/Win64/`. Cacheado por raiz, inclusive o "nao achei".
+ */
+const executavelNaRaiz = new Map();
+
+function acharExecutavel(raiz, nomes) {
+  if (!raiz || !Array.isArray(nomes) || nomes.length === 0) return null;
+  if (executavelNaRaiz.has(raiz)) return executavelNaRaiz.get(raiz);
+
+  const procurados = new Set(nomes.map((n) => n.toLowerCase()));
+  let nivel = [raiz];
+  let achado = null;
+  for (let profundidade = 0; profundidade <= 3 && !achado; profundidade += 1) {
+    const proximo = [];
+    for (const dir of nivel) {
+      let itens = [];
+      try {
+        itens = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const item of itens) {
+        if (item.isFile() && procurados.has(item.name.toLowerCase())) {
+          achado = path.join(dir, item.name);
+          break;
+        }
+        if (item.isDirectory()) proximo.push(path.join(dir, item.name));
+      }
+      if (achado) break;
+    }
+    nivel = proximo;
+  }
+  executavelNaRaiz.set(raiz, achado);
+  return achado;
+}
+
+/* -------------------------------------------------------------------------
  * EA app (ex-Origin)
  *
  * Segue o modelo da Steam: instala tudo numa pasta so, dita por
@@ -557,15 +756,19 @@ function jogosEa() {
 /**
  * O catalogo de TODAS as lojas que dizem o que instalaram.
  *
- * A Steam nao entra aqui: ela e a unica com convencao de pasta
- * (`steamapps/common/<Jogo>/`), entao e reconhecida pelo caminho do processo,
- * sem catalogo. As outras precisam dizer onde puseram o jogo.
+ * A Steam entra tambem, mas so para o casamento por NOME (anti-cheat que ja
+ * escondeu o caminho): pelo caminho ela continua sendo reconhecida antes, pela
+ * convencao de pasta (`steamapps/common/<Jogo>/`), em `jogosEmSaida`.
  *
  * Uma loja com problema nao derruba as outras — `allSettled`, e nao `all`: se
  * o `reg query` travar, o jogo da Riot continua sendo detectado.
  */
 async function catalogoDeLojas() {
-  const doRegistro = await Promise.allSettled([jogosUbisoft(), jogosGog()]);
+  const doRegistro = await Promise.allSettled([
+    jogosUbisoft(),
+    jogosGog(),
+    jogosSteam(),
+  ]);
   return [
     ...jogosEpic(),
     ...jogosRiot(),
@@ -692,10 +895,24 @@ function jogosPorNomes(texto, catalogo = []) {
 
     const entrada = entradaPorNomeDeProcesso(nome, catalogo);
     if (!entrada || !ehJogo(entrada.nome)) continue;
-    if (achados.has(entrada.nome)) continue;
+    if (achados.has(entrada.chaveSteam ?? entrada.nome)) continue;
 
-    const registro = { chave: entrada.nome, nome: entrada.nome, caminhos: [] };
+    /**
+     * Jogo da Steam usa a PASTA como chave, a mesma do casamento por caminho
+     * — senao o mesmo jogo, visto pelos dois lados, contaria como dois.
+     */
+    const registro = {
+      chave: entrada.chaveSteam ?? entrada.nome,
+      nome: entrada.nome,
+      caminhos: [],
+    };
     if (entrada.launch) registro.caminhos.push(entrada.launch);
+    /**
+     * Steam nao tem `launch` no manifesto. O exe protegido, achado no DISCO,
+     * faz o papel: o anti-cheat esconde o processo, nao o arquivo.
+     */
+    const emDisco = entrada.launch ? null : acharExecutavel(entrada.raiz, entrada.exes);
+    if (emDisco) registro.caminhos.push(emDisco);
     if (entrada.icone) registro.icone = entrada.icone;
     achados.set(entrada.nome, registro);
   }
@@ -1390,9 +1607,13 @@ async function jogoAtual() {
    * por caminho traz os executaveis rodando, e e deles que sai o melhor
    * icone. Substituir por um registro de `caminhos` vazio seria perder isso.
    */
-  const jaAchados = new Set(porCaminho.map((j) => j.chave));
+  /*
+   * Chaves em minusculas: a pasta vista no caminho e o `installdir` do
+   * manifesto da Steam sao o mesmo nome, mas nada garante a mesma caixa.
+   */
+  const jaAchados = new Set(porCaminho.map((j) => j.chave.toLowerCase()));
   const porNome = jogosPorNomes(saidaDeNomes, catalogo).filter(
-    (j) => !jaAchados.has(j.chave),
+    (j) => !jaAchados.has(j.chave.toLowerCase()),
   );
 
   /*
@@ -1400,9 +1621,9 @@ async function jogoAtual() {
    * instalado e informacao de primeira mao, e o que as pessoas ensinaram e de
    * segunda. Empatando, ganha a loja — e ela tambem e a unica que traz icone.
    */
-  for (const j of porNome) jaAchados.add(j.chave);
+  for (const j of porNome) jaAchados.add(j.chave.toLowerCase());
   const daComunidade = jogosDaComunidadeEm(saidaDeNomes).filter(
-    (j) => !jaAchados.has(j.chave),
+    (j) => !jaAchados.has(j.chave.toLowerCase()),
   );
 
   const achados = [...porCaminho, ...porNome, ...daComunidade];
@@ -1593,6 +1814,11 @@ module.exports = {
   jogosEpic,
   jogosRiot,
   jogosEa,
+  bibliotecasNoVdf,
+  bibliotecasSteam,
+  jogosDaBibliotecaSteam,
+  jogosSteamEm,
+  acharExecutavel,
   nomesProtegidosPorAntiCheat,
   catalogoDeLojas,
   nomeRiot,
