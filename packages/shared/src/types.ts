@@ -354,6 +354,35 @@ export interface VoiceParticipant extends VoiceState {
   user: PublicUser;
 }
 
+/**
+ * A call de um AMIGO, do jeito que a tela Amigos mostra.
+ *
+ * Calculada POR QUEM VE, no gateway: so chega a quem e membro daquele servidor
+ * e tem `VIEW_CHANNEL` no canal. Para os outros, o amigo simplesmente nao esta
+ * em call (`null`) — dizer "em um canal privado" ja contaria que o servidor e
+ * o canal existem.
+ */
+export interface VozDeAmigo {
+  serverId: string;
+  serverName: string;
+  serverIconUrl: string | null;
+  channelId: string;
+  channelName: string;
+  /** `null` = sem limite */
+  userLimit: number | null;
+  /** quantos estao no canal (pode ser maior que `participantes.length`) */
+  total: number;
+  /** os primeiros ocupantes, em ordem de chegada — corte em `VOZ_DE_AMIGO_MAX` */
+  participantes: PublicUser[];
+  /** o amigo esta transmitindo a tela */
+  transmitindo: boolean;
+  /** desde quando o amigo esta NESTE canal (ISO) */
+  desde: string | null;
+}
+
+/** Quantos ocupantes viajam no `VozDeAmigo`; o resto vira o "+N". */
+export const VOZ_DE_AMIGO_MAX = 12;
+
 /** Resultado padrao de toda server action — nunca lancamos erro cru para o cliente. */
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }

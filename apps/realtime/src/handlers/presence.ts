@@ -15,6 +15,7 @@ import { resyncEavisarServidor, visibleChannelRooms } from "../rooms";
 import { createRateLimiter } from "../rate-limit";
 import { metadadosDe } from "../games/metadata";
 import { sincronizarCargoPorJogo } from "../games/cargos-por-jogo";
+import { reavaliarVozDe, vozDosAmigos } from "../voz/voz-de-amigos";
 import {
   detachSocket,
   friendsOf,
@@ -217,6 +218,16 @@ const presenceLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 1 });
  */
 const joinRoomLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 2 });
 
+/**
+ * `friend:voice-sync` le a localizacao de voz de cada amigo e, para os que
+ * estao em call, o acesso de quem pediu — o mais caro dos pedidos de amigos.
+ * O uso honesto e um por conexao (e um quando a lista de amigos muda).
+ */
+const vozDosAmigosLimiter = createRateLimiter({
+  capacity: 4,
+  refillPerSecond: 0.2,
+});
+
 export function registerPresenceHandlers(
   io: AetherServer,
   socket: AetherSocket,
@@ -297,6 +308,9 @@ export function registerPresenceHandlers(
     // que ele ve por este caminho.
     await announceToFriends(io, userId, status, await friendsOf(userId));
 
+    // Invisivel tambem esconde a call da tela Amigos (e voltar a mostra).
+    void reavaliarVozDe(io, userId).catch(() => undefined);
+
     /**
      * Cargo por jogo acompanha a visibilidade: ficar invisivel tira o cargo
      * (ele revelaria o jogo escondido), voltar a aparecer devolve conforme o
@@ -365,6 +379,13 @@ export function registerPresenceHandlers(
     const mudou = await setGame(userId, nome, icone);
     if (!mudou) return;
 
+    /**
+     * As OUTRAS abas da propria pessoa (o navegador nao detecta jogo) ficam
+     * sabendo o que ela esta jogando — e o que habilita "Convidar para jogar"
+     * fora do app de desktop.
+     */
+    io.to(room.user(userId)).emit("presence:self", { game: nome });
+
     const meuStatus = await statusOf(userId);
     const visivel = await entryVisivel(userId, meuStatus);
     for (const serverId of mudou.servers) {
@@ -400,6 +421,29 @@ export function registerPresenceHandlers(
      * Sem `await`: nada aqui pode segurar o handler.
      */
     if (nome && mudou.nomeMudou) void enriquecer(io, userId, nome);
+  });
+
+  /**
+   * Foto das calls dos amigos, ja filtrada para quem pediu (ver
+   * `voz/voz-de-amigos.ts`). Recusa por ritmo devolve `ok: false`, e NAO
+   * lista vazia: a tela substitui o mapa pela foto, e uma lista vazia apagaria
+   * as calls que ela ja mostrava.
+   */
+  socket.on("friend:voice-sync", async (ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+    if (!vozDosAmigosLimiter.take(userId)) {
+      respond({ ok: false });
+      return;
+    }
+    try {
+      respond({ ok: true, entries: await vozDosAmigos(userId) });
+    } catch (erro) {
+      log.warn("gateway.voz_de_amigos.sync", "friend:voice-sync falhou", {
+        err: erro,
+        userId,
+      });
+      respond({ ok: false });
+    }
   });
 
   socket.on("disconnect", () => {

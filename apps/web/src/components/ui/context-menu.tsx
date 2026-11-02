@@ -55,7 +55,10 @@ export function useMenuDeContexto() {
 
   const fechar = useCallback(() => setPonto(null), []);
 
-  return { ponto, abrir, fechar };
+  /** Abre num ponto escolhido — para o botao "Mais", que ancora no botao, nao no cursor. */
+  const abrirEm = useCallback((novo: PontoDoMenu) => setPonto(novo), []);
+
+  return { ponto, abrir, abrirEm, fechar };
 }
 
 export function ContextMenu({

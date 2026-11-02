@@ -7,11 +7,17 @@ import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
 import { Avatar } from "@/components/ui/avatar";
 import { duracaoGrossa, useElapsed } from "@/lib/use-elapsed";
+import { useVozDeAmigosStore, useVozDoAmigo } from "@/lib/stores/voz-de-amigos-store";
+import { ChamadaDoAmigo } from "./chamada-do-amigo";
+import { useMenuDoAmigo } from "./menu-do-amigo";
+import { estaPendente, useConvites, useJogoComAmigo } from "@/lib/use-convites";
+import { AetherIcon } from "@/components/ui/aether-icon";
 
 /**
  * Painel direito — "Ativo agora", 260px fixos.
  *
- * So aparece quem esta REALMENTE jogando algo. Nao ha lista de "amigos online"
+ * So aparece quem esta REALMENTE jogando, ouvindo algo ou em call (call que
+ * o gateway deixou voce ver — ver `voz/voz-de-amigos.ts`). Nao ha lista de "amigos online"
  * repetida aqui: isso ja e o painel do meio, e repetir a mesma informacao em
  * duas colunas gasta 260px para nao dizer nada novo.
  *
@@ -21,9 +27,13 @@ import { duracaoGrossa, useElapsed } from "@/lib/use-elapsed";
 export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
   const activity = useRealtimeStore((estado) => estado.activity);
   const listening = useRealtimeStore((estado) => estado.listening);
+  const vozes = useVozDeAmigosStore((estado) => estado.porAmigo);
 
   const jogando = amigos.filter(
-    (amigo) => activity[amigo.user.id]?.game || listening[amigo.user.id],
+    (amigo) =>
+      activity[amigo.user.id]?.game ||
+      listening[amigo.user.id] ||
+      vozes[amigo.user.id],
   );
 
   return (
@@ -47,7 +57,8 @@ export function ActivityPanel({ amigos }: { amigos: PublicFriendship[] }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {jogando.length === 0 ? (
           <p className="rounded-[10px] border border-dashed border-line px-4 py-8 text-center text-[12px] leading-relaxed text-ink-500">
-            Quando alguem da sua lista abrir um jogo ou puser uma musica, aparece aqui.
+            Quando alguem da sua lista abrir um jogo, puser uma musica ou entrar
+            numa call, aparece aqui.
           </p>
         ) : (
           jogando.map((amigo) => (
@@ -63,6 +74,8 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   const jogo = useRealtimeStore((estado) => estado.activity[amigo.user.id]);
   const musica = useListening(amigo.user.id);
   const status = useRealtimeStore((estado) => estado.presence[amigo.user.id]);
+  const voz = useVozDoAmigo(amigo.user.id);
+  const menu = useMenuDoAmigo(amigo.user);
   const decorrido = useElapsed(jogo?.since ?? null);
 
   /**
@@ -77,10 +90,14 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
   }, []);
   const grosso = duracaoGrossa(jogo?.since ?? null, agora);
 
-  if (!jogo?.game && !musica) return null;
+  if (!jogo?.game && !musica && !voz) return null;
 
   return (
-    <article className="mb-3 rounded-[10px] border border-line bg-base-850 p-3.5">
+    <article
+      onContextMenu={menu.abrir}
+      className="mb-3 rounded-[10px] border border-line bg-base-850 p-3.5"
+    >
+      {menu.elemento}
       <header className="flex items-center gap-2.5">
         <Avatar
           userId={amigo.user.id}
@@ -100,10 +117,14 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
           <p className="truncate text-[12px] text-ink-300">
             {jogo?.game
               ? `Jogando ${jogo.game}${grosso ? ` — ${grosso}` : ""}`
-              : "Ouvindo no Spotify"}
+              : voz
+                ? "Em uma call"
+                : "Ouvindo no Spotify"}
           </p>
         </div>
       </header>
+
+      {voz ? <ChamadaDoAmigo voz={voz} /> : null}
 
       {musica ? (
         <div className="mt-3 rounded-lg border border-line bg-base-950 p-2.5">
@@ -131,6 +152,57 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
           </div>
         </div>
       ) : null}
+
+      {jogo?.game ? <PedirParaEntrar amigoId={amigo.user.id} /> : null}
     </article>
+  );
+}
+
+/**
+ * "Pedir para entrar" do cartao. O pedido e do AETHER (avisa o amigo e traz
+ * a resposta); entrar no jogo continua manual — nenhum dos jogos tem API
+ * oficial para isso, entao o botao nao promete entrada automatica.
+ */
+function PedirParaEntrar({ amigoId }: { amigoId: string }) {
+  const { pedido, jogoDoAmigo } = useJogoComAmigo(amigoId);
+  const { enviar, cancelar, ocupado } = useConvites();
+
+  if (estaPendente(pedido)) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-md border border-line px-2.5 py-1.5 text-[12px]">
+        <AetherIcon name="clock" className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+        <span className="min-w-0 flex-1 truncate text-ink-300">Pedido enviado</span>
+        <button
+          type="button"
+          disabled={ocupado}
+          onClick={() => cancelar(pedido.id)}
+          className="font-bold text-ink-400 hover:text-ink-100 disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
+  if (pedido?.estado === "aceito" && pedido.jogo === jogoDoAmigo) {
+    return (
+      <p className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] text-signal-online">
+        <AetherIcon name="check" className="h-3.5 w-3.5" />
+        Pedido aceito
+      </p>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={ocupado}
+      onClick={() => enviar(amigoId, "pedir")}
+      title={`Avisa e espera a resposta. A entrada no ${jogoDoAmigo ?? "jogo"} e manual: o jogo nao deixa outros apps colocarem voce na party.`}
+      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[12px] font-bold text-ink-200 transition-colors duration-150 hover:bg-base-800 hover:text-ink-100 disabled:opacity-50"
+    >
+      <AetherIcon name="gamepad" className="h-3.5 w-3.5" />
+      Pedir para entrar
+    </button>
   );
 }

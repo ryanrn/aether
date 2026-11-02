@@ -8,6 +8,7 @@ import { env } from "./env";
 import { resyncEavisarServidor } from "./rooms";
 import { enviarMensagem } from "./enviar-mensagem";
 import { entrarNaVoz, sairDaVoz, sairDaVozDoCanal } from "./entrar-em-voz";
+import { marcarVozAlterada } from "./voz/voz-de-amigos";
 import type { AetherServer } from "./types";
 import {
   countInChannel,
@@ -141,6 +142,7 @@ async function evict(
       participant: voiceDeparture(userId, left.user),
     });
   }
+  if (left) marcarVozAlterada(io, left.serverId, [userId]);
 
   io.to(userRoom).emit("server:evicted", { serverId, reason });
   await io.in(userRoom).socketsLeave([room.server(serverId), ...channelRooms]);
@@ -456,6 +458,8 @@ export async function handleInternalRequest(
           serverId: voz.serverId,
           participant: voz.participant,
         });
+        // A foto nova tambem nos avatares da call na tela Amigos.
+        marcarVozAlterada(io, voz.serverId, [userId]);
       }
 
       /**

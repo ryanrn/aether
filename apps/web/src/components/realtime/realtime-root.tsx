@@ -6,6 +6,7 @@ import { VoiceSession } from "@/components/realtime/voice-session";
 import { VoiceChimes } from "@/components/realtime/voice-chimes";
 import { ChamadaDmSession } from "@/components/realtime/chamada-dm-session";
 import { ChamadaDmOverlay } from "@/components/realtime/chamada-dm-overlay";
+import { ConvitesOverlay } from "@/components/realtime/convites-overlay";
 
 /**
  * Monta a conexao em tempo real e a sessao de midia no LAYOUT RAIZ — o unico
@@ -35,6 +36,7 @@ export function RealtimeRoot({ children }: { children: React.ReactNode }) {
       {/* chamada direta: mesmo motivo da VoiceSession — sobrevive a navegacao */}
       <ChamadaDmSession />
       <ChamadaDmOverlay />
+      <ConvitesOverlay />
       {children}
     </RealtimeProvider>
   );
