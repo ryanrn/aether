@@ -459,7 +459,7 @@ export function AccountTab({
       </div>
 
       {/*
-        DECORACAO e BANNER — cosmeticos com arte, cadastrados pela equipe. So
+        Cosmeticos com arte (decoracao, banner, placa, efeito), cadastrados pela equipe. So
         aparecem com a flag `loja_de_cosmeticos` ligada (o seletor devolve nada
         quando desligada). A decoracao acompanha o preview do avatar la em cima.
       */}
@@ -470,12 +470,15 @@ export function AccountTab({
         avatarUrl={previa?.url ?? avatarUrl}
         onEquipar={setDecoracao}
       />
-      <SeletorDeCosmeticos
-        tipo="BANNER"
-        userId={user.id}
-        nome={displayName || user.username}
-        avatarUrl={previa?.url ?? avatarUrl}
-      />
+      {(["BANNER", "NAMEPLATE", "PROFILE_EFFECT"] as const).map((tipo) => (
+        <SeletorDeCosmeticos
+          key={tipo}
+          tipo={tipo}
+          userId={user.id}
+          nome={displayName || user.username}
+          avatarUrl={previa?.url ?? avatarUrl}
+        />
+      ))}
 
       <input
         ref={inputRef}

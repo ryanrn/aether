@@ -8,6 +8,7 @@ import {
   PLAN_ORDER,
   PLANS,
   RARIDADES,
+  type ColecaoNoPainel,
   ROTULO_COSMETIC_TYPE,
   raridadePorId,
   type CosmeticoNoPainel,
@@ -17,6 +18,10 @@ import {
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import {
+  CamadaDeEfeito,
+  FundoDePlaca,
+} from "@/components/profile/cosmeticos-de-perfil";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Label } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
@@ -29,6 +34,8 @@ import {
   excluirCosmeticoAction,
   listarCosmeticosAction,
 } from "@/server/actions/cosmeticos";
+import { listarColecoesAction } from "@/server/actions/colecoes";
+import { ColecoesSecao } from "./colecoes-secao";
 import { cn } from "@/lib/utils";
 
 /**
@@ -50,7 +57,7 @@ const FILTROS: { id: Filtro; rotulo: string }[] = [
   { id: "TODOS", rotulo: "Todos" },
   ...COSMETIC_TYPES.map((t) => ({
     id: t,
-    rotulo: `${ROTULO_COSMETIC_TYPE[t]}s`,
+    rotulo: ROTULO_COSMETIC_TYPE[t],
   })),
 ];
 
@@ -66,7 +73,14 @@ export function CosmeticosTab() {
   );
   const [excluindo, setExcluindo] = useState<CosmeticoNoPainel | null>(null);
   const [ativando, setAtivando] = useState<string | null>(null);
+  const [colecoes, setColecoes] = useState<ColecaoNoPainel[]>([]);
   const [pending, startTransition] = useTransition();
+
+  const carregarColecoes = useCallback(() => {
+    listarColecoesAction().then((r) => {
+      if (r.ok) setColecoes(r.data);
+    });
+  }, []);
 
   const carregar = useCallback(() => {
     listarCosmeticosAction().then((r) => {
@@ -82,7 +96,8 @@ export function CosmeticosTab() {
 
   useEffect(() => {
     carregar();
-  }, [carregar]);
+    carregarColecoes();
+  }, [carregar, carregarColecoes]);
 
   const visiveis = useMemo(() => {
     if (!itens) return [];
@@ -118,9 +133,9 @@ export function CosmeticosTab() {
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] leading-snug text-ink-400">
-          Decorações de avatar e banners de perfil. O arquivo vai para o
-          Cloudflare R2; o banco guarda só a referência. Adicionar um cosmético
-          não precisa de deploy.
+          Decorações, banners, placas de nome e efeitos de perfil. O arquivo
+          vai para o Cloudflare R2; o banco guarda só a referência. Adicionar
+          um cosmético não precisa de deploy.
         </p>
         <Button
           size="sm"
@@ -131,6 +146,14 @@ export function CosmeticosTab() {
           Novo cosmético
         </Button>
       </div>
+
+      <ColecoesSecao
+        colecoes={colecoes}
+        onMudou={() => {
+          carregarColecoes();
+          carregar();
+        }}
+      />
 
       <div className="flex gap-1">
         {FILTROS.map((f) => {
@@ -188,6 +211,7 @@ export function CosmeticosTab() {
         <FormularioCosmetico
           inicial={editando === "novo" ? null : editando}
           tipoPadrao={filtro !== "TODOS" ? (filtro as CosmeticType) : "DECORATION"}
+          colecoes={colecoes}
           onFechar={() => setEditando(null)}
           onSalvo={() => {
             setEditando(null);
@@ -305,8 +329,27 @@ type ArteDoCosmetico = Pick<
   "tipo" | "nome" | "assetUrl" | "assetTrasUrl" | "thumbUrl"
 >;
 
-/** O item na lista: decoracao sobre um avatar de teste, ou a faixa 3:1. */
+/**
+ * O item na lista: decoracao sobre um avatar de teste, ou a propria imagem
+ * (banner 3:1, placa ~6:1, efeito em pe).
+ */
 function MiniPreview({ cosmetico: c, px = 60 }: { cosmetico: ArteDoCosmetico; px?: number }) {
+  if (c.tipo === "NAMEPLATE" || c.tipo === "PROFILE_EFFECT") {
+    const placa = c.tipo === "NAMEPLATE";
+    return (
+      <div
+        className="overflow-hidden rounded-md border border-line bg-base-900"
+        style={placa ? { width: px * 1.8, height: (px * 1.8) / 6 } : { width: px * 0.75, height: px }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={c.thumbUrl ?? c.assetUrl}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
   if (c.tipo === "BANNER") {
     return (
       <div
@@ -361,6 +404,32 @@ function PreviaCosmetico({ cosmetico: c }: { cosmetico: ArteDoCosmetico }) {
   const [fundo, setFundo] = useState<(typeof FUNDOS)[number]["id"]>("escuro");
   const corFundo = FUNDOS.find((f) => f.id === fundo)!.cor;
 
+  if (c.tipo === "NAMEPLATE") {
+    // A linha da lista de membros, com a placa atras — como ela aparece.
+    return (
+      <div className="w-full max-w-[260px] rounded-lg border border-line bg-base-900 p-2">
+        <div className="relative isolate flex items-center gap-2.5 overflow-hidden rounded-md px-2 py-[7px]">
+          <FundoDePlaca url={c.assetUrl} />
+          <Avatar userId="pv-placa" name="AE" size="sm" />
+          <span className="text-[13px] font-medium text-ink-100">Nome</span>
+        </div>
+      </div>
+    );
+  }
+  if (c.tipo === "PROFILE_EFFECT") {
+    // Um cartao de perfil de mentira, com o efeito por cima.
+    return (
+      <div className="relative w-full max-w-[240px] rounded-lg border border-line bg-base-900">
+        <div className="h-16 rounded-t-lg bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+        <div className="-mt-8 px-4 pb-16">
+          <Avatar userId="pv-efeito" name="AE" px={56} ring="border-base-900" />
+          <p className="mt-1.5 text-[14px] font-semibold text-ink-100">Nome</p>
+          <p className="font-mono text-[11px] text-ink-500">@usuario</p>
+        </div>
+        <CamadaDeEfeito url={c.assetUrl} />
+      </div>
+    );
+  }
   if (c.tipo === "BANNER") {
     return (
       <div className="w-full max-w-[300px] overflow-hidden rounded-lg border border-line bg-base-900">
@@ -425,6 +494,8 @@ interface Rascunho {
   precoMoedas: string;
   tierMinimo: PlanTier;
   ordem: string;
+  /** "" = sem colecao */
+  colecaoId: string;
 }
 
 function slugify(texto: string): string {
@@ -440,11 +511,13 @@ function slugify(texto: string): string {
 function FormularioCosmetico({
   inicial,
   tipoPadrao,
+  colecoes,
   onFechar,
   onSalvo,
 }: {
   inicial: CosmeticoNoPainel | null;
   tipoPadrao: CosmeticType;
+  colecoes: ColecaoNoPainel[];
   onFechar: () => void;
   onSalvo: () => void;
 }) {
@@ -459,6 +532,7 @@ function FormularioCosmetico({
     precoMoedas: inicial?.precoMoedas != null ? String(inicial.precoMoedas) : "",
     tierMinimo: inicial?.tierMinimo ?? "FREE",
     ordem: String(inicial?.ordem ?? 0),
+    colecaoId: inicial?.colecaoId ?? "",
   }));
   const [slugManual, setSlugManual] = useState(editando);
   const [asset, setAsset] = useState<File | null>(null);
@@ -497,6 +571,7 @@ function FormularioCosmetico({
     fd.set("precoMoedas", r.precoMoedas);
     fd.set("tierMinimo", r.tierMinimo);
     fd.set("ordem", r.ordem);
+    fd.set("colecaoId", r.colecaoId);
     if (asset) fd.set("asset", asset);
     if (assetTras) fd.set("assetTras", assetTras);
 
@@ -537,6 +612,24 @@ function FormularioCosmetico({
             />
           </Field>
         </div>
+
+        <Field
+          label="Coleção"
+          hint="Coleção com período decide quando o item se vende."
+        >
+          <select
+            value={r.colecaoId}
+            onChange={(e) => set("colecaoId", e.target.value)}
+            className="h-10 w-full rounded-md border border-line-strong bg-base-900 px-3 text-sm text-ink-100 focus:border-accent-600 focus:outline-none"
+          >
+            <option value="">Sem coleção</option>
+            {colecoes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label="Descrição">
           <textarea
@@ -614,7 +707,7 @@ function FormularioCosmetico({
         {/* asset */}
         <div className="flex flex-col gap-3">
           <Field
-            label={r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem do banner"}
+            label={r.tipo === "DECORATION" ? "Arte (frente)" : "Imagem"}
             required={!editando}
             hint={regra.alvo}
           >

@@ -233,9 +233,49 @@ export const cosmeticoMetaSchema = z.object({
     errorMap: () => ({ message: "Plano minimo invalido" }),
   }),
   ordem: z.coerce.number().int().min(0).max(9999).catch(0),
+  /** vazio = sem colecao */
+  colecaoId: z
+    .string()
+    .trim()
+    .max(64)
+    .nullish()
+    .transform((v) => (v ? v : null)),
 });
 
 export type CosmeticoMeta = z.infer<typeof cosmeticoMetaSchema>;
+
+/** Data opcional do formulario: vazio = sem limite. */
+const dataOpcionalSchema = z
+  .union([z.literal(""), z.null(), z.undefined(), z.coerce.date()])
+  .transform((v) => (v instanceof Date ? v : null))
+  .refine((v) => v === null || !Number.isNaN(v.getTime()), "Data invalida");
+
+export const colecaoMetaSchema = z
+  .object({
+    nome: z
+      .string()
+      .trim()
+      .min(1, "De um nome a colecao")
+      .max(60, "O nome pode ter no maximo 60 caracteres"),
+    slug: cosmeticSlugSchema,
+    descricao: z
+      .string()
+      .trim()
+      .max(240, "A descricao pode ter no maximo 240 caracteres")
+      .optional()
+      .transform((v) => (v && v.length > 0 ? v : null)),
+    inicioEm: dataOpcionalSchema,
+    fimEm: dataOpcionalSchema,
+    destaque: z.boolean().catch(false),
+    ativa: z.boolean().catch(false),
+    ordem: z.coerce.number().int().min(0).max(9999).catch(0),
+  })
+  .refine((c) => !c.inicioEm || !c.fimEm || c.fimEm > c.inicioEm, {
+    message: "O fim precisa ser depois do inicio",
+    path: ["fimEm"],
+  });
+
+export type ColecaoMeta = z.infer<typeof colecaoMetaSchema>;
 
 /** Acha uma marca ASCII nos primeiros bytes. Limitado para nao varrer 10 MB. */
 function contemMarca(bytes: Uint8Array, marca: string, ate = 4096): boolean {

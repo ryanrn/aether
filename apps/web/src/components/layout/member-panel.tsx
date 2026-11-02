@@ -10,6 +10,7 @@ import {
   type UserStatus,
   type ViewerContext,
 } from "@aether/shared";
+import { FundoDePlaca } from "@/components/profile/cosmeticos-de-perfil";
 import { Avatar } from "@/components/ui/avatar";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { SeloBot } from "@/components/ui/selo-bot";
@@ -401,7 +402,13 @@ function MemberRow({
 
   return (
     <li>
-      <div className="group/member flex items-center gap-2.5 rounded-md px-2 py-[7px] transition-colors hover:bg-base-850">
+      <div
+        className={cn(
+          "group/member flex items-center gap-2.5 rounded-md px-2 py-[7px] transition-colors hover:bg-base-850",
+          member.user.placa && "relative isolate overflow-hidden",
+        )}
+      >
+        {member.user.placa ? <FundoDePlaca url={member.user.placa} /> : null}
         <button
           type="button"
           onClick={(event) => onOpenCard(member, event)}

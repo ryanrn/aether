@@ -17,6 +17,7 @@ import type {
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import { CamadaDeEfeito } from "@/components/profile/cosmeticos-de-perfil";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { GameArt } from "@/components/profile/game-art";
 import { MusicActivityRow } from "@/components/profile/music-activity";
@@ -159,6 +160,7 @@ export function CartaoDePerfil({
         )}
         role="dialog"
       >
+      {perfil?.efeito ? <CamadaDeEfeito url={perfil.efeito} /> : null}
       {/*
         A faixa clipa SO A SI MESMA (nao o card inteiro) — antes o
         `overflow-hidden` estava no card, e com `DECORACAO_ESCALA` maior a

@@ -15,7 +15,8 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * O seletor de DECORACAO ou BANNER na tela "Minha conta".
+ * O seletor de um tipo de cosmetico (decoracao, banner, placa, efeito) na
+ * tela "Minha conta".
  *
  * So aparece com a flag `loja_de_cosmeticos` ligada — a action devolve lista
  * vazia quando ela esta desligada, e ai este componente nao renderiza nada.
@@ -85,7 +86,7 @@ export function SeletorDeCosmeticos({
           onClick={() => equipar(null)}
           disabled={pending}
           aria-pressed={equipadoId === null}
-          title={`Sem ${tipo === "DECORATION" ? "decoração" : "banner"}`}
+          title={`Sem ${ROTULO_COSMETIC_TYPE[tipo].toLowerCase()}`}
           className={cn(
             "grid h-11 w-11 place-items-center rounded-md border text-[10px] text-ink-500 transition-colors",
             equipadoId === null
@@ -123,7 +124,8 @@ export function SeletorDeCosmeticos({
               )}
               style={rar ? { boxShadow: `inset 0 -2px 0 0 ${rar.cor}` } : undefined}
             >
-              {tipo === "BANNER" ? (
+              {tipo !== "DECORATION" ? (
+                // Banner, placa e efeito: a propria imagem, recortada.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={c.thumbUrl ?? c.assetUrl}

@@ -36,6 +36,7 @@ const user: PublicUser = {
   plano: "FREE",
   moldura: null,
   decoracao: null,
+  placa: null,
 };
 
 /** Cada teste comeca sem ninguem em voz — o estado do modulo e global. */

@@ -115,12 +115,7 @@ async function lerECheckar(
     }
     const ratio = largura / altura;
     if (ratio < regra.ratioMin || ratio > regra.ratioMax) {
-      return {
-        erro:
-          tipo === "BANNER"
-            ? `${rotulo}: precisa ser proximo de 3:1 (ex.: 1500x500)`
-            : `${rotulo}: precisa ser proxima de quadrada (ex.: 512x512)`,
-      };
+      return { erro: `${rotulo}: proporcao fora do formato (alvo: ${regra.alvo})` };
     }
     return { bytes, mime, largura, altura };
   } catch (erro) {
