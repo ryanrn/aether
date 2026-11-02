@@ -2105,13 +2105,35 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
      `start_protected_game.exe` (generico, excluido sozinho) estava rodando
      quando a pasta foi vista. Foi o buraco real do GunZ: The Duel.
 
-  RESIDUAL: se a deteccao so ligar DEPOIS de o jogo ja estar protegido (app
-  aberto depois do jogo, ou deteccao ligada no meio da partida), nao ha a
-  janela inicial para fixar. Ai so um catalogo do Steam resolveria — anotado
-  para quando aparecer.
+  O residual — deteccao ligada DEPOIS de o jogo ja estar protegido (Aether
+  aberto depois do jogo, ou deteccao ligada no meio da partida), sem a janela
+  inicial para fixar — foi fechado pelo **catalogo da Steam** (abaixo).
+- **Catalogo da Steam (02/11/2026).** A Steam era reconhecida so pelo
+  CAMINHO do processo, e por isso jogo do Steam com anti-cheat ja protegido
+  ficava invisivel. Agora ela tambem entra no catalogo, como a EA:
+  `HKCU\Software\Valve\Steam\SteamPath` (padrao
+  `C:/Program Files (x86)/Steam`) -> `steamapps/libraryfolders.vdf` (todas as
+  bibliotecas) -> `appmanifest_*.acf` (`installdir` e `name`) -> config do
+  anti-cheat na raiz do jogo (exes protegidos). O casamento por caminho
+  continua vindo primeiro; o catalogo so entra no casamento por NOME.
+  - A chave do jogo achado pelo nome e a PASTA (`installdir`), a mesma do
+    caminho: o mesmo jogo visto pelos dois lados nao conta como dois. As
+    chaves sao comparadas em minusculas.
+  - Icone: a Steam nao tem `LaunchExecutable`; o exe protegido e procurado no
+    DISCO, ate 3 niveis abaixo da raiz (o anti-cheat esconde o processo, nao o
+    arquivo).
+  - Manifesto sem a pasta do jogo (instalacao pela metade) e ignorado;
+    "Wallpaper Engine" e "Steamworks Common Redistributables" entram em
+    `NAO_SAO_JOGOS` pelo NOME do manifesto.
+  - Cache invalidado pela data das pastas `steamapps` de todas as bibliotecas.
+  - **Verificado** contra a Steam real da maquina de desenvolvimento (3
+    bibliotecas lidas, os dois apps nao-jogo descartados), mas **sem nenhum
+    jogo instalado nela**: o caminho jogo-com-anti-cheat-pelo-catalogo esta
+    coberto so por teste, com uma Steam falsa em disco.
+  - **Risco novo:** com a Steam no casamento por nome, uma biblioteca grande
+    aumenta a chance de um processo qualquer comecar com o nome de um jogo
+    instalado (o piso de 5 letras para prefixo continua valendo).
 - **Um jogo instalado por DUAS lojas conta como Steam.** A regra da Steam e
-  avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
-- **Um jogo instalado pelas DUAS lojas conta como Steam.** A regra da Steam e
   avaliada primeiro; e caso raro e o nome sai igual de qualquer jeito.
 - **O cache dos manifestos da Epic e invalidado pela data da PASTA**, nao por
   tempo. Instalar ou desinstalar mexe na pasta e forca a releitura. Uma leitura
