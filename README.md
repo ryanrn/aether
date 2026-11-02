@@ -4152,8 +4152,8 @@ Ao vivo, com a flag `loja_de_cosmeticos` ligada:
 ### Limitacoes
 
 - **Nao testado ao vivo** (so testes, PGlite e build).
-- **Migracao NAO aplicada em producao.** Sem ela, as abas novas da loja ficam
-  vazias: a consulta degrada para lista vazia em vez de derrubar a pagina.
+- **Migracao aplicada em producao em 02/11/2026**, junto com as de moedas,
+  missoes e colecoes.
 - **A placa so aparece na lista de membros do servidor.** Ela nao aparece na
   lista de DMs nem na de amigos.
 - **Com o gateway antigo, a placa pisca.** Ele monta o `PublicUser` sem o
@@ -4240,10 +4240,9 @@ Ao vivo, com a flag `loja_de_cosmeticos` ligada:
 ### Limitacoes
 
 - **Nao testado ao vivo** (so testes, PGlite e build).
-- **Migracao NAO aplicada em producao.** Esta versao do codigo consulta
-  `colecaoId`; publicada sem a migracao, o catalogo cai para vazio e a loja
-  mostra "abre em breve". Ordem obrigatoria: `db:deploy`, depois o deploy do
-  web.
+- **Migracao aplicada em producao em 02/11/2026**, antes do deploy do web.
+  Esta versao do codigo consulta `colecaoId`; num banco sem a migracao, o
+  catalogo cai para vazio e a loja mostra "abre em breve".
 - **Despublicar a colecao nao tira o item de quem ja usa o gratis sem
   prazo.** A leitura no perfil olha so `Cosmetic.ativo`. Para recolher um
   item, desative o item.
