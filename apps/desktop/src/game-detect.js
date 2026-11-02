@@ -1048,6 +1048,8 @@ function jogosPorNomes(texto, catalogo = []) {
       chave: entrada.chaveSteam ?? entrada.nome,
       nome: entrada.nome,
       caminhos: [],
+      // o processo que casou — e por ele que se sabe QUANDO o jogo abriu
+      processos: [nome],
     };
     if (entrada.launch) registro.caminhos.push(entrada.launch);
     /**
@@ -1057,7 +1059,9 @@ function jogosPorNomes(texto, catalogo = []) {
     const emDisco = entrada.launch ? null : acharExecutavel(entrada.raiz, entrada.exes);
     if (emDisco) registro.caminhos.push(emDisco);
     if (entrada.icone) registro.icone = entrada.icone;
-    achados.set(entrada.nome, registro);
+    // Mesma chave do `has` acima: com o nome aqui, dois processos do mesmo
+    // jogo da Steam viravam dois achados.
+    achados.set(registro.chave, registro);
   }
 
   return [...achados.values()];
@@ -1108,7 +1112,12 @@ function jogosDaComunidadeEm(texto, comunidade = catalogoDaComunidade) {
     if (chave.length === 0) continue;
     const jogo = porChave.get(chave);
     if (!jogo || achados.has(jogo.nome)) continue;
-    achados.set(jogo.nome, { chave: jogo.nome, nome: jogo.nome, caminhos: [] });
+    achados.set(jogo.nome, {
+      chave: jogo.nome,
+      nome: jogo.nome,
+      caminhos: [],
+      processos: [linha.trim()],
+    });
   }
   return [...achados.values()];
 }
@@ -1440,7 +1449,7 @@ async function listarProcessos() {
       const csv = await executar("wmic", [
         "process",
         "get",
-        "Name,ExecutablePath",
+        "CreationDate,ExecutablePath,Name",
         "/format:csv",
       ]);
       return processosDoCsvDoWmic(csv);
@@ -1467,36 +1476,81 @@ let wmicAusente = false;
 function processosDoCsvDoWmic(texto) {
   const caminhos = [];
   const nomes = [];
+  const inicios = novosInicios();
+  let comData = false;
   for (const linha of String(texto).split(/\r?\n/)) {
     const limpa = linha.trim();
-    if (!limpa || /^node,/i.test(limpa)) continue;
+    if (!limpa) continue;
+    if (/^node,/i.test(limpa)) {
+      // `Node,CreationDate,ExecutablePath,Name` quando a data foi pedida
+      comData = /,creationdate,/i.test(limpa);
+      continue;
+    }
     const campos = limpa.split(",");
-    if (campos.length < 3) continue;
+    if (campos.length < (comData ? 4 : 3)) continue;
     const nome = campos[campos.length - 1].trim();
-    const caminho = campos.slice(1, -1).join(",").trim();
+    const caminho = campos.slice(comData ? 2 : 1, -1).join(",").trim();
     if (nome) nomes.push(nome);
     if (caminho) caminhos.push(caminho);
+    if (comData) anotarInicio(inicios, nome, caminho, dataDoWmic(campos[1]));
   }
-  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n") };
+  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n"), inicios };
+}
+
+/**
+ * QUANDO cada processo comecou, por nome e por caminho (minusculos). Com dois
+ * processos do mesmo nome, vale o mais antigo — e quando o jogo abriu.
+ */
+function novosInicios() {
+  return { porNome: new Map(), porCaminho: new Map() };
+}
+
+function anotarInicio(inicios, nome, caminho, ms) {
+  if (!Number.isFinite(ms)) return;
+  for (const [mapa, chave] of [
+    [inicios.porNome, String(nome).toLowerCase()],
+    [inicios.porCaminho, String(caminho).toLowerCase()],
+  ]) {
+    if (!chave) continue;
+    const atual = mapa.get(chave);
+    if (atual === undefined || ms < atual) mapa.set(chave, ms);
+  }
+}
+
+/** `20261102123456.872109-180` (hora local + fuso em minutos) -> epoch ms. */
+function dataDoWmic(texto) {
+  const m = String(texto).match(
+    /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d{3})\d*([+-]\d+)$/,
+  );
+  if (!m) return NaN;
+  const [, a, mes, d, h, min, s, mili, fuso] = m;
+  return (
+    Date.UTC(+a, +mes - 1, +d, +h, +min, +s, +mili) - Number(fuso) * 60_000
+  );
 }
 
 /** Uma linha `Nome|Caminho` por processo (o `|` nao existe em caminho). */
 const SCRIPT_PROCESSOS =
-  "Get-CimInstance Win32_Process | ForEach-Object { $_.Name + '|' + $_.ExecutablePath }";
+  "Get-CimInstance Win32_Process | ForEach-Object { $_.Name + '|' + " +
+  "$(if ($_.CreationDate) { ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() }) + " +
+  "'|' + $_.ExecutablePath }";
 
 function processosDaSaidaDoPowershell(texto) {
   const caminhos = [];
   const nomes = [];
+  const inicios = novosInicios();
   for (const linha of String(texto).split(/\r?\n/)) {
     const limpa = linha.trim();
     if (!limpa) continue;
-    const corte = limpa.indexOf("|");
-    const nome = (corte === -1 ? limpa : limpa.slice(0, corte)).trim();
-    const caminho = corte === -1 ? "" : limpa.slice(corte + 1).trim();
+    // `Nome|inicio em ms|Caminho` — o caminho e o ULTIMO campo
+    const [nomeCru = "", inicioCru = "", ...resto] = limpa.split("|");
+    const nome = nomeCru.trim();
+    const caminho = resto.join("|").trim();
     if (nome) nomes.push(nome);
     if (caminho) caminhos.push(caminho);
+    if (inicioCru.trim()) anotarInicio(inicios, nome, caminho, Number(inicioCru));
   }
-  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n") };
+  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n"), inicios };
 }
 
 /* -------------------------------------------------------------------------
@@ -1860,6 +1914,39 @@ function jogoFixadoAindaVivo(saidaDeNomes) {
 }
 
 /**
+ * Com mais de um jogo aberto, o que entra na tela e o ABERTO POR ULTIMO.
+ *
+ * Antes era o primeiro em ordem alfabetica — estavel, mas arbitrario: quem
+ * deixava um jogo minimizado e abria outro continuava "jogando" o primeiro. O
+ * horario de inicio vem na mesma leitura de processos e e igualmente estavel
+ * (nao muda entre verificacoes), entao nao ha alternancia.
+ *
+ * O inicio de um jogo e o do seu processo MAIS ANTIGO (por caminho ou por
+ * nome). Sem horario conhecido conta como antigo. Empate: ordem alfabetica,
+ * como antes.
+ */
+function inicioDoJogo(achado, inicios) {
+  if (!inicios) return 0;
+  let menor = Infinity;
+  for (const c of achado.caminhos ?? []) {
+    const ms = inicios.porCaminho.get(String(c).toLowerCase());
+    if (ms !== undefined && ms < menor) menor = ms;
+  }
+  for (const n of achado.processos ?? []) {
+    const ms = inicios.porNome.get(String(n).toLowerCase());
+    if (ms !== undefined && ms < menor) menor = ms;
+  }
+  return Number.isFinite(menor) ? menor : 0;
+}
+
+function escolherJogo(achados, inicios) {
+  return [...achados].sort((a, b) => {
+    const diferenca = inicioDoJogo(b, inicios) - inicioDoJogo(a, inicios);
+    return diferenca !== 0 ? diferenca : a.chave.localeCompare(b.chave);
+  })[0];
+}
+
+/**
  * O jogo rodando agora como `{ nome, icone }`, ou `null`.
  *
  * O icone pode vir `null` sozinho: nem todo executavel entrega um, e nome sem
@@ -1875,8 +1962,11 @@ async function jogoAtual() {
    * icone e cobre jogo fora do catalogo (Steam pela convencao de pasta). Nome
    * cobre o que o anti-cheat esconde.
    */
-  const { caminhos: saidaDeCaminhos, nomes: saidaDeNomes } =
-    await listarProcessos();
+  const {
+    caminhos: saidaDeCaminhos,
+    nomes: saidaDeNomes,
+    inicios,
+  } = await listarProcessos();
 
   const porCaminho = jogosEmSaida(saidaDeCaminhos, catalogo);
 
@@ -1912,12 +2002,7 @@ async function jogoAtual() {
     return jogoFixadoAindaVivo(saidaDeNomes);
   }
 
-  /**
-   * Mais de um jogo aberto e caso raro e sem resposta certa. Ordenar e pegar
-   * o primeiro nao e "o melhor", e o ESTAVEL: sem isso o nome ficaria
-   * alternando entre os dois a cada verificacao.
-   */
-  const escolhido = achados.sort((a, b) => a.chave.localeCompare(b.chave))[0];
+  const escolhido = escolherJogo(achados, inicios);
   /**
    * O `.ico` da loja ganha do icone do executavel quando existe: e arte de
    * verdade, e nao os 48x48 que o Windows guarda dentro do programa. So a
@@ -2105,6 +2190,8 @@ module.exports = {
   nomesProtegidosPorAntiCheat,
   catalogoDeLojas,
   processosDoCsvDoWmic,
+  dataDoWmic,
+  escolherJogo,
   processosDaSaidaDoPowershell,
   comValidade,
   sessaoPowershell,

@@ -1075,9 +1075,9 @@ describe("leitura de processos: nome e caminho numa consulta so", () => {
     ]);
   });
 
-  it("saida da sessao de PowerShell: Nome|Caminho, caminho vazio quando protegido", () => {
+  it("saida da sessao de PowerShell: Nome|inicio|Caminho, caminho vazio quando protegido", () => {
     const r = processosDaSaidaDoPowershell(
-      [String.raw`Hades.exe|D:\SteamLibrary\steamapps\common\Hades\Hades.exe`, "vgc.exe|", ""].join("\r\n"),
+      [String.raw`Hades.exe|1762100000000|D:\SteamLibrary\steamapps\common\Hades\Hades.exe`, "vgc.exe||", ""].join("\r\n"),
     );
     expect(r.nomes.split("\n")).toEqual(["Hades.exe", "vgc.exe"]);
     expect(r.caminhos).toBe(String.raw`D:\SteamLibrary\steamapps\common\Hades\Hades.exe`);
@@ -1101,5 +1101,88 @@ describe("leitura de processos: nome e caminho numa consulta so", () => {
     await ler();
     await ler();
     expect(chamadas).toBe(1);
+  });
+});
+
+describe("dois jogos abertos: vale o aberto por ultimo", () => {
+  type Inicios = { porNome: Map<string, number>; porCaminho: Map<string, number> };
+  const {
+    dataDoWmic,
+    escolherJogo,
+    processosDoCsvDoWmic,
+    processosDaSaidaDoPowershell,
+  } = detect as {
+    dataDoWmic: (t: string) => number;
+    escolherJogo: (a: object[], i?: Inicios) => { chave: string };
+    processosDoCsvDoWmic: (t: string) => { caminhos: string; nomes: string; inicios: Inicios };
+    processosDaSaidaDoPowershell: (t: string) => { inicios: Inicios };
+  };
+
+  it("le a data do wmic com o fuso (hora local + minutos)", () => {
+    // 12:00 em UTC-3 = 15:00 UTC
+    expect(new Date(dataDoWmic("20261102120000.123456-180")).toISOString()).toBe(
+      "2026-11-02T15:00:00.123Z",
+    );
+    expect(Number.isNaN(dataDoWmic(""))).toBe(true);
+  });
+
+  it("CSV com CreationDate: horario por nome e por caminho, o mais antigo vence", () => {
+    const csv = [
+      "Node,CreationDate,ExecutablePath,Name",
+      String.raw`PC,20261102120000.000000-180,D:\Jogos\GTAV\GTA5.exe,GTA5.exe`,
+      String.raw`PC,20261102110000.000000-180,,VALORANT-Win64-Shipping.exe`,
+      String.raw`PC,20261102130000.000000-180,,VALORANT-Win64-Shipping.exe`,
+    ].join("\r\n");
+    const r = processosDoCsvDoWmic(csv);
+    expect(r.nomes.split("\n")).toHaveLength(3);
+    expect(r.inicios.porCaminho.get(String.raw`d:\jogos\gtav\gta5.exe`)).toBe(
+      dataDoWmic("20261102120000.000000-180"),
+    );
+    expect(r.inicios.porNome.get("valorant-win64-shipping.exe")).toBe(
+      dataDoWmic("20261102110000.000000-180"),
+    );
+  });
+
+  it("PowerShell: o inicio vem em ms; vazio fica sem horario", () => {
+    const r = processosDaSaidaDoPowershell(
+      ["a.exe|1000|C:\\a.exe", "b.exe||"].join("\r\n"),
+    );
+    expect(r.inicios.porNome.get("a.exe")).toBe(1000);
+    expect(r.inicios.porNome.has("b.exe")).toBe(false);
+  });
+
+  it("escolhe o que comecou por ultimo, nao o primeiro do alfabeto", () => {
+    const inicios: Inicios = {
+      porNome: new Map([["valorant-win64-shipping.exe", 2000]]),
+      porCaminho: new Map([[String.raw`d:\jogos\gtav\gta5.exe`, 1000]]),
+    };
+    const achados = [
+      { chave: "Grand Theft Auto V", caminhos: [String.raw`D:\Jogos\GTAV\GTA5.exe`] },
+      { chave: "VALORANT", caminhos: [], processos: ["VALORANT-Win64-Shipping.exe"] },
+    ];
+    expect(escolherJogo(achados, inicios).chave).toBe("VALORANT");
+  });
+
+  it("sem horario conhecido, volta a ordem alfabetica (estavel)", () => {
+    const vazio: Inicios = { porNome: new Map(), porCaminho: new Map() };
+    const achados = [{ chave: "Zelda", caminhos: [] }, { chave: "Alan Wake", caminhos: [] }];
+    expect(escolherJogo(achados, vazio).chave).toBe("Alan Wake");
+    expect(escolherJogo(achados).chave).toBe("Alan Wake");
+  });
+
+  it("dois processos do mesmo jogo da Steam sao um achado so", () => {
+    const catalogo = [
+      {
+        pasta: "d:/steam/steamapps/common/gunz the duel/",
+        nome: "GunZ: The Duel",
+        launch: null,
+        icone: null,
+        exes: ["gunz.exe", "gunzlauncher2.exe"],
+        raiz: null,
+        chaveSteam: "GunZ The Duel",
+      },
+    ];
+    const achados = jogosPorNomes("Gunz.exe\nGunzLauncher2.exe", catalogo) as JogoAchado[];
+    expect(achados.map((j) => j.chave)).toEqual(["GunZ The Duel"]);
   });
 });
