@@ -24,6 +24,7 @@ function msg(over: Partial<PublicMessage> & { id: string }): PublicMessage {
     reactions: [],
     anexos: [],
     replyTo: null,
+    mencoes: { usuarios: [], cargos: [], todos: false },
     author: {
       id: EU,
       username: "eu",

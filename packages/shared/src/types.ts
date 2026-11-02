@@ -4,6 +4,7 @@
  */
 
 import { planoEfetivo, type PlanTier } from "./plans";
+import { textoComNomes, type MencoesDaMensagem } from "./mencoes";
 import {
   decoracaoEfetiva,
   imagemEfetiva,
@@ -428,6 +429,11 @@ export interface PublicMessage {
    * some). So o resumo viaja — a original inteira ja esta (ou estara) na lista.
    */
   replyTo: MessageReplyTo | null;
+  /**
+   * Quem a mensagem chamou, com o nome de AGORA. O texto guarda marcadores
+   * (`<@id>`); isto e o que a tela usa para desenhar "@Nome" no lugar.
+   */
+  mencoes: MencoesDaMensagem;
 }
 
 export interface MessageReplyTo {
@@ -478,7 +484,34 @@ export interface MessageRow {
     content: string;
     deletedAt: Date | null;
     author: { displayName: string };
+    /** Para o trecho mostrar "@Nome", e nao o marcador cru. */
+    mencionaTodos?: boolean;
+    mencoes?: LinhaDeMencao[];
   } | null;
+  /** `@everyone` aceito. Ausente em leitura antiga = sem. */
+  mencionaTodos?: boolean;
+  /** As mencoes validas, cruas do banco (`MessageMention`). */
+  mencoes?: LinhaDeMencao[];
+}
+
+/** Uma linha de `MessageMention` como o select traz: pessoa OU cargo. */
+export interface LinhaDeMencao {
+  user: { id: string; displayName: string } | null;
+  role: { id: string; name: string; color: string | null } | null;
+}
+
+/** Linhas cruas -> o que a tela usa para desenhar os marcadores. */
+export function mencoesDaLinha(
+  linhas: LinhaDeMencao[] | undefined,
+  todos: boolean | undefined,
+): MencoesDaMensagem {
+  const usuarios: MencoesDaMensagem["usuarios"] = [];
+  const cargos: MencoesDaMensagem["cargos"] = [];
+  for (const l of linhas ?? []) {
+    if (l.user) usuarios.push({ id: l.user.id, nome: l.user.displayName });
+    else if (l.role) cargos.push({ id: l.role.id, nome: l.role.name, cor: l.role.color });
+  }
+  return { usuarios, cargos, todos: todos ?? false };
 }
 
 /**
@@ -556,6 +589,7 @@ export function toPublicMessage(
     })),
     author: toPublicUser(row.author),
     replyTo: row.replyTo ? resumirResposta(row.replyTo) : null,
+    mencoes: mencoesDaLinha(row.mencoes, row.mencionaTodos),
   };
 }
 
@@ -565,7 +599,11 @@ function resumirResposta(
   r: NonNullable<MessageRow["replyTo"]>,
 ): MessageReplyTo {
   const apagada = r.deletedAt !== null;
-  const bruto = apagada ? "" : r.content.replace(/\s+/g, " ").trim();
+  const bruto = apagada
+    ? ""
+    : textoComNomes(r.content, mencoesDaLinha(r.mencoes, r.mencionaTodos))
+        .replace(/\s+/g, " ")
+        .trim();
   return {
     id: r.id,
     autorNome: r.author.displayName,

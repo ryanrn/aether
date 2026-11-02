@@ -29,6 +29,11 @@ export function inicioDaContagem(
   return new Date(Math.max(...acessoDesde.map((d) => d.getTime())));
 }
 
+/** Uma conversa a contar. */
+type Alvo =
+  | { id: string; tipo: "canal"; serverId: string; desde: Date }
+  | { id: string; tipo: "dm"; desde: Date };
+
 /** Quantas contagens ao banco ao mesmo tempo, para nao esgotar o pool. */
 const LOTE = 8;
 
@@ -68,11 +73,13 @@ export async function calcularNaoLidas(
   }
 
   const serverDoCanal: Record<string, string> = {};
-  const alvos: { id: string; tipo: "canal" | "dm"; desde: Date }[] = [];
+  const meusCargos: Record<string, string[]> = {};
+  const alvos: Alvo[] = [];
 
   for (const { serverId, joinedAt } of membros) {
     const access = await loadMemberAccess(serverId, userId);
     if (!access) continue;
+    meusCargos[serverId] = access.roleIds;
     const [permissoes, canais] = await Promise.all([
       getChannelPermissionMap(access),
       prisma.channel.findMany({
@@ -87,6 +94,7 @@ export async function calcularNaoLidas(
       alvos.push({
         id: canal.id,
         tipo: "canal",
+        serverId,
         desde: inicioDaContagem(lidoEm.get(canal.id), [joinedAt, canal.createdAt]),
       });
     }
@@ -100,18 +108,16 @@ export async function calcularNaoLidas(
     });
   }
 
+  const naoLidasDe = (alvo: Alvo) => ({
+    ...(alvo.tipo === "canal" ? { channelId: alvo.id } : { dmChannelId: alvo.id }),
+    createdAt: { gt: alvo.desde },
+    deletedAt: null,
+    // A propria mensagem nunca e "nao lida".
+    authorId: { not: userId },
+  });
+
   const contagens = await emLotes(alvos, (alvo) =>
-    prisma.message.count({
-      where: {
-        ...(alvo.tipo === "canal"
-          ? { channelId: alvo.id }
-          : { dmChannelId: alvo.id }),
-        createdAt: { gt: alvo.desde },
-        deletedAt: null,
-        // A propria mensagem nunca e "nao lida".
-        authorId: { not: userId },
-      },
-    }),
+    prisma.message.count({ where: naoLidasDe(alvo) }),
   );
 
   const naoLidas: Record<string, number> = {};
@@ -119,7 +125,34 @@ export async function calcularNaoLidas(
     if (contagens[i]! > 0) naoLidas[alvo.id] = contagens[i]!;
   });
 
-  return { naoLidas, serverDoCanal };
+  /**
+   * Mencoes so onde HA nao lida — o resto e zero sem perguntar ao banco. Em
+   * conversa direta toda mensagem e para voce: a contagem e a mesma.
+   */
+  const comNaoLidas = alvos.filter((alvo) => naoLidas[alvo.id]);
+  const mencoesPorAlvo = await emLotes(comNaoLidas, (alvo) => {
+    if (alvo.tipo === "dm") return Promise.resolve(naoLidas[alvo.id]!);
+    const cargos = meusCargos[alvo.serverId] ?? [];
+    return prisma.message.count({
+      where: {
+        ...naoLidasDe(alvo),
+        OR: [
+          { mencionaTodos: true },
+          { mencoes: { some: { userId } } },
+          ...(cargos.length > 0
+            ? [{ mencoes: { some: { roleId: { in: cargos } } } }]
+            : []),
+        ],
+      },
+    });
+  });
+
+  const mencoes: Record<string, number> = {};
+  comNaoLidas.forEach((alvo, i) => {
+    if (mencoesPorAlvo[i]! > 0) mencoes[alvo.id] = mencoesPorAlvo[i]!;
+  });
+
+  return { naoLidas, serverDoCanal, mencoes, meusCargos };
 }
 
 /**

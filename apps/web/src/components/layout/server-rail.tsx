@@ -33,7 +33,10 @@ import {
   NAV_VISIVEL,
 } from "@/components/layout/nav-mobile";
 import { reorderServersAction } from "@/server/actions/servers";
-import { useUnreadByServer } from "@/lib/stores/realtime-store";
+import {
+  useMencoesByServer,
+  useUnreadByServer,
+} from "@/lib/stores/realtime-store";
 
 /**
  * Barra vertical de servidores. Estado ativo marcado por uma barra de acento
@@ -84,6 +87,7 @@ export function ServerRail({
   const activeId = params?.serverId;
   const [modalOpen, setModalOpen] = useState(false);
   const naoLidas = useUnreadByServer();
+  const mencoes = useMencoesByServer();
 
   /**
    * A ordem local existe para o arrasto ser INSTANTANEO.
@@ -179,6 +183,7 @@ export function ServerRail({
                 server={server}
                 ativo={server.id === activeId}
                 naoLidas={naoLidas[server.id] ?? 0}
+                mencoes={mencoes[server.id] ?? 0}
               />
             ))}
           </SortableContext>
@@ -226,10 +231,13 @@ function ItemDeServidor({
   server,
   ativo,
   naoLidas,
+  mencoes,
 }: {
   server: PublicServer;
   ativo: boolean;
   naoLidas: number;
+  /** Com mencao, o selo mostra "@N" no lugar do total de nao lidas. */
+  mencoes: number;
 }) {
   const {
     attributes,
@@ -291,7 +299,19 @@ function ItemDeServidor({
           )}
         </span>
 
-        {naoLidas > 0 ? (
+        {mencoes > 0 ? (
+          <span
+            aria-label={`${mencoes} mencoes a voce em ${server.name}`}
+            className={cn(
+              "pointer-events-none absolute -right-0.5 -top-0.5",
+              "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1",
+              "bg-signal-dnd text-[10px] font-bold leading-none text-white",
+              "ring-2 ring-base-900",
+            )}
+          >
+            @{mencoes > 99 ? "99+" : mencoes}
+          </span>
+        ) : naoLidas > 0 ? (
           <span
             aria-label={`${naoLidas} nao lidas em ${server.name}`}
             className={cn(

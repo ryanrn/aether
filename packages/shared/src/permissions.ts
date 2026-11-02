@@ -67,12 +67,14 @@ export const Permission = {
    */
   CAMERA: 1n << 20n,
   /**
-   * Usar `@everyone` / `@here` para notificar o canal inteiro de uma vez.
+   * Usar `@everyone` e mencionar cargo (`<@&id>`) para notificar muita gente
+   * de uma vez.
    *
    * Declarada na fundacao da Developer Platform (Etapa 3): um bot ou webhook
-   * NAO deve poder notificar todo mundo so por ter um token. AINDA NAO HA
-   * comportamento — nao ha parsing de `@everyone` em lugar nenhum. Este bit so
-   * existe para que, quando o parsing entrar, a regra ja tenha onde morar.
+   * NAO deve poder notificar todo mundo so por ter um token. Passou a ter
+   * efeito com as mencoes (P1-2, `apps/realtime/src/mencoes.ts`): sem este bit
+   * no canal, `@everyone` e `@cargo` ficam texto e nao avisam ninguem.
+   * `@here` ainda nao existe.
    *
    * Nasce em NENHUM template de cargo: dono e portador de `ADMINISTRATOR` ja
    * passam pelo curto-circuito de `has()`; o resto so ganha se um admin marcar.

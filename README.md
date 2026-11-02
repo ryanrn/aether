@@ -3380,6 +3380,81 @@ ela precisa existir antes; o web novo com o gateway antigo so fica sem o
 - **Aba visivel nao e a mesma coisa que janela em foco.** Uma janela visivel
   atras de outra conta como leitura.
 
+### Mencoes (P1-2, 02/11/2026)
+
+`@` no campo de mensagem abre a lista de pessoas da conversa (no servidor, os
+membros; na DM, a outra pessoa) e `@everyone`. Setas, Enter ou Tab escolhem,
+Esc fecha. Digitar `@usuario` direto tambem funciona. A mencao aparece em
+destaque com o nome ATUAL, a mensagem que chama voce ganha fundo e barra na
+cor de destaque, e o canal e o icone do servidor mostram "@N" em vermelho.
+
+**Como o texto guarda:** marcadores, e nao nomes — `<@id>` (pessoa), `<@&id>`
+(cargo) e `@everyone`. Nome muda, id nao. O gateway troca `@usuario` pelo
+marcador ao gravar; o campo de mensagem nunca mostra id cru. A regra de leitura
+dos marcadores mora em `packages/shared/src/mencoes.ts`, usada pelo gateway e
+pela tela. Dentro de crases nao ha mencao.
+
+**Regras** (`apps/realtime/src/mencoes.ts`, chamado por `enviarMensagem`):
+
+- `@pessoa` so vale para quem ENXERGA a conversa (mesma permissao das salas).
+  Fora disso fica texto e nao avisa ninguem.
+- `@everyone` e `@cargo` exigem `MENTION_EVERYONE` no canal (o bit existia sem
+  efeito). Cargo so deste servidor, e nunca o cargo padrao. Em DM nao existem.
+- No maximo 20 pessoas + cargos por mensagem.
+- Webhook nao resolve mencao (nao e membro); bot pela REST segue a regra normal.
+
+**Banco** (migracao `20261102120000_mencoes`): tabela `MessageMention`
+(mensagem + pessoa OU cargo, CHECK, cascade, RLS) e `Message.mencionaTodos`. O
+`@everyone` e coluna, e nao uma linha por membro: num servidor de mil pessoas
+seriam mil linhas por mensagem.
+
+**Contador.** O `read:state` passou a trazer `mencoes` (por conversa) e
+`meusCargos` (por servidor). A contagem so pergunta ao banco onde ha nao lida,
+com `mencionaTodos OR mencao a mim OR mencao a um cargo meu`. Em DM toda
+mensagem conta como mencao. Ao vivo, a store reconhece a mencao pelo
+`PublicMessage.mencoes` e pelos `meusCargos`.
+
+**Mudancas em relacao ao plano aprovado:**
+
+- O contador NAO virou coluna em `ReadState`: e calculado na conexao, como as
+  nao lidas. Uma coluna obrigaria a somar 1 em cada membro a cada `@everyone`.
+- O autocompletar nao oferece cargos: escolher um inseriria o marcador cru no
+  campo (nome de cargo pode ter espaco e nao da para digitar como `@nome`). O
+  gateway ja aceita `<@&id>`, usado por bots e pela REST.
+
+**Como testar:**
+
+```bash
+npx vitest run tests/unit/mencoes-texto.test.ts tests/unit/mencoes-gateway.test.ts tests/unit/leitura.test.ts tests/unit/chat-store-leitura.test.ts
+```
+
+Migracao aplicada com as 39 anteriores num Postgres em memoria (PGlite):
+mensagem antiga fica com `mencionaTodos = false`; CHECK barra sem alvo e com
+os dois; unique barra pessoa repetida; apagar cargo e apagar mensagem levam as
+mencoes; RLS ligado.
+
+**Publicacao:** `npm run db:deploy`, gateway, web. Depende do #13 (as nao lidas
+persistidas) ja estar no `master`. Web novo com gateway antigo nao quebra: a
+store trata `mencoes` ausente como "sem mencao".
+
+**Limitacoes:**
+
+- **Nao testado ao vivo.** O gateway nao tem onde ser publicado agora.
+- **Editar (#12) ainda nao recalcula as mencoes.** Quando os dois PRs
+  entrarem, `editarMensagem` precisa chamar `resolverMencoes` e regravar
+  `MessageMention`; ate la, a edicao mantem as mencoes de quando a mensagem foi
+  enviada.
+- **Sem notificacao do sistema nem som** (P1-4, o proximo).
+- **Sem `@here`** e sem cargo "mencionavel" por configuracao.
+- **Cargos novos ou removidos no meio da sessao** so contam para o contador ao
+  vivo depois de reconectar (`meusCargos` vem na conexao).
+- **Mensagem apagada que mencionava voce** continua contada ate a proxima
+  conexao.
+- **"Copiar texto" copia o marcador cru** (`<@id>`).
+- **Bots nao recebem as mencoes** no evento de mensagem criada.
+- **Cada mencao a pessoa custa duas consultas** (acesso + permissao do canal),
+  ate 20 por mensagem.
+
 ## Abrir junto com o Windows
 
 Chave em Configuracoes > Atividade > "Ao ligar o computador". So aparece no app

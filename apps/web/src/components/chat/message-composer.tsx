@@ -1,8 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SugestoesDeMencao } from "@/components/chat/sugestoes-de-mencao";
+import {
+  aplicarSugestao,
+  consultaNoCursor,
+  filtrarSugestoes,
+  type ConsultaDeMencao,
+  type PessoaMencionavel,
+  type Sugestao,
+} from "@/lib/chat/autocompletar-mencao";
 import { AetherIcon } from "@/components/ui/aether-icon";
-import type { MessageReplyTo, PublicUser } from "@aether/shared";
+import {
+  SEM_MENCOES,
+  type MessageReplyTo,
+  type PublicUser,
+} from "@aether/shared";
 import {
   useConnectionStatus,
   useRealtimeStore,
@@ -78,6 +91,51 @@ export function MessageComposer({
     }
     setCursorPendente(null);
   }, [cursorPendente]);
+
+  /**
+   * Autocompletar de `@` (P1-2). Numa conversa direta so ha a outra pessoa
+   * para chamar, e `@everyone` nao existe; num servidor, os membros que o
+   * painel lateral ja recebeu. Voce mesmo fica de fora.
+   */
+  const outroDaDm = useRealtimeStore((s) => s.conversasDm[channelId]);
+  const pessoasDoServidor = useRealtimeStore((s) => s.pessoasParaMencao);
+  const selfId = selfUser.id;
+  const pessoas = useMemo<PessoaMencionavel[]>(
+    () =>
+      outroDaDm
+        ? [
+            {
+              id: outroDaDm.id,
+              username: outroDaDm.username,
+              nome: outroDaDm.displayName,
+              avatarUrl: outroDaDm.avatarUrl,
+            },
+          ]
+        : pessoasDoServidor.filter((p) => p.id !== selfId),
+    [outroDaDm, pessoasDoServidor, selfId],
+  );
+  const [consulta, setConsulta] = useState<ConsultaDeMencao | null>(null);
+  const [sugestaoAtiva, setSugestaoAtiva] = useState(0);
+  const sugestoes = useMemo(
+    () =>
+      consulta ? filtrarSugestoes(consulta.termo, pessoas, !outroDaDm) : [],
+    [consulta, pessoas, outroDaDm],
+  );
+
+  function lerConsulta(campo: HTMLTextAreaElement) {
+    const nova = consultaNoCursor(campo.value, campo.selectionStart);
+    setConsulta(nova);
+    if (nova?.termo !== consulta?.termo) setSugestaoAtiva(0);
+  }
+
+  function escolherSugestao(sugestao: Sugestao) {
+    const campo = textareaRef.current;
+    if (!consulta || !campo) return;
+    const r = aplicarSugestao(value, consulta, campo.selectionStart, sugestao);
+    setValue(r.texto);
+    setCursorPendente(r.cursor);
+    setConsulta(null);
+  }
 
   const disabled = !canSend || !connected;
   const tooLong = value.length > MAX_LENGTH;
@@ -198,6 +256,9 @@ export function MessageComposer({
       editedAt: null,
       // Mensagem que ainda nao existe no banco nao tem reacao.
       reactions: [],
+      // Nem mencao: o gateway resolve `@nome` ao gravar, e a confirmada
+      // substitui esta.
+      mencoes: SEM_MENCOES,
       replyTo: resumoOtimista(),
       /**
        * A mensagem otimista ja mostra os anexos, com a URL local da previa
@@ -255,6 +316,7 @@ export function MessageComposer({
       createdAt: new Date().toISOString(),
       editedAt: null,
       reactions: [],
+      mencoes: SEM_MENCOES,
       replyTo: resumoOtimista(),
       anexos: [],
       pending: true,
@@ -333,7 +395,13 @@ export function MessageComposer({
   }
 
   return (
-    <div className="shrink-0 px-4 pb-4 pt-1">
+    <div className="relative shrink-0 px-4 pb-4 pt-1">
+      <SugestoesDeMencao
+        sugestoes={sugestoes}
+        ativa={sugestaoAtiva}
+        onEscolher={escolherSugestao}
+        onPassar={setSugestaoAtiva}
+      />
       {/*
         O seletor de arquivo fica ESCONDIDO e e acionado pelo clipe: o
         `<input type=file>` nativo nao tem como ser estilizado, e um botao
@@ -395,9 +463,37 @@ export function MessageComposer({
             disabled={disabled}
             onChange={(event) => {
               setValue(event.target.value);
+              lerConsulta(event.target);
               grow();
             }}
+            onSelect={(event) => lerConsulta(event.currentTarget)}
+            onBlur={() => setConsulta(null)}
             onKeyDown={(event) => {
+              // Com a lista do `@` aberta, as setas, Enter, Tab e Esc sao dela.
+              if (sugestoes.length > 0) {
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  const passo = event.key === "ArrowDown" ? 1 : -1;
+                  setSugestaoAtiva(
+                    (i) => (i + passo + sugestoes.length) % sugestoes.length,
+                  );
+                  return;
+                }
+                if (
+                  (event.key === "Enter" || event.key === "Tab") &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault();
+                  escolherSugestao(sugestoes[sugestaoAtiva] ?? sugestoes[0]!);
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setConsulta(null);
+                  return;
+                }
+              }
               // Esc com o campo vazio cancela a resposta pendente.
               if (
                 event.key === "Escape" &&

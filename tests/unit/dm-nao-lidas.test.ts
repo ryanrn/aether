@@ -33,6 +33,7 @@ function dmMsg(autor: string): PublicMessage {
     reactions: [],
     anexos: [],
     replyTo: null,
+    mencoes: { usuarios: [], cargos: [], todos: false },
     author:
       autor === EU
         ? ({ id: EU, username: "eu", displayName: "Eu", avatarUrl: null } as PublicUser)

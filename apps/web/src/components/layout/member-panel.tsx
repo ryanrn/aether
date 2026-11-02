@@ -88,6 +88,24 @@ export function MemberPanel({
     }
     definirCoresDeMembro(cores);
   }, [members, definirCoresDeMembro]);
+
+  /**
+   * E quem o `@` do campo de mensagem oferece — pelo mesmo motivo das cores:
+   * a lista ja esta aqui. O apelido do servidor e o nome que a pessoa ve.
+   */
+  const definirPessoasParaMencao = useRealtimeStore(
+    (state) => state.definirPessoasParaMencao,
+  );
+  useEffect(() => {
+    definirPessoasParaMencao(
+      members.map((m) => ({
+        id: m.user.id,
+        username: m.user.username,
+        nome: m.nickname ?? m.user.displayName,
+        avatarUrl: m.user.avatarUrl,
+      })),
+    );
+  }, [members, definirPessoasParaMencao]);
   /**
    * Todos os participantes de voz do servidor ABERTO — o mapa `voice` ja e so
    * deste servidor (troca de servidor troca o mapa). Chave = userId.

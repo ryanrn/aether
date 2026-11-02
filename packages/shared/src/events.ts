@@ -244,6 +244,16 @@ export interface NaoLidasIniciais {
   naoLidas: Record<string, number>;
   /** canal -> servidor, de todo canal de texto visivel */
   serverDoCanal: Record<string, string>;
+  /**
+   * conversa -> quantas das nao lidas chamam voce (P1-2). Em conversa direta
+   * toda mensagem conta, como no resto do app de chat: e falada para voce.
+   */
+  mencoes: Record<string, number>;
+  /**
+   * servidor -> os seus cargos nele. A tela precisa disto para saber, ao vivo,
+   * se um `@cargo` numa mensagem nova e com voce.
+   */
+  meusCargos: Record<string, string[]>;
 }
 
 export type DeleteMessageAck =

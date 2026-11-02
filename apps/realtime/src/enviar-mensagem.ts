@@ -11,6 +11,7 @@ import {
   room,
   toPublicMessage,
   SELECT_USUARIO_PUBLICO,
+  SELECT_MENCOES,
   type PermissionKey,
   type PublicMessage,
   type SendMessageAck,
@@ -18,6 +19,7 @@ import {
 import { log } from "@aether/shared/log";
 import type { AetherServer } from "./types";
 import { publicarMensagemCriada } from "./domain-events";
+import { resolverMencoes } from "./mencoes";
 
 /**
  * O UNICO caminho de escrita de mensagem.
@@ -70,12 +72,14 @@ export const MESSAGE_SELECT = {
   author: {
     select: SELECT_USUARIO_PUBLICO,
   },
+  ...SELECT_MENCOES,
   replyTo: {
     select: {
       id: true,
       content: true,
       deletedAt: true,
       author: { select: { displayName: true } },
+      ...SELECT_MENCOES,
     },
   },
 } as const;
@@ -305,11 +309,21 @@ export async function enviarMensagem(
      * A mensagem e os anexos entram JUNTOS, numa transacao. Sem ela, uma falha
      * ao ligar os anexos deixaria a mensagem publicada sem os arquivos.
      */
+    /**
+     * Quem a mensagem chama. Webhook fica de fora: ele nao e membro, entao
+     * nao ha permissao contra a qual conferir — o texto sai como foi escrito.
+     */
+    const mencoes =
+      origem === "webhook"
+        ? null
+        : await resolverMencoes(ator.id, conversa, parsed.data);
+
     const created = await prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({
         data: {
           authorId: ator.id,
-          content: parsed.data,
+          content: mencoes?.content ?? parsed.data,
+          mencionaTodos: mencoes?.todos ?? false,
           ...(replyValido ? { replyToId: replyValido } : {}),
           ...(conversa.tipo === "canal"
             ? { channelId: conversa.channelId }
@@ -317,6 +331,15 @@ export async function enviarMensagem(
         },
         select: { id: true },
       });
+
+      if (mencoes && (mencoes.usuarios.length > 0 || mencoes.cargos.length > 0)) {
+        await tx.messageMention.createMany({
+          data: [
+            ...mencoes.usuarios.map((userId) => ({ messageId: msg.id, userId })),
+            ...mencoes.cargos.map((roleId) => ({ messageId: msg.id, roleId })),
+          ],
+        });
+      }
 
       if (anexoIds.length > 0) {
         /**
