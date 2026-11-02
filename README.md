@@ -4085,6 +4085,324 @@ A troca so faz sentido QUANDO os anexos existirem. Hoje o storage guarda icone
 de servidor e avatar, que sao poucos e pequenos; migrar agora seria trabalho
 sem retorno.
 
+## Loja: moedas (Estagio 1 da economia, 02/11/2026)
+
+A loja deixou de ser vitrine. Item pago mostra **"Comprar por N moedas"** no
+lugar do "em breve", o saldo aparece no topo, e a aba **"Minhas moedas"** traz
+o extrato. A equipe envia ou retira moedas pela aba **Moedas** do painel. O
+Estagio 2 (missoes: tempo em voz, horas jogando, dias seguidos) e o que faz a
+pessoa GANHAR moedas; ate ele entrar, so a equipe da moedas.
+
+Pesquisa que motivou o desenho: `docs/pesquisa-discord/loja-e-cosmeticos.md`.
+
+### Arquivos
+
+- `packages/db/prisma/schema.prisma` + migracao `20261102180000_moedas`:
+  `User.saldoMoedas`, `MovimentoDeMoedas` (o extrato), enum `MotivoDeMoedas`.
+- `packages/shared/src/moedas.ts`: o NOME da moeda (`MOEDA`, como o `brand.ts`),
+  `formatarMoedas`, limites e tipos do extrato.
+- `apps/web/src/server/services/moedas.ts`: `comprarCosmetico`,
+  `concederMoedas`, `carteiraDe`.
+- `apps/web/src/server/actions/moedas.ts`: `comprarCosmeticoAction`,
+  `carteiraAction`, `concederMoedasAction` (equipe, com auditoria global
+  `global.moedas_concedidas`).
+- `components/loja/loja-screen.tsx` (saldo, comprar, extrato),
+  `components/equipe/moedas-tab.tsx`.
+
+### Decisoes
+
+- **Saldo e o resumo, o extrato e a verdade.** Toda mudanca de saldo escreve
+  uma linha em `MovimentoDeMoedas` na mesma transacao, com o saldo resultante.
+  A linha nunca e editada nem apagada.
+- **Debito condicional no proprio UPDATE** (`WHERE saldoMoedas >= preco`), e
+  nao "ler, checar, gravar": duas compras ao mesmo tempo nao gastam o mesmo
+  saldo. O CHECK `User_saldo_nao_negativo` e a segunda defesa.
+- **Item, debito e extrato numa transacao so.** Clique duplo na mesma peca bate
+  no unique de `UserCosmetic` e desfaz o segundo debito inteiro.
+- **`chave` unica** no extrato torna operacoes idempotentes (compra
+  `compra:<user>:<item>`; concessao reenviada com a mesma chave nao credita de
+  novo). O Estagio 2 usa a mesma chave para o resgate de missao.
+- **Moeda compra a peca, nao o plano:** item de plano continua exigindo o plano.
+- **Preco zero** entrega o item sem movimento no extrato (o banco recusa
+  movimento de valor zero).
+- **Equipe tira moedas so ate zero:** tirar mais do que a pessoa tem e recusado
+  inteiro. Teto de 100.000 por envio, contra erro de digitacao.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/moedas.test.ts
+```
+
+A migracao foi aplicada, com as 38 anteriores, num Postgres em memoria
+(PGlite): usuario existente comeca com saldo 0; o banco barra saldo negativo,
+movimento de valor zero, saldo registrado negativo e chave repetida; o debito
+condicional nao afeta a linha quando falta saldo; apagar a pessoa leva o
+extrato; RLS ligado.
+
+Ao vivo (depois de `npm run db:deploy`): equipe envia 500 moedas pela aba
+Moedas → a pessoa ve o saldo e a linha no extrato → compra um item de 300 → o
+item vira "Seu", o saldo vai a 200, o extrato mostra a compra → tentar comprar
+um de 300 mostra "Faltam 100 moedas".
+
+### Limitacoes
+
+- **Nao testado ao vivo.** Teste unitario com banco dublado, migracao no
+  PGlite, typecheck, build de producao.
+- **Ainda nao da para GANHAR moedas sozinho:** isso e o Estagio 2 (missoes).
+- **Sem presentear, sem reembolso, sem coleções/rotacao** (Estagio 3).
+- **O extrato mostra as 50 linhas mais recentes**, sem paginacao.
+- **Comprar a mesma peca em duas abas ao mesmo tempo**: a segunda recebe "Esse
+  item ja e seu" e nao e cobrada (o unique desfaz a transacao dela).
+- **Item tirado da loja (inativo) continua de quem comprou**, como hoje com as
+  pecas concedidas; o extrato mostra o nome enquanto o item existir no banco.
+
+## Loja: missoes (Estagio 2 da economia, 02/11/2026)
+
+O jeito de GANHAR moedas. A aba "Minhas moedas" da loja mostra as missoes com
+barra de progresso e o botao **Resgatar**; a equipe ajusta meta, recompensa e
+liga/desliga cada uma na aba **Moedas** do painel.
+
+| Missao | Mede | Meta | Recompensa |
+| --- | --- | --- | --- |
+| Bate-papo do dia (diaria) | minutos em voz | 30 | 50 |
+| Partida do dia (diaria) | minutos jogando | 60 | 50 |
+| Passou por aqui (diaria) | abrir o app | 1 | 10 |
+| Semana conversada (semanal) | minutos em voz | 300 | 300 |
+| Todo dia, toda semana (semanal) | dias ativos | 7 | 200 |
+
+A migracao `20261102200000_missoes` ja cria essas cinco, ativas.
+
+### Como conta
+
+- **Gateway** (`apps/realtime/src/missoes.ts`): a cada minuto, soma em memoria
+  1 minuto de voz e/ou de jogo para quem se qualifica; a cada 5 minutos grava o
+  acumulado num lote so (e no desligamento do processo).
+  - **Voz** conta com mais alguem no canal e sem estar ensurdecido (por si ou
+    por moderador). Canal vazio com o fone tirado nao conta.
+  - **Jogo** conta com jogo detectado pelo app de desktop e sem estar invisivel.
+  - **Uma vez por pessoa**, mesmo com varias abas e varias instancias: voz conta
+    na instancia do socket de voz; jogo, na do menor id entre os sockets da
+    pessoa (lista do estado compartilhado).
+  - **Dia ativo**: marcado na conexao. A semanal so soma quando a linha da
+    diaria e CRIADA (dia novo), nao a cada reconexao.
+- **Periodo** (`packages/shared/src/missoes.ts`): o dia vira a meia-noite de
+  **Brasilia**; a semana e a ISO (comeca na segunda, numerada pelo ano ISO).
+  Gateway e web usam a mesma funcao.
+- **Resgate** (`apps/web/src/server/services/missoes.ts`): marca
+  `resgatadaEm` so se `resgatadaEm IS NULL` e `valor >= meta`, credita o saldo e
+  escreve o extrato (`chave = missao:<user>:<missao>:<periodo>`), tudo numa
+  transacao. O segundo clique encontra zero linhas.
+
+### Decisoes
+
+- **Sem teto diario separado.** Cada missao paga uma vez por periodo, entao o
+  maximo que se ganha por dia e por semana ja e o catalogo (hoje 110/dia +
+  500/semana). Um teto a mais so complicaria.
+- **Progresso e linha nova por periodo**, e nao contador zerado: nada e apagado,
+  e o historico fica.
+- **Gravar a cada 5 minutos, e nao a cada minuto**: uma queda perde no maximo 5
+  minutos de progresso; em troca, o banco recebe um lote por intervalo.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/missoes-periodo.test.ts tests/unit/missoes-gateway.test.ts tests/unit/missoes-resgate.test.ts
+```
+
+A migracao foi aplicada com as 39 anteriores (incluindo a das moedas) no
+PGlite: cria as cinco missoes; repetir nao duplica nem desfaz ajuste da equipe;
+CHECK barra meta e recompensa zero e progresso negativo; a chave impede
+progresso repetido; o resgate condicional so passa com 30/30 e uma vez so; RLS.
+
+Ao vivo: duas pessoas num canal de voz por 30 min → a missao diaria de voz
+chega a 30/30 → Resgatar → +50 no saldo e no extrato → clicar de novo nao da
+nada.
+
+### Limitacoes
+
+- **Depende do gateway novo para CONTAR.** Sem ele publicado, a loja mostra as
+  missoes e o resgate funciona, mas o progresso nunca sobe.
+- **Nao testado ao vivo.**
+- **Missao concluida e nao resgatada ate a virada do periodo se perde** (o
+  resgate so olha o periodo atual).
+- **Bot em canal de voz conta como "mais alguem"** (o `countInChannel` nao
+  separa humano de bot): duas contas da mesma pessoa, ou uma pessoa com o
+  bot de musica, enchem a missao de voz. O teto e o proprio catalogo.
+- **A deteccao de jogo vem do app de desktop, que pode ser adulterado**: a
+  missao de jogo confia nele, limitada a uma recompensa por dia.
+- **Chamada direta (DM) nao conta** como tempo em voz, so canal de servidor.
+- **Convidar amigos** ficou para depois.
+- **Mudar a metrica de uma missao** nao e possivel pelo painel (so meta,
+  recompensa e ativa); o gateway relê o catalogo em ate 5 minutos.
+
+## Loja: placa de nome e efeito de perfil (Estagio 3a da economia, 02/11/2026)
+
+Dois tipos novos de cosmetico, alem de decoracao e banner. A equipe cadastra
+pelo painel (aba Cosmeticos), a loja vende em moedas ou por plano como os
+outros, e a pessoa equipa na loja ou em **Minha conta**.
+
+| Tipo | Onde aparece | Arte |
+| --- | --- | --- |
+| **Placa de nome** (`NAMEPLATE`) | atras da linha da pessoa na lista de membros | faixa ~6:1 (ex.: 720x120), PNG ou WEBP, pode ser animada |
+| **Efeito de perfil** (`PROFILE_EFFECT`) | por cima do cartao de perfil (o popup e a tela `/app/perfil`) | em pe ~3:4 (ex.: 600x800), fundo transparente, normalmente WEBP animado |
+
+### Como funciona
+
+- **Banco** (`20261102220000_placa_e_efeito`): dois valores novos no enum
+  `CosmeticType` (`ADD VALUE IF NOT EXISTS`, por causa do drift antigo de
+  producao) e `User.placaId` / `User.efeitoId`, com FK `ON DELETE SET NULL`:
+  apagar o item desequipa.
+- **Qual coluna recebe cada tipo** mora num lugar so: `CAMPO_EQUIPADO` em
+  `services/cosmeticos.ts`. E um `Record` por tipo, entao tipo novo sem
+  coluna nao compila. Antes, um ternario mandava qualquer tipo que nao fosse
+  decoracao para o banner.
+- **Placa viaja no `PublicUser`** (`placa: string | null`), porque a lista de
+  membros e desenhada a partir dele. Ela sai de `SELECT_USUARIO_PUBLICO`, um
+  LEFT JOIN por chave primaria, e e resolvida em `toPublicUser` contra o plano
+  e contra `ativo` (`imagemEfetiva`), como a decoracao. Gateway e web usam a
+  mesma funcao.
+- **Efeito NAO viaja no `PublicUser`.** Como o banner, so o cartao usa: ele
+  vem em `PerfilParaCartao.efeito`, buscado quando o cartao abre.
+- **Render** (`components/profile/cosmeticos-de-perfil.tsx`):
+  - `FundoDePlaca` traz um degrade escuro do lado do avatar e do nome, para o
+    texto continuar legivel sobre arte de terceiros.
+  - `CamadaDeEfeito` fica por cima e nao captura clique. O recorte pelo
+    arredondado do cartao fica na propria camada, para nao cortar a
+    decoracao do avatar, que estoura o topo de proposito.
+- **Envio**: as regras de proporcao estao em `COSMETIC_REGRAS`, e a mensagem
+  de erro agora mostra o `alvo` do tipo. Nao ha normalizacao: so a decoracao
+  passa por ela.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/cosmeticos-catalogo.test.ts tests/unit/usuario-publico.test.ts
+```
+
+A migracao foi aplicada no PGlite com as 40 anteriores:
+
+- o enum fica com os quatro valores;
+- repetir o `ADD VALUE` nao quebra;
+- equipar grava nas colunas;
+- apagar o item zera as duas;
+- a FK barra id inexistente.
+
+Ao vivo, com a flag `loja_de_cosmeticos` ligada:
+
+1. No painel da equipe, crie uma placa (720x120) e um efeito (600x800,
+   transparente).
+2. Equipe os dois em Minha conta.
+3. Confira a placa atras do seu nome na lista de membros de um servidor.
+4. Abra o seu cartao: o efeito deve aparecer por cima.
+
+### Limitacoes
+
+- **Nao testado ao vivo** (so testes, PGlite e build).
+- **Migracao aplicada em producao em 02/11/2026**, junto com as de moedas,
+  missoes e colecoes.
+- **A placa so aparece na lista de membros do servidor.** Ela nao aparece na
+  lista de DMs nem na de amigos.
+- **Com o gateway antigo, a placa pisca.** Ele monta o `PublicUser` sem o
+  campo `placa`. Quando chega uma atualizacao de perfil por ele, a linha
+  perde a placa ate a pagina recarregar. Com o gateway novo publicado, a
+  placa nova chega a todos pelo `profile:changed`.
+- **O efeito usa o arquivo cheio na previa da loja**, nao a miniatura, que e
+  estatica e mataria a animacao.
+- **Sem limite de peso para efeito animado** alem do `ladoMax` (2048px). Um
+  WEBP animado longo pode pesar no cartao.
+- **Colecoes, rotacao e destaque com prazo**: ver o Estagio 3b, logo abaixo.
+
+## Loja: colecoes, prazo e previa no perfil (Estagio 3b da economia, 03/11/2026)
+
+A vitrine passa a ter **colecoes** ("Neon", "Halloween"), com periodo de venda
+opcional. A aba Destaques abre com a colecao em destaque. Na previa de cada
+item, a aba **No seu perfil** mostra o cartao com o item aplicado sobre o que
+a pessoa ja usa.
+
+### Regras do periodo
+
+A regra mora em `packages/shared/src/colecoes.ts`; servidor e tela usam a
+mesma.
+
+| Situacao | Na loja | Comprar / resgatar | Equipar |
+| --- | --- | --- | --- |
+| Item sem colecao | aparece | sim | como antes |
+| Colecao no ar | aparece, com "Sai em N dias" se tiver fim | sim | sim |
+| Colecao agendada, encerrada ou despublicada | some (fica para quem tem ou usa) | nao | so quem possui |
+| Item gratis em colecao **com fim** | "Resgatar gratis" | o resgate grava a posse | so depois de resgatar; fica seu apos o prazo |
+
+- **No ar** quer dizer: publicada, ja comecou e ainda nao acabou. O fim e
+  exclusivo.
+- **Quem possui o item fica com ele para sempre.** Isso vale para compra,
+  resgate ou concessao da equipe, mesmo depois que a colecao sai do ar.
+- **O servidor confere o periodo** na compra, no resgate e ao equipar. A
+  tela so esconde.
+
+### Como funciona
+
+- **Banco** (`20261103000000_colecoes`):
+  - tabela `ColecaoDeCosmeticos`, com CHECK de fim depois do inicio, slug unico
+    e RLS;
+  - `Cosmetic.colecaoId`, com FK `SET NULL`: apagar a colecao solta os itens,
+    que voltam a valer sem prazo, e nao mexe em posse.
+- **Resgate gratis** (`resgatarCosmetico` em `services/moedas.ts`): grava
+  `UserCosmetic` com `origem = "resgate"`. Nao mexe em saldo nem em extrato.
+  O unique da posse barra o resgate duplo, e a action trata a repeticao como
+  sucesso.
+- **Vitrine** (`/app/loja`):
+  - o topo e a primeira colecao marcada como destaque que tenha item
+    visivel; sem nenhuma, volta o heroi por raridade;
+  - cada colecao no ar ganha uma secao;
+  - "Novidades" agora sao os itens cadastrados por ultimo.
+- **O "agora" e um so por pagina:** o servidor passa `agoraIso`, e o selo de
+  prazo sai igual no HTML e na hidratacao.
+- **Painel da equipe** (aba Cosmeticos):
+  - a secao **Colecoes** cria, edita e exclui, e mostra o estado (No ar,
+    Agendada, Encerrada, Rascunho);
+  - o formulario do item ganha o campo **Colecao**;
+  - as datas sao convertidas para ISO no navegador, no fuso de quem digita;
+  - criar, editar e excluir colecao entram na auditoria global.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/colecoes.test.ts tests/unit/colecoes-loja.test.ts
+```
+
+A migracao foi aplicada no PGlite com as 41 anteriores. Ela barra fim antes
+do inicio, slug repetido e item em colecao inexistente; apagar a colecao
+solta o item e mantem a posse; o RLS fica ligado.
+
+Ao vivo, com a flag `loja_de_cosmeticos` ligada:
+
+1. No painel, crie a colecao "Teste", publicada, em destaque, com fim daqui a
+   2 dias.
+2. Coloque nela um banner pago e um banner gratis.
+3. Na loja, a aba Destaques deve abrir com "Teste" e o selo "Sai em 2 dias".
+4. O gratis deve mostrar "Resgatar gratis"; resgate e equipe.
+5. Edite o fim da colecao para ontem. Os dois somem da vitrine, o resgatado
+   continua em "Meus cosmeticos" e equipado, e o pago nao se compra mais.
+
+### Limitacoes
+
+- **Nao testado ao vivo** (so testes, PGlite e build).
+- **Migracao aplicada em producao em 02/11/2026**, antes do deploy do web.
+  Esta versao do codigo consulta `colecaoId`; num banco sem a migracao, o
+  catalogo cai para vazio e a loja mostra "abre em breve".
+- **Despublicar a colecao nao tira o item de quem ja usa o gratis sem
+  prazo.** A leitura no perfil olha so `Cosmetic.ativo`. Para recolher um
+  item, desative o item.
+- **Mover para uma colecao agendada um item gratis que ja estava em uso nao
+  o tira de quem usa.** O catalogo o esconde de quem nao usa ate o inicio,
+  mas quem ja o tinha equipado continua com ele.
+- **A vitrine nao vira sozinha no instante do fim:** a pagina so troca no
+  proximo carregamento. O servidor recusa a compra depois do fim, entao nada
+  se vende fora do prazo.
+- **Cada item pertence a no maximo uma colecao.**
+- **Fica de fora:** presente para outra pessoa (moedas farmaveis permitiriam
+  lavar moeda entre contas), pacote com desconto e aviso de colecao nova.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:

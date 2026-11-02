@@ -135,6 +135,7 @@ const USUARIO: PublicUser = {
   plano: "FREE",
   moldura: null,
   decoracao: null,
+  placa: null,
 };
 
 /** Roda a MESMA sequencia contra as duas implementacoes; devolve os pares pra comparar. */

@@ -4,6 +4,7 @@ import type { DecoracaoPublica, PlanTier, UserStatus } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
+import { CamadaDeEfeito } from "@/components/profile/cosmeticos-de-perfil";
 import { SeloPlano } from "@/components/ui/selo-plano";
 import { NavToggle } from "@/components/layout/nav-mobile";
 import { useShellStore } from "@/lib/stores/shell-store";
@@ -40,6 +41,7 @@ export function PerfilScreen({
   bio,
   membroDesde,
   banner,
+  efeito,
 }: {
   user: PerfilUser;
   bio: string | null;
@@ -47,6 +49,8 @@ export function PerfilScreen({
   membroDesde: string | null;
   /** URL do banner equipado, já resolvida — ou null */
   banner: string | null;
+  /** URL do efeito de perfil equipado, já resolvida — ou null */
+  efeito: string | null;
 }) {
   const abrirConfig = useShellStore((s) => s.abrirConfig);
 
@@ -91,8 +95,9 @@ export function PerfilScreen({
             type="button"
             onClick={() => abrirConfig("conta")}
             aria-label="Editar perfil"
-            className="mt-5 block w-full rounded-2xl border border-line bg-base-850 text-left shadow-[var(--shadow-pop)] transition-colors hover:border-line-strong"
+            className="relative mt-5 block w-full rounded-2xl border border-line bg-base-850 text-left shadow-[var(--shadow-pop)] transition-colors hover:border-line-strong"
           >
+            {efeito ? <CamadaDeEfeito url={efeito} /> : null}
             {/*
               O arredondado do topo vive AQUI, nao no botao inteiro — antes
               era o `overflow-hidden` do botao que cortava tambem a decoracao

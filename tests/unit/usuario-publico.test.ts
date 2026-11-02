@@ -25,6 +25,7 @@ const BASE: UserRow = {
   kind: "HUMAN",
   molduraId: null,
   decoracao: null,
+  placa: null,
   assinatura: null,
 };
 
@@ -219,5 +220,34 @@ describe("avatar animado contra o plano", () => {
     // e ao voltar o plano, a animacao volta sem novo envio
     expect(toPublicUser({ ...linha, assinatura: { tier: "PRO", expiraEm: null } }, HOJE)
       .avatarUrl).toBe(ANIMADO);
+  });
+});
+
+describe("placa de nome contra o plano", () => {
+  const PLACA = { assetUrl: "https://cdn/p.webp", ativo: true, tierMinimo: "PLUS" as PlanTier };
+
+  it("sem placa equipada: null", () => {
+    expect(toPublicUser(BASE, HOJE).placa).toBeNull();
+  });
+
+  it("plano cobre: a URL", () => {
+    const u = toPublicUser(
+      { ...BASE, placa: PLACA, assinatura: { tier: "PLUS", expiraEm: AMANHA } },
+      HOJE,
+    );
+    expect(u.placa).toBe("https://cdn/p.webp");
+  });
+
+  it("assinatura vencida ou placa desativada: some", () => {
+    expect(
+      toPublicUser({ ...BASE, placa: PLACA, assinatura: { tier: "PLUS", expiraEm: ONTEM } }, HOJE)
+        .placa,
+    ).toBeNull();
+    expect(
+      toPublicUser(
+        { ...BASE, placa: { ...PLACA, ativo: false }, assinatura: { tier: "PRO", expiraEm: null } },
+        HOJE,
+      ).placa,
+    ).toBeNull();
   });
 });

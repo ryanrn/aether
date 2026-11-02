@@ -7,9 +7,11 @@ import { planoEfetivo, type PlanTier } from "./plans";
 import { textoComNomes, type MencoesDaMensagem } from "./mencoes";
 import {
   decoracaoEfetiva,
+  imagemEfetiva,
   molduraEfetiva,
   podeAvatarAnimado,
   type DecoracaoPublica,
+  type CosmeticoDeImagemRow,
   type DecoracaoRow,
 } from "./cosmeticos";
 
@@ -81,6 +83,12 @@ export interface PublicUser {
    * aparece no cartao de perfil, que o resolve sob demanda.
    */
   decoracao: DecoracaoPublica | null;
+  /**
+   * A PLACA DE NOME equipada, JA RESOLVIDA — a URL, ou `null`. Viaja aqui
+   * porque a lista de membros e desenhada a partir do `PublicUser`; o efeito de
+   * perfil, como o banner, so o cartao usa e fica de fora.
+   */
+  placa: string | null;
 }
 
 /**
@@ -116,6 +124,8 @@ export interface UserRow {
    * `Cosmetic` equipado, ou `null`. `toPublicUser` resolve contra o plano.
    */
   decoracao: DecoracaoRow | null;
+  /** A relacao `User.placa`, crua. `toPublicUser` resolve contra o plano. */
+  placa: CosmeticoDeImagemRow | null;
   assinatura: {
     tier: PlanTier;
     expiraEm: Date | string | null;
@@ -156,6 +166,8 @@ export const SELECT_USUARIO_PUBLICO = {
       ativo: true,
     },
   },
+  /** A placa de nome equipada — mesmo LEFT JOIN por chave primaria. */
+  placa: { select: { assetUrl: true, tierMinimo: true, ativo: true } },
   /**
    * So `tier` e `expiraEm`: sao o que `planoEfetivo` precisa. Provedor, id
    * externo e quem concedeu ficam fora — nao servem a tela e nao tem por que
@@ -210,6 +222,7 @@ export function toPublicUser(row: UserRow, agora: Date = new Date()): PublicUser
      * venceu some, e a escolha continua no banco para voltar sozinha.
      */
     decoracao: decoracaoEfetiva(row.decoracao, plano),
+    placa: imagemEfetiva(row.placa, plano),
   };
 }
 
@@ -648,6 +661,11 @@ export interface PerfilParaCartao {
    * porque aparece em todo lugar.
    */
   banner: string | null;
+  /**
+   * O EFEITO DE PERFIL equipado, resolvido como o banner — a URL de uma
+   * imagem transparente desenhada por cima do cartao, ou `null`.
+   */
+  efeito: string | null;
   /** apelido no servidor atual; `null` em DM ou sem apelido */
   nickname: string | null;
   /** cargos no servidor atual, ja ordenados; `[]` em DM ou sem cargo com cor */

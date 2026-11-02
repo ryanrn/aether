@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@aether/db";
 import { getSession } from "@/server/auth/session";
-import { bannerEquipado } from "@/server/services/cosmeticos";
+import { bannerEquipado, efeitoEquipado } from "@/server/services/cosmeticos";
 import { PerfilScreen } from "@/components/perfil/perfil-screen";
 
 /**
@@ -20,12 +20,13 @@ export default async function PerfilPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [extra, banner] = await Promise.all([
+  const [extra, banner, efeito] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { createdAt: true, bio: true },
     }),
     bannerEquipado(session.user.id, session.user.plano),
+    efeitoEquipado(session.user.id, session.user.plano),
   ]);
 
   // Só o que a tela desenha — `email`, `equipe`, flags de privacidade e afins
@@ -47,6 +48,7 @@ export default async function PerfilPage() {
       bio={extra?.bio?.trim() || null}
       membroDesde={extra?.createdAt.toISOString() ?? null}
       banner={banner}
+      efeito={efeito}
     />
   );
 }
