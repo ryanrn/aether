@@ -1,7 +1,7 @@
 "use strict";
 
 const { app, nativeImage } = require("electron");
-const { execFile } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { registrar } = require("./log");
@@ -74,8 +74,14 @@ function diag(assunto, dados) {
  * programas lida sem ter pedido.
  */
 
-/** De quanto em quanto tempo olhamos. 15s: o suficiente para parecer imediato. */
-const POLL_MS = 15_000;
+/**
+ * De quanto em quanto tempo olhamos. Era 15s. Com nome e caminho numa leitura
+ * so e o catalogo das lojas em cache, cada verificacao caiu de ~190ms para
+ * ~135ms (medido com `wmic`) — e abrir ou fechar um jogo aparece 3x mais
+ * rapido. Por minuto, com `wmic`, sao ~1,6s contra ~0,8s antes; sem `wmic`
+ * (24H2, sessao de PowerShell), ~1s contra ~2,4s antes.
+ */
+const POLL_MS = 5_000;
 
 /**
  * O que essas lojas instalam mas NAO e jogo.
@@ -441,6 +447,9 @@ async function jogosGog() {
   }
   return jogos;
 }
+
+const jogosUbisoftEmCache = comValidade(60_000, jogosUbisoft);
+const jogosGogEmCache = comValidade(60_000, jogosGog);
 
 /**
  * Battle.net (Blizzard e Activision).
@@ -898,8 +907,8 @@ function jogosEa() {
  */
 async function catalogoDeLojas() {
   const doRegistro = await Promise.allSettled([
-    jogosUbisoft(),
-    jogosGog(),
+    jogosUbisoftEmCache(),
+    jogosGogEmCache(),
     jogosSteam(),
     jogosBattleNet(),
   ]);
@@ -1411,51 +1420,189 @@ function executar(comando, argumentos) {
 }
 
 /**
- * Lista os caminhos dos processos em execucao.
+ * NOME E CAMINHO de cada processo, numa leitura so.
  *
- * `wmic` primeiro porque e MUITO mais barato: medido nesta maquina, ~300ms
- * contra ~1600ms do PowerShell. Numa maquina que esta rodando um jogo, um
- * segundo e meio de processo em segundo plano se sente.
+ * Eram duas consultas por verificacao (uma de caminhos, outra de nomes — o
+ * anti-cheat esconde o caminho, nao o nome). Uma consulta traz os dois:
+ * medido nesta maquina, ~135ms com `wmic`, contra ~150ms de CADA uma das duas.
  *
- * O PowerShell fica de reserva porque o `wmic` foi removido por padrao a
- * partir do Windows 11 24H2 — sem a reserva, a deteccao simplesmente nao
- * existiria para quem tem Windows novo.
+ * Devolve `{ caminhos, nomes }` como TEXTO, uma linha por processo — o formato
+ * que `jogosEmSaida` e `jogosPorNomes` ja consomem.
+ *
+ * Sem `wmic` (removido por padrao no Windows 11 24H2), a reserva e uma sessao
+ * de PowerShell que FICA ABERTA (`sessaoPowershell`): abrir um PowerShell
+ * custa ~450ms so para subir, e eram dois por verificacao; na sessao, a
+ * consulta custa ~75ms.
  */
-async function caminhosDeProcessos() {
-  try {
-    return await executar("wmic", ["process", "get", "ExecutablePath"]);
-  } catch {
-    return executar("powershell", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "(Get-Process).Path",
-    ]);
+async function listarProcessos() {
+  if (!wmicAusente) {
+    try {
+      const csv = await executar("wmic", [
+        "process",
+        "get",
+        "Name,ExecutablePath",
+        "/format:csv",
+      ]);
+      return processosDoCsvDoWmic(csv);
+    } catch (erro) {
+      // Ausente de vez (24H2): para de tentar. Outra falha: so desta vez.
+      if (erro && erro.code === "ENOENT") wmicAusente = true;
+    }
   }
+  return processosDaSaidaDoPowershell(
+    await sessaoPowershell().pedir(SCRIPT_PROCESSOS),
+  );
+}
+
+/** Lembrar que o `wmic` nao existe evita tentar (e falhar) a cada verificacao. */
+let wmicAusente = false;
+
+/**
+ * O CSV do `wmic`: `Node,ExecutablePath,Name` (ordem alfabetica, fixa).
+ *
+ * O caminho pode ter VIRGULA (`C:\Jogos, Steam\...`) e o `wmic` nao poe aspas.
+ * O nome do executavel nao tem virgula — entao o nome e o ULTIMO campo, o no e
+ * o primeiro, e o caminho e tudo que sobra no meio.
+ */
+function processosDoCsvDoWmic(texto) {
+  const caminhos = [];
+  const nomes = [];
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const limpa = linha.trim();
+    if (!limpa || /^node,/i.test(limpa)) continue;
+    const campos = limpa.split(",");
+    if (campos.length < 3) continue;
+    const nome = campos[campos.length - 1].trim();
+    const caminho = campos.slice(1, -1).join(",").trim();
+    if (nome) nomes.push(nome);
+    if (caminho) caminhos.push(caminho);
+  }
+  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n") };
+}
+
+/** Uma linha `Nome|Caminho` por processo (o `|` nao existe em caminho). */
+const SCRIPT_PROCESSOS =
+  "Get-CimInstance Win32_Process | ForEach-Object { $_.Name + '|' + $_.ExecutablePath }";
+
+function processosDaSaidaDoPowershell(texto) {
+  const caminhos = [];
+  const nomes = [];
+  for (const linha of String(texto).split(/\r?\n/)) {
+    const limpa = linha.trim();
+    if (!limpa) continue;
+    const corte = limpa.indexOf("|");
+    const nome = (corte === -1 ? limpa : limpa.slice(0, corte)).trim();
+    const caminho = corte === -1 ? "" : limpa.slice(corte + 1).trim();
+    if (nome) nomes.push(nome);
+    if (caminho) caminhos.push(caminho);
+  }
+  return { caminhos: caminhos.join("\n"), nomes: nomes.join("\n") };
+}
+
+/* -------------------------------------------------------------------------
+ * Sessao de PowerShell que fica aberta
+ *
+ * Um pedido por vez (fila), cada um terminado por um marcador na saida. Se o
+ * PowerShell morrer ou travar (15s sem resposta), a sessao e descartada e a
+ * proxima verificacao abre outra — uma falha nunca prende a deteccao.
+ * ------------------------------------------------------------------------- */
+
+const FIM_DO_PEDIDO = "__AETHER_FIM__";
+const PEDIDO_TIMEOUT_MS = 15_000;
+let sessaoAtual = null;
+
+function sessaoPowershell() {
+  if (sessaoAtual) return sessaoAtual;
+
+  const ps = spawn(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-Command", "-"],
+    { windowsHide: true },
+  );
+  let buffer = "";
+  let fila = Promise.resolve();
+  let atual = null;
+
+  const sessao = {
+    pedir(script) {
+      const vez = fila.then(
+        () =>
+          new Promise((resolve, reject) => {
+            atual = {
+              resolve,
+              reject,
+              timer: setTimeout(() => {
+                encerrar();
+              }, PEDIDO_TIMEOUT_MS),
+            };
+            ps.stdin.write(`${script}; Write-Output '${FIM_DO_PEDIDO}'\n`);
+          }),
+      );
+      fila = vez.catch(() => {});
+      return vez;
+    },
+    fechar: () => encerrar(),
+  };
+
+  function encerrar() {
+    if (sessaoAtual === sessao) sessaoAtual = null;
+    if (atual) {
+      clearTimeout(atual.timer);
+      atual.reject(new Error("sessao do powershell encerrada"));
+      atual = null;
+    }
+    try {
+      ps.kill();
+    } catch {
+      // ja saiu
+    }
+  }
+
+  ps.stdout.setEncoding("utf8");
+  ps.stdout.on("data", (pedaco) => {
+    buffer += pedaco;
+    const fim = buffer.indexOf(FIM_DO_PEDIDO);
+    if (fim === -1 || !atual) return;
+    const saida = buffer.slice(0, fim);
+    buffer = buffer.slice(fim + FIM_DO_PEDIDO.length);
+    clearTimeout(atual.timer);
+    atual.resolve(saida);
+    atual = null;
+  });
+  ps.on("exit", encerrar);
+  ps.on("error", encerrar);
+  // Caminho com acento (nome de usuario do Windows) precisa chegar igual ao
+  // que os manifestos das lojas dizem, ou o casamento por pasta falha.
+  ps.stdin.write("[Console]::OutputEncoding = [Text.Encoding]::UTF8\n");
+
+  sessaoAtual = sessao;
+  return sessao;
+}
+
+function fecharSessaoPowershell() {
+  if (sessaoAtual) sessaoAtual.fechar();
+}
+
+// O app fechando leva o PowerShell junto. `app` nao existe fora do Electron
+// (testes), dai a guarda.
+if (app && typeof app.on === "function") {
+  app.on("will-quit", fecharSessaoPowershell);
 }
 
 /**
- * Lista os NOMES dos processos em execucao.
- *
- * Consulta separada da de caminhos porque responde a uma pergunta que a outra
- * nao consegue: jogo com anti-cheat de kernel devolve caminho VAZIO. Medido
- * nesta maquina com o VALORANT aberto, `VALORANT-Win64-Shipping` aparece na
- * lista de nomes e some na de caminhos.
- *
- * As duas rodam EM PARALELO em `jogoAtual`, entao o custo em tempo e o da
- * mais lenta, e nao a soma.
+ * Le de novo so depois de `ms`. Para o registro da Ubisoft e do GOG, que eram
+ * consultados (um `reg` cada) a CADA verificacao — e a verificacao agora e de
+ * 5 em 5 segundos.
  */
-async function nomesDeProcessos() {
-  try {
-    return await executar("wmic", ["process", "get", "Name"]);
-  } catch {
-    return executar("powershell", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "(Get-Process).ProcessName",
-    ]);
-  }
+function comValidade(ms, buscar) {
+  let em = 0;
+  let valor = null;
+  return async () => {
+    if (valor && Date.now() - em < ms) return valor;
+    valor = await buscar();
+    em = Date.now();
+    return valor;
+  };
 }
 
 /* -------------------------------------------------------------------------
@@ -1724,15 +1871,12 @@ async function jogoAtual() {
   const catalogo = await catalogoDeLojas();
 
   /*
-   * As duas leituras em paralelo: o custo em tempo e o da mais lenta, e nao a
-   * soma. Caminho continua sendo o caminho principal — ele diz de onde tirar
+   * Caminho e nome vem da MESMA leitura. Caminho continua sendo o principal — ele diz de onde tirar
    * icone e cobre jogo fora do catalogo (Steam pela convencao de pasta). Nome
    * cobre o que o anti-cheat esconde.
    */
-  const [saidaDeCaminhos, saidaDeNomes] = await Promise.all([
-    caminhosDeProcessos(),
-    nomesDeProcessos(),
-  ]);
+  const { caminhos: saidaDeCaminhos, nomes: saidaDeNomes } =
+    await listarProcessos();
 
   const porCaminho = jogosEmSaida(saidaDeCaminhos, catalogo);
 
@@ -1818,8 +1962,8 @@ function resolverNomeSteam(escolhido, icone) {
  */
 async function listarCandidatos() {
   if (process.platform !== "win32") return [];
-  const [nomes, catalogo] = await Promise.all([
-    nomesDeProcessos(),
+  const [{ nomes }, catalogo] = await Promise.all([
+    listarProcessos(),
     catalogoDeLojas(),
   ]);
   return candidatosParaSugerir(nomes, catalogo);
@@ -1867,7 +2011,7 @@ function criarVigia(aoMudar) {
        */
       if (ultimo?.nome && !jogo) {
         try {
-          const nomes = String(await nomesDeProcessos())
+          const nomes = String((await listarProcessos()).nomes)
             .split(/\r?\n/)
             .map((l) => l.trim())
             .filter(Boolean)
@@ -1912,6 +2056,8 @@ function criarVigia(aoMudar) {
     parar() {
       if (timer) clearInterval(timer);
       timer = null;
+      // Deteccao desligada nao deixa PowerShell aberto a toa.
+      fecharSessaoPowershell();
       // Avisa que nao ha mais jogo: desligar precisa APAGAR o que ficou
       // aparecendo para os outros, nao so parar de atualizar.
       if (ultimo !== null) {
@@ -1958,6 +2104,11 @@ module.exports = {
   acharExecutavel,
   nomesProtegidosPorAntiCheat,
   catalogoDeLojas,
+  processosDoCsvDoWmic,
+  processosDaSaidaDoPowershell,
+  comValidade,
+  sessaoPowershell,
+  fecharSessaoPowershell,
   nomeRiot,
   blocosDoRegistro,
   nomePelaPasta,

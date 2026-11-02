@@ -1832,7 +1832,8 @@ usuario, e o script ja dispara 12 `presence:game`. Sem cadencia ele estoura o
 balde no meio e os eventos seguintes somem em silencio — o sintoma sao falhas
 que MUDAM DE LUGAR a cada rodada, sempre com `undefined`, e a primeira rodada
 passando enquanto as seguintes falham (o balde vazio e herdado). Quem esta
-irreal ali e o script: o app anuncia no maximo uma vez a cada 15 segundos.
+irreal ali e o script: o app anuncia no maximo uma vez a cada 5 segundos, e
+so quando o jogo muda — longe do limite de 1/s.
 
 ### Jogo com anti-cheat: por que so o caminho nao bastava
 
@@ -2219,11 +2220,32 @@ conta, em vez de ser o que e: trabalho de moderacao. Ambos corrigidos juntos:
   A Epic tem o caso equivalente na Unreal Engine, que ela distribui pela mesma
   via dos jogos. A lista esta em `NAO_SAO_JOGOS` e cobre os casos conhecidos —
   outro app pode escapar ate ser adicionado.
-- **Verifica a cada 15s**, entao abrir ou fechar um jogo leva ate 15 segundos
-  para refletir. Medido nesta maquina: ~300ms por verificacao com `wmic`,
-  contra ~1600ms do PowerShell — por isso `wmic` vem primeiro.
-- **`wmic` foi removido por padrao no Windows 11 24H2+**, e por isso existe a
-  reserva em PowerShell. Nessas maquinas cada verificacao custa ~5x mais.
+- **Verifica a cada 5s (era 15s, 02/11/2026)**, entao abrir ou fechar um jogo
+  leva ate 5 segundos para refletir. O que permitiu:
+  - **nome e caminho numa leitura so** (`wmic process get Name,ExecutablePath
+    /format:csv`), em vez de duas consultas por verificacao. O CSV do `wmic`
+    nao poe aspas, e caminho pode ter virgula: o nome e o ULTIMO campo e o
+    caminho e o meio;
+  - **Ubisoft e GOG em cache de 60s** — eram um `reg` cada, a cada verificacao.
+  Medido nesta maquina (Windows 10, com `wmic`): verificacao completa de
+  ~190ms para ~135ms. **Por minuto o custo com `wmic` DOBROU** (~0,8s para
+  ~1,6s), porque sao 12 verificacoes em vez de 4 — e o preco de reagir 3x mais
+  rapido. Sem `wmic` ele CAI (abaixo).
+- **`wmic` foi removido por padrao no Windows 11 24H2+.** A reserva era abrir
+  DOIS PowerShell a cada verificacao (~450ms so para subir cada um). Agora e
+  uma **sessao de PowerShell que fica aberta** e responde a cada verificacao
+  (`Get-CimInstance Win32_Process`): ~75ms por consulta depois de aquecida, ~1s
+  por minuto contra ~2,4s antes. A sessao:
+  - atende um pedido por vez, cada um terminado por um marcador na saida;
+  - e descartada se o PowerShell morrer ou ficar 15s sem responder — a
+    proxima verificacao abre outra;
+  - sai em UTF-8 (`[Console]::OutputEncoding`), para caminho com acento casar
+    com o que os manifestos das lojas dizem — **nao verificado com um caminho
+    acentuado real**, a maquina de teste nao tem nenhum;
+  - fecha quando a deteccao e desligada e quando o app fecha.
+  Conferida nesta maquina contra o `wmic`: os mesmos 191 processos (so o
+  proprio `wmic.exe` difere). **Nao foi rodada num Windows 11 24H2 de verdade**
+  — aqui o `wmic` existe; a sessao foi exercitada chamando-a diretamente.
 - **Mais de um jogo aberto mostra so um** — o primeiro em ordem alfabetica.
   Escolha estavel, nao "a melhor": sem ordenar, o nome ficaria alternando entre
   os dois a cada verificacao.

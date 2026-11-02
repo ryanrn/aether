@@ -1045,3 +1045,61 @@ describe("Battle.net — pelo registro de desinstalacao", () => {
     expect(entradaPorNomeDeProcesso("cod.exe", catalogo)?.nome).toBe("Call of Duty");
   });
 });
+
+describe("leitura de processos: nome e caminho numa consulta so", () => {
+  const { processosDoCsvDoWmic, processosDaSaidaDoPowershell, comValidade } =
+    detect as {
+      processosDoCsvDoWmic: (t: string) => { caminhos: string; nomes: string };
+      processosDaSaidaDoPowershell: (t: string) => { caminhos: string; nomes: string };
+      comValidade: <T>(ms: number, f: () => Promise<T>) => () => Promise<T>;
+    };
+
+  it("CSV do wmic: virgula no caminho, processo protegido sem caminho, CRLF", () => {
+    const csv = [
+      "",
+      "Node,ExecutablePath,Name",
+      String.raw`PC,C:\Windows\explorer.exe,explorer.exe`,
+      String.raw`PC,D:\Jogos, Steam\steamapps\common\Hades\Hades.exe,Hades.exe`,
+      "PC,,VALORANT-Win64-Shipping.exe",
+      "",
+    ].join("\r\n");
+    const r = processosDoCsvDoWmic(csv);
+    expect(r.nomes.split("\n")).toEqual([
+      "explorer.exe",
+      "Hades.exe",
+      "VALORANT-Win64-Shipping.exe",
+    ]);
+    expect(r.caminhos.split("\n")).toEqual([
+      String.raw`C:\Windows\explorer.exe`,
+      String.raw`D:\Jogos, Steam\steamapps\common\Hades\Hades.exe`,
+    ]);
+  });
+
+  it("saida da sessao de PowerShell: Nome|Caminho, caminho vazio quando protegido", () => {
+    const r = processosDaSaidaDoPowershell(
+      [String.raw`Hades.exe|D:\SteamLibrary\steamapps\common\Hades\Hades.exe`, "vgc.exe|", ""].join("\r\n"),
+    );
+    expect(r.nomes.split("\n")).toEqual(["Hades.exe", "vgc.exe"]);
+    expect(r.caminhos).toBe(String.raw`D:\SteamLibrary\steamapps\common\Hades\Hades.exe`);
+  });
+
+  it("a mesma saida alimenta o casamento por caminho e por nome", () => {
+    const r = processosDoCsvDoWmic(
+      ["Node,ExecutablePath,Name", String.raw`PC,E:\SteamLibrary\steamapps\common\Hollow Knight\hollow_knight.exe,hollow_knight.exe`].join("\r\n"),
+    );
+    expect((jogosEmSaida(r.caminhos) as JogoAchado[]).map((j) => j.chave)).toEqual([
+      "Hollow Knight",
+    ]);
+  });
+
+  it("comValidade: le uma vez dentro do prazo", async () => {
+    let chamadas = 0;
+    const ler = comValidade(60_000, async () => {
+      chamadas += 1;
+      return ["jogo"];
+    });
+    await ler();
+    await ler();
+    expect(chamadas).toBe(1);
+  });
+});
