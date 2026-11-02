@@ -12,6 +12,7 @@ export * from "./events";
 export * from "./flags";
 export * from "./jogos";
 export * from "./legal";
+export * from "./missoes";
 export * from "./moedas";
 export * from "./permissions";
 export * from "./plans";

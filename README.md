@@ -4010,6 +4010,85 @@ um de 300 mostra "Faltam 100 moedas".
 - **Item tirado da loja (inativo) continua de quem comprou**, como hoje com as
   pecas concedidas; o extrato mostra o nome enquanto o item existir no banco.
 
+## Loja: missoes (Estagio 2 da economia, 02/11/2026)
+
+O jeito de GANHAR moedas. A aba "Minhas moedas" da loja mostra as missoes com
+barra de progresso e o botao **Resgatar**; a equipe ajusta meta, recompensa e
+liga/desliga cada uma na aba **Moedas** do painel.
+
+| Missao | Mede | Meta | Recompensa |
+| --- | --- | --- | --- |
+| Bate-papo do dia (diaria) | minutos em voz | 30 | 50 |
+| Partida do dia (diaria) | minutos jogando | 60 | 50 |
+| Passou por aqui (diaria) | abrir o app | 1 | 10 |
+| Semana conversada (semanal) | minutos em voz | 300 | 300 |
+| Todo dia, toda semana (semanal) | dias ativos | 7 | 200 |
+
+A migracao `20261102200000_missoes` ja cria essas cinco, ativas.
+
+### Como conta
+
+- **Gateway** (`apps/realtime/src/missoes.ts`): a cada minuto, soma em memoria
+  1 minuto de voz e/ou de jogo para quem se qualifica; a cada 5 minutos grava o
+  acumulado num lote so (e no desligamento do processo).
+  - **Voz** conta com mais alguem no canal e sem estar ensurdecido (por si ou
+    por moderador). Canal vazio com o fone tirado nao conta.
+  - **Jogo** conta com jogo detectado pelo app de desktop e sem estar invisivel.
+  - **Uma vez por pessoa**, mesmo com varias abas e varias instancias: voz conta
+    na instancia do socket de voz; jogo, na do menor id entre os sockets da
+    pessoa (lista do estado compartilhado).
+  - **Dia ativo**: marcado na conexao. A semanal so soma quando a linha da
+    diaria e CRIADA (dia novo), nao a cada reconexao.
+- **Periodo** (`packages/shared/src/missoes.ts`): o dia vira a meia-noite de
+  **Brasilia**; a semana e a ISO (comeca na segunda, numerada pelo ano ISO).
+  Gateway e web usam a mesma funcao.
+- **Resgate** (`apps/web/src/server/services/missoes.ts`): marca
+  `resgatadaEm` so se `resgatadaEm IS NULL` e `valor >= meta`, credita o saldo e
+  escreve o extrato (`chave = missao:<user>:<missao>:<periodo>`), tudo numa
+  transacao. O segundo clique encontra zero linhas.
+
+### Decisoes
+
+- **Sem teto diario separado.** Cada missao paga uma vez por periodo, entao o
+  maximo que se ganha por dia e por semana ja e o catalogo (hoje 110/dia +
+  500/semana). Um teto a mais so complicaria.
+- **Progresso e linha nova por periodo**, e nao contador zerado: nada e apagado,
+  e o historico fica.
+- **Gravar a cada 5 minutos, e nao a cada minuto**: uma queda perde no maximo 5
+  minutos de progresso; em troca, o banco recebe um lote por intervalo.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/missoes-periodo.test.ts tests/unit/missoes-gateway.test.ts tests/unit/missoes-resgate.test.ts
+```
+
+A migracao foi aplicada com as 39 anteriores (incluindo a das moedas) no
+PGlite: cria as cinco missoes; repetir nao duplica nem desfaz ajuste da equipe;
+CHECK barra meta e recompensa zero e progresso negativo; a chave impede
+progresso repetido; o resgate condicional so passa com 30/30 e uma vez so; RLS.
+
+Ao vivo: duas pessoas num canal de voz por 30 min → a missao diaria de voz
+chega a 30/30 → Resgatar → +50 no saldo e no extrato → clicar de novo nao da
+nada.
+
+### Limitacoes
+
+- **Depende do gateway novo para CONTAR.** Sem ele publicado, a loja mostra as
+  missoes e o resgate funciona, mas o progresso nunca sobe.
+- **Nao testado ao vivo.**
+- **Missao concluida e nao resgatada ate a virada do periodo se perde** (o
+  resgate so olha o periodo atual).
+- **Bot em canal de voz conta como "mais alguem"** (o `countInChannel` nao
+  separa humano de bot): duas contas da mesma pessoa, ou uma pessoa com o
+  bot de musica, enchem a missao de voz. O teto e o proprio catalogo.
+- **A deteccao de jogo vem do app de desktop, que pode ser adulterado**: a
+  missao de jogo confia nele, limitada a uma recompensa por dia.
+- **Chamada direta (DM) nao conta** como tempo em voz, so canal de servidor.
+- **Convidar amigos** ficou para depois.
+- **Mudar a metrica de uma missao** nao e possivel pelo painel (so meta,
+  recompensa e ativa); o gateway relê o catalogo em ate 5 minutos.
+
 ## Celular: a gaveta de navegacao
 
 O app nasceu de tres colunas fixas, e num telefone isso nao fecha conta:

@@ -229,6 +229,21 @@ export async function carteiraDe(userId: string, limite = 50): Promise<Carteira>
     : [];
   const nomeDoItem = new Map(itens.map((i) => [i.id, i.nome]));
 
+  const idsDeMissao = [
+    ...new Set(
+      linhas
+        .filter((l) => l.motivo === "MISSAO" && l.referencia)
+        .map((l) => l.referencia!),
+    ),
+  ];
+  const missoes = idsDeMissao.length
+    ? await prisma.missao.findMany({
+        where: { id: { in: idsDeMissao } },
+        select: { id: true, titulo: true },
+      })
+    : [];
+  const nomeDaMissao = new Map(missoes.map((m) => [m.id, m.titulo]));
+
   const movimentos: MovimentoPublico[] = linhas.map((l) => ({
     id: l.id,
     valor: l.valor,
@@ -237,7 +252,9 @@ export async function carteiraDe(userId: string, limite = 50): Promise<Carteira>
     descricao:
       l.motivo === "COMPRA"
         ? (nomeDoItem.get(l.referencia ?? "") ?? "Item removido da loja")
-        : l.nota,
+        : l.motivo === "MISSAO"
+          ? (nomeDaMissao.get(l.referencia ?? "") ?? null)
+          : l.nota,
     createdAt: l.createdAt.toISOString(),
   }));
 
