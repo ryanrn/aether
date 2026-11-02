@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { preCarregarPerfil } from "@/lib/perfil-cache";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { SwitchVisual } from "@/components/ui/switch";
 import type {
@@ -386,6 +387,7 @@ export function ControlBar({
       */}
       <button
         type="button"
+        onPointerEnter={() => preCarregarPerfil(user.id)}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           setSelfCard((atual) =>

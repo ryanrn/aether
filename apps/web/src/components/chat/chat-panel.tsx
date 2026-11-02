@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { preCarregarPerfil } from "@/lib/perfil-cache";
 import type { PublicMessage, PublicUser } from "@aether/shared";
 import {
   useRealtimeStore,
@@ -95,6 +96,7 @@ export function ChatPanel({
         ehConversaDireta={ehConversaDireta}
         initialMessages={initialMessages}
         onAbrirPerfil={abrirPerfil}
+        onPreCarregarPerfil={(userId) => preCarregarPerfil(userId, serverId)}
         onResponder={setRespondendoA}
       />
       <MessageComposer

@@ -28,7 +28,11 @@ import {
 } from "@/lib/stores/realtime-store";
 import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { useElapsed } from "@/lib/use-elapsed";
-import { carregarPerfilAction } from "@/server/actions/perfil";
+import {
+  buscarPerfil,
+  guardarPerfil,
+  perfilEmCache,
+} from "@/lib/perfil-cache";
 import {
   removeFriendAction,
   respondFriendRequestAction,
@@ -71,7 +75,10 @@ export function CartaoDePerfil({
 }) {
   const caixaRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  const [perfil, setPerfil] = useState<PerfilParaCartao | null>(null);
+  // Comeca do cache (o hover no nome costuma ter buscado) e revalida abaixo.
+  const [perfil, setPerfil] = useState<PerfilParaCartao | null>(() =>
+    perfilEmCache(user.id, serverId),
+  );
   /** tela estreita: o cartao vira uma folha colada embaixo, largura toda */
   const [folha, setFolha] = useState(false);
 
@@ -84,8 +91,8 @@ export function CartaoDePerfil({
 
   useEffect(() => {
     let vivo = true;
-    void carregarPerfilAction({ userId: user.id, serverId }).then((r) => {
-      if (vivo && r.ok) setPerfil(r.data);
+    void buscarPerfil(user.id, serverId).then((p) => {
+      if (vivo && p) setPerfil(p);
     });
     return () => {
       vivo = false;
@@ -169,7 +176,13 @@ export function CartaoDePerfil({
         o canto bonito sem clipar o cosmetico.
       */}
       <div className={cn("overflow-hidden", folha ? "rounded-t-2xl" : "rounded-t-xl")}>
-        {perfil?.banner ? (
+        {/*
+          Altura fixa nos tres estados, e neutra ate a resposta chegar: mostrar
+          a cor padrao e trocar pelo banner logo depois era um "pisca".
+        */}
+        {!perfil ? (
+          <div className="h-[76px] bg-base-800" />
+        ) : perfil.banner ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={perfil.banner}
@@ -177,7 +190,7 @@ export function CartaoDePerfil({
             className="h-[76px] w-full object-cover"
           />
         ) : (
-          <div className="h-[64px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
+          <div className="h-[76px] bg-gradient-to-r from-accent-700/40 to-accent-500/15" />
         )}
       </div>
 
@@ -298,7 +311,10 @@ export function CartaoDePerfil({
               user={user}
               serverId={serverId}
               perfil={perfil}
-              onMudou={(p) => setPerfil(p)}
+              onMudou={(p) => {
+                setPerfil(p);
+                guardarPerfil(user.id, serverId, p);
+              }}
               onClose={onClose}
             />
           </div>

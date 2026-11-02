@@ -1,35 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { carregarPerfilAction } from "@/server/actions/perfil";
+import { buscarPerfil, imagensEmCache } from "@/lib/perfil-cache";
 
 /**
  * Banner e efeito de perfil de alguem, para os cartoes que abrem da lista de
  * membros e do proprio usuario. Nao estao no `PublicUser` (que o gateway
- * espalha a cada evento) porque so o cartao aberto precisa deles: busca quando
- * o cartao abre, pela mesma action do cartao do chat.
+ * espalha a cada evento) porque so o cartao aberto precisa deles.
  *
- * Ate a resposta chegar (ou se falhar), vem `null` e o cartao mostra a faixa
- * de cor de sempre.
+ * Comeca com o que o `perfil-cache` ja tem (o hover costuma ter buscado) e
+ * busca de novo ao abrir. `pronto` diz se ja ha resposta — antes dela a faixa
+ * fica neutra, em vez de mostrar a cor padrao e trocar logo depois.
  */
-export function useImagensDoPerfil(
-  userId: string,
-  serverId?: string,
-): { banner: string | null; efeito: string | null } {
-  const [imagens, setImagens] = useState<{
-    banner: string | null;
-    efeito: string | null;
-  }>({ banner: null, efeito: null });
+export function useImagensDoPerfil(userId: string): {
+  banner: string | null;
+  efeito: string | null;
+  pronto: boolean;
+} {
+  const [imagens, setImagens] = useState(() => {
+    const emCache = imagensEmCache(userId);
+    return emCache
+      ? { ...emCache, pronto: true }
+      : { banner: null, efeito: null, pronto: false };
+  });
 
   useEffect(() => {
     let vivo = true;
-    void carregarPerfilAction({ userId, serverId }).then((r) => {
-      if (vivo && r.ok) setImagens({ banner: r.data.banner, efeito: r.data.efeito });
+    void buscarPerfil(userId).then((perfil) => {
+      if (!vivo) return;
+      setImagens({
+        banner: perfil?.banner ?? null,
+        efeito: perfil?.efeito ?? null,
+        pronto: true,
+      });
     });
     return () => {
       vivo = false;
     };
-  }, [userId, serverId]);
+  }, [userId]);
 
   return imagens;
 }

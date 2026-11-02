@@ -140,7 +140,7 @@ export function SelfUserCard({
         className="fixed z-[61] animate-rise overflow-hidden rounded-lg border border-line bg-base-800 shadow-[var(--shadow-pop)]"
       >
         {imagens.efeito ? <CamadaDeEfeito url={imagens.efeito} /> : null}
-        <FaixaDeBanner url={imagens.banner} />
+        <FaixaDeBanner url={imagens.banner} pronto={imagens.pronto} />
 
         <div className="px-3.5 pb-3.5">
           <div className="-mt-6 mb-2.5">

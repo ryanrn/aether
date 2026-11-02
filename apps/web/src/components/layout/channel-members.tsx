@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { preCarregarPerfil } from "@/lib/perfil-cache";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import type { PublicChannel, ViewerContext, VoiceParticipant } from "@aether/shared";
 import {
@@ -50,6 +51,7 @@ export function ChannelMembers({
             */}
             <button
               type="button"
+              onPointerEnter={() => preCarregarPerfil(state.userId)}
               onClick={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setOpenCard((current) =>
