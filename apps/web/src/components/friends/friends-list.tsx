@@ -11,6 +11,8 @@ import {
   sendFriendRequestAction,
 } from "@/server/actions/friends";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useVozDoAmigo } from "@/lib/stores/voz-de-amigos-store";
+import { useMenuDoAmigo } from "./menu-do-amigo";
 import { useAbrirConversa } from "@/lib/chat/use-abrir-conversa";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -388,9 +390,14 @@ function Linha({ item }: { item: PublicFriendship }) {
   );
   const jogo = useRealtimeStore((estado) => estado.activity[item.user.id]);
   const musica = useRealtimeStore((estado) => estado.listening[item.user.id]);
+  // Ja filtrada no gateway: so existe se voce pode ver o canal.
+  const voz = useVozDoAmigo(item.user.id);
   const [pendente, startTransition] = useTransition();
 
   const { abrir, abrindo: abrindoConversa } = useAbrirConversa();
+  const menu = useMenuDoAmigo(item.user);
+  // So amizade aceita tem menu: pedido pendente e bloqueado tem as proprias acoes.
+  const temMenu = item.kind === "friend";
 
   function agir(acao: () => Promise<unknown>) {
     startTransition(async () => {
@@ -403,7 +410,11 @@ function Linha({ item }: { item: PublicFriendship }) {
   }
 
   return (
-    <div className="group mx-2 flex items-center gap-3.5 border-t border-line-soft px-3 py-3 transition-colors duration-150 first:border-t-0 hover:rounded-md hover:bg-base-750">
+    <div
+      onContextMenu={temMenu ? menu.abrir : undefined}
+      className="group mx-2 flex items-center gap-3.5 border-t border-line-soft px-3 py-3 transition-colors duration-150 first:border-t-0 hover:rounded-md hover:bg-base-750"
+    >
+      {temMenu ? menu.elemento : null}
       <Avatar
         userId={item.user.id}
         name={item.user.displayName}
@@ -427,6 +438,13 @@ function Linha({ item }: { item: PublicFriendship }) {
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-ink-200">
             <AetherIcon name="gamepad" className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{jogo.game}</span>
+          </p>
+        ) : voz ? (
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-signal-online">
+            <AetherIcon name="volume" className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              Em call em {voz.channelName} · {voz.serverName}
+            </span>
           </p>
         ) : musica ? (
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-signal-spotify">
@@ -517,6 +535,9 @@ function Linha({ item }: { item: PublicFriendship }) {
                 strokeWidth={1.75}
               />
             </BotaoAcao>
+            <BotaoAcao titulo="Mais opcoes" pendente={false} onClick={menu.abrirNoBotao}>
+              <AetherIcon name="more" className="h-4 w-4" strokeWidth={1.75} />
+            </BotaoAcao>
             <span className="flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
               <BotaoAcao
                 titulo="Desfazer amizade"
@@ -562,7 +583,7 @@ function BotaoAcao({
   titulo: string;
   pendente: boolean;
   perigo?: boolean;
-  onClick: () => void;
+  onClick: (evento: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }) {
   return (

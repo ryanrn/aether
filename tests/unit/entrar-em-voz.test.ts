@@ -26,6 +26,10 @@ vi.mock("@aether/access", () => ({
 const createMediaCredentials = vi.fn();
 vi.mock("../../apps/realtime/src/livekit", () => ({ createMediaCredentials }));
 
+// A tela Amigos tem teste proprio (voz-de-amigos.test.ts); aqui so o gatilho.
+const marcarVozAlterada = vi.fn();
+vi.mock("../../apps/realtime/src/voz/voz-de-amigos", () => ({ marcarVozAlterada }));
+
 const talvezRemoverSalaEfemera = vi.fn();
 vi.mock("../../apps/realtime/src/voz/salas-efemeras", () => ({
   talvezRemoverSalaEfemera,

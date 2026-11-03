@@ -5,7 +5,13 @@ import type {
   UserStatus,
   VoiceParticipant,
   VoiceState,
+  VozDeAmigo,
 } from "./types";
+import type {
+  ConviteAck,
+  ConviteDeJogo,
+  TipoDeConvite,
+} from "./convites-de-jogo";
 
 /**
  * Contratos dos eventos de WebSocket — o vocabulario entre o app web e o
@@ -517,6 +523,28 @@ export interface ServerToClientEvents {
   /** presenca de todos os amigos online, ao conectar */
   "friend:sync": (payload: { entries: PresenceEntry[] }) => void;
   /**
+   * A call de um amigo mudou (entrou, saiu, trocou de canal, alguem entrou no
+   * canal dele, comecou a transmitir). `voz: null` = nao esta em call VISIVEL
+   * para voce.
+   *
+   * Excecao calculada ao comentario do `friend:presence` acima: o canal so vai
+   * a quem e membro do servidor e ve o canal — a visao e montada para cada
+   * destinatario no gateway (`voz/voz-de-amigos.ts`), nunca a mesma para todos.
+   */
+  "friend:voice": (payload: { userId: string; voz: VozDeAmigo | null }) => void;
+  /**
+   * Um convite de jogo seu (enviado ou recebido) mudou: criado, aceito,
+   * recusado, cancelado ou expirado. Vai as salas pessoais dos DOIS lados —
+   * todas as abas e o desktop veem o mesmo estado.
+   */
+  "game-invite:update": (payload: { convite: ConviteDeJogo }) => void;
+  /**
+   * O SEU jogo detectado mudou (vem do app de desktop). Existe para as outras
+   * abas — o navegador nao detecta jogo — saberem se podem oferecer "Convidar
+   * para jogar".
+   */
+  "presence:self": (payload: { game: string | null }) => void;
+  /**
    * A LISTA de amizades mudou (pedido novo, aceite, recusa, remocao).
    *
    * Nao carrega o que mudou, pelo mesmo motivo de `server:changed`: a lista e
@@ -614,6 +642,51 @@ export interface ClientToServerEvents {
   ) => void;
   /** As conversas diretas de quem pediu. */
   "dm:list": (ack: (result: DmListAck) => void) => void;
+  /**
+   * Foto das calls dos amigos, ja filtrada para quem pediu. A tela Amigos pede
+   * ao conectar (e ao reconectar); dali em diante vale o `friend:voice`.
+   */
+  /**
+   * Convites para jogos (`convites-de-jogo.ts`). Tudo revalidado no gateway:
+   * amizade, jogo do anfitriao, limites, quem pode responder/cancelar.
+   */
+  "game-invite:send": (
+    payload: { paraId: string; tipo: TipoDeConvite; comoEntrar?: string | null },
+    ack: (result: ConviteAck) => void,
+  ) => void;
+  /** So o destinatario. `comoEntrar` so vale quando ele e o anfitriao (pedido). */
+  "game-invite:respond": (
+    payload: { id: string; aceitar: boolean; comoEntrar?: string | null },
+    ack: (result: ConviteAck) => void,
+  ) => void;
+  /** So o remetente, e so enquanto pendente. */
+  "game-invite:cancel": (
+    payload: { id: string },
+    ack: (result: ConviteAck) => void,
+  ) => void;
+  /**
+   * Os seus convites ainda relevantes e o seu jogo atual — ao (re)conectar.
+   *
+   * Tambem e a DETECCAO de que o gateway conhece convites: o cliente so mostra
+   * "Pedir para entrar" se este pedido tiver resposta. Por isso o gateway
+   * SEMPRE responde (recusa por ritmo ou falha = `ok: false`) — ficar calado
+   * faria o cliente concluir que o recurso nao existe.
+   */
+  "game-invite:list": (
+    ack: (
+      result:
+        | { ok: true; convites: ConviteDeJogo[]; meuJogo: string | null }
+        | { ok: false },
+    ) => void,
+  ) => void;
+  "friend:voice-sync": (
+    ack: (
+      result:
+        | { ok: true; entries: { userId: string; voz: VozDeAmigo }[] }
+        // recusado por ritmo ou falha: a tela mantem o que ja tinha
+        | { ok: false },
+    ) => void,
+  ) => void;
   /**
    * Liga ou desliga a sua reacao numa mensagem.
    *

@@ -10,6 +10,9 @@ import type {
 import { createSocketTicketAction } from "@/server/actions/realtime";
 import { sincronizarCatalogoDeJogos } from "@/lib/desktop/game-activity";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useVozDeAmigosStore } from "@/lib/stores/voz-de-amigos-store";
+import { useConvitesStore } from "@/lib/stores/convites-store";
+import { toast } from "@/lib/stores/toast-store";
 
 /**
  * Dono da conexao com o gateway.
@@ -150,6 +153,36 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
      * do proprio ack porque o broadcast de `voice:update` so alcanca quem esta
      * na sala do servidor, e a pessoa pode ter recarregado na tela de amigos.
      */
+    /**
+     * Foto das calls dos amigos — a cada `friend:sync`, porque durante a queda os
+     * `friend:voice` nao chegaram. Substitui o mapa: quem saiu enquanto
+     * estavamos fora nao vem na lista.
+     */
+    function pedirVozDosAmigos(target: TypedSocket) {
+      target.emit("friend:voice-sync", (resultado) => {
+        if (resultado.ok) useVozDeAmigosStore.getState().substituir(resultado.entries);
+      });
+    }
+
+    /**
+     * Convites de jogo e o seu jogo atual — mesma hora e motivo da voz dos
+     * amigos. Sem resposta em 10 s = gateway que nao conhece convites (versao
+     * anterior): os botoes ficam escondidos em vez de falhar no clique.
+     * Qualquer resposta, mesmo `ok: false` (ritmo), prova que ele conhece.
+     */
+    function pedirConvites(target: TypedSocket) {
+      target.timeout(10_000).emit("game-invite:list", (semResposta, resultado) => {
+        const store = useConvitesStore.getState();
+        if (semResposta) {
+          // Queda no meio tambem cai aqui; a proxima conexao pergunta de novo.
+          if (target.connected) store.setDisponivel(false);
+          return;
+        }
+        store.setDisponivel(true);
+        if (resultado.ok) store.substituir(resultado.convites, resultado.meuJogo);
+      });
+    }
+
     function rejoinVoice(target: TypedSocket, tentativa = 0) {
       const state = useRealtimeStore.getState();
       const intent = state.voiceIntent;
@@ -285,6 +318,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
        */
       socketInstance.on("friend:sync", ({ entries }) => {
         useRealtimeStore.getState().mergePresence(entries);
+        /**
+         * A foto das calls vem DEPOIS do `friend:sync`, e nao no `connect`: o
+         * gateway carrega a lista de amigos sem segurar o handshake, e um
+         * pedido no `connect` podia chegar antes dela — e voltar vazio. O
+         * `friend:sync` so sai com a lista pronta, e sai de novo quando ela
+         * muda (amigo novo).
+         */
+        pedirVozDosAmigos(socketInstance);
+        pedirConvites(socketInstance);
       });
 
       /**
@@ -295,6 +337,36 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
        */
       socketInstance.on("friend:changed", () => {
         refreshRef.current();
+      });
+
+      /**
+       * A call de um amigo, ja filtrada no gateway para o que VOCE pode ver
+       * (membro do servidor + `VIEW_CHANNEL`). `null` = saiu ou deixou de ser
+       * visivel.
+       */
+      socketInstance.on("friend:voice", ({ userId, voz }) => {
+        useVozDeAmigosStore.getState().atualizar(userId, voz);
+      });
+
+      /**
+       * Convite de jogo seu mudou. Recusa e expiracao de um pedido SEU viram
+       * aviso aqui (uma vez, no evento); o aceite fica no overlay, porque
+       * carrega o "como entrar" e precisa ficar na tela ate a pessoa fechar.
+       */
+      socketInstance.on("game-invite:update", ({ convite }) => {
+        const anterior = useConvitesStore.getState().porId[convite.id];
+        useConvitesStore.getState().atualizar(convite);
+        const eu = useRealtimeStore.getState().selfUserId;
+        if (convite.de.id !== eu || anterior?.estado === convite.estado) return;
+        if (convite.estado === "recusado") {
+          toast.info(`${convite.para.displayName} recusou o ${convite.tipo === "pedir" ? "pedido" : "convite"}.`);
+        } else if (convite.estado === "expirado") {
+          toast.info(`${convite.para.displayName} nao respondeu a tempo.`);
+        }
+      });
+
+      socketInstance.on("presence:self", ({ game }) => {
+        useConvitesStore.getState().setMeuJogo(game);
       });
 
       socketInstance.on(

@@ -11,6 +11,7 @@ import type { AetherServer, AetherSocket } from "../types";
 import { createRateLimiter } from "../rate-limit";
 import { talvezRemoverSalaEfemera } from "../voz/salas-efemeras";
 import { entrarNaVoz, sairDaVoz } from "../entrar-em-voz";
+import { marcarVozAlterada } from "../voz/voz-de-amigos";
 import {
   applyServerMute,
   conferirQualidadeDaTela,
@@ -326,7 +327,11 @@ export function registerVoiceHandlers(
     }
 
     const updated = await setVoiceStreaming(userId, streaming);
-    if (updated) broadcast(updated.serverId, updated.participant);
+    if (updated) {
+      broadcast(updated.serverId, updated.participant);
+      // "transmitindo" aparece na tela Amigos; mudo/fala/camera, nao.
+      marcarVozAlterada(io, updated.serverId, [userId]);
+    }
 
     /**
      * A QUALIDADE E CONFERIDA DEPOIS, e nao aqui na hora.
@@ -630,6 +635,7 @@ export function registerVoiceHandlers(
 
       const participant = await voiceParticipant(targetId);
       if (participant) broadcast(target.serverId, participant);
+      marcarVozAlterada(io, target.serverId, [targetId]);
 
       // Tiraram a pessoa de uma sala de grupo — ela pode ter esvaziado.
       void talvezRemoverSalaEfemera(io, target.channelId);

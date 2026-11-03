@@ -4,6 +4,7 @@ import { has, room, type PublicUser, type VoiceJoinAck } from "@aether/shared";
 import type { AetherServer } from "./types";
 import { createMediaCredentials } from "./livekit";
 import { talvezRemoverSalaEfemera } from "./voz/salas-efemeras";
+import { marcarVozAlterada } from "./voz/voz-de-amigos";
 import {
   countInChannel,
   joinVoice,
@@ -141,6 +142,12 @@ export async function entrarNaVoz(
     });
   }
 
+  // Tela Amigos: a call nova (e a saida da antiga, se trocou de servidor).
+  marcarVozAlterada(io, channel.serverId, [userId]);
+  if (previousServerId && previousServerId !== channel.serverId) {
+    marcarVozAlterada(io, previousServerId, [userId]);
+  }
+
   // Saiu de uma sala de grupo para entrar aqui — ela pode ter esvaziado.
   if (canalAnterior && canalAnterior !== channelId) {
     void talvezRemoverSalaEfemera(io, canalAnterior);
@@ -179,6 +186,7 @@ export async function sairDaVoz(
     serverId: left.serverId,
     participant: voiceDeparture(params.userId, left.user),
   });
+  marcarVozAlterada(io, left.serverId, [params.userId]);
   void talvezRemoverSalaEfemera(io, left.channelId);
   return true;
 }

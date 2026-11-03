@@ -12,6 +12,8 @@ export * from "./developer";
 export * from "./events";
 export * from "./flags";
 export * from "./jogos";
+export * from "./adaptadores-de-jogo";
+export * from "./convites-de-jogo";
 export * from "./legal";
 export * from "./missoes";
 export * from "./moedas";

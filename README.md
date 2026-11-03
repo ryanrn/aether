@@ -4825,6 +4825,180 @@ enviados e um grafico das ultimas ~2 min.
   uma rajada de perda entre duas amostras some do numero exibido, mas
   aparece no grafico como um pico de ping.
 
+## Tela Amigos — call dos amigos (etapa 1 de "Ativo agora", 02/11/2026)
+
+Analise completa, pesquisa das integracoes com jogos e as proximas etapas em
+[docs/ativo-agora.md](docs/ativo-agora.md).
+
+**O que faz:** o painel "Ativo agora" e a linha de cada amigo mostram em qual
+canal de voz ele esta (canal, servidor, quem esta junto com "+N", tempo, se
+esta transmitindo a tela), com **Entrar no canal** e **Ir para o servidor**.
+
+**Como funciona:** `apps/realtime/src/voz/voz-de-amigos.ts`. Cada ponto que
+emite `voice:update` chama `marcarVozAlterada`; com debounce de 400 ms por
+servidor, o gateway monta a call de quem mudou e manda `friend:voice` a cada
+amigo CONECTADO com a visao que ele pode ter (membro + `VIEW_CHANNEL`, pelo
+`@aether/access`). Quem nao pode ver recebe `null` — nao "canal privado". A
+foto inicial vem de `friend:voice-sync`, pedido apos cada `friend:sync`.
+Entrar usa o `voice:join` de sempre: permissao e lotacao continuam no backend.
+
+**Como testar:** duas contas amigas, A e B, membros do mesmo servidor. A entra
+num canal de voz; em ate ~0,5 s B ve a call em Amigos. Terceira pessoa C entra
+no canal: o "+N"/contagem de B muda. A sai, troca de canal ou fica invisivel:
+some/atualiza. Com C amiga de A mas fora do servidor, C nao ve nada. Testes:
+`npx vitest run tests/unit/voz-de-amigos.test.ts`.
+
+### Limitacoes conhecidas
+- **Nao verificado ao vivo** — so por testes unitarios e typecheck. Precisa
+  de duas contas e do gateway novo no ar.
+- **Acesso em cache por 30 s** (por quem ve e canal). Perder `VIEW_CHANNEL` ou
+  sair do servidor pode deixar a call visivel na tela Amigos por ate 30 s. A
+  ENTRADA continua revalidada no `voice:join`, entao a janela e so de exibicao.
+- **Com varias instancias de gateway**, a deduplicacao (assinatura) e por
+  instancia: um mesmo estado pode ser anunciado duas vezes. Inofensivo — o
+  cliente so substitui o valor.
+- **Mudanca de permissao sem mudanca de voz** (cargo editado) so reflete na
+  proxima mudanca da call ou no proximo `friend:sync`.
+- **Amigo novo** recebe a call do outro no `friend:sync` que o aceite ja
+  dispara; nao ha evento so para isso.
+- **Ja existente, nao corrigido aqui:** `voice:update` vai para a sala do
+  SERVIDOR inteira, inclusive ocupacao de canal privado (so o `channelId`, sem
+  nome). Fica para uma etapa propria — mexe na arvore de canais.
+- **Convites para jogos e adaptadores** ainda nao existem (etapas 3 e 4 do
+  documento).
+
+### Etapa 2 — menu do amigo
+
+Botao direito na linha do amigo ou no cartao do "Ativo agora", ou o botao
+"Mais" (sempre visivel ao lado de "Conversar"). `components/friends/menu-do-
+amigo.tsx`, montado sobre o `ContextMenu` que ja existia (posicao na borda,
+setas, Esc, foco devolvido). Contextual:
+
+- sempre: Enviar mensagem, Abrir perfil ("Ver perfil e atividade" quando esta
+  jogando — o cartao mostra o jogo ao vivo), Iniciar chamada (abre a conversa
+  direta e toca, pelo `dmcall:ring` de sempre);
+- em call visivel: Entrar no canal (ou "Canal cheio", desabilitado; nada se
+  voce ja esta la), Ir para o servidor, Ver membros da call (modal com a lista).
+
+**Como testar:** botao direito num amigo sem atividade (3 itens); num amigo em
+call (aparecem os itens da call, com o nome do canal); com o canal no limite
+(aparece "Canal cheio"); "Mais" abre o mesmo menu ancorado no botao; Esc fecha
+e devolve o foco.
+
+**Limitacoes:**
+- **Nao verificado ao vivo**, so typecheck e a suite (964). Nao ha teste de
+  componente no projeto (sem jsdom), entao o menu nao tem teste automatico.
+- **Sem "Convidar para a call"** nem "Pedir para entrar": nao ha ainda
+  infraestrutura de convite, e item que nao faz nada nao entra no menu.
+- **"Iniciar chamada" com o amigo offline** toca do mesmo jeito que na conversa
+  direta (o gateway decide); o menu nao esconde o item por status.
+- **Pedido pendente e bloqueado** nao tem menu — essas linhas ja tem as
+  proprias acoes.
+
+### Etapa 3 — convites para jogos (pedir para entrar / convidar para jogar)
+
+Infraestrutura do AETHER, nao do jogo: nenhum dos jogos prioritarios tem API
+oficial para um terceiro colocar alguem numa party (pesquisa em
+`docs/ativo-agora.md`). O convite avisa em tempo real, recolhe a resposta e,
+no aceite, entrega o "como entrar" que o ANFITRIAO escreveu (Riot ID, codigo
+da party, nome Epic). A entrada no jogo e manual — fluxo assistido.
+
+- **Gateway:** `convites/convites.ts` (regras, testaveis), `convites/
+  armazem.ts` (memoria ou Redis, como o resto do estado), `handlers/
+  convites.ts` (ritmo, avisos, expiracao). Eventos `game-invite:send |
+  respond | cancel | list` e `game-invite:update` para as salas pessoais dos
+  DOIS lados (todas as abas + desktop). `presence:self` conta o seu jogo as
+  outras abas — o navegador nao detecta jogo.
+- **Regras (no gateway, nunca no cliente):** so entre amigos; o jogo vem da
+  presenca do anfitriao (nao do payload); invisivel = "nao esta jogando", com
+  a mesma mensagem; so o destinatario responde e so o remetente cancela (os
+  outros recebem "nao existe"); a primeira resposta vence (troca condicional
+  — em Redis, um script Lua); expira em 5 min; fica mais 10 min guardado para
+  o "como entrar" sobreviver a um reload.
+- **Anti-spam:** 6 envios de rajada e 1 a cada 10 s por pessoa; no maximo 5
+  pendentes enviados e 20 recebidos; repetir o mesmo pedido devolve o
+  existente e NAO renotifica.
+- **Cliente:** `ConvitesOverlay` (em qualquer tela, canto inferior esquerdo):
+  recebido pendente com aceitar/recusar e, num pedido, o campo "como entrar";
+  aceito com o "como entrar" e copiar. Recusa e expiracao viram aviso curto.
+  Botao "Pedir para entrar" no cartao do "Ativo agora" (vira "Pedido enviado
+  · Cancelar" / "Pedido aceito") e itens no menu do amigo ("Pedir para entrar
+  em X", "Convidar para X", cancelar).
+
+**Como testar:** contas A e B amigas. A abre um jogo detectado (app de
+desktop). B ve "Pedir para entrar" no cartao de A e clica; A recebe o cartao
+em qualquer tela, escreve o Riot ID e aceita; B ve o cartao com o Riot ID e
+copia. Repetir com recusar, com B cancelando, e deixando passar 5 min (os dois
+lados veem expirar). Invisivel: A invisivel -> B recebe "nao esta jogando".
+Testes: `npx vitest run tests/unit/convites-de-jogo.test.ts` (16).
+
+**Limitacoes:**
+- **Nao verificado ao vivo**, so testes de regra (armazem em memoria),
+  typecheck e a suite (980). O armazem em **Redis** (script Lua com
+  `KEEPTTL`, que exige Redis 6.0+) nao tem teste automatico.
+- **Sem entrada automatica em nenhum jogo** — nao existe integracao oficial
+  (VALORANT, Fortnite); CS2 via Steam fica para uma etapa propria, com
+  verificacao antes. Nenhum botao promete entrar no jogo.
+- **Sem som e sem notificacao do Windows** para convite recebido — so o
+  cartao na tela. Quem esta com o app minimizado so ve ao voltar.
+- **"Como entrar" e texto livre** do anfitriao (ate 120 caracteres, sem
+  quebra de linha); nao ha validacao por jogo (etapa 4, adaptadores).
+- **O jogo do convite e o do momento do envio.** Se o anfitriao trocar de
+  jogo, o convite pendente continua citando o anterior ate expirar.
+- **Timer de expiracao e por instancia.** Se o gateway reiniciar, o aviso de
+  "expirou" so sai na proxima leitura (`game-invite:list` a cada
+  reconexao/`friend:sync`) — o estado em si nunca fica errado, porque toda
+  acao confere o prazo.
+- **"Convidar para a call"** (chamar alguem para o seu canal de voz) continua
+  fora: e outro recurso, nao convite de jogo.
+- **Site e gateway sobem separados.** O site pergunta (`game-invite:list`, a
+  cada `friend:sync`) se o gateway conhece convites; sem resposta em 10 s, os
+  botoes de convite ficam ESCONDIDOS em vez de falhar no clique. Com o gateway
+  antigo no ar: menu do amigo funciona, call dos amigos e convites nao
+  aparecem. Quando o gateway novo subir, aparecem na proxima conexao, sem novo
+  deploy do site.
+
+### Etapa 4 — adaptadores por jogo
+
+`packages/shared/src/adaptadores-de-jogo.ts`. Cada jogo DECLARA o que o
+AETHER faz com ele, nos quatro papeis da especificacao (presenca, sessao,
+convite, entrada), e a tela so oferece o declarado. Hoje, para todos:
+presenca por processo, **sessao nenhuma** (nao mostramos modo, mapa nem lobby
+— nao temos esse dado), convite do AETHER, **entrada assistida**.
+
+| Jogo | Campo "como entrar" | Formato validado |
+|---|---|---|
+| VALORANT | Riot ID | `Nome#TAG` (nome 3-16, tag 3-5) |
+| Fortnite | Nome na Epic | 3 a 16 caracteres |
+| Counter-Strike 2 | Codigo de amigo ou perfil Steam | `ABCDE-FGHJ` ou `https://steamcommunity.com/id/...` |
+| Outro jogo | Como entrar | texto livre |
+
+O formato e validado NO GATEWAY (`comoEntrarDoJogo` em `convites.ts`) e, com
+a mesma funcao, na tela antes de enviar. Formato errado nao responde o
+convite: ele continua pendente para o anfitriao corrigir. O cartao de quem vai
+entrar mostra o rotulo ("Riot ID: ...") e a instrucao do jogo.
+
+Novo jogo = uma entrada em `ADAPTADORES_DE_JOGO`. Integracao de verdade (o
+VANT nativo, ou o CS2 pela Steam) entraria como uma capacidade nova em
+`CapacidadesDeJogo` — o tipo hoje so permite `assistida`, de proposito: um
+adaptador nao consegue declarar entrada automatica sem que o codigo que a
+executa exista.
+
+**Como testar:** pedido num VALORANT: o campo pede "Seu Riot ID", "so nome"
+mostra o erro e desabilita Aceitar, `Nome#BR1` aceita. Num jogo sem adaptador,
+texto livre. Testes: `tests/unit/convites-de-jogo.test.ts` (21).
+
+**Limitacoes:**
+- **As instrucoes dos jogos ("Social > Adicionar amigo") foram escritas a
+  partir do conhecimento geral dos menus, nao conferidas nos jogos agora.**
+  Menus mudam a cada atualizacao; revisar com os jogos abertos.
+- **Formatos sao os publicos de cada plataforma**, sem consulta a API: um
+  Riot ID bem formado mas inexistente passa.
+- **O casamento e pelo nome detectado** (`normalizarNome`). Se o detector
+  der um nome diferente (ex. outra edicao), o jogo cai no generico — o
+  convite funciona, so sem o campo especifico.
+- **Nao verificado ao vivo.**
+
 ## Developer Platform (bots, webhooks, API) — fundacao
 
 Terceiros podem criar bots e integracoes. **Conceito do Discord Developer
