@@ -134,15 +134,20 @@ export function registerConviteHandlers(io: AetherServer, socket: AetherSocket):
 
   socket.on("game-invite:list", async (ack) => {
     if (typeof ack !== "function") return;
-    if (!listarLimiter.take(userId)) return;
+    // Sempre responde: o silencio e o sinal de "gateway sem convites" no cliente.
+    if (!listarLimiter.take(userId)) {
+      ack({ ok: false });
+      return;
+    }
     try {
       const { convites, vencidos } = await listarConvites(deps, userId);
       // Quem venceu nesta leitura: o outro lado tambem precisa saber.
       for (const c of vencidos) avisar(io, c);
       const meuJogo = (await presenceEntryOf(userId))?.game ?? null;
-      ack({ convites, meuJogo });
+      ack({ ok: true, convites, meuJogo });
     } catch (erro) {
       log.warn("gateway.convites.list", "game-invite:list falhou", { err: erro, userId });
+      ack({ ok: false });
     }
   });
 }

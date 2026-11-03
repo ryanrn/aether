@@ -100,7 +100,12 @@ export function useJogoComAmigo(amigoId: string) {
   const eu = useRealtimeStore((estado) => estado.selfUserId);
   const jogoDoAmigo = useRealtimeStore((estado) => estado.activity[amigoId]?.game ?? null);
   const meuJogo = useConvitesStore((estado) => estado.meuJogo);
+  const disponivel = useConvitesStore((estado) => estado.disponivel === true);
   const pedido = useConviteCom(eu, amigoId, "pedir");
   const convite = useConviteCom(eu, amigoId, "convidar");
+  // Gateway sem convites: nada para oferecer (ver `disponivel` na store).
+  if (!disponivel) {
+    return { jogoDoAmigo: null, meuJogo: null, pedido: null, convite: null };
+  }
   return { jogoDoAmigo, meuJogo, pedido, convite };
 }

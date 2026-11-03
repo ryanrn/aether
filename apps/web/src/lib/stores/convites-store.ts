@@ -16,6 +16,14 @@ interface ConvitesState {
   meuJogo: string | null;
   /** Avisos de resultado que a pessoa ja fechou nesta aba. */
   dispensados: Record<string, true>;
+  /**
+   * O gateway conhece convites? `null` = ainda nao sabemos. Os botoes de
+   * convite so aparecem com `true`: um gateway de versao anterior ignora
+   * `game-invite:*` em silencio, e o botao viraria "sem resposta" na mao de
+   * quem clica. Quando o gateway novo entra no ar, a proxima conexao liga.
+   */
+  disponivel: boolean | null;
+  setDisponivel: (disponivel: boolean) => void;
   atualizar: (convite: ConviteDeJogo) => void;
   substituir: (convites: ConviteDeJogo[], meuJogo: string | null) => void;
   setMeuJogo: (jogo: string | null) => void;
@@ -26,6 +34,8 @@ export const useConvitesStore = create<ConvitesState>((set) => ({
   porId: {},
   meuJogo: null,
   dispensados: {},
+  disponivel: null,
+  setDisponivel: (disponivel) => set({ disponivel }),
   atualizar: (convite) =>
     set((estado) => ({ porId: { ...estado.porId, [convite.id]: convite } })),
   substituir: (convites, meuJogo) =>

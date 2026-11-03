@@ -164,10 +164,22 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    /** Convites de jogo e o seu jogo atual — mesma hora e motivo da voz dos amigos. */
+    /**
+     * Convites de jogo e o seu jogo atual — mesma hora e motivo da voz dos
+     * amigos. Sem resposta em 10 s = gateway que nao conhece convites (versao
+     * anterior): os botoes ficam escondidos em vez de falhar no clique.
+     * Qualquer resposta, mesmo `ok: false` (ritmo), prova que ele conhece.
+     */
     function pedirConvites(target: TypedSocket) {
-      target.emit("game-invite:list", ({ convites, meuJogo }) => {
-        useConvitesStore.getState().substituir(convites, meuJogo);
+      target.timeout(10_000).emit("game-invite:list", (semResposta, resultado) => {
+        const store = useConvitesStore.getState();
+        if (semResposta) {
+          // Queda no meio tambem cai aqui; a proxima conexao pergunta de novo.
+          if (target.connected) store.setDisponivel(false);
+          return;
+        }
+        store.setDisponivel(true);
+        if (resultado.ok) store.substituir(resultado.convites, resultado.meuJogo);
       });
     }
 

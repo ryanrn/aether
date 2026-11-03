@@ -166,6 +166,8 @@ function CartaoAtividade({ amigo }: { amigo: PublicFriendship }) {
 function PedirParaEntrar({ amigoId }: { amigoId: string }) {
   const { pedido, jogoDoAmigo } = useJogoComAmigo(amigoId);
   const { enviar, cancelar, ocupado } = useConvites();
+  // `null` = gateway sem convites (ou amigo parou de jogar): sem botao.
+  if (!jogoDoAmigo) return null;
 
   if (estaPendente(pedido)) {
     return (

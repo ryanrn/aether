@@ -4951,6 +4951,12 @@ Testes: `npx vitest run tests/unit/convites-de-jogo.test.ts` (16).
   acao confere o prazo.
 - **"Convidar para a call"** (chamar alguem para o seu canal de voz) continua
   fora: e outro recurso, nao convite de jogo.
+- **Site e gateway sobem separados.** O site pergunta (`game-invite:list`, a
+  cada `friend:sync`) se o gateway conhece convites; sem resposta em 10 s, os
+  botoes de convite ficam ESCONDIDOS em vez de falhar no clique. Com o gateway
+  antigo no ar: menu do amigo funciona, call dos amigos e convites nao
+  aparecem. Quando o gateway novo subir, aparecem na proxima conexao, sem novo
+  deploy do site.
 
 ### Etapa 4 — adaptadores por jogo
 

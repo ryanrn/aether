@@ -664,9 +664,20 @@ export interface ClientToServerEvents {
     payload: { id: string },
     ack: (result: ConviteAck) => void,
   ) => void;
-  /** Os seus convites ainda relevantes e o seu jogo atual — ao (re)conectar. */
+  /**
+   * Os seus convites ainda relevantes e o seu jogo atual — ao (re)conectar.
+   *
+   * Tambem e a DETECCAO de que o gateway conhece convites: o cliente so mostra
+   * "Pedir para entrar" se este pedido tiver resposta. Por isso o gateway
+   * SEMPRE responde (recusa por ritmo ou falha = `ok: false`) — ficar calado
+   * faria o cliente concluir que o recurso nao existe.
+   */
   "game-invite:list": (
-    ack: (result: { convites: ConviteDeJogo[]; meuJogo: string | null }) => void,
+    ack: (
+      result:
+        | { ok: true; convites: ConviteDeJogo[]; meuJogo: string | null }
+        | { ok: false },
+    ) => void,
   ) => void;
   "friend:voice-sync": (
     ack: (
