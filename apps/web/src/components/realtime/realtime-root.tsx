@@ -7,6 +7,7 @@ import { VoiceChimes } from "@/components/realtime/voice-chimes";
 import { ChamadaDmSession } from "@/components/realtime/chamada-dm-session";
 import { ChamadaDmOverlay } from "@/components/realtime/chamada-dm-overlay";
 import { ConvitesOverlay } from "@/components/realtime/convites-overlay";
+import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
 
 /**
  * Monta a conexao em tempo real e a sessao de midia no LAYOUT RAIZ — o unico
@@ -37,6 +38,8 @@ export function RealtimeRoot({ children }: { children: React.ReactNode }) {
       <ChamadaDmSession />
       <ChamadaDmOverlay />
       <ConvitesOverlay />
+      {/* o jogo vale no app inteiro, nao so com um servidor aberto */}
+      <GameActivityMonitor />
       {children}
     </RealtimeProvider>
   );

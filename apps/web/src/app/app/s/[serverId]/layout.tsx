@@ -8,7 +8,6 @@ import { ControlBar } from "@/components/layout/control-bar";
 import { prisma } from "@aether/db";
 import { MemberPanel } from "@/components/layout/member-panel";
 import { ConnectionBanner } from "@/components/realtime/connection-banner";
-import { GameActivityMonitor } from "@/components/realtime/game-activity-monitor";
 import { VoiceActivityMonitor } from "@/components/realtime/voice-activity-monitor";
 
 /**
@@ -92,7 +91,6 @@ export default async function ServerLayout({
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <ConnectionBanner />
         <VoiceActivityMonitor />
-        <GameActivityMonitor />
 
         <div className="flex min-h-0 flex-1">
           <ChannelSidebar

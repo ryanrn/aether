@@ -11,9 +11,10 @@ import {
 /**
  * Leva o jogo detectado pelo app de desktop ate o gateway.
  *
- * Nao desenha nada — mora no layout do servidor pelo mesmo motivo do
- * `VoiceActivityMonitor`: continuar valendo enquanto a pessoa navega entre
- * canais. Se vivesse numa pagina, trocar de canal apagaria o jogo para todos.
+ * Nao desenha nada — mora na RAIZ do app (`RealtimeRoot`). Ja morou no layout
+ * do servidor, e era um bug: ir para Amigos ou para uma conversa desmontava o
+ * monitor, e a limpeza abaixo dizia a todos que a pessoa tinha parado de jogar.
+ * Trocar de servidor tambem zerava o tempo de jogo.
  *
  * Quem detecta e o processo principal do Electron; aqui so repassamos o nome.
  * No navegador `canDetectGames()` e falso e este componente nao faz nada.
@@ -50,14 +51,25 @@ export function GameActivityMonitor() {
      * aviso — o jogo so apareceria se a pessoa fechasse e abrisse o jogo.
      */
     let cancelado = false;
-    void currentGame().then((jogo) => {
-      if (!cancelado && jogo) {
-        socket.emit("presence:game", { name: jogo.nome, icon: jogo.icone });
-      }
-    });
+    function enviarOAtual() {
+      void currentGame().then((jogo) => {
+        if (!cancelado && jogo) {
+          socket?.emit("presence:game", { name: jogo.nome, icon: jogo.icone });
+        }
+      });
+    }
+    enviarOAtual();
+
+    /**
+     * E de novo a cada reconexao. O gateway apaga o jogo quando cai o ultimo
+     * socket, e o vigia nao avisa nada porque o jogo nao mudou: sem isto, uma
+     * queda de rede deixava a pessoa "sem jogo" ate fechar o jogo.
+     */
+    socket.on("connect", enviarOAtual);
 
     return () => {
       cancelado = true;
+      socket.off("connect", enviarOAtual);
       desinscrever();
       /**
        * Sair limpa o jogo para os outros. Sem isto, fechar a aba deixaria
