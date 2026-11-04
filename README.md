@@ -4951,6 +4951,13 @@ Testes: `npx vitest run tests/unit/convites-de-jogo.test.ts` (16).
   acao confere o prazo.
 - **"Convidar para a call"** (chamar alguem para o seu canal de voz) continua
   fora: e outro recurso, nao convite de jogo.
+- **O jogo agora vale no app inteiro** (`GameActivityMonitor` na raiz, nao mais
+  no layout do servidor): ir para Amigos ou conversa nao apaga o jogo, trocar de
+  servidor nao zera o tempo, e reconectar reenvia. **Enquanto o gateway antigo
+  estiver no ar**, o cargo por jogo nao acompanha a troca de servidor: quem ja
+  esta jogando nao recebe o cargo ao abrir outro servidor, e o cargo do servidor
+  anterior fica ate a proxima conexao. O gateway novo cobre os dois casos
+  (`server:join` / `server:leave`).
 - **Site e gateway sobem separados.** O site pergunta (`game-invite:list`, a
   cada `friend:sync`) se o gateway conhece convites; sem resposta em 10 s, os
   botoes de convite ficam ESCONDIDOS em vez de falhar no clique. Com o gateway

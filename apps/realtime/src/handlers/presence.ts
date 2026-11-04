@@ -279,7 +279,18 @@ export function registerPresenceHandlers(
       respond({ ok: true, presence: await presenceOf(serverId) });
 
       if (becamePresent) {
-        await announce(io, serverId, userId, await statusOf(userId));
+        const meuStatus = await statusOf(userId);
+        await announce(io, serverId, userId, meuStatus);
+        /**
+         * Cargo por jogo de quem JA estava jogando ao abrir este servidor: o
+         * `presence:game` saiu antes, sem este servidor na lista. Invisivel
+         * conta como sem jogo (o cargo revelaria o jogo escondido).
+         */
+        const jogo =
+          meuStatus === "OFFLINE"
+            ? null
+            : (await presenceEntryOf(userId))?.game ?? null;
+        if (jogo) void sincronizarCargosDeJogo(io, userId, [serverId], jogo);
       }
     } catch (error) {
       log.error("gateway.server.join", "server:join falhou", {
@@ -295,7 +306,11 @@ export function registerPresenceHandlers(
     if (typeof serverId !== "string") return;
     const left = await leaveServer(socket.id, serverId);
     await socket.leave(room.server(serverId));
-    if (left) await announce(io, serverId, userId, "OFFLINE");
+    if (left) {
+      await announce(io, serverId, userId, "OFFLINE");
+      // Mesmo criterio do disconnect: fora do servidor, sem cargo por jogo.
+      void sincronizarCargosDeJogo(io, userId, [serverId], null);
+    }
   });
 
   socket.on("presence:set", async (status) => {
