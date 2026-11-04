@@ -6,6 +6,7 @@ import { SeloPlano } from "@/components/ui/selo-plano";
 import { SeloBot } from "@/components/ui/selo-bot";
 import { usePrefsDoChat } from "@/lib/chat/prefs";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { comPerfilAoVivo, usePerfilAoVivo } from "@/lib/stores/perfis-store";
 import { cn } from "@/lib/utils";
 import { MessageItem } from "./message-item";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
@@ -31,7 +32,7 @@ export interface GrupoDeMensagens {
 }
 
 export function MessageGroup({
-  grupo,
+  grupo: grupoOriginal,
   ehConversaDireta = false,
   onAbrirPerfil,
   onPreCarregarPerfil,
@@ -53,6 +54,16 @@ export function MessageGroup({
   onResponder?: (message: GrupoDeMensagens["mensagens"][number]) => void;
   onIrParaMensagem?: (id: string) => void;
 }) {
+  /**
+   * O autor fica gravado na mensagem quando ela chega, e as mensagens vivem no
+   * `realtime-store` — um `router.refresh()` nao as troca. Por cima, o perfil
+   * mais recente (`user:profile`): nome, foto, moldura e decoracao novos em
+   * TODAS as mensagens ja carregadas, na hora.
+   */
+  const aoVivo = usePerfilAoVivo(grupoOriginal.autor.id);
+  const grupo = aoVivo
+    ? { ...grupoOriginal, autor: comPerfilAoVivo(grupoOriginal.autor, aoVivo) }
+    : grupoOriginal;
   const tamanhoAvatar = usePrefsDoChat((p) => p.tamanhoAvatar);
   const corDoCargo = useRealtimeStore((s) =>
     ehConversaDireta ? undefined : s.corPorMembro[grupo.autor.id],

@@ -1,6 +1,9 @@
+"use client";
+
 import type { CSSProperties } from "react";
 import type { UserStatus } from "@aether/shared";
 import { cn, colorFromId, initials } from "@/lib/utils";
+import { usePerfilAoVivo } from "@/lib/stores/perfis-store";
 import {
   MOLDURA_ESPESSURA,
   MOLDURA_ESTILO,
@@ -119,6 +122,22 @@ export function Avatar({
   ring?: string;
   className?: string;
 }) {
+  /**
+   * Foto e moldura mais recentes, se a pessoa trocou depois que esta tela
+   * carregou (`user:profile`, ver `perfis-store`). Aqui, e nao em cada um dos
+   * ~40 lugares que desenham avatar: um ponto so cobre chat, membros, amigos,
+   * DMs e call de uma vez.
+   *
+   * O `name` NAO e trocado: em varios lugares ele e o APELIDO no servidor, e o
+   * evento so conhece o nome de exibicao. Ele so aparece como iniciais quando
+   * nao ha foto.
+   */
+  const aoVivo = usePerfilAoVivo(userId);
+  if (aoVivo) {
+    src = aoVivo.avatarUrl;
+    moldura = aoVivo.moldura;
+  }
+
   const box = px ?? AVATAR_PX[size];
   const estiloDaMoldura = moldura ? MOLDURA_ESTILO[moldura] : undefined;
 

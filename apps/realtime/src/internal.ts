@@ -427,15 +427,6 @@ export async function handleInternalRequest(
       }
       const userId = body.userId;
 
-      /**
-       * Quem nao esta conectado nao tem snapshot em memoria para corrigir — o
-       * proximo handshake ja carrega o perfil novo.
-       */
-      if (!(await isConnected(userId))) {
-        json(response, 200, { ok: true, atualizado: false });
-        return true;
-      }
-
       const row = await prisma.user.findUnique({
         where: { id: userId },
         select: SELECT_USUARIO_PUBLICO,
@@ -445,6 +436,43 @@ export async function handleInternalRequest(
         return true;
       }
       const publicUser = toPublicUser(row);
+
+      /**
+       * 0. O perfil novo para TODO MUNDO que pode ve-lo: membros de cada
+       * servidor da pessoa, amigos dela e os outros aparelhos dela. Antes do
+       * `isConnected` de proposito — quem trocou a foto pode nem ter socket
+       * aberto (aba fechada logo depois), e os outros continuam na tela com a
+       * foto velha.
+       *
+       * Sem isto, so a call e os amigos atualizavam; quem dividia um servidor
+       * sem ser amigo via a foto velha ate reabrir o app, e as mensagens ja
+       * carregadas no chat guardavam a foto e o nome antigos ate para amigos.
+       *
+       * Um `emit` so com todas as salas: o Socket.IO entrega UMA vez por
+       * socket mesmo que ele esteja em varias delas, e com o adapter de Redis
+       * alcanca sockets de outras instancias.
+       */
+      const [servidores, amigos] = await Promise.all([
+        prisma.serverMember.findMany({
+          where: { userId },
+          select: { serverId: true },
+        }),
+        loadFriendIds(userId),
+      ]);
+      io.to([
+        room.user(userId),
+        ...servidores.map((m) => room.server(m.serverId)),
+        ...amigos.map((id) => room.user(id)),
+      ]).emit("user:profile", { user: publicUser });
+
+      /**
+       * Quem nao esta conectado nao tem snapshot em memoria para corrigir — o
+       * proximo handshake ja carrega o perfil novo.
+       */
+      if (!(await isConnected(userId))) {
+        json(response, 200, { ok: true, atualizado: false });
+        return true;
+      }
 
       /**
        * 1. A foto/nome no card de voz. O `PublicUser` fica gravado na ocupacao
@@ -481,7 +509,7 @@ export async function handleInternalRequest(
        * foto nova do banco). Mesmo evento do `/internal/friends-changed`, sem o
        * `friend:sync` — presenca nao mudou, so o perfil.
        */
-      for (const amigoId of await loadFriendIds(userId)) {
+      for (const amigoId of amigos) {
         if (await isConnected(amigoId)) {
           io.to(room.user(amigoId)).emit("friend:changed");
         }

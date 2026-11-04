@@ -885,12 +885,66 @@ janela inteira) matava a call de vez.
   (sem typecheck) e Electron nao roda no sandbox — `node --check` passou, mas o
   fluxo real (cookie compartilhado, fechamento automatico) so se prova num
   desktop de verdade, e exige o release `0.1.21`.
-- **Perfil: painel de membros de nao-amigos.** A propagacao do estagio 4 cobre
-  o card de voz (todos na call) e a tela dos amigos; quem esta no mesmo servidor
-  mas nao e seu amigo so ve a foto nova no proximo refresh. E com Redis, o
-  `socket.data.user` so e corrigido na instancia que segura o socket.
+- ~~**Perfil: painel de membros de nao-amigos.**~~ Resolvido pelo
+  `user:profile` (secao "Perfil ao vivo"): membros dos servidores, amigos e os
+  outros aparelhos da pessoa veem foto, moldura e nome novos na hora. Fica: com
+  Redis, o `socket.data.user` so e corrigido na instancia que segura o socket.
 
 ---
+
+## Perfil ao vivo (foto, moldura e nome para todo mundo, na hora)
+
+**O problema:** trocar a foto so atualizava a call (cartao de voz) e a tela dos
+amigos. Quem dividia um servidor sem ser amigo via a foto velha ate reabrir o
+app — e, mesmo para amigos, as mensagens ja carregadas no chat guardavam a foto
+e o nome antigos, porque elas vivem no `realtime-store` e um `router.refresh()`
+nao as troca.
+
+**Como funciona agora:**
+
+- **Gateway** (`apps/realtime/src/internal.ts`, `/internal/profile-changed`):
+  alem do que ja fazia, emite `user:profile` com o `PublicUser` novo para as
+  salas `server:<id>` de TODOS os servidores da pessoa, para a sala pessoal de
+  cada amigo e para a dela (outros aparelhos). Um `emit` so com todas as salas:
+  o Socket.IO entrega uma vez por socket, e o adapter de Redis leva a outras
+  instancias. Sai mesmo se quem trocou a foto ja fechou o app.
+- **Quem recebe e quem ja podia ver o perfil**, e mais ninguem — o
+  `verify-perfil-ao-vivo` prova que um estranho (nem amigo, nem servidor em
+  comum) nao recebe. So campos publicos.
+- **Cliente:** `lib/stores/perfis-store.ts` guarda o perfil mais recente de
+  cada pessoa (nome, foto, moldura, decoracao, placa). Dois leitores:
+  - `components/ui/avatar.tsx` troca foto e moldura — um ponto so cobre os ~40
+    lugares que desenham avatar (chat, membros, amigos, DMs, call). Virou
+    componente de cliente por causa disso;
+  - `components/chat/message-group.tsx` aplica o perfil inteiro ao autor:
+    **nome**, foto, moldura e decoracao novos em todas as mensagens ja
+    carregadas.
+  - O provider tambem faz `router.refresh()` (debounce de 400 ms), e as listas
+    renderizadas no servidor (membros, amigos, DMs) voltam com o nome novo.
+
+**Como testar:** duas contas no mesmo servidor, SEM serem amigas, as duas com o
+app aberto no chat do servidor, com mensagens da conta A na tela. A troca a
+foto e o nome em Configuracoes. Em ~1 s, B ve a foto e o nome novos nas
+mensagens antigas, no painel de membros e no cartao de voz. Automatizado:
+`node scripts/verify-perfil-ao-vivo.mjs` (gateway no ar; na bateria do CI) e
+`npx vitest run tests/unit/perfis-store.test.ts`.
+
+**Limitacoes:**
+
+- **O `<Avatar>` nao troca as INICIAIS** (o `name`): em varios lugares ele
+  recebe o apelido no servidor, e o evento so conhece o nome de exibicao.
+  Iniciais so aparecem sem foto.
+- **Apelido por servidor nao muda por este caminho** — ele e do servidor, nao
+  do perfil, e continua vindo do refresh.
+- **Nome fora do chat depende do `router.refresh()`**: membros, amigos e DMs
+  trocam quando o Next devolve a tela nova (normalmente < 1 s). Outros textos
+  de nome renderizados no cliente a partir de copias antigas (ex.: popover
+  aberto naquele instante) so trocam ao reabrir.
+- **Quem estava offline** recebe o perfil novo ao abrir o app, pelo caminho de
+  sempre (o banco), nao pelo evento.
+- **Com dois gateways**, ver a limitacao do `socket.data.user` na secao da 7e.
+- **Nao testado com duas pessoas reais no app** — so o gateway real
+  (`verify-perfil-ao-vivo`), unitario e typecheck.
 
 ## Stack
 
@@ -5333,9 +5387,10 @@ vale anotar em vez de supor que esta ligada.
   no cliente (perde o fallback em rede que bloqueia WebSocket), ou sticky no
   proxy. O CI nao cobre isso — os `verify-*` usam so WebSocket.
 - **`/internal/profile-changed` atualiza `socket.data.user` so na instancia
-  que recebeu a chamada** (ja anotado no codigo). Com dois gateways, o socket
-  na outra instancia guarda a foto velha ate reconectar. Nenhum `verify-*`
-  exercita isso, entao a rodada de 2 gateways nao pega.
+  que recebeu a chamada** (ja anotado no codigo). Com dois gateways, a TELA dos
+  outros ja atualiza (o `user:profile` passa pelo adapter), mas a proxima
+  mensagem/entrada em call de um socket da outra instancia ainda grava o
+  snapshot velho ate reconectar. Nenhum `verify-*` exercita isso.
 - **Postgres 18 no CI; producao (Supabase) pode estar em outra versao.** O
   CI pega o mais novo; se o Supabase estiver numa major anterior, algo que so
   existe no 18 passaria aqui e falharia la. O schema do projeto nao usa nada
