@@ -12,7 +12,7 @@ import type { SendMessageAck, VoiceJoinAck } from "@aether/shared";
  * DEIXOU de ser membro, `resyncGatewayRooms` para quando ela continua membro
  * mas o que pode VER mudou.
  *
- * Autenticado pelo AUTH_SECRET que os dois lados ja compartilham para validar
+ * Autenticado pelo INTERNAL_API_SECRET que os dois lados ja compartilham para validar
  * sessao. Nunca chamado pelo navegador: este modulo e `server-only`.
  */
 
@@ -31,7 +31,7 @@ async function callInternal(
   params: Record<string, unknown>,
   errorLabel: string,
 ): Promise<void> {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return;
 
   try {
@@ -84,7 +84,7 @@ export async function enviarMensagemPeloGateway(params: {
   replyToId?: string;
   origem?: "api" | "webhook";
 }): Promise<SendMessageAck | null> {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return null;
 
   try {
@@ -244,7 +244,7 @@ export async function presencaDeServidores(
 ): Promise<Record<string, number> | null> {
   if (serverIds.length === 0) return {};
 
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return null;
 
   try {
@@ -284,7 +284,7 @@ export async function ocupacaoDeCanais(
 ): Promise<Record<string, number> | null> {
   if (channelIds.length === 0) return {};
 
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return null;
 
   try {
@@ -320,7 +320,7 @@ export async function entrarEmVozPeloGateway(params: {
   botUserId: string;
   channelId: string;
 }): Promise<VoiceJoinAck | null> {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return null;
 
   try {
@@ -352,7 +352,7 @@ export async function entrarEmVozPeloGateway(params: {
 export async function sairDaVozPeloGateway(params: {
   botUserId: string;
 }): Promise<boolean> {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) return false;
 
   try {

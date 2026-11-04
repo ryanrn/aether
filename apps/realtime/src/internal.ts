@@ -1,10 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { prisma } from "@aether/db";
 import { loadFriendIds } from "@aether/access";
 import { room, SELECT_USUARIO_PUBLICO, toPublicUser } from "@aether/shared";
 import { log } from "@aether/shared/log";
 import { env } from "./env";
+import { verificarSegredoInterno } from "./internal-auth";
 import { resyncEavisarServidor } from "./rooms";
 import { enviarMensagem } from "./enviar-mensagem";
 import { entrarNaVoz, sairDaVoz, sairDaVozDoCanal } from "./entrar-em-voz";
@@ -59,19 +59,29 @@ import {
  * mudanca de permissao que nao fosse remocao total.
  *
  * Quem chama e o servidor do Next, nunca o navegador. A autenticacao e o
- * AUTH_SECRET que os dois lados ja compartilham para validar sessao — sem
- * variavel nova para configurar errado.
+ * `INTERNAL_API_SECRET` — durante a transicao, tambem o `AUTH_SECRET` antigo
+ * (regra inteira em `internal-auth.ts`).
  */
 
 const HEADER = "x-aether-internal";
 
-/** Comparacao em tempo constante: igualdade simples vaza o segredo por tempo. */
-function secretMatches(provided: string | undefined): boolean {
-  if (!provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(env.authSecret);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+/** Avisa uma vez por processo que alguem ainda chama com o valor legado. */
+let avisouLegado = false;
+
+function autenticado(provided: string | undefined): boolean {
+  const prova = verificarSegredoInterno(provided, {
+    authSecret: env.authSecret,
+    internalApiSecret: env.internalApiSecret,
+    aceitaLegado: env.internalApiAceitaLegado,
+  });
+  if (prova === "legado" && env.internalApiSecret !== null && !avisouLegado) {
+    avisouLegado = true;
+    log.warn(
+      "gateway.internal.legado",
+      "porta interna autenticada pelo AUTH_SECRET; configure INTERNAL_API_SECRET no web e feche com INTERNAL_API_ACEITA_LEGADO=nao",
+    );
+  }
+  return prova !== null;
 }
 
 function readJsonBody(
@@ -158,7 +168,7 @@ export async function handleInternalRequest(
 ): Promise<boolean> {
   if (!request.url?.startsWith("/internal/")) return false;
 
-  if (!secretMatches(request.headers[HEADER] as string | undefined)) {
+  if (!autenticado(request.headers[HEADER] as string | undefined)) {
     // Sem detalhe: quem chamou nao precisa saber se o caminho existe.
     json(response, 404, { ok: false });
     return true;
