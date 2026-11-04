@@ -248,6 +248,21 @@ export type DeleteMessageAck =
   | { ok: true }
   | { ok: false; error: string; codigo?: CodigoDeRecusaDeExclusao };
 
+/**
+ * Por que editar foi recusado. `nao_encontrada` cobre "nunca existiu", "ja
+ * apagada", "nao e sua" e "voce nao enxerga mais esta conversa" — editar e so
+ * do autor, entao nao ha "sem permissao" que valha a pena distinguir.
+ */
+export type CodigoDeRecusaDeEdicao =
+  | "nao_encontrada"
+  | "silenciado"
+  | "invalida"
+  | "falha";
+
+export type EditMessageAck =
+  | { ok: true; content: string; editedAt: string | null }
+  | { ok: false; error: string; codigo?: CodigoDeRecusaDeEdicao };
+
 /** Uma conversa direta, do ponto de vista de quem perguntou. */
 export interface DmResumo {
   id: string;
@@ -450,6 +465,19 @@ export interface ServerToClientEvents {
     conversationId: string;
   }) => void;
   /**
+   * Uma mensagem foi editada pelo autor. Mesmas salas do `message:new`.
+   *
+   * Leva SO o que mudou, e nao o `PublicMessage` inteiro: este e montado do
+   * ponto de vista de quem pede (as reacoes marcam "eu reagi"), e mandar o do
+   * autor para a sala faria todo mundo ver as reacoes dele como suas.
+   */
+  "message:updated": (payload: {
+    messageId: string;
+    conversationId: string;
+    content: string;
+    editedAt: string;
+  }) => void;
+  /**
    * Voce foi movido para outro canal de voz por um moderador.
    *
    * Vem com credenciais novas porque cada canal e uma sala propria no SFU: o
@@ -622,6 +650,14 @@ export interface ClientToServerEvents {
   "message:delete": (
     payload: { messageId: string },
     ack: (result: DeleteMessageAck) => void,
+  ) => void;
+  /**
+   * Edita o texto de uma mensagem. So o autor, e so enquanto ainda puder
+   * escrever na conversa. Texto igual ao atual responde ok sem gravar nada.
+   */
+  "message:edit": (
+    payload: { messageId: string; content: string },
+    ack: (result: EditMessageAck) => void,
   ) => void;
   /**
    * Conecta em um canal de voz. Ainda SEM midia — a fase 4 acopla o WebRTC.

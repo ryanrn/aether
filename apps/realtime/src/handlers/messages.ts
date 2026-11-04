@@ -14,6 +14,7 @@ import {
   MESSAGE_SELECT,
 } from "../enviar-mensagem";
 import { apagarMensagem } from "../apagar-mensagem";
+import { editarMensagem } from "../editar-mensagem";
 
 /**
  * Chat de texto — os handlers de socket.
@@ -209,6 +210,42 @@ export function registerMessageHandlers(
         socketId: socket.id,
       });
       respond({ ok: false, error: "Falha ao apagar" });
+    }
+  });
+
+  /** Mesmo balde do envio e do apagar: e a mesma pessoa escrevendo no chat. */
+  socket.on("message:edit", async (payload, ack) => {
+    const respond = typeof ack === "function" ? ack : () => undefined;
+
+    if (!payload || typeof payload !== "object") {
+      respond({ ok: false, error: "payload invalido" });
+      return;
+    }
+
+    if (!limiter.take(userId)) {
+      respond({ ok: false, error: "Muitas acoes seguidas. Respire." });
+      return;
+    }
+
+    const p = payload as { messageId?: unknown; content?: unknown };
+    try {
+      const resultado = await editarMensagem(io, {
+        ator: {
+          id: userId,
+          silenciadoEm: socket.data.user.silenciadoEm,
+          silenciadoAte: socket.data.user.silenciadoAte,
+        },
+        messageId: p.messageId,
+        content: p.content,
+      });
+      respond(resultado);
+    } catch (error) {
+      log.error("gateway.message.edit", "message:edit falhou", {
+        err: error,
+        userId,
+        socketId: socket.id,
+      });
+      respond({ ok: false, error: "Falha ao editar", codigo: "falha" });
     }
   });
 

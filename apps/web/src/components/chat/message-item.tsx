@@ -19,6 +19,7 @@ import { Emoji } from "@/components/ui/emoji";
 import { quebrarEmEmoji } from "@/lib/emoji/twemoji";
 import { ehMidiaEmbutivel, MidiaEmbutida } from "@/components/chat/midia-embutida";
 import { TextoDeMensagem } from "@/components/chat/texto-de-mensagem";
+import { EditorDeMensagem } from "@/components/chat/editor-de-mensagem";
 import type { ChatMessage } from "@/lib/stores/realtime-store";
 
 /**
@@ -55,6 +56,7 @@ export function MessageItem({
   const [excluirAberto, setExcluirAberto] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [erroExclusao, setErroExclusao] = useState<string | null>(null);
+  const [editando, setEditando] = useState(false);
 
   const menu = useMenuDeContexto();
   const linhaRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +111,9 @@ export function MessageItem({
     !message.pending &&
     !message.failed &&
     message.author.id === selfUserId;
+
+  /** Editar e so do autor — o gateway confere de novo, isto so esconde o item. */
+  const podeEditar = podeExcluir;
 
   function excluirMensagem() {
     if (!socket) return;
@@ -242,7 +247,9 @@ export function MessageItem({
         da mensagem e o texto que mais se le no app — dai `ink-200`, e nao o tom
         de coisa secundaria.
       */}
-      {midiaUrl ? (
+      {editando ? (
+        <EditorDeMensagem message={message} onFechar={() => setEditando(false)} />
+      ) : midiaUrl ? (
         <MidiaEmbutida url={midiaUrl} />
       ) : (
         <p
@@ -252,6 +259,14 @@ export function MessageItem({
           )}
         >
           <TextoDeMensagem texto={message.content} />
+          {message.editedAt ? (
+            <span
+              title={`Editada em ${new Date(message.editedAt).toLocaleString()}`}
+              className="ml-1 select-none align-baseline text-[10px] text-ink-500"
+            >
+              (editada)
+            </span>
+          ) : null}
         </p>
       )}
 
@@ -367,6 +382,18 @@ export function MessageItem({
         >
           Reagir
         </ItemDoMenu>
+
+        {podeEditar ? (
+          <ItemDoMenu
+            icone={<AetherIcon name="pencil" className="h-3.5 w-3.5" />}
+            onClick={() => {
+              menu.fechar();
+              setEditando(true);
+            }}
+          >
+            Editar mensagem
+          </ItemDoMenu>
+        ) : null}
 
         {podeDenunciar ? (
           <ItemDoMenu

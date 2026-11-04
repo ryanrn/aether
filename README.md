@@ -3100,8 +3100,9 @@ Na tela: entrar em Amigos, passar o mouse numa linha, clicar no icone de balao.
 - **Sem indicador de nao lida para DM.** O contador do store e por chave de
   conversa e ja funcionaria, mas nao ha onde exibi-lo sem a lista acima.
 - **Sem notificacao.** Mensagem que chega com a conversa fechada nao avisa nada.
-- **Sem anexo, edicao, exclusao ou resposta** — as mesmas ausencias do chat de
-  servidor. O schema ja tem `replyToId`, `editedAt` e `deletedAt`; nada os usa.
+- ~~Sem anexo, edicao, exclusao ou resposta~~ — desatualizado: resposta,
+  exclusao, anexo e (01/11/2026) edicao ja existem e valem igual em DM e em
+  canal. Ver "Editar mensagem".
 - **O bloqueio nao esconde a pessoa nas outras telas.** Ele fecha a conversa,
   mas quem voce bloqueou continua aparecendo na lista de membros do servidor e
   nas mensagens antigas de canal. `loadBlockedBothWays` existe em
@@ -3431,6 +3432,73 @@ proprio microfone ali nao quer dizer nada.
 
 Esconder e so economia de clique: o servidor revalida cada acao em
 `voice:moderate` e `voice:move`, como sempre.
+
+## Editar mensagem (01/11/2026)
+
+Item P1-1 do `docs/aether-roadmap.md`. Clique direito (ou "mais") na propria
+mensagem → **Editar mensagem**. O texto vira um campo: Enter salva,
+Shift+Enter quebra linha, Esc cancela. A mensagem ganha "(editada)", e a hora
+da edicao aparece no hover.
+
+### Arquivos
+
+- `apps/realtime/src/editar-mensagem.ts` — o caminho de escrita, terceiro ao
+  lado de `enviarMensagem` e `apagarMensagem`.
+- `apps/realtime/src/handlers/messages.ts` — `message:edit`, no mesmo balde de
+  rate limit de enviar e apagar.
+- `packages/shared/src/events.ts` — `message:edit`, `message:updated`,
+  `EditMessageAck`. `packages/shared/src/types.ts` — `trechoDeResposta`.
+- `apps/web/src/components/chat/editor-de-mensagem.tsx`, `message-item.tsx`,
+  `realtime-provider.tsx` e `aplicarEdicao` no `realtime-store.ts`.
+
+### Decisoes
+
+- **So o autor edita, sem excecao para moderador.** Editar e por palavras na
+  boca de alguem; moderador que discorda apaga.
+- **E so enquanto ainda pode escrever na conversa.** A edicao passa pela mesma
+  `autorizarConversa(..., "SEND_MESSAGES")` do envio. Quem foi expulso, perdeu
+  o cargo ou deixou de ser amigo nao reescreve o que deixou para tras.
+- **"Nao existe", "apagada", "nao e sua" e "sem acesso" respondem igual**
+  (`nao_encontrada`), para nao ensinar quais ids sao reais.
+- **O evento leva so o que mudou** (`messageId`, `conversationId`, `content`,
+  `editedAt`). O `PublicMessage` e montado do ponto de vista de quem pede (as
+  reacoes marcam "eu reagi"); mandar o do autor faria a sala ver as reacoes
+  dele como suas.
+- **Respostas que citam a mensagem refazem o trecho na hora**, pela mesma
+  `trechoDeResposta` do servidor.
+- **`updateMany` com `deletedAt: null` no WHERE**: apagada entre a leitura e a
+  escrita, a edicao nao ressuscita o texto. Texto igual ao atual responde ok
+  sem gravar nem carimbar "(editada)".
+- **Sem migracao.** `editedAt` existia desde a fase 3.
+
+### Como testar
+
+```bash
+npx vitest run tests/unit/editar-mensagem.test.ts tests/unit/chat-store-edicao.test.ts
+```
+
+Ao vivo (gateway e web no ar, duas abas): editar numa aba deve aparecer na
+outra com "(editada)"; uma resposta a essa mensagem deve mostrar o trecho novo.
+
+### Limitacoes
+
+- **Nao testado ao vivo.** So teste unitario (banco e `autorizarConversa`
+  dublados), typecheck e `check:esm`: o unico banco e o de producao, e o
+  gateway nao tem onde ser publicado agora (Fly bloqueado por cobranca).
+- **Precisa de deploy do gateway e do web.** Web novo com gateway antigo:
+  "Editar" aparece, mas ninguem responde o `message:edit`; depois de 8 s o
+  campo mostra "Sem resposta do servidor" (`socket.timeout`). Gateway novo
+  com web antigo: nada quebra. Publique o gateway primeiro.
+- **Sem historico de versoes.** A versao anterior e sobrescrita; denuncia
+  feita antes da edicao aponta para o texto novo.
+- **Bots nao recebem evento de edicao.** `publicarMensagemCriada` so existe
+  para criacao; a REST v1 tambem nao tem rota de editar.
+- **Seta para cima no composer vazio nao edita a ultima mensagem** (atalho
+  comum em apps de chat). Fica para depois.
+- **Sem prazo para editar.** Uma mensagem antiga pode ser editada a qualquer
+  momento.
+
+---
 
 ## Reacoes de emoji
 

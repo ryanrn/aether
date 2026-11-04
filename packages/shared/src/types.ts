@@ -590,16 +590,23 @@ export function toPublicMessage(
 
 const TRECHO_MAX = 120;
 
+/**
+ * O trecho que uma referencia de resposta mostra. Exportado porque o cliente
+ * refaz o trecho quando a original e editada — a mesma regra, nao uma copia.
+ */
+export function trechoDeResposta(content: string): string {
+  const bruto = content.replace(/\s+/g, " ").trim();
+  return bruto.length > TRECHO_MAX ? `${bruto.slice(0, TRECHO_MAX)}…` : bruto;
+}
+
 function resumirResposta(
   r: NonNullable<MessageRow["replyTo"]>,
 ): MessageReplyTo {
   const apagada = r.deletedAt !== null;
-  const bruto = apagada ? "" : r.content.replace(/\s+/g, " ").trim();
   return {
     id: r.id,
     autorNome: r.author.displayName,
-    trecho:
-      bruto.length > TRECHO_MAX ? `${bruto.slice(0, TRECHO_MAX)}…` : bruto,
+    trecho: apagada ? "" : trechoDeResposta(r.content),
     apagada,
   };
 }
