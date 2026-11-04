@@ -30,6 +30,7 @@ import {
   statusOf,
   voiceOfServer,
 } from "../state";
+import { carenciaOfflineMs, confirmarSaida } from "../carencia-offline";
 
 /**
  * Presenca: quem esta online, em quais servidores, com qual status.
@@ -471,23 +472,39 @@ export function registerPresenceHandlers(
        */
       const amigos = await friendsOf(userId);
       const { vacatedServers } = await detachSocket(socket.id);
-      for (const serverId of vacatedServers) {
+
+      // Fechar uma aba de tres nao e sair de lugar nenhum: nada a anunciar.
+      if (vacatedServers.length === 0 && (await isConnected(userId))) return;
+
+      /**
+       * Carencia (G-1): espera alguns segundos antes de anunciar, e anuncia
+       * so o que continuou vazio. Uma queda curta de rede nao faz a pessoa
+       * sumir e voltar para todo mundo. Ver `carencia-offline.ts`.
+       */
+      const saida = await confirmarSaida(userId, vacatedServers, carenciaOfflineMs(), {
+        esperar: (ms) => new Promise((ok) => setTimeout(ok, ms)),
+        isConnected,
+        estaNoServidor: async (serverId, id) =>
+          (await presenceOf(serverId)).some((e) => e.userId === id),
+      });
+
+      for (const serverId of saida.servidores) {
         await announce(io, serverId, userId, "OFFLINE");
       }
       /**
-       * Saiu de vez de um servidor (ultimo socket) — tira o cargo por jogo.
-       * `vacatedServers` ja e "sem mais socket aqui": fechar uma aba de tres
-       * nao mexe, a pessoa continua jogando pelas outras.
+       * Saiu de vez de um servidor (ultimo socket, e nao voltou na carencia)
+       * — tira o cargo por jogo. Fechar uma aba de tres nao mexe, a pessoa
+       * continua jogando pelas outras.
        */
-      if (vacatedServers.length > 0) {
-        await sincronizarCargosDeJogo(io, userId, vacatedServers, null);
+      if (saida.servidores.length > 0) {
+        await sincronizarCargosDeJogo(io, userId, saida.servidores, null);
       }
       /**
-       * So avisa os amigos quando o ULTIMO socket caiu. Fechar uma das tres
-       * abas nao e ficar offline — e o mesmo criterio que
-       * `joinServer`/`leaveServer` ja aplicam por servidor.
+       * So avisa os amigos quando nao sobrou socket NENHUM depois da
+       * carencia. Fechar uma das tres abas nao e ficar offline — e o mesmo
+       * criterio que `joinServer`/`leaveServer` ja aplicam por servidor.
        */
-      if (!(await isConnected(userId))) {
+      if (saida.totalmenteFora) {
         await announceToFriends(io, userId, "OFFLINE", amigos);
         // Ultimo socket caiu: para de consultar o Spotify desta pessoa.
         spotify?.esquecer(userId);

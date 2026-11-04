@@ -3381,6 +3381,60 @@ nao zera e pior do que numero nenhum.
 - **Conversa direta nao entra em nenhum contador de servidor**, e ainda nao tem
   lugar proprio para aparecer (ver as limitacoes de DM).
 
+## Carencia antes de anunciar offline (G-1, 02/11/2026)
+
+Uma queda curta de rede (Wi-Fi trocando de ponto, notebook acordando) fazia a
+pessoa sumir e voltar para todo mundo, perder e ganhar de novo o cargo por
+jogo e piscar na lista de amigos: o gateway anunciava `OFFLINE` no instante em
+que o ultimo socket caia. Agora ele espera **5 s** (`PRESENCA_CARENCIA_MS`;
+`0` volta ao comportamento antigo) e anuncia so o que continuou vazio. A ideia
+veio do estudo em `docs/fluxer-research.md`; a implementacao e propria.
+
+**Arquivos:** `apps/realtime/src/carencia-offline.ts` (a decisao, pura e
+testavel) e o `disconnect` de `handlers/presence.ts` (os anuncios).
+
+**Decisoes:**
+
+- **So o ANUNCIO atrasa.** O estado de presenca e desmontado na hora, como
+  antes. Quem ja via a pessoa online continua vendo; se ela voltar dentro do
+  prazo, o "saiu" nunca e enviado.
+- **A decisao depois da espera le o estado de presenca**, que fica no Redis
+  quando ha varias instancias: reconectar em outra maquina de gateway tambem
+  conta como "voltou".
+- **Por servidor:** se ela voltou conectada mas em outro servidor, so os que
+  continuaram vazios recebem o `OFFLINE` e perdem o cargo por jogo.
+
+**O que NAO entrou, e por que:** o `connectionStateRecovery` do Socket.IO, que
+reenvia eventos perdidos durante a queda. Lido no fonte do Socket.IO 4.8
+(`socket.js`), a sessao recuperada devolve as salas e entrega os pacotes
+pendentes no construtor do socket, ANTES de qualquer middleware. Isso
+entregaria mensagens de um servidor a quem foi expulso durante a queda, e
+eventos a uma sessao revogada (troca de senha, banimento global) antes da
+recusa. Alem disso, o `@socket.io/redis-adapter` nao implementa a recuperacao.
+A ressincronizacao continua no nivel do app (`message:history` com `after`,
+`voice:sync`), que passa pela autorizacao.
+
+**Como testar:**
+
+```bash
+npx vitest run tests/unit/carencia-offline.test.ts
+```
+
+Ao vivo (dois navegadores, A vendo B): desligar a rede de B por 2 s nao muda
+nada para A; desligar por 10 s faz B aparecer offline para A uns 5 s depois de
+o socket cair.
+
+**Limitacoes:**
+
+- **Nao testado ao vivo:** o gateway nao tem onde ser publicado agora.
+- **Quem chega durante a carencia ve a pessoa ausente:** o estado ja foi
+  desmontado, so o anuncio espera.
+- **O temporizador e do processo:** se a instancia do gateway cair durante a
+  carencia, o anuncio se perde (como qualquer coisa em andamento nela).
+- **A voz nao tem carencia:** cair desconecta da call na hora, como antes; a
+  religacao continua sendo a do `voiceIntent` no cliente.
+- **Fechar o app de proposito** tambem leva 5 s para aparecer como offline.
+
 ## Abrir junto com o Windows
 
 Chave em Configuracoes > Atividade > "Ao ligar o computador". So aparece no app

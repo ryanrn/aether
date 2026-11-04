@@ -132,6 +132,10 @@ jobs:
       REDIS_URL: redis://localhost:6379
       UPSTASH_REDIS_REST_URL: http://localhost:8079
       UPSTASH_REDIS_REST_TOKEN: ci-upstash-token
+      # Carencia antes do OFFLINE (G-1) curta no CI: o caminho com espera
+      # continua exercitado, sem somar 5 s a cada desconexao da bateria. Os
+      # scripts leem a mesma variavel para esperar o anuncio.
+      PRESENCA_CARENCIA_MS: "300"
 
     steps:
       - uses: actions/checkout@v5

@@ -12,6 +12,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
+import { carenciaMs } from "./lib/presenca.mjs";
 import {
   connectedClients,
   requireSeedFixture,
@@ -332,7 +333,8 @@ async function main() {
   await vista;
 
   await respirar();
-  vista = waitPresence(observador, member.id, 4000);
+  // O gateway espera a carencia antes de anunciar a saida (G-1).
+  vista = waitPresence(observador, member.id, 4000 + carenciaMs());
   relator.close();
   entrada = await vista;
 

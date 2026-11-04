@@ -20,6 +20,7 @@
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from "jose";
 import { io } from "socket.io-client";
+import { carenciaMs } from "./lib/presenca.mjs";
 
 const BASE = process.env.VERIFY_REALTIME_URL ?? "http://localhost:4000";
 const prisma = new PrismaClient();
@@ -237,7 +238,8 @@ async function main() {
 
   console.log("\nDesconectar avisa o amigo");
 
-  const saiu = esperar(B, "friend:presence");
+  // O gateway espera a carencia antes de anunciar a saida (G-1).
+  const saiu = esperar(B, "friend:presence", 2500 + carenciaMs());
   A.close();
   const fim = await saiu;
   check("cair da conexao chega como OFFLINE", fim?.entry?.status === "OFFLINE", JSON.stringify(fim));
