@@ -3374,12 +3374,84 @@ nao zera e pior do que numero nenhum.
 
 ### Limitacoes
 
-- **A conta e por SESSAO.** Recarregar zera, porque `unread` sempre viveu em
-  memoria e nada disso e gravado. Para sobreviver ao restart seria preciso
-  guardar "ultima mensagem lida" por canal no banco.
+- ~~A conta e por SESSAO~~ — resolvido em 01/11/2026. Ver "Nao lidas
+  persistidas" logo abaixo.
 - **Nao ha notificacao do sistema nem som** — so o numero na tela.
-- **Conversa direta nao entra em nenhum contador de servidor**, e ainda nao tem
-  lugar proprio para aparecer (ver as limitacoes de DM).
+- **Conversa direta nao entra em nenhum contador de servidor** (ela aparece
+  na lista de conversas da tela inicial).
+
+### Nao lidas persistidas (P1-3, 01/11/2026)
+
+O contador sobrevive a recarregar e vale em todo aparelho: ler no celular
+apaga no desktop.
+
+**Banco.** Tabela nova `ReadState` (migracao `20261101120000_read_state`):
+quem, qual conversa (canal OU DM, garantido por CHECK, mesmo molde da
+`Message`) e `lastReadAt`. Uma linha por pessoa e conversa (unique), cascade
+com usuario, canal e DM, RLS ligado. Guarda a DATA, e nao o id da mensagem:
+`cuid` nao ordena no tempo, e a data aproveita o indice `(channelId,
+createdAt)` que a `Message` ja tem.
+
+**Preenchimento inicial, na propria migracao:** uma linha com `lastReadAt =
+agora` para cada humano e cada canal de TEXTO dos servidores dele, e para os
+dois lados de cada DM. Sem isso, o primeiro acesso depois do deploy acenderia
+o historico inteiro. Linha ausente (canal novo, membro novo) conta a partir de
+quando a pessoa ganhou acesso: entrada no servidor, criacao do canal ou da
+conversa.
+
+**Gateway** (`apps/realtime/src/leitura.ts`, `handlers/leitura.ts`):
+
+- `read:state`, uma vez por conexao: quantas nao lidas por conversa visivel,
+  e de que servidor e cada canal. Usa o mesmo `getChannelPermissionMap` que
+  decide as salas do socket: canal sem `VIEW_CHANNEL` nao entra, nem como
+  zero.
+- `read:mark { conversationId, messageId }`: passa por `autorizarConversa`; a
+  mensagem tem de ser daquela conversa e nao apagada. A data salva SO
+  AVANCA (`updateMany ... lastReadAt < nova`), entao duas abas ou um evento
+  atrasado nunca devolvem nao lidas ja vistas. Corrida de criacao entre duas
+  abas cai no unique e vira atualizacao.
+- `read:updated` para a sala pessoal: as outras abas e aparelhos zeram.
+
+**Web.** `useMarcarLeitura` (no `ChatPanel`, canal e DM) marca a mensagem mais
+nova confirmada, no maximo uma vez a cada 2 s por conversa, e so com a aba
+visivel. Trocar de servidor deixou de zerar as nao lidas dos outros.
+
+**Como testar:**
+
+```bash
+npx vitest run tests/unit/leitura.test.ts tests/unit/chat-store-leitura.test.ts tests/unit/dm-nao-lidas.test.ts
+```
+
+A migracao foi aplicada, junto com as 38 anteriores, num Postgres em memoria
+(PGlite, fora do repositorio): preenchimento so de humanos e canais de texto,
+repetir nao duplica, o CHECK barra as duas formas invalidas, apagar o canal
+leva as leituras, RLS ligado.
+
+Ao vivo (duas abas ou dois aparelhos): mensagem de outra pessoa num canal
+fechado acende o contador; recarregar mantem; abrir o canal no outro
+aparelho apaga aqui.
+
+**Publicacao — nesta ordem:** `npm run db:deploy` (o unico banco e o de
+producao), depois o gateway, depois o web. O gateway novo le a tabela, entao
+ela precisa existir antes; o web novo com o gateway antigo so fica sem o
+`read:state` (contador volta ao comportamento em memoria).
+
+**Limitacoes:**
+
+- **Nao testado ao vivo.** Teste unitario com banco dublado, migracao no
+  PGlite, typecheck e `check:esm`. O gateway nao tem onde ser publicado agora.
+- **Uma contagem por conversa visivel a cada conexao** (em lotes de 8). Na
+  escala atual (dezenas de canais) e barato e usa indice; com centenas de
+  canais por pessoa, trocar por um contador mantido no banco.
+- **Mudar a permissao no meio da sessao nao recalcula** o `read:state`: o
+  canal que passou a ser visivel so ganha contador na proxima conexao (a
+  mensagem nova ja acende pelo `message:new`).
+- **Sem separacao de mencoes.** O contador de mencoes entra com o P1-2, como
+  coluna nesta mesma tabela.
+- **Sem a linha "novas mensagens"** na conversa ao abrir. O `lastReadAt` ja
+  permite desenhar; fica para depois.
+- **Aba visivel nao e a mesma coisa que janela em foco.** Uma janela visivel
+  atras de outra conta como leitura.
 
 ## Abrir junto com o Windows
 

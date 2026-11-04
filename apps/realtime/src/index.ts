@@ -15,6 +15,10 @@ import { registerConviteHandlers } from "./handlers/convites";
 import { registerDmHandlers } from "./handlers/dm";
 import { registerDmCallHandlers } from "./handlers/dm-call";
 import { registerReactionHandlers } from "./handlers/reactions";
+import {
+  enviarNaoLidasIniciais,
+  registerLeituraHandlers,
+} from "./handlers/leitura";
 import { joinAllServerRooms } from "./rooms";
 import { limparCargosDeJogoNaConexao } from "./games/cargos-por-jogo";
 import { varrerSalasEfemeras } from "./voz/salas-efemeras";
@@ -201,6 +205,7 @@ io.on("connection", (socket) => {
   registerDmHandlers(socket);
   registerDmCallHandlers(io, socket);
   registerReactionHandlers(io, socket);
+  registerLeituraHandlers(io, socket);
 
   socket.on("ping", (ack) => {
     if (typeof ack === "function") ack(Date.now());
@@ -294,6 +299,9 @@ async function iniciarConexao(socket: AetherSocket): Promise<void> {
       userId: user.id,
     });
   });
+
+  // Nao lidas salvas (P1-3): o contador que sobrevive a recarregar.
+  enviarNaoLidasIniciais(socket);
 
   // Missao "abrir o app hoje" (Estagio 2 da loja). Sem `await`: o handshake
   // nao depende dela.

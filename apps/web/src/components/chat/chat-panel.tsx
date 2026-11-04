@@ -10,6 +10,7 @@ import {
 import { CartaoDePerfil } from "@/components/profile/cartao-de-perfil";
 import { MessageList } from "./message-list";
 import { MessageComposer } from "./message-composer";
+import { useMarcarLeitura } from "@/lib/chat/use-marcar-leitura";
 
 /** Quem clicou em qual avatar/nome, e onde — para ancorar o cartao. */
 export interface PerfilAberto {
@@ -80,6 +81,9 @@ export function ChatPanel({
     setActiveChannel(channelId);
     return () => setActiveChannel(null);
   }, [channelId, setActiveChannel]);
+
+  // E salva a leitura no servidor, para o contador valer em outro aparelho.
+  useMarcarLeitura(channelId);
 
   return (
     /**

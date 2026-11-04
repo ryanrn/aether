@@ -76,13 +76,20 @@ describe("nao-lidas de DM", () => {
     expect(useRealtimeStore.getState().conversasDm[DM]?.id).toBe(AMIGO);
   });
 
-  it("nao-lida de CANAL nao sobrevive a troca de servidor", () => {
+  /**
+   * Mudou com o P1-3: antes, trocar de servidor zerava as nao lidas de canal,
+   * porque o cliente so conhecia a arvore do servidor aberto. Agora o
+   * `read:state` traz todas, e zerar apagaria o contador do icone do servidor
+   * que voce acabou de deixar.
+   */
+  it("nao-lida de CANAL sobrevive a troca de servidor", () => {
     const msgCanal = { ...dmMsg(AMIGO), conversationId: "canal-1" };
     useRealtimeStore.getState().receiveMessage(msgCanal, null, "servidor-a");
     expect(useRealtimeStore.getState().unread["canal-1"]).toBe(1);
 
     useRealtimeStore.getState().enterServer("servidor-b");
-    expect(useRealtimeStore.getState().unread["canal-1"]).toBeUndefined();
+    expect(useRealtimeStore.getState().unread["canal-1"]).toBe(1);
+    expect(useRealtimeStore.getState().serverDoCanal["canal-1"]).toBe("servidor-a");
   });
 
   it("abrir a conversa zera a nao-lida", () => {
