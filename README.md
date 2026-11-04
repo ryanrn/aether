@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos; 7e itens 1-2 no CI, falta ligar a regra no GitHub e o item 3) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos; 7e no CI — falta ligar a branch protection no GitHub) |
 
 ---
 
@@ -5106,9 +5106,9 @@ SFU real nunca entra no caminho).
 - **`verify-igdb-live` e os `*-live` com credencial externa.** O `verify-igdb`
   (sem `-live`) roda e cobre o fallback + o cache; a variante live precisa do
   par da Twitch.
-- **Gateway em mais de uma instancia real.** O `verify-gateway-redis` prova o
-  estado 7c-2 entre dois processos, mas as phases 3-7b rodam contra um gateway
-  so. Dois gateways atras de um balanceador e a fase 7e.
+- **Long-polling com mais de um gateway.** A rodada de 2 gateways (fase 7e,
+  item 3) usa so WebSocket, como os clientes dos `verify-*`; o navegador
+  comeca por polling, que exige sticky session. Ver limitacoes da 7e.
 - **`verificar-redis` depende do proxy `hiett/serverless-redis-http`.** Se o
   container do proxy ficar instavel, esse script e o unico que cai junto — os
   outros nao dependem dele.
@@ -5158,14 +5158,14 @@ tambem passou a garantir o cargo padrao de quem ja e membro).
 
 ## FASE 7e — branch protection e build do desktop no CI
 
-Escopo desta rodada: itens 1 e 2. O item 3 (dois gateways atras de um
-balanceador rodando a bateria inteira) continua aberto.
+Tres itens. O 1 e o 2 sairam primeiro; o 3 veio na mesma branch, junto com
+a atualizacao de versoes do CI.
 
 | Item | O que muda | Estado |
 | --- | --- | --- |
 | 1 | **Branch protection no `master`**, com o job `verificar` obrigatorio | workflow pronto; a regra se liga no GitHub (passo abaixo) |
 | 2 | **Build do desktop no CI** — `.github/workflows/desktop.yml`, runner Windows | ✅ |
-| 3 | Dois gateways atras de um balanceador na bateria de integracao | ⬜ |
+| 3 | **Dois gateways atras de um balanceador** na bateria de integracao — matriz `gateways: [1, 2]` | ✅ |
 
 ### Item 2 — `desktop.yml`
 
@@ -5199,6 +5199,67 @@ Matriz `windows-2022` (VS 2022) + `windows-latest` (VS 2026), so quando o deskto
 - **Nao e check obrigatorio.** Check obrigatorio de workflow com `paths:` fica
   "Expected — Waiting for status" para sempre em PR que nao toca o desktop, e
   o merge trava.
+
+### Item 3 — a bateria com dois gateways
+
+O job `integracao` do `ci.yml` virou uma matriz `gateways: [1, 2]`, as duas
+rodadas em paralelo, a MESMA bateria:
+
+- **1** — um gateway na 4000, estado em memoria. A config de sempre.
+- **2** — dois gateways (4001, 4002), os dois com `REDIS_URL` (estado 7c-2 +
+  adapter do Socket.IO) e o par REST do Upstash, atras de um balanceador na
+  4000. Scripts e web continuam falando com a 4000.
+
+Quem liga e o `scripts/verify-all-ci.mjs`, pela variavel
+`GATEWAY_INSTANCIAS` (padrao 1, entao rodar local continua igual).
+
+**O balanceador** (`scripts/lib/balanceador.mjs`) e TCP, em Node, sem
+dependencia nova: repassa bytes, entao serve para HTTP e para WebSocket sem
+entender nenhum dos dois. Round-robin por conexao, **sem sticky**, de
+proposito — e o pior caso: cada socket novo cai na outra instancia, e o
+`ryan` e o `joao` de um mesmo teste ficam em gateways diferentes. Dois
+rodizios separados, um para WebSocket e outro para HTTP: com um so, um teste
+que alternasse "HTTP, socket, HTTP, socket" mandaria todo socket para a mesma
+instancia.
+
+**A rodada que nao exercita nada FALHA.** No fim, o orquestrador imprime
+quantos WebSockets cada instancia recebeu e derruba o job se alguma ficou com
+zero — senao o verde nao provaria o caminho entre instancias.
+
+**Com 2 gateways, o par Upstash e exigido** (o orquestrador para antes de
+comecar se faltar). Foi a primeira coisa que a bateria pegou rodando local sem
+o par: o `verify-phase3` reprovou "o MESMO ticket nao serve duas vezes" — o
+ticket consumido no gateway A abriu uma segunda conexao no B, porque cada um
+lembrava os tickets usados so na propria memoria. Nao e defeito novo: e a
+regra que o `scripts/fly-secrets.mjs` ja documentava (segunda maquina exige o
+par), agora provada por teste.
+
+**Rodada local (04/11/2026), sem LiveKit nem Upstash** — so para comparar as
+duas configs no mesmo ambiente:
+
+| Script | 1 gateway | 2 gateways |
+| --- | --- | --- |
+| 14 dos 16 | ok | ok |
+| `verify-phase3` | ok | FALHA so no ticket (sem Upstash — ver acima) |
+| `verify-phase6` | FALHA | FALHA — os dois por falta de LiveKit local ("servidor de audio nao confirmou"), nao pela mudanca |
+| `verify-phase5` | FALHA(conhecida) | ok |
+
+Distribuicao: 16 e 15 WebSockets, 9 e 9 HTTP. A rodada completa, com LiveKit
+e Upstash, e a do CI.
+
+### Versoes do CI (atualizadas nesta fase)
+
+| O que | Antes | Agora |
+| --- | --- | --- |
+| `actions/checkout` | v5 | v7 |
+| `actions/setup-node` | v5 | v7 |
+| `actions/cache` | v5 | v6 |
+| `actions/upload-artifact` | v4 | v7 |
+| Postgres (servico) | 16 | 18 |
+| Redis (servico) | 7 | 8 |
+| `hiett/serverless-redis-http` | `latest` | `0.0.10` (fixa: `latest` muda sem aviso) |
+| LiveKit (`--dev`) | v1.8.4 | v1.13.11 |
+| `node-gyp` (`build:native`) | 11 | 13 |
 
 ### Item 1 — ligar a regra no GitHub
 
@@ -5263,6 +5324,24 @@ vale anotar em vez de supor que esta ligada.
   exercitadas — isso continua sendo teste manual numa maquina com som.
 - **O instalador do CI nao e assinado**, igual ao de release (sem certificado).
   E artefato de teste, nao canal de distribuicao.
+- **Producao com mais de um gateway ainda precisa de sticky session.** O
+  navegador conecta por long-polling e so depois sobe para WebSocket
+  (`realtime-provider.tsx` nao fixa `transports`); com duas maquinas, as
+  requisicoes de polling de um mesmo cliente podem cair em maquinas
+  diferentes e o handshake falha ("Session ID unknown"). O proxy da Fly nao
+  faz sticky sozinho. Antes da segunda maquina: ou `transports: ["websocket"]`
+  no cliente (perde o fallback em rede que bloqueia WebSocket), ou sticky no
+  proxy. O CI nao cobre isso — os `verify-*` usam so WebSocket.
+- **`/internal/profile-changed` atualiza `socket.data.user` so na instancia
+  que recebeu a chamada** (ja anotado no codigo). Com dois gateways, o socket
+  na outra instancia guarda a foto velha ate reconectar. Nenhum `verify-*`
+  exercita isso, entao a rodada de 2 gateways nao pega.
+- **Postgres 18 no CI; producao (Supabase) pode estar em outra versao.** O
+  CI pega o mais novo; se o Supabase estiver numa major anterior, algo que so
+  existe no 18 passaria aqui e falharia la. O schema do projeto nao usa nada
+  recente, mas vale conferir a versao do Supabase e alinhar se divergir.
+- **As versoes novas das actions e imagens nao foram lidas uma a uma no
+  changelog.** O CI deste PR e o teste; o que quebrar, corrige aqui.
 - **O `integracao` nao e obrigatorio.** Ele roda em todo PR, mas uma falha de
   infra (Docker, LiveKit, proxy REST) nao deve travar merge. Promover a
   obrigatorio depende de ele ficar estavel por algumas semanas.

@@ -30,9 +30,9 @@ jobs:
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           # A MESMA versao que producao roda: o gateway e `node:22-slim` no
           # Dockerfile, e a Vercel roda 22+.
@@ -54,7 +54,7 @@ jobs:
       # ele usa o proprio diretorio. Sem este passo, sao ~100 MB baixados de
       # novo a cada rodada.
       - name: Cache do binario do Electron
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -87,14 +87,30 @@ jobs:
   # Separado do `verificar` de proposito: aquele fica em ~80s, sem servicos, e
   # e o "required" da branch protection (fase 7e). Este nao e: uma flaky de
   # infra aqui nao pode travar o merge nem enterrar uma regressao de unidade la.
+  #
+  # FASE 7e, item 3 — a matriz `gateways`. Duas rodadas da MESMA bateria, em
+  # paralelo:
+  #   1 — um gateway, estado em memoria (a config de sempre, e de dev);
+  #   2 — dois gateways com estado no Redis + adapter do Socket.IO, atras de
+  #       um balanceador round-robin sem sticky (`scripts/lib/balanceador.mjs`).
+  #       E a config de producao com mais de uma maquina, no pior caso: cada
+  #       socket novo cai na outra instancia.
+  # `fail-fast: false`: uma falha so com 2 gateways e exatamente a informacao
+  # que se quer ver ao lado da rodada com 1, e nao um cancelamento.
   # ------------------------------------------------------------------------
   integracao:
+    name: integracao (${{ matrix.gateways }} gateway${{ matrix.gateways > 1 && 's' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    strategy:
+      fail-fast: false
+      matrix:
+        gateways: [1, 2]
+
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: aether
           POSTGRES_PASSWORD: aether
@@ -108,7 +124,7 @@ jobs:
           --health-retries 5
 
       redis:
-        image: redis:7
+        image: redis:8
         ports:
           - 6379:6379
         options: >-
@@ -121,7 +137,7 @@ jobs:
       # `verificar-redis.mts` precisa (o rate limit do app web usa a API REST,
       # nao TCP). Sem isto, aquele script pularia.
       srh:
-        image: hiett/serverless-redis-http:latest
+        image: hiett/serverless-redis-http:0.0.10
         ports:
           - 8079:80
         env:
@@ -139,15 +155,15 @@ jobs:
       UPSTASH_REDIS_REST_TOKEN: ci-upstash-token
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
 
       - name: Cache do binario do Electron
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -192,10 +208,12 @@ jobs:
       - name: Subir LiveKit (dev)
         run: |
           docker run -d --name livekit --network host \
-            livekit/livekit-server:v1.8.4 --dev --bind 0.0.0.0
+            livekit/livekit-server:v1.13.11 --dev --bind 0.0.0.0
 
       - name: Bateria de integracao
         timeout-minutes: 12
+        env:
+          GATEWAY_INSTANCIAS: ${{ matrix.gateways }}
         run: node scripts/verify-all-ci.mjs
 
 # O QUE ESTE CI *NAO* COBRE, e vale saber antes de confiar demais nele:
@@ -208,9 +226,10 @@ jobs:
 # precisa do par da Twitch. O `verify-igdb` (sem "-live") roda e cobre o
 # caminho de fallback + o cache no banco.
 #
-# O gateway roda em UMA instancia. O `verify-gateway-redis` prova o estado
-# 7c-2 entre dois processos, mas a bateria de socket (phases 3-7b) roda contra
-# um gateway so. Dois gateways de verdade atras de um balanceador e a fase 7e.
+# O balanceador do CI e round-robin por conexao, e os clientes dos
+# `verify-*` usam so WebSocket. O navegador usa long-polling antes do
+# upgrade, e isso EXIGE sticky session com mais de um gateway — nao coberto
+# aqui (ver limitacoes da 7e no README).
 #
 # E POR QUE O ELECTRON PRECISA SER INSTALADO mesmo o CI nunca abrindo janela:
 # `game-detect.js` e `picker.js` fazem `require("electron")` no TOPO do modulo,

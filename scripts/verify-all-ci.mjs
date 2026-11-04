@@ -22,14 +22,31 @@
  *   UPSTASH_REDIS_REST_URL    (opcional — habilita o verificar-redis.mts)
  *   UPSTASH_REDIS_REST_TOKEN  (idem)
  *   SKIP_WEB=1                (opcional — pula verify-phase2 e nao sobe o web)
+ *   GATEWAY_INSTANCIAS=2      (opcional, fase 7e — ver abaixo; padrao 1)
+ *
+ * GATEWAY_INSTANCIAS (fase 7e, item 3). Com 1 (padrao), um gateway na porta
+ * 4000 com o estado EM MEMORIA — a config em que as phases 3-7b sempre foram
+ * verificadas. Com N > 1, N gateways nas portas 4001..400N, TODOS com
+ * `REDIS_URL` (estado 7c-2 + adapter do Socket.IO), atras de um balanceador
+ * round-robin na 4000 (`lib/balanceador.mjs`). Scripts e web continuam
+ * apontando para a 4000 e nao sabem quantos gateways existem. No fim, se
+ * alguma instancia nao recebeu nenhum WebSocket, o job FALHA: a bateria teria
+ * passado sem exercitar o caminho entre instancias.
  */
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { iniciarBalanceador } from "./lib/balanceador.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const GATEWAY_URL = "http://127.0.0.1:4000";
 const WEB_URL = "http://127.0.0.1:3000";
 const SKIP_WEB = process.env.SKIP_WEB === "1";
+const INSTANCIAS = Number.parseInt(process.env.GATEWAY_INSTANCIAS ?? "1", 10);
+if (!Number.isInteger(INSTANCIAS) || INSTANCIAS < 1 || INSTANCIAS > 9) {
+  console.error("GATEWAY_INSTANCIAS deve ser um inteiro de 1 a 9.");
+  process.exit(1);
+}
+const MULTI = INSTANCIAS > 1;
 
 /**
  * Scripts com FALHA CONHECIDA: rodam, a saida aparece inteira, mas nao
@@ -66,7 +83,23 @@ if (authSecret.length < 32) {
   console.error("AUTH_SECRET curto demais (minimo 32).");
   process.exit(1);
 }
-need("REDIS_URL");
+const redisUrl = need("REDIS_URL");
+/**
+ * Com mais de um gateway, o par REST do Upstash e OBRIGATORIO, como em
+ * producao (`scripts/fly-secrets.mjs`): e nele que o ticket do handshake e
+ * consumido uma vez so ENTRE instancias. Sem o par, cada gateway lembra os
+ * tickets usados so na propria memoria, e o mesmo ticket abre uma segunda
+ * conexao na outra instancia — o `verify-phase3` pega isso ("o MESMO ticket
+ * nao serve duas vezes"), corretamente. Melhor parar aqui com o motivo do
+ * que deixar a bateria falhar la no meio parecendo regressao.
+ */
+if (MULTI && !HAS_UPSTASH) {
+  console.error(
+    "GATEWAY_INSTANCIAS > 1 exige UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN " +
+      "(uso unico do ticket entre instancias — ver scripts/fly-secrets.mjs).",
+  );
+  process.exit(1);
+}
 
 /**
  * LiveKit: um `livekit-server --dev` de verdade sobe no job (porta 7880,
@@ -82,10 +115,11 @@ const LIVEKIT = {
 };
 
 /**
- * O gateway roda com o estado EM MEMORIA (sem `REDIS_URL`): e a config em que
- * as phases 3-7b/6 sempre foram verificadas, e o estado no Redis (7c-2) tem
- * cobertura propria e direta no `verify-gateway-redis.mts`. Misturar os dois
- * aqui so acrescentaria latencia de rede a assercoes sensiveis a tempo.
+ * Com uma instancia, o gateway roda com o estado EM MEMORIA (sem `REDIS_URL`):
+ * e a config em que as phases 3-7b/6 sempre foram verificadas. Com varias
+ * (`GATEWAY_INSTANCIAS`), memoria nao serve — cada processo teria a propria
+ * presenca —, entao TODAS recebem `REDIS_URL`: estado no Redis e adapter do
+ * Socket.IO, que e a config de producao com mais de uma maquina.
  */
 const gatewayEnv = {
   ...process.env,
@@ -93,7 +127,7 @@ const gatewayEnv = {
   DATABASE_URL: process.env.DATABASE_URL,
   DIRECT_URL: process.env.DATABASE_URL,
   AUTH_SECRET: authSecret,
-  REDIS_URL: "",
+  REDIS_URL: MULTI ? redisUrl : "",
   REALTIME_PORT: "4000",
   NEXT_PUBLIC_APP_URL: WEB_URL,
   SESSION_GUARD_INTERVAL_MS: "3000",
@@ -161,6 +195,8 @@ async function waitForHttp(url, label, tries = 60) {
 }
 
 let shuttingDown = false;
+/** So com `GATEWAY_INSTANCIAS > 1`. */
+let balanceador = null;
 function killGroup(child, signal) {
   try {
     // `-pid` = o grupo inteiro (ver `detached` no start()).
@@ -175,6 +211,7 @@ function killGroup(child, signal) {
 }
 async function shutdown() {
   shuttingDown = true;
+  if (balanceador) await balanceador.fechar();
   for (const { child } of children) killGroup(child, "SIGTERM");
   await sleep(800);
   for (const { child } of children) killGroup(child, "SIGKILL");
@@ -218,9 +255,26 @@ async function main() {
     console.warn(`  aviso: ${e.message} — seguindo sem LiveKit`);
   });
 
-  console.log("subindo o gateway...");
-  start("gateway", "npm", ["run", "start", "--workspace=@aether/realtime"], gatewayEnv);
-  await waitForHttp(`${GATEWAY_URL}/health`, "gateway");
+  if (MULTI) {
+    const portas = Array.from({ length: INSTANCIAS }, (_, i) => 4001 + i);
+    console.log(`subindo ${INSTANCIAS} gateways (${portas.join(", ")}) com Redis...`);
+    portas.forEach((porta, i) =>
+      start(`gateway-${i + 1}`, "npm", ["run", "start", "--workspace=@aether/realtime"], {
+        ...gatewayEnv,
+        REALTIME_PORT: String(porta),
+      }),
+    );
+    for (const porta of portas) {
+      await waitForHttp(`http://127.0.0.1:${porta}/health`, `gateway :${porta}`);
+    }
+    balanceador = await iniciarBalanceador({ porta: 4000, alvos: portas });
+    console.log(`  balanceador round-robin em ${GATEWAY_URL} -> ${portas.join(", ")}`);
+    await waitForHttp(`${GATEWAY_URL}/health`, "gateway (via balanceador)");
+  } else {
+    console.log("subindo o gateway...");
+    start("gateway", "npm", ["run", "start", "--workspace=@aether/realtime"], gatewayEnv);
+    await waitForHttp(`${GATEWAY_URL}/health`, "gateway");
+  }
 
   if (!SKIP_WEB) {
     console.log("subindo o web...");
@@ -263,9 +317,13 @@ async function main() {
   }
 
   // --- resumo ---------------------------------------------------------
+  // Copia antes do shutdown: os contadores sao do balanceador que ele fecha.
+  const distribuicao = balanceador
+    ? { sockets: [...balanceador.sockets], http: [...balanceador.http] }
+    : null;
   await shutdown();
 
-  console.log(`\n${"=".repeat(64)}\nRESUMO`);
+  console.log(`\n${"=".repeat(64)}\nRESUMO (${INSTANCIAS} gateway${MULTI ? "s" : ""})`);
   let falhas = 0;
   let conhecidas = 0;
   for (const { label, code, ms } of results) {
@@ -277,6 +335,19 @@ async function main() {
     console.log(`  ${marca.padEnd(16)} ${label.padEnd(40)} ${(ms / 1000).toFixed(1)}s`);
   }
   console.log(`${"=".repeat(64)}`);
+  if (distribuicao) {
+    console.log("\nDistribuicao pelo balanceador:");
+    distribuicao.sockets.forEach((n, i) => {
+      console.log(`  gateway-${i + 1} (:${4001 + i})  websockets=${n}  http=${distribuicao.http[i]}`);
+    });
+    const ociosas = distribuicao.sockets.filter((n) => n === 0).length;
+    if (ociosas > 0) {
+      console.error(
+        `\n${ociosas} instancia(s) nao recebeu nenhum WebSocket — a bateria NAO exercitou o caminho entre instancias.`,
+      );
+      falhas += 1;
+    }
+  }
   if (conhecidas > 0) {
     console.warn(`\n${conhecidas} com FALHA CONHECIDA (nao derruba o job) — ver README, fase 7d.`);
   }

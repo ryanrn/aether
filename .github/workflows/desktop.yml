@@ -81,9 +81,9 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -94,7 +94,7 @@ jobs:
       # O Electron e o electron-builder (NSIS, winCodeSign) baixam para os
       # proprios diretorios, nao para o `~/.npm` que o `cache: npm` guarda.
       - name: Cache do Electron e do electron-builder
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/AppData/Local/electron/Cache
@@ -159,7 +159,7 @@ jobs:
       # Windows avisa "editor desconhecido"), e expira em 7 dias — nao e canal
       # de distribuicao.
       - name: Guardar o instalador
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Aether-Setup-${{ matrix.os }}-${{ github.sha }}
           path: apps/desktop/dist/Aether-Setup.exe
