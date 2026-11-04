@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos; 7e itens 1-2 no CI, falta ligar a regra no GitHub e o item 3) |
 
 ---
 
@@ -982,7 +982,7 @@ npm run dev                 # http://localhost:3000
 
 ```bash
 npm run dev:desktop      # abre a janela apontando para a producao
-npm run build:desktop    # gera apps/desktop/dist/Aether Setup X.Y.Z.exe
+npm run build:desktop    # gera apps/desktop/dist/Aether-Setup.exe
 ```
 
 **A casca NAO empacota o site.** O Next roda no servidor (Server Actions,
@@ -5059,11 +5059,12 @@ Verificacao ao vivo: `scripts/verify-phase-bots.mjs` (fixture descartavel;
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR, com dois
-jobs:
+jobs (o build do desktop e um workflow a parte, `desktop.yml` — ver FASE 7e
+abaixo):
 
 - **`verificar`** — `npm ci`, `prisma generate`, os dois typechecks e os testes
-  unitarios. ~80s, sem servico nenhum. E o job rapido, o candidato a "required"
-  quando houver branch protection (fase 7e).
+  unitarios. ~80s, sem servico nenhum. E o job rapido, e o check obrigatorio da
+  branch protection do `master` (fase 7e).
 - **`integracao`** (fase 7d) — sobe Postgres, Redis e um proxy REST-Upstash
   como servicos, semeia, poe o gateway e o app web no ar e roda a bateria de
   `scripts/verify-*` inteira via `scripts/verify-all-ci.mjs`. Alguns minutos.
@@ -5100,8 +5101,8 @@ SFU real nunca entra no caminho).
 
 ### O que o CI ainda NAO cobre
 
-- **O build do desktop.** O modulo nativo do som e C++ compilado contra os
-  headers do Electron para Windows, e o runner e Linux. (fase 7e)
+- **O build do desktop em PR que nao toca o desktop.** O `desktop.yml` so roda
+  quando `apps/desktop/**`, o lockfile ou o proprio workflow mudam (fase 7e).
 - **`verify-igdb-live` e os `*-live` com credencial externa.** O `verify-igdb`
   (sem `-live`) roda e cobre o fallback + o cache; a variante live precisa do
   par da Twitch.
@@ -5154,6 +5155,112 @@ tambem passou a garantir o cargo padrao de quem ja e membro).
    require preguicoso deixaria a logica testavel sem o runtime; e mudanca em
    codigo de producao do desktop que nao da para verificar num runner Linux,
    entao ficou anotada, nao feita.
+
+## FASE 7e — branch protection e build do desktop no CI
+
+Escopo desta rodada: itens 1 e 2. O item 3 (dois gateways atras de um
+balanceador rodando a bateria inteira) continua aberto.
+
+| Item | O que muda | Estado |
+| --- | --- | --- |
+| 1 | **Branch protection no `master`**, com o job `verificar` obrigatorio | workflow pronto; a regra se liga no GitHub (passo abaixo) |
+| 2 | **Build do desktop no CI** — `.github/workflows/desktop.yml`, runner Windows | ✅ |
+| 3 | Dois gateways atras de um balanceador na bateria de integracao | ⬜ |
+
+### Item 2 — `desktop.yml`
+
+Runner `windows-latest`, so quando o desktop muda (`apps/desktop/**`,
+`package.json`/`package-lock.json` da raiz, o proprio workflow) ou na mao
+(Actions › Desktop › Run workflow). Passos:
+
+1. `npm ci` na raiz e `npm ci --prefix apps/desktop/native` — o `native/` nao e
+   workspace (o glob `apps/*` so desce um nivel) e tem lockfile proprio.
+2. `npm run build:native` — o MESMO comando do `build`/`release`: node-gyp
+   contra os headers do Electron 44, x64, com o MSVC que o runner ja tem.
+3. **Carrega o `.node` com o Node do proprio Electron**
+   (`ELECTRON_RUN_AS_NODE=1 npx electron -e ...`) e exige `disponivel()`.
+   Compilar nao prova que carrega: simbolo que so o carregador resolve passa
+   no build e explode no `require`; e o Node do runner recusaria um binario
+   feito para a ABI do Electron, entao so o runtime do Electron e teste valido.
+4. `electron-builder --win --publish never` com o `electron-builder.yml` real.
+5. Confere que `Aether-Setup.exe` saiu e que o `.node` esta em
+   `app.asar.unpacked` — o defeito do `asarUnpack` so aparece no app instalado.
+6. Sobe o instalador como artefato do run (7 dias), para testar um PR sem
+   buildar local.
+
+**Decisoes.**
+
+- **Workflow separado, e nao um 3º job no `ci.yml`.** Minuto de Windows custa
+  o dobro e o `npm ci` la e lento; o filtro `paths:` e por workflow, e dentro
+  do `ci.yml` o job rodaria sempre ou exigiria action de terceiros.
+- **Publicar continua fora do CI.** `--publish never`, nenhum segredo no job,
+  `CSC_IDENTITY_AUTO_DISCOVERY=false`. O release segue sendo o
+  `npm run release:desktop`, na maquina de quem tem o `gh` autenticado.
+- **Nao e check obrigatorio.** Check obrigatorio de workflow com `paths:` fica
+  "Expected — Waiting for status" para sempre em PR que nao toca o desktop, e
+  o merge trava.
+
+### Item 1 — ligar a regra no GitHub
+
+A regra mora nas configuracoes do repositorio, nao no codigo — e nao ha como
+liga-la de dentro de um PR. O lado do repo esta pronto: o `verificar` roda em
+todo PR (sem filtro de caminho) e o `ci.yml` avisa que renomear o job quebra
+a regra. Passo a passo (uma vez, por quem e admin do `ryanrn/aether`):
+
+1. GitHub › repositorio › **Settings › Rules › Rulesets › New ruleset › New
+   branch ruleset**.
+2. Nome: `master`. Enforcement status: **Active**.
+3. Target branches › **Add target › Include default branch**.
+4. Marcar:
+   - **Restrict deletions**
+   - **Block force pushes**
+   - **Require a pull request before merging** (aprovacoes: 0 — hoje ha um
+     mantenedor so; com 1, ninguem conseguiria aprovar o proprio PR)
+   - **Require status checks to pass** › **Add checks** › `verificar`
+     (aparece na lista depois de o CI ter rodado ao menos uma vez neste PR).
+     Deixar **Require branches to be up to date** desligado: com ele, todo
+     merge exige rebase e uma nova rodada.
+5. **Bypass list:** vazia. Se precisar de uma saida de emergencia, adicione
+   `Repository admin` com modo **For pull requests only** — o bypass fica
+   registrado no PR, em vez de push direto silencioso.
+6. Create.
+
+**Repositorio privado em conta GitHub Free nao tem ruleset nem branch
+protection** — o menu aparece, mas a regra nao e aplicada (exige Pro/Team ou
+repo publico). Se for o caso, a 7e item 1 fica bloqueada no plano, e isso
+vale anotar em vez de supor que esta ligada.
+
+### Como testar
+
+- **Item 2:** este PR mexe em `.github/workflows/desktop.yml`, entao o
+  workflow **Desktop** roda nele. Verde = compilou, carregou no Electron e
+  empacotou. O instalador fica em Actions › run › Artifacts. Para ver falhar:
+  num branch descartavel, remova `-lmmdevapi` do `binding.gyp` — o passo de
+  compilar cai com LNK2001.
+- **Item 1:** com a regra ligada, abra um PR que quebre um teste unitario: o
+  botao de merge fica bloqueado ate o `verificar` passar. `git push origin
+  master` direto deve ser recusado.
+
+### Limitacoes conhecidas (7e, itens 1-2)
+
+- **A regra do item 1 nao esta ligada** ate alguem fazer o passo acima. Nada
+  no repositorio consegue provar que ela existe.
+- **Nao rodado ainda.** O workflow foi escrito e validado como YAML; a
+  primeira execucao real e a deste PR, num runner Windows que esta maquina nao
+  tem. Se algum passo cair (MSVC do runner, download dos headers do Electron),
+  a correcao vem no mesmo PR.
+- **O teste de carga do modulo so chama `disponivel()`.** O runner nao tem
+  dispositivo de audio, entao `listarSaidas()` e a captura nao sao
+  exercitadas — isso continua sendo teste manual numa maquina com som.
+- **O instalador do CI nao e assinado**, igual ao de release (sem certificado).
+  E artefato de teste, nao canal de distribuicao.
+- **O `integracao` nao e obrigatorio.** Ele roda em todo PR, mas uma falha de
+  infra (Docker, LiveKit, proxy REST) nao deve travar merge. Promover a
+  obrigatorio depende de ele ficar estavel por algumas semanas.
+- **O `require("electron")` no topo de `game-detect.js`/`picker.js` continua.**
+  O `verificar` ainda instala o Electron so por causa dele. Agora ha runner
+  Windows para verificar a mudanca, mas e codigo de producao do app e ficou
+  fora desta rodada.
 
 ## Auditoria de seguranca (26/08/2026) — o que foi corrigido e o que ficou
 
@@ -5536,8 +5643,9 @@ usuario sem senha. Corrigido.
   falso-verde.
 - **Sem medicao de cobertura.** Nenhum relatorio configurado; o que existe foi
   escolhido a dedo, nao guiado por percentual.
-- **A suite ainda nao roda em CI** — isso e a fase 7e. Hoje depende de alguem
-  lembrar de rodar `npm test`.
+- ~~**A suite ainda nao roda em CI**~~ — resolvido: o job `verificar` do
+  `ci.yml` roda `vitest` em todo PR, e a fase 7e o tornou obrigatorio para o
+  merge.
 - **O contrato do rate limit esta testado, a protecao continua furada.** Os
   testes fixam o comportamento do algoritmo em memoria; em producao, na Vercel,
   cada instancia serverless tem o proprio contador, entao o bloqueio de forca

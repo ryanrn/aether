@@ -1,0 +1,151 @@
+name: Desktop
+
+# ---------------------------------------------------------------------------
+# FASE 7e — o build do `apps/desktop` no CI.
+#
+# Por que um workflow SEPARADO do `ci.yml`, e nao um terceiro job la:
+#
+# 1. O modulo nativo do som (`native/src/loopback.cc`) e C++ compilado contra
+#    os headers do Electron para Windows, com MSVC. So um runner Windows
+#    builda isso — e minuto de runner Windows custa o dobro do Linux, e o
+#    `npm ci` la e lento. Rodar isso em todo PR que so mexe no web e pagar
+#    caro para nao aprender nada.
+#
+# 2. O filtro `paths:` abaixo funciona por WORKFLOW. Com o job dentro do
+#    `ci.yml`, ou ele rodaria sempre (motivo 1), ou precisaria de uma action
+#    de terceiros para filtrar por caminho.
+#
+# 3. Este check NAO e "required" na branch protection, de proposito. Check
+#    obrigatorio de workflow com `paths:` fica "Expected — waiting" para
+#    sempre num PR que nao toca o desktop, e o merge trava. O required e o
+#    `verificar` do `ci.yml`, que roda em todo PR.
+# ---------------------------------------------------------------------------
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop.yml"
+      # O lockfile da raiz fixa Electron e electron-builder.
+      - "package-lock.json"
+      - "package.json"
+  # Mesma lista do `push` (ancora YAML evitada de proposito: e o tipo de
+  # coisa que um parser de workflow antigo/lint rejeita, e sao 4 linhas).
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop.yml"
+      - "package-lock.json"
+      - "package.json"
+  # Para rodar na mao (Actions › Desktop › Run workflow), por exemplo antes de
+  # um `npm run release:desktop`.
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        # Git Bash, que vem no runner. Os passos abaixo usam `test -f` e
+        # variavel inline; em PowerShell cada um viraria outra sintaxe.
+        shell: bash
+
+    env:
+      # Mesmo motivo do `ci.yml`: o postinstall do Prisma le o schema e quer
+      # as variaveis definidas, mas nao conecta em nada.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+      # Sem certificado no CI (nem fora dele — ver limitacoes do desktop).
+      # Isto impede o electron-builder de sair procurando um no repositorio
+      # de certificados do Windows.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/native/package-lock.json
+
+      # O Electron e o electron-builder (NSIS, winCodeSign) baixam para os
+      # proprios diretorios, nao para o `~/.npm` que o `cache: npm` guarda.
+      - name: Cache do Electron e do electron-builder
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar (monorepo)
+        run: npm ci
+
+      # O `native/` NAO e workspace (o glob e `apps/*`, um nivel so) e tem o
+      # proprio lockfile — o `node-addon-api` vem daqui.
+      - name: Instalar (modulo nativo)
+        run: npm ci --prefix apps/desktop/native
+
+      # O mesmo comando que o `npm run build` e o release rodam: node-gyp
+      # contra os headers do Electron 44, x64, com o MSVC do runner.
+      - name: Compilar o modulo nativo
+        run: npm run build:native --workspace=@aether/desktop
+
+      # Compilar nao prova que CARREGA: um simbolo que so o linker dinamico
+      # resolve (o LNK2001 do mmdevapi, por exemplo, ja apareceu) passa no
+      # build e explode no `require`. Carregar com o Node do PROPRIO Electron
+      # prova tambem que o binario saiu para a ABI certa — o Node do runner
+      # recusaria um .node feito para o Electron, e vice-versa.
+      #
+      # So `disponivel()`: listar as saidas de audio exige um dispositivo, e o
+      # runner nao tem placa de som.
+      - name: Carregar o modulo no runtime do Electron
+        working-directory: apps/desktop
+        env:
+          ELECTRON_RUN_AS_NODE: "1"
+        run: |
+          npx electron -e '
+            const l = require("./native");
+            if (!l.disponivel()) {
+              console.error("loopback indisponivel:", l.indisponivelPorque());
+              process.exit(1);
+            }
+            console.log("loopback carregou no Electron", process.versions.electron);
+          '
+
+      # O instalador de verdade, com a config de verdade (`electron-builder.yml`).
+      # `--publish never`: publicar continua sendo so do `release:desktop`,
+      # na maquina de quem tem o token. Nenhum segredo entra neste job.
+      - name: Empacotar (NSIS)
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish never
+
+      # O defeito que o `asarUnpack` evita so aparece no app INSTALADO: o
+      # `.node` dentro do asar nao carrega. Conferir o arquivo fora do asar
+      # pega a regressao se alguem mexer em `files:`/`asarUnpack:`.
+      - name: Conferir o pacote
+        working-directory: apps/desktop/dist
+        run: |
+          test -f Aether-Setup.exe
+          test -f win-unpacked/resources/app.asar.unpacked/native/build/Release/aether_loopback.node
+          ls -la Aether-Setup.exe
+
+      # Para baixar e testar um PR sem buildar localmente. Sem assinatura (o
+      # Windows avisa "editor desconhecido"), e expira em 7 dias — nao e canal
+      # de distribuicao.
+      - name: Guardar o instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aether-Setup-${{ github.sha }}
+          path: apps/desktop/dist/Aether-Setup.exe
+          retention-days: 7
+          if-no-files-found: error

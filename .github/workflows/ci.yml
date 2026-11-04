@@ -1,7 +1,12 @@
 name: CI
 
-# Push no master e todo PR. Nao ha branch protegida ainda; quando houver,
-# este e o job para exigir.
+# Push no master e todo PR.
+#
+# FASE 7e — o job `verificar` e o check OBRIGATORIO da branch protection do
+# `master` (configurada no GitHub, nao aqui — passo a passo no README › CI ›
+# "Branch protection"). Renomear o job quebra a regra em silencio: o GitHub
+# passa a esperar um check que nunca mais vai chegar, e todo PR trava em
+# "Expected". Quem renomear, atualiza a regra junto.
 on:
   push:
     branches: [master]
@@ -80,8 +85,8 @@ jobs:
   # app web no ar e roda a bateria inteira via `scripts/verify-all-ci.mjs`.
   #
   # Separado do `verificar` de proposito: aquele fica em ~80s, sem servicos, e
-  # e o candidato a "required" quando houver branch protection (fase 7e). Uma
-  # flaky de infra aqui nao pode enterrar uma regressao de unidade la.
+  # e o "required" da branch protection (fase 7e). Este nao e: uma flaky de
+  # infra aqui nao pode travar o merge nem enterrar uma regressao de unidade la.
   # ------------------------------------------------------------------------
   integracao:
     runs-on: ubuntu-latest
@@ -195,9 +200,9 @@ jobs:
 
 # O QUE ESTE CI *NAO* COBRE, e vale saber antes de confiar demais nele:
 #
-# O BUILD do `apps/desktop`: o modulo nativo do som e C++ compilado contra os
-# headers do Electron para Windows, e nao ha runner Windows aqui. O que o CI
-# garante do desktop e so o que `game-detect.test.ts` cobre. (fase 7e)
+# O BUILD do `apps/desktop` nao roda AQUI: o modulo nativo do som e C++
+# compilado contra os headers do Electron para Windows. Ele mora no
+# `desktop.yml` (fase 7e), num runner Windows, so quando o desktop muda.
 #
 # Os `verify-*-live` que dependem de credencial externa: `verify-igdb-live`
 # precisa do par da Twitch. O `verify-igdb` (sem "-live") roda e cobre o
@@ -212,5 +217,6 @@ jobs:
 # ainda que so usem `app.getFileIcon` la dentro. Importar a logica pura arrasta
 # o runtime junto, e o `index.js` do Electron lanca se o binario nao existir.
 # Tornar esse require preguicoso deixaria a logica testavel sem o runtime e
-# tiraria os 100 MB daqui — e mudanca em codigo de producao do desktop, que nao
-# da para verificar neste runner, entao ficou anotada em vez de feita. (fase 7e)
+# tiraria os 100 MB daqui — e mudanca em codigo de producao do desktop, que
+# ficou anotada em vez de feita. O `desktop.yml` agora daria para verificar,
+# mas nao entrou na 7e (itens 1 e 2 sao CI, nao codigo do app).
