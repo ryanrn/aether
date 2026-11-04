@@ -5169,13 +5169,13 @@ balanceador rodando a bateria inteira) continua aberto.
 
 ### Item 2 — `desktop.yml`
 
-Runner `windows-2022`, so quando o desktop muda (`apps/desktop/**`,
+Matriz `windows-2022` (VS 2022) + `windows-latest` (VS 2026), so quando o desktop muda (`apps/desktop/**`,
 `package.json`/`package-lock.json` da raiz, o proprio workflow) ou na mao
 (Actions › Desktop › Run workflow). Passos:
 
 1. `npm ci` na raiz e `npm ci --prefix apps/desktop/native` — o `native/` nao e
    workspace (o glob `apps/*` so desce um nivel) e tem lockfile proprio.
-2. `npm run build:native` — o MESMO comando do `build`/`release`: node-gyp
+2. `npm run build:native` — o MESMO comando do `build`/`release`: `node-gyp@13`
    contra os headers do Electron 44, x64, com o MSVC que o runner ja tem.
 3. **Carrega o `.node` com o Node do proprio Electron**
    (`ELECTRON_RUN_AS_NODE=1 npx electron -e ...`) e exige `disponivel()`.
@@ -5249,14 +5249,15 @@ vale anotar em vez de supor que esta ligada.
   primeira execucao real e a deste PR, num runner Windows que esta maquina nao
   tem. Se algum passo cair (MSVC do runner, download dos headers do Electron),
   a correcao vem no mesmo PR.
-- **O build do desktop NAO funciona com Visual Studio 2026.** A primeira
-  rodada, em `windows-latest`, provou: a imagem tem o VS 2026 (versao 18) e o
-  `node-gyp@11` do `build:native` falha em "could not find a version of Visual
-  Studio". O job foi fixado em `windows-2022` (VS 2022, o toolchain do
-  release). Vale para a maquina de quem publica tambem: instalar so o VS 2026
-  quebra o `release:desktop`. A saida e subir o `build:native` para
-  `node-gyp@13` (suporta 2019/2022/2026; exige Node `^22.22.2`) — mudanca no
-  comando do release, que precisa ser testada nessa maquina antes.
+- **O `build:native` subiu de `node-gyp@11` para `node-gyp@13`.** A primeira
+  rodada, em `windows-latest`, provou que o 11 nao reconhece o Visual Studio
+  2026 (versao 18) e falha em "could not find a version of Visual Studio". O
+  13 suporta 2019/2022/2026, e a matriz do job builda com VS 2022 e VS 2026.
+  **Exige Node `^22.22.2`** (ou `^24.15`/`>=26`) na maquina de quem roda
+  `release:desktop` — com Node 22 mais antigo, o `npx` recusa o node-gyp.
+  O `engines` da raiz continua `>=22`; o piso real do build do desktop e o do
+  node-gyp. **Ainda nao rodado na maquina de quem publica** — o primeiro
+  `release:desktop` depois deste PR e o teste.
 - **O teste de carga do modulo so chama `disponivel()`.** O runner nao tem
   dispositivo de audio, entao `listarSaidas()` e a captura nao sao
   exercitadas — isso continua sendo teste manual numa maquina com som.

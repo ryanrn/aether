@@ -47,14 +47,21 @@ concurrency:
 
 jobs:
   build:
-    # `windows-2022`, e NAO `windows-latest`. A imagem `latest` traz o Visual
-    # Studio 2026 (versao 18), e o node-gyp 11 do `build:native` nao o
-    # reconhece ("unknown version"): o build cai antes de compilar uma linha.
-    # Suporte a VS 2026 so existe a partir do node-gyp 12.1 (e o 13 corrigiu
-    # a deteccao de versao). Trocar o node-gyp mexe no comando do RELEASE, que
-    # roda na maquina de quem publica — fica para quando essa maquina migrar.
-    # Ate la, este job builda com o mesmo toolchain do release: VS 2022.
-    runs-on: windows-2022
+    # Duas imagens, dois Visual Studios: `windows-2022` (VS 2022) e
+    # `windows-latest` (VS 2026, versao 18). A maquina de quem publica pode
+    # ter qualquer um dos dois, e o `release:desktop` tem de funcionar com
+    # ambos.
+    #
+    # Historia: o `build:native` usava `node-gyp@11`, que NAO reconhece o VS
+    # 2026 ("unknown version") — a primeira rodada deste job, em
+    # `windows-latest`, caiu antes de compilar uma linha. O `build:native`
+    # subiu para `node-gyp@13` (2019/2022/2026), e a matriz garante que a
+    # troca nao quebrou o VS 2022 de quem ainda esta nele.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
 
     defaults:
@@ -102,8 +109,10 @@ jobs:
       - name: Instalar (modulo nativo)
         run: npm ci --prefix apps/desktop/native
 
-      # O mesmo comando que o `npm run build` e o release rodam: node-gyp
-      # contra os headers do Electron 44, x64, com o MSVC do runner.
+      # O mesmo comando que o `npm run build` e o release rodam: node-gyp 13
+      # contra os headers do Electron 44, x64, com o MSVC do runner. O
+      # node-gyp 13 exige Node ^22.22.2 — o `setup-node` acima ("22") pega a
+      # 22 mais nova, entao satisfaz.
       - name: Compilar o modulo nativo
         run: npm run build:native --workspace=@aether/desktop
 
@@ -152,7 +161,7 @@ jobs:
       - name: Guardar o instalador
         uses: actions/upload-artifact@v4
         with:
-          name: Aether-Setup-${{ github.sha }}
+          name: Aether-Setup-${{ matrix.os }}-${{ github.sha }}
           path: apps/desktop/dist/Aether-Setup.exe
           retention-days: 7
           if-no-files-found: error
