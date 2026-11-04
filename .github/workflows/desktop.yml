@@ -47,7 +47,14 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # `windows-2022`, e NAO `windows-latest`. A imagem `latest` traz o Visual
+    # Studio 2026 (versao 18), e o node-gyp 11 do `build:native` nao o
+    # reconhece ("unknown version"): o build cai antes de compilar uma linha.
+    # Suporte a VS 2026 so existe a partir do node-gyp 12.1 (e o 13 corrigiu
+    # a deteccao de versao). Trocar o node-gyp mexe no comando do RELEASE, que
+    # roda na maquina de quem publica — fica para quando essa maquina migrar.
+    # Ate la, este job builda com o mesmo toolchain do release: VS 2022.
+    runs-on: windows-2022
     timeout-minutes: 30
 
     defaults:

@@ -5169,7 +5169,7 @@ balanceador rodando a bateria inteira) continua aberto.
 
 ### Item 2 — `desktop.yml`
 
-Runner `windows-latest`, so quando o desktop muda (`apps/desktop/**`,
+Runner `windows-2022`, so quando o desktop muda (`apps/desktop/**`,
 `package.json`/`package-lock.json` da raiz, o proprio workflow) ou na mao
 (Actions › Desktop › Run workflow). Passos:
 
@@ -5249,6 +5249,14 @@ vale anotar em vez de supor que esta ligada.
   primeira execucao real e a deste PR, num runner Windows que esta maquina nao
   tem. Se algum passo cair (MSVC do runner, download dos headers do Electron),
   a correcao vem no mesmo PR.
+- **O build do desktop NAO funciona com Visual Studio 2026.** A primeira
+  rodada, em `windows-latest`, provou: a imagem tem o VS 2026 (versao 18) e o
+  `node-gyp@11` do `build:native` falha em "could not find a version of Visual
+  Studio". O job foi fixado em `windows-2022` (VS 2022, o toolchain do
+  release). Vale para a maquina de quem publica tambem: instalar so o VS 2026
+  quebra o `release:desktop`. A saida e subir o `build:native` para
+  `node-gyp@13` (suporta 2019/2022/2026; exige Node `^22.22.2`) — mudanca no
+  comando do release, que precisa ser testada nessa maquina antes.
 - **O teste de carga do modulo so chama `disponivel()`.** O runner nao tem
   dispositivo de audio, entao `listarSaidas()` e a captura nao sao
   exercitadas — isso continua sendo teste manual numa maquina com som.
