@@ -353,7 +353,13 @@ export function AccountTab({
                   onClick={enviarPrevia}
                   disabled={pending}
                 >
-                  {pending ? "Enviando..." : "Salvar foto"}
+                  {/* O selo "GIF" na previa diz o que e; o botao confirma
+                      que o movimento vai junto. */}
+                  {pending
+                    ? "Enviando..."
+                    : previa.animado
+                      ? "Salvar GIF"
+                      : "Salvar foto"}
                 </Button>
                 {/*
                   So para foto PARADA: reabre o recorte sobre o arquivo
