@@ -553,6 +553,18 @@ export interface ServerToClientEvents {
    * pede a lista nova ao Next.
    */
   "friend:changed": () => void;
+  /**
+   * Alguem mudou a propria foto, moldura ou nome de exibicao.
+   *
+   * Diferente de `friend:changed`, CARREGA o perfil: as mensagens do chat
+   * guardam o autor na memoria da tela, e recarregar a pagina nao as troca.
+   * O cliente guarda "o perfil mais recente de cada pessoa" e o `<Avatar>` e o
+   * nome no chat leem dali.
+   *
+   * Vai so para quem ja podia ver esse perfil: membros dos servidores da
+   * pessoa, amigos dela e os outros aparelhos dela. So campos publicos.
+   */
+  "user:profile": (payload: { user: PublicUser }) => void;
 }
 
 export interface ClientToServerEvents {

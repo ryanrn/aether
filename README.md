@@ -18,7 +18,7 @@ com a usabilidade do Discord — voz, compartilhamento de tela e chat.
 | 4 | WebRTC: microfone, audio, canais de voz (SFU) | ✅ pronto |
 | 5 | Compartilhamento de tela (getDisplayMedia + distribuicao) | ✅ pronto |
 | 6 | Administracao, moderacao, logs | ✅ pronto |
-| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos) |
+| 7 | Performance, reconexao, seguranca, testes, deploy | em andamento (7a, 7b, 7c-1, 7c-2, 7d prontos; 7e no CI — falta ligar a branch protection no GitHub) |
 
 ---
 
@@ -885,12 +885,66 @@ janela inteira) matava a call de vez.
   (sem typecheck) e Electron nao roda no sandbox — `node --check` passou, mas o
   fluxo real (cookie compartilhado, fechamento automatico) so se prova num
   desktop de verdade, e exige o release `0.1.21`.
-- **Perfil: painel de membros de nao-amigos.** A propagacao do estagio 4 cobre
-  o card de voz (todos na call) e a tela dos amigos; quem esta no mesmo servidor
-  mas nao e seu amigo so ve a foto nova no proximo refresh. E com Redis, o
-  `socket.data.user` so e corrigido na instancia que segura o socket.
+- ~~**Perfil: painel de membros de nao-amigos.**~~ Resolvido pelo
+  `user:profile` (secao "Perfil ao vivo"): membros dos servidores, amigos e os
+  outros aparelhos da pessoa veem foto, moldura e nome novos na hora. Fica: com
+  Redis, o `socket.data.user` so e corrigido na instancia que segura o socket.
 
 ---
+
+## Perfil ao vivo (foto, moldura e nome para todo mundo, na hora)
+
+**O problema:** trocar a foto so atualizava a call (cartao de voz) e a tela dos
+amigos. Quem dividia um servidor sem ser amigo via a foto velha ate reabrir o
+app — e, mesmo para amigos, as mensagens ja carregadas no chat guardavam a foto
+e o nome antigos, porque elas vivem no `realtime-store` e um `router.refresh()`
+nao as troca.
+
+**Como funciona agora:**
+
+- **Gateway** (`apps/realtime/src/internal.ts`, `/internal/profile-changed`):
+  alem do que ja fazia, emite `user:profile` com o `PublicUser` novo para as
+  salas `server:<id>` de TODOS os servidores da pessoa, para a sala pessoal de
+  cada amigo e para a dela (outros aparelhos). Um `emit` so com todas as salas:
+  o Socket.IO entrega uma vez por socket, e o adapter de Redis leva a outras
+  instancias. Sai mesmo se quem trocou a foto ja fechou o app.
+- **Quem recebe e quem ja podia ver o perfil**, e mais ninguem — o
+  `verify-perfil-ao-vivo` prova que um estranho (nem amigo, nem servidor em
+  comum) nao recebe. So campos publicos.
+- **Cliente:** `lib/stores/perfis-store.ts` guarda o perfil mais recente de
+  cada pessoa (nome, foto, moldura, decoracao, placa). Dois leitores:
+  - `components/ui/avatar.tsx` troca foto e moldura — um ponto so cobre os ~40
+    lugares que desenham avatar (chat, membros, amigos, DMs, call). Virou
+    componente de cliente por causa disso;
+  - `components/chat/message-group.tsx` aplica o perfil inteiro ao autor:
+    **nome**, foto, moldura e decoracao novos em todas as mensagens ja
+    carregadas.
+  - O provider tambem faz `router.refresh()` (debounce de 400 ms), e as listas
+    renderizadas no servidor (membros, amigos, DMs) voltam com o nome novo.
+
+**Como testar:** duas contas no mesmo servidor, SEM serem amigas, as duas com o
+app aberto no chat do servidor, com mensagens da conta A na tela. A troca a
+foto e o nome em Configuracoes. Em ~1 s, B ve a foto e o nome novos nas
+mensagens antigas, no painel de membros e no cartao de voz. Automatizado:
+`node scripts/verify-perfil-ao-vivo.mjs` (gateway no ar; na bateria do CI) e
+`npx vitest run tests/unit/perfis-store.test.ts`.
+
+**Limitacoes:**
+
+- **O `<Avatar>` nao troca as INICIAIS** (o `name`): em varios lugares ele
+  recebe o apelido no servidor, e o evento so conhece o nome de exibicao.
+  Iniciais so aparecem sem foto.
+- **Apelido por servidor nao muda por este caminho** — ele e do servidor, nao
+  do perfil, e continua vindo do refresh.
+- **Nome fora do chat depende do `router.refresh()`**: membros, amigos e DMs
+  trocam quando o Next devolve a tela nova (normalmente < 1 s). Outros textos
+  de nome renderizados no cliente a partir de copias antigas (ex.: popover
+  aberto naquele instante) so trocam ao reabrir.
+- **Quem estava offline** recebe o perfil novo ao abrir o app, pelo caminho de
+  sempre (o banco), nao pelo evento.
+- **Com dois gateways**, ver a limitacao do `socket.data.user` na secao da 7e.
+- **Nao testado com duas pessoas reais no app** — so o gateway real
+  (`verify-perfil-ao-vivo`), unitario e typecheck.
 
 ## Stack
 
@@ -982,7 +1036,7 @@ npm run dev                 # http://localhost:3000
 
 ```bash
 npm run dev:desktop      # abre a janela apontando para a producao
-npm run build:desktop    # gera apps/desktop/dist/Aether Setup X.Y.Z.exe
+npm run build:desktop    # gera apps/desktop/dist/Aether-Setup.exe
 ```
 
 **A casca NAO empacota o site.** O Next roda no servidor (Server Actions,
@@ -5059,11 +5113,12 @@ Verificacao ao vivo: `scripts/verify-phase-bots.mjs` (fixture descartavel;
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` roda a cada push no `master` e em todo PR, com dois
-jobs:
+jobs (o build do desktop e um workflow a parte, `desktop.yml` — ver FASE 7e
+abaixo):
 
 - **`verificar`** — `npm ci`, `prisma generate`, os dois typechecks e os testes
-  unitarios. ~80s, sem servico nenhum. E o job rapido, o candidato a "required"
-  quando houver branch protection (fase 7e).
+  unitarios. ~80s, sem servico nenhum. E o job rapido, e o check obrigatorio da
+  branch protection do `master` (fase 7e).
 - **`integracao`** (fase 7d) — sobe Postgres, Redis e um proxy REST-Upstash
   como servicos, semeia, poe o gateway e o app web no ar e roda a bateria de
   `scripts/verify-*` inteira via `scripts/verify-all-ci.mjs`. Alguns minutos.
@@ -5100,14 +5155,14 @@ SFU real nunca entra no caminho).
 
 ### O que o CI ainda NAO cobre
 
-- **O build do desktop.** O modulo nativo do som e C++ compilado contra os
-  headers do Electron para Windows, e o runner e Linux. (fase 7e)
+- **O build do desktop em PR que nao toca o desktop.** O `desktop.yml` so roda
+  quando `apps/desktop/**`, o lockfile ou o proprio workflow mudam (fase 7e).
 - **`verify-igdb-live` e os `*-live` com credencial externa.** O `verify-igdb`
   (sem `-live`) roda e cobre o fallback + o cache; a variante live precisa do
   par da Twitch.
-- **Gateway em mais de uma instancia real.** O `verify-gateway-redis` prova o
-  estado 7c-2 entre dois processos, mas as phases 3-7b rodam contra um gateway
-  so. Dois gateways atras de um balanceador e a fase 7e.
+- **Long-polling com mais de um gateway.** A rodada de 2 gateways (fase 7e,
+  item 3) usa so WebSocket, como os clientes dos `verify-*`; o navegador
+  comeca por polling, que exige sticky session. Ver limitacoes da 7e.
 - **`verificar-redis` depende do proxy `hiett/serverless-redis-http`.** Se o
   container do proxy ficar instavel, esse script e o unico que cai junto — os
   outros nao dependem dele.
@@ -5154,6 +5209,201 @@ tambem passou a garantir o cargo padrao de quem ja e membro).
    require preguicoso deixaria a logica testavel sem o runtime; e mudanca em
    codigo de producao do desktop que nao da para verificar num runner Linux,
    entao ficou anotada, nao feita.
+
+## FASE 7e — branch protection e build do desktop no CI
+
+Tres itens. O 1 e o 2 sairam primeiro; o 3 veio na mesma branch, junto com
+a atualizacao de versoes do CI.
+
+| Item | O que muda | Estado |
+| --- | --- | --- |
+| 1 | **Branch protection no `master`**, com o job `verificar` obrigatorio | workflow pronto; a regra se liga no GitHub (passo abaixo) |
+| 2 | **Build do desktop no CI** — `.github/workflows/desktop.yml`, runner Windows | ✅ |
+| 3 | **Dois gateways atras de um balanceador** na bateria de integracao — matriz `gateways: [1, 2]` | ✅ |
+
+### Item 2 — `desktop.yml`
+
+Matriz `windows-2022` (VS 2022) + `windows-latest` (VS 2026), so quando o desktop muda (`apps/desktop/**`,
+`package.json`/`package-lock.json` da raiz, o proprio workflow) ou na mao
+(Actions › Desktop › Run workflow). Passos:
+
+1. `npm ci` na raiz e `npm ci --prefix apps/desktop/native` — o `native/` nao e
+   workspace (o glob `apps/*` so desce um nivel) e tem lockfile proprio.
+2. `npm run build:native` — o MESMO comando do `build`/`release`: `node-gyp@13`
+   contra os headers do Electron 44, x64, com o MSVC que o runner ja tem.
+3. **Carrega o `.node` com o Node do proprio Electron**
+   (`ELECTRON_RUN_AS_NODE=1 npx electron -e ...`) e exige `disponivel()`.
+   Compilar nao prova que carrega: simbolo que so o carregador resolve passa
+   no build e explode no `require`; e o Node do runner recusaria um binario
+   feito para a ABI do Electron, entao so o runtime do Electron e teste valido.
+4. `electron-builder --win --publish never` com o `electron-builder.yml` real.
+5. Confere que `Aether-Setup.exe` saiu e que o `.node` esta em
+   `app.asar.unpacked` — o defeito do `asarUnpack` so aparece no app instalado.
+6. Sobe o instalador como artefato do run (7 dias), para testar um PR sem
+   buildar local.
+
+**Decisoes.**
+
+- **Workflow separado, e nao um 3º job no `ci.yml`.** Minuto de Windows custa
+  o dobro e o `npm ci` la e lento; o filtro `paths:` e por workflow, e dentro
+  do `ci.yml` o job rodaria sempre ou exigiria action de terceiros.
+- **Publicar continua fora do CI.** `--publish never`, nenhum segredo no job,
+  `CSC_IDENTITY_AUTO_DISCOVERY=false`. O release segue sendo o
+  `npm run release:desktop`, na maquina de quem tem o `gh` autenticado.
+- **Nao e check obrigatorio.** Check obrigatorio de workflow com `paths:` fica
+  "Expected — Waiting for status" para sempre em PR que nao toca o desktop, e
+  o merge trava.
+
+### Item 3 — a bateria com dois gateways
+
+O job `integracao` do `ci.yml` virou uma matriz `gateways: [1, 2]`, as duas
+rodadas em paralelo, a MESMA bateria:
+
+- **1** — um gateway na 4000, estado em memoria. A config de sempre.
+- **2** — dois gateways (4001, 4002), os dois com `REDIS_URL` (estado 7c-2 +
+  adapter do Socket.IO) e o par REST do Upstash, atras de um balanceador na
+  4000. Scripts e web continuam falando com a 4000.
+
+Quem liga e o `scripts/verify-all-ci.mjs`, pela variavel
+`GATEWAY_INSTANCIAS` (padrao 1, entao rodar local continua igual).
+
+**O balanceador** (`scripts/lib/balanceador.mjs`) e TCP, em Node, sem
+dependencia nova: repassa bytes, entao serve para HTTP e para WebSocket sem
+entender nenhum dos dois. Round-robin por conexao, **sem sticky**, de
+proposito — e o pior caso: cada socket novo cai na outra instancia, e o
+`ryan` e o `joao` de um mesmo teste ficam em gateways diferentes. Dois
+rodizios separados, um para WebSocket e outro para HTTP: com um so, um teste
+que alternasse "HTTP, socket, HTTP, socket" mandaria todo socket para a mesma
+instancia.
+
+**A rodada que nao exercita nada FALHA.** No fim, o orquestrador imprime
+quantos WebSockets cada instancia recebeu e derruba o job se alguma ficou com
+zero — senao o verde nao provaria o caminho entre instancias.
+
+**Com 2 gateways, o par Upstash e exigido** (o orquestrador para antes de
+comecar se faltar). Foi a primeira coisa que a bateria pegou rodando local sem
+o par: o `verify-phase3` reprovou "o MESMO ticket nao serve duas vezes" — o
+ticket consumido no gateway A abriu uma segunda conexao no B, porque cada um
+lembrava os tickets usados so na propria memoria. Nao e defeito novo: e a
+regra que o `scripts/fly-secrets.mjs` ja documentava (segunda maquina exige o
+par), agora provada por teste.
+
+**Rodada local (04/11/2026), sem LiveKit nem Upstash** — so para comparar as
+duas configs no mesmo ambiente:
+
+| Script | 1 gateway | 2 gateways |
+| --- | --- | --- |
+| 14 dos 16 | ok | ok |
+| `verify-phase3` | ok | FALHA so no ticket (sem Upstash — ver acima) |
+| `verify-phase6` | FALHA | FALHA — os dois por falta de LiveKit local ("servidor de audio nao confirmou"), nao pela mudanca |
+| `verify-phase5` | FALHA(conhecida) | ok |
+
+Distribuicao: 16 e 15 WebSockets, 9 e 9 HTTP. A rodada completa, com LiveKit
+e Upstash, e a do CI.
+
+### Versoes do CI (atualizadas nesta fase)
+
+| O que | Antes | Agora |
+| --- | --- | --- |
+| `actions/checkout` | v5 | v7 |
+| `actions/setup-node` | v5 | v7 |
+| `actions/cache` | v5 | v6 |
+| `actions/upload-artifact` | v4 | v7 |
+| Postgres (servico) | 16 | 18 |
+| Redis (servico) | 7 | 8 |
+| `hiett/serverless-redis-http` | `latest` | `0.0.10` (fixa: `latest` muda sem aviso) |
+| LiveKit (`--dev`) | v1.8.4 | v1.13.11 |
+| `node-gyp` (`build:native`) | 11 | 13 |
+
+### Item 1 — ligar a regra no GitHub
+
+A regra mora nas configuracoes do repositorio, nao no codigo — e nao ha como
+liga-la de dentro de um PR. O lado do repo esta pronto: o `verificar` roda em
+todo PR (sem filtro de caminho) e o `ci.yml` avisa que renomear o job quebra
+a regra. Passo a passo (uma vez, por quem e admin do `ryanrn/aether`):
+
+1. GitHub › repositorio › **Settings › Rules › Rulesets › New ruleset › New
+   branch ruleset**.
+2. Nome: `master`. Enforcement status: **Active**.
+3. Target branches › **Add target › Include default branch**.
+4. Marcar:
+   - **Restrict deletions**
+   - **Block force pushes**
+   - **Require a pull request before merging** (aprovacoes: 0 — hoje ha um
+     mantenedor so; com 1, ninguem conseguiria aprovar o proprio PR)
+   - **Require status checks to pass** › **Add checks** › `verificar`
+     (aparece na lista depois de o CI ter rodado ao menos uma vez neste PR).
+     Deixar **Require branches to be up to date** desligado: com ele, todo
+     merge exige rebase e uma nova rodada.
+5. **Bypass list:** vazia. Se precisar de uma saida de emergencia, adicione
+   `Repository admin` com modo **For pull requests only** — o bypass fica
+   registrado no PR, em vez de push direto silencioso.
+6. Create.
+
+**Repositorio privado em conta GitHub Free nao tem ruleset nem branch
+protection** — o menu aparece, mas a regra nao e aplicada (exige Pro/Team ou
+repo publico). Se for o caso, a 7e item 1 fica bloqueada no plano, e isso
+vale anotar em vez de supor que esta ligada.
+
+### Como testar
+
+- **Item 2:** este PR mexe em `.github/workflows/desktop.yml`, entao o
+  workflow **Desktop** roda nele. Verde = compilou, carregou no Electron e
+  empacotou. O instalador fica em Actions › run › Artifacts. Para ver falhar:
+  num branch descartavel, remova `-lmmdevapi` do `binding.gyp` — o passo de
+  compilar cai com LNK2001.
+- **Item 1:** com a regra ligada, abra um PR que quebre um teste unitario: o
+  botao de merge fica bloqueado ate o `verificar` passar. `git push origin
+  master` direto deve ser recusado.
+
+### Limitacoes conhecidas (7e, itens 1-2)
+
+- **A regra do item 1 nao esta ligada** ate alguem fazer o passo acima. Nada
+  no repositorio consegue provar que ela existe.
+- **Nao rodado ainda.** O workflow foi escrito e validado como YAML; a
+  primeira execucao real e a deste PR, num runner Windows que esta maquina nao
+  tem. Se algum passo cair (MSVC do runner, download dos headers do Electron),
+  a correcao vem no mesmo PR.
+- **O `build:native` subiu de `node-gyp@11` para `node-gyp@13`.** A primeira
+  rodada, em `windows-latest`, provou que o 11 nao reconhece o Visual Studio
+  2026 (versao 18) e falha em "could not find a version of Visual Studio". O
+  13 suporta 2019/2022/2026, e a matriz do job builda com VS 2022 e VS 2026.
+  **Exige Node `^22.22.2`** (ou `^24.15`/`>=26`) na maquina de quem roda
+  `release:desktop` — com Node 22 mais antigo, o `npx` recusa o node-gyp.
+  O `engines` da raiz continua `>=22`; o piso real do build do desktop e o do
+  node-gyp. **Ainda nao rodado na maquina de quem publica** — o primeiro
+  `release:desktop` depois deste PR e o teste.
+- **O teste de carga do modulo so chama `disponivel()`.** O runner nao tem
+  dispositivo de audio, entao `listarSaidas()` e a captura nao sao
+  exercitadas — isso continua sendo teste manual numa maquina com som.
+- **O instalador do CI nao e assinado**, igual ao de release (sem certificado).
+  E artefato de teste, nao canal de distribuicao.
+- **Producao com mais de um gateway ainda precisa de sticky session.** O
+  navegador conecta por long-polling e so depois sobe para WebSocket
+  (`realtime-provider.tsx` nao fixa `transports`); com duas maquinas, as
+  requisicoes de polling de um mesmo cliente podem cair em maquinas
+  diferentes e o handshake falha ("Session ID unknown"). O proxy da Fly nao
+  faz sticky sozinho. Antes da segunda maquina: ou `transports: ["websocket"]`
+  no cliente (perde o fallback em rede que bloqueia WebSocket), ou sticky no
+  proxy. O CI nao cobre isso — os `verify-*` usam so WebSocket.
+- **`/internal/profile-changed` atualiza `socket.data.user` so na instancia
+  que recebeu a chamada** (ja anotado no codigo). Com dois gateways, a TELA dos
+  outros ja atualiza (o `user:profile` passa pelo adapter), mas a proxima
+  mensagem/entrada em call de um socket da outra instancia ainda grava o
+  snapshot velho ate reconectar. Nenhum `verify-*` exercita isso.
+- **Postgres 18 no CI; producao (Supabase) pode estar em outra versao.** O
+  CI pega o mais novo; se o Supabase estiver numa major anterior, algo que so
+  existe no 18 passaria aqui e falharia la. O schema do projeto nao usa nada
+  recente, mas vale conferir a versao do Supabase e alinhar se divergir.
+- **As versoes novas das actions e imagens nao foram lidas uma a uma no
+  changelog.** O CI deste PR e o teste; o que quebrar, corrige aqui.
+- **O `integracao` nao e obrigatorio.** Ele roda em todo PR, mas uma falha de
+  infra (Docker, LiveKit, proxy REST) nao deve travar merge. Promover a
+  obrigatorio depende de ele ficar estavel por algumas semanas.
+- **O `require("electron")` no topo de `game-detect.js`/`picker.js` continua.**
+  O `verificar` ainda instala o Electron so por causa dele. Agora ha runner
+  Windows para verificar a mudanca, mas e codigo de producao do app e ficou
+  fora desta rodada.
 
 ## Auditoria de seguranca (26/08/2026) — o que foi corrigido e o que ficou
 
@@ -5536,8 +5786,9 @@ usuario sem senha. Corrigido.
   falso-verde.
 - **Sem medicao de cobertura.** Nenhum relatorio configurado; o que existe foi
   escolhido a dedo, nao guiado por percentual.
-- **A suite ainda nao roda em CI** — isso e a fase 7e. Hoje depende de alguem
-  lembrar de rodar `npm test`.
+- ~~**A suite ainda nao roda em CI**~~ — resolvido: o job `verificar` do
+  `ci.yml` roda `vitest` em todo PR, e a fase 7e o tornou obrigatorio para o
+  merge.
 - **O contrato do rate limit esta testado, a protecao continua furada.** Os
   testes fixam o comportamento do algoritmo em memoria; em producao, na Vercel,
   cada instancia serverless tem o proprio contador, entao o bloqueio de forca

@@ -11,6 +11,7 @@ import { createSocketTicketAction } from "@/server/actions/realtime";
 import { sincronizarCatalogoDeJogos } from "@/lib/desktop/game-activity";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useVozDeAmigosStore } from "@/lib/stores/voz-de-amigos-store";
+import { usePerfisStore } from "@/lib/stores/perfis-store";
 import { useConvitesStore } from "@/lib/stores/convites-store";
 import { toast } from "@/lib/stores/toast-store";
 
@@ -135,6 +136,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     let instance: TypedSocket | null = null;
     let cancelled = false;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let perfilTimer: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Deixa um ticket novo em maos para a PROXIMA tentativa. O socket.io
@@ -340,6 +342,22 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       });
 
       /**
+       * Alguem que voce pode ver mudou foto, moldura ou nome. Dois efeitos:
+       * o `perfis-store` corrige o que vive no cliente (mensagens do chat, e
+       * todo `<Avatar>`), e o refresh traz as listas renderizadas no servidor
+       * (membros, amigos, DMs) ja com o perfil novo. Debounce porque trocar
+       * foto e moldura em seguida sao dois avisos.
+       */
+      socketInstance.on("user:profile", ({ user }) => {
+        usePerfisStore.getState().atualizar(user);
+        if (perfilTimer) clearTimeout(perfilTimer);
+        perfilTimer = setTimeout(() => {
+          perfilTimer = null;
+          refreshRef.current();
+        }, 400);
+      });
+
+      /**
        * A call de um amigo, ja filtrada no gateway para o que VOCE pode ver
        * (membro do servidor + `VIEW_CHANNEL`). `null` = saiu ou deixou de ser
        * visivel.
@@ -479,6 +497,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       if (refreshTimer) clearTimeout(refreshTimer);
+      if (perfilTimer) clearTimeout(perfilTimer);
       /**
        * NAO fecha na hora e NAO faz `setSocket(null)`: se for uma remonta
        * rapida do provedor, a proxima montagem cancela `descarteAgendado` e
