@@ -72,7 +72,7 @@ export const FLAGS_CONHECIDAS: Record<ChaveDeFlag, DefinicaoDeFlag> = {
   hub_grupos: {
     rotulo: "Hub AETHER · Grupos",
     descricao:
-      "Salas de voz por jogo abertas a qualquer conta (o hub global). Desligado até a moderação do hub (estágio 4b-2) estar no ar. Desligar esconde o hub e recusa entrar e criar sala; quem já está numa call termina a call.",
+      "Salas de voz por jogo abertas a qualquer conta (o hub global). Moderação no ar (bloqueio, remover da sala, denunciar, banir do hub). Desligar esconde o hub e recusa entrar e criar sala; quem já está numa call termina a call.",
     padrao: false,
   },
 };

@@ -78,6 +78,7 @@ export default async function ServerLayout({
     highestRolePosition: context.isOwner
       ? Number.MAX_SAFE_INTEGER
       : context.highestRolePosition,
+    hub: data.server.hub,
   };
 
   return (

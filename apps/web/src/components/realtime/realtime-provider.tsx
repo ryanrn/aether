@@ -348,6 +348,21 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
        * (membros, amigos, DMs) ja com o perfil novo. Debounce porque trocar
        * foto e moldura em seguida sao dois avisos.
        */
+      /**
+       * Hub (4b-2): o criador da sala te tirou dela. O gateway ja encerrou a
+       * ocupacao; aqui a intencao de voz acaba ANTES de qualquer reconexao
+       * tentar voltar (o gateway recusaria pelo prazo, mas seria um erro
+       * confuso na tela), a midia cai, e a pessoa sabe o que houve.
+       */
+      socketInstance.on("hub:removido", ({ channelId }) => {
+        const estado = useRealtimeStore.getState();
+        // Ja trocou de sala por conta propria: nao derruba a call nova.
+        if (estado.voiceIntent && estado.voiceIntent.channelId !== channelId) return;
+        estado.setVoiceIntent(null);
+        estado.setMedia(null);
+        toast.erro("Quem criou a sala te removeu dela.");
+      });
+
       socketInstance.on("user:profile", ({ user }) => {
         usePerfisStore.getState().atualizar(user);
         if (perfilTimer) clearTimeout(perfilTimer);

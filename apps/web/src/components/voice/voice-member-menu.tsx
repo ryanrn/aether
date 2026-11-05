@@ -14,6 +14,7 @@ import {
   saveUserVolume,
 } from "@/lib/voice/volumes";
 import { VolumeSlider } from "@/components/ui/volume-slider";
+import { DenunciarDialog } from "@/components/chat/denunciar-dialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -118,6 +119,39 @@ export function VoiceMemberMenu({
   const canDeafen = viewer ? viewerCan(viewer, "DEAFEN_MEMBERS") : false;
   const canMove = viewer ? viewerCan(viewer, "MOVE_MEMBERS") : false;
 
+  /**
+   * Hub (4b-2): quem CRIOU a sala pode tirar alguem dela. A tela so mostra; o
+   * gateway confere a regra (`podeRemoverDaSalaDoHub`) de novo.
+   */
+  const salaDoParticipante = (voiceChannels ?? []).find(
+    (channel) => channel.id === participant.channelId,
+  );
+  const podeRemoverDaSala =
+    viewer?.hub === true &&
+    !isSelf &&
+    selfUserId !== null &&
+    salaDoParticipante?.criadaPor === selfUserId;
+  const [removendo, setRemovendo] = useState(false);
+  const [denunciando, setDenunciando] = useState(false);
+
+  function removerDaSala() {
+    if (!participant.channelId) return;
+    setError(null);
+    setRemovendo(true);
+    socket?.emit(
+      "hub:remover",
+      { channelId: participant.channelId, userId: participant.userId },
+      (result) => {
+        setRemovendo(false);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        onClose();
+      },
+    );
+  }
+
   const targets = (voiceChannels ?? []).filter(
     (channel) => channel.id !== participant.channelId,
   );
@@ -168,6 +202,23 @@ export function VoiceMemberMenu({
 
   if (!canMute && !canDeafen && !canMove && !showVolume) return null;
   if (typeof document === "undefined") return null;
+
+  /**
+   * Denunciar troca o menu pelo dialogo, em vez de fechar o menu: o menu e
+   * quem monta o dialogo, e fechar desmontaria os dois. Vale em QUALQUER
+   * call — no hub e onde mais importa (gente que voce nao conhece).
+   */
+  if (denunciando) {
+    return (
+      <DenunciarDialog
+        open
+        onClose={onClose}
+        tipo="USUARIO"
+        alvoId={participant.userId}
+        oQue={participant.user.displayName}
+      />
+    );
+  }
 
   return createPortal(
     <>
@@ -289,6 +340,23 @@ export function VoiceMemberMenu({
         {canMove ? (
           <MenuItem onClick={disconnect} icon="disconnect" danger>
             Desconectar da call
+          </MenuItem>
+        ) : null}
+
+        {podeRemoverDaSala ? (
+          <MenuItem
+            onClick={removerDaSala}
+            icon="disconnect"
+            danger
+            disabled={removendo}
+          >
+            Remover da sala
+          </MenuItem>
+        ) : null}
+
+        {!isSelf ? (
+          <MenuItem onClick={() => setDenunciando(true)} icon="alert">
+            Denunciar
           </MenuItem>
         ) : null}
 

@@ -565,6 +565,12 @@ export interface ServerToClientEvents {
    * pessoa, amigos dela e os outros aparelhos dela. So campos publicos.
    */
   "user:profile": (payload: { user: PublicUser }) => void;
+  /**
+   * O criador de uma sala do hub tirou VOCE dela (fase 2, estagio 4b-2). O
+   * gateway ja encerrou a ocupacao; o cliente derruba a midia e explica. So
+   * vai para a pessoa removida.
+   */
+  "hub:removido": (payload: { channelId: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -577,6 +583,14 @@ export interface ClientToServerEvents {
     ack: (result: JoinServerAck) => void,
   ) => void;
   "server:leave": (serverId: string) => void;
+  /**
+   * Hub (4b-2): quem CRIOU a sala tira alguem dela. A regra e
+   * `podeRemoverDaSalaDoHub` (@aether/access); o gateway confere tudo.
+   */
+  "hub:remover": (
+    payload: { channelId: string; userId: string },
+    ack: (result: { ok: true } | { ok: false; error: string }) => void,
+  ) => void;
   /** troca deliberada de status (ONLINE / IDLE / DND); persiste como preferencia */
   "presence:set": (status: UserStatus) => void;
   /**

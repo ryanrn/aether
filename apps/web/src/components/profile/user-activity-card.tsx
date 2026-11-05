@@ -36,6 +36,7 @@ import {
   FaixaDeBanner,
 } from "@/components/profile/cosmeticos-de-perfil";
 import { useImagensDoPerfil } from "@/lib/use-imagens-do-perfil";
+import { DenunciarDialog } from "@/components/chat/denunciar-dialog";
 
 /**
  * AETHER Activity — o cartao de perfil com o que a pessoa esta fazendo agora.
@@ -345,6 +346,37 @@ export function UserActivityCard({
     (item) => item.id !== participant?.channelId,
   );
 
+  /**
+   * Hub (4b-2): quem CRIOU a sala pode tirar alguem dela. A tela so mostra; o
+   * gateway confere a regra (`podeRemoverDaSalaDoHub`) de novo.
+   */
+  const podeRemoverDaSala =
+    naCall &&
+    viewer?.hub === true &&
+    !isSelf &&
+    selfUserId !== null &&
+    channel?.criadaPor === selfUserId;
+  const [removendoDaSala, setRemovendoDaSala] = useState(false);
+  const [denunciando, setDenunciando] = useState(false);
+
+  function removerDaSala() {
+    if (!socket || !participant?.channelId) return;
+    setErroModeracao(null);
+    setRemovendoDaSala(true);
+    socket.emit(
+      "hub:remover",
+      { channelId: participant.channelId, userId: user.id },
+      (resultado) => {
+        setRemovendoDaSala(false);
+        if (!resultado.ok) {
+          setErroModeracao(resultado.error);
+          return;
+        }
+        onClose();
+      },
+    );
+  }
+
   function joinChannel() {
     if (!socket || !channel) return;
     // Voz de servidor e chamada direta se excluem (salas diferentes do SFU).
@@ -361,6 +393,20 @@ export function UserActivityCard({
   }
 
   if (typeof document === "undefined") return null;
+
+  // Denunciar troca o cartao pelo dialogo — o cartao e quem monta o dialogo,
+  // e fechar um desmontaria o outro.
+  if (denunciando) {
+    return (
+      <DenunciarDialog
+        open
+        onClose={onClose}
+        tipo="USUARIO"
+        alvoId={user.id}
+        oQue={user.displayName}
+      />
+    );
+  }
 
   const nomeEstado = estado?.icon ?? null;
 
@@ -668,6 +714,18 @@ export function UserActivityCard({
             </button>
           ) : null}
 
+          {podeRemoverDaSala ? (
+            <button
+              type="button"
+              onClick={removerDaSala}
+              disabled={removendoDaSala}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-signal-dnd/40 px-2 py-1.5 text-[11px] text-signal-dnd transition-colors hover:bg-signal-dnd/10 disabled:opacity-50"
+            >
+              <AetherIcon name="disconnect" size="sm" className="h-3 w-3" />
+              {removendoDaSala ? "Removendo..." : "Remover da sala"}
+            </button>
+          ) : null}
+
           {erroModeracao ? (
             <p className="mt-2 text-[11px] leading-snug text-signal-dnd">
               {erroModeracao}
@@ -729,6 +787,17 @@ export function UserActivityCard({
                 Bloquear
               </button>
             )
+          ) : null}
+
+          {user.id !== selfUserId ? (
+            <button
+              type="button"
+              onClick={() => setDenunciando(true)}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-line px-3 py-1.5 text-[11px] text-ink-400 transition-colors hover:border-signal-dnd/40 hover:text-signal-dnd"
+            >
+              <AetherIcon name="alert" size="sm" className="h-3 w-3" />
+              Denunciar
+            </button>
           ) : null}
 
           {canJoin ? (

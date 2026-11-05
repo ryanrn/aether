@@ -50,6 +50,26 @@ export function motivoParaNaoEntrarNoHub(
   return null;
 }
 
+/**
+ * Quem pode tirar alguem de uma sala do hub (estagio 4b-2): SO quem a criou,
+ * so numa sala do hub, nunca a si mesmo.
+ *
+ * Servidor comum ja tem moderacao (cargos com MOVE_MEMBERS); la a sala de
+ * grupo nao da poder nenhum a quem a criou. No hub nao ha cargo de moderador
+ * por sala — o criador e o unico que responde por ela no momento.
+ *
+ * Pura. Quem chama confere ANTES que o alvo esta mesmo na sala.
+ */
+export function podeRemoverDaSalaDoHub(params: {
+  solicitanteId: string;
+  alvoId: string;
+  sala: { hub: boolean; criadaPor: string | null };
+}): boolean {
+  if (!params.sala.hub) return false;
+  if (params.alvoId === params.solicitanteId) return false;
+  return params.sala.criadaPor === params.solicitanteId;
+}
+
 /** O servidor marcado como hub, ou `null` se ninguem foi marcado ainda. */
 export async function carregarHub(): Promise<{ id: string } | null> {
   return await prisma.server.findFirst({

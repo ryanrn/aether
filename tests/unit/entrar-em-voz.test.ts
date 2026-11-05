@@ -17,10 +17,19 @@ vi.mock("@aether/db", () => ({
 const flagLigada = vi.fn();
 const loadMemberAccess = vi.fn();
 const getChannelPermissions = vi.fn();
+const loadBlockedBothWays = vi.fn();
 vi.mock("@aether/access", () => ({
   flagLigada,
   loadMemberAccess,
   getChannelPermissions,
+  loadBlockedBothWays,
+}));
+
+// Prazo de quem foi removido de sala do hub (4b-2) — dublado aqui; a versao
+// de verdade tem teste proprio (remocoes-do-hub.test.ts).
+const esperaRestante = vi.fn();
+vi.mock("../../apps/realtime/src/voz/remocoes-do-hub", () => ({
+  remocoesDoHub: { esperaRestante, registrar: vi.fn() },
 }));
 
 const createMediaCredentials = vi.fn();
@@ -115,9 +124,13 @@ beforeEach(() => {
     leaveVoice,
     voiceOfServer,
     voiceParticipant,
+    loadBlockedBothWays,
+    esperaRestante,
   ]) {
     m.mockReset();
   }
+  loadBlockedBothWays.mockResolvedValue(new Set());
+  esperaRestante.mockResolvedValue(0);
   flagLigada.mockResolvedValue(true);
   joinVoice.mockResolvedValue({ previousServerId: null });
   voiceOfServer.mockResolvedValue([]);
@@ -166,7 +179,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("canal de TEXTO -> nao_encontrada (nao existe pra voz)", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT", userLimit: null });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "TEXT", userLimit: null, server: { hub: false } });
 
     const r = await entrarNaVoz(io, {
       userId: "u_1",
@@ -180,7 +193,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("sem acesso ao servidor -> nao_encontrada", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null, server: { hub: false } });
     loadMemberAccess.mockResolvedValue(null);
 
     const r = await entrarNaVoz(io, {
@@ -194,7 +207,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("sem VIEW_CHANNEL -> nao_encontrada", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null, server: { hub: false } });
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
     getChannelPermissions.mockResolvedValue(0n);
 
@@ -209,7 +222,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("ve o canal mas sem CONNECT -> sem_permissao (mensagem revela, nao esconde)", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null, server: { hub: false } });
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
     getChannelPermissions.mockResolvedValue(1n << 6n); // so VIEW_CHANNEL
 
@@ -228,7 +241,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("canal cheio -> cheio (mas nao conta quem ja esta la)", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: 2 });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: 2, server: { hub: false } });
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
     getChannelPermissions.mockResolvedValue((1n << 6n) | (1n << 7n)); // VIEW+CONNECT
     voiceParticipant.mockResolvedValue(null);
@@ -245,7 +258,7 @@ describe("entrarNaVoz — recusas", () => {
 
   it("ja esta no canal (troca de aba/reconecta) -> nao conta contra o limite", async () => {
     const { io } = fakeIo();
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: 1 });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: 1, server: { hub: false } });
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
     getChannelPermissions.mockResolvedValue((1n << 6n) | (1n << 7n));
     voiceParticipant.mockResolvedValue({ channelId: "c_1" });
@@ -263,7 +276,7 @@ describe("entrarNaVoz — recusas", () => {
 
 describe("entrarNaVoz — sucesso", () => {
   beforeEach(() => {
-    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null });
+    channelFindUnique.mockResolvedValue({ serverId: "s_1", type: "VOICE", userLimit: null, server: { hub: false } });
     loadMemberAccess.mockResolvedValue({ serverId: "s_1" });
     getChannelPermissions.mockResolvedValue((1n << 6n) | (1n << 7n));
     voiceParticipant.mockResolvedValue({ userId: "u_1", channelId: "c_1", user: USER });
@@ -356,5 +369,59 @@ describe("sairDaVoz", () => {
       payload: { serverId: "s_1", participant: { userId: "u_1", channelId: null } },
     });
     expect(talvezRemoverSalaEfemera).toHaveBeenCalledWith(io, "c_1");
+  });
+});
+
+const ENTRADA = { userId: "u_1", user: USER, channelId: "c_1", socketId: "s_1" };
+
+describe("entrarNaVoz — sala do HUB (4b-2)", () => {
+  const salaDoHub = { serverId: "hub", type: "VOICE", userLimit: 5, server: { hub: true } };
+  const VIEW_CONNECT = (1n << 6n) | (1n << 7n);
+
+  beforeEach(() => {
+    channelFindUnique.mockResolvedValue(salaDoHub);
+    loadMemberAccess.mockResolvedValue({ serverId: "hub" });
+    getChannelPermissions.mockResolvedValue(VIEW_CONNECT);
+    voiceParticipant.mockResolvedValue(null);
+    countInChannel.mockResolvedValue(1);
+  });
+
+  it("removido ha pouco pelo criador: recusa e diz quanto falta", async () => {
+    esperaRestante.mockResolvedValue(4 * 60_000);
+    const { io } = fakeIo();
+    const r = await entrarNaVoz(io, ENTRADA);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toMatch(/removido.*4 min/);
+    expect(joinVoice).not.toHaveBeenCalled();
+  });
+
+  it("bloqueio com alguem LA DENTRO (qualquer direcao): indisponivel, sem dizer quem", async () => {
+    voiceOfServer.mockResolvedValue([
+      { userId: "u_dentro", channelId: "c_1" },
+      { userId: "u_outra_sala", channelId: "c_9" },
+    ]);
+    loadBlockedBothWays.mockResolvedValue(new Set(["u_dentro"]));
+    const { io } = fakeIo();
+    const r = await entrarNaVoz(io, ENTRADA);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toBe("Esta sala nao esta disponivel para voce.");
+    expect(joinVoice).not.toHaveBeenCalled();
+  });
+
+  it("bloqueio com alguem de OUTRA sala nao atrapalha", async () => {
+    voiceOfServer.mockResolvedValue([{ userId: "u_outra_sala", channelId: "c_9" }]);
+    loadBlockedBothWays.mockResolvedValue(new Set(["u_outra_sala"]));
+    joinVoice.mockResolvedValue({ previousServerId: null });
+    const { io } = fakeIo();
+    const r = await entrarNaVoz(io, ENTRADA);
+    expect(r.ok).toBe(true);
+  });
+
+  it("servidor COMUM nao consulta prazo nem bloqueio (moderacao e do servidor)", async () => {
+    channelFindUnique.mockResolvedValue({ ...salaDoHub, server: { hub: false } });
+    const { io } = fakeIo();
+    await entrarNaVoz(io, ENTRADA);
+    expect(esperaRestante).not.toHaveBeenCalled();
+    expect(loadBlockedBothWays).not.toHaveBeenCalled();
   });
 });

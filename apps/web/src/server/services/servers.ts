@@ -240,6 +240,7 @@ export async function getServerContext(
       ownerId: true,
       cargoPorJogo: true,
       salasDeGrupo: true,
+      hub: true,
       _count: { select: { members: true } },
       categories: {
         orderBy: { position: "asc" },
@@ -357,6 +358,7 @@ export async function getServerContext(
       name: server.name,
       iconUrl: server.iconUrl,
       ownerId: server.ownerId,
+      hub: server.hub,
       memberCount: server._count.members,
     },
     categories,

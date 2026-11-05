@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import type { DenunciaNaFila } from "@aether/shared";
+import { BAN_DURATIONS, type DenunciaNaFila } from "@aether/shared";
 import { AetherIcon } from "@/components/ui/aether-icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Modal } from "@/components/ui/modal";
@@ -14,6 +14,7 @@ import {
   resolverDenunciaAction,
   silenciarUsuarioAction,
 } from "@/server/actions/denuncia";
+import { banirDoHubAction } from "@/server/actions/hub";
 import { cn } from "@/lib/utils";
 
 /**
@@ -60,6 +61,10 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
   const [confirmandoSilenciar, setConfirmandoSilenciar] =
     useState<DenunciaNaFila | null>(null);
   const [diasSilenciar, setDiasSilenciar] = useState("");
+  /** Banir do hub global (fase 2, 4b-2) — o ban do servidor do hub. */
+  const [confirmandoBanirHub, setConfirmandoBanirHub] =
+    useState<DenunciaNaFila | null>(null);
+  const [duracaoBanHub, setDuracaoBanHub] = useState<string>("7d");
 
   const carregar = useCallback(() => {
     void listarDenunciasAction({ status: "ABERTA" }).then((r) => {
@@ -198,6 +203,20 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
                   Silenciar autor
                 </button>
               ) : null}
+
+              {d.autorDoAlvoId ? (
+                <button
+                  type="button"
+                  disabled={ocupado}
+                  onClick={() => {
+                    setDuracaoBanHub("7d");
+                    setConfirmandoBanirHub(d);
+                  }}
+                  className="rounded-sm border border-signal-dnd/40 px-2.5 py-1 text-[11px] font-medium text-signal-dnd transition-colors hover:bg-signal-dnd/15 disabled:opacity-50"
+                >
+                  Banir do hub
+                </button>
+              ) : null}
             </div>
           </div>
         );
@@ -307,6 +326,62 @@ export function DenunciasTab({ onAbertas }: { onAbertas: (n: number) => void }) 
             agindoEm === confirmandoSilenciar.id
               ? "Silenciando..."
               : "Silenciar"}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmandoBanirHub !== null}
+        onClose={() => setConfirmandoBanirHub(null)}
+        title="Banir do hub"
+        description="Tira a pessoa do hub AETHER · Grupos e impede de voltar. Os servidores dela nao mudam."
+        className="max-w-[380px]"
+      >
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="den-duracao-hub">Por quanto tempo</Label>
+          <select
+            id="den-duracao-hub"
+            value={duracaoBanHub}
+            onChange={(e) => setDuracaoBanHub(e.target.value)}
+            className="rounded-md border border-line-strong bg-base-950 px-2.5 py-2 text-[13px] text-ink-200"
+          >
+            {BAN_DURATIONS.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setConfirmandoBanirHub(null)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            disabled={
+              pendente &&
+              confirmandoBanirHub !== null &&
+              agindoEm === confirmandoBanirHub.id
+            }
+            onClick={() => {
+              const alvo = confirmandoBanirHub;
+              if (!alvo?.autorDoAlvoId) return;
+              agir(alvo.id, async () => {
+                const r = await banirDoHubAction({
+                  userId: alvo.autorDoAlvoId!,
+                  duracao: duracaoBanHub,
+                  motivo: MOTIVO_ROTULO[alvo.motivo],
+                });
+                if (r.ok) {
+                  await resolverDenunciaAction(alvo.id, "RESOLVIDA", "banido do hub");
+                  setConfirmandoBanirHub(null);
+                }
+                return r;
+              });
+            }}
+          >
+            Banir do hub
           </Button>
         </div>
       </Modal>

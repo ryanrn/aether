@@ -4,7 +4,9 @@ import type { ContaParaOHub } from "../../packages/access/src/hub";
 
 vi.mock("@aether/db", () => ({ prisma: {} }));
 
-const { motivoParaNaoEntrarNoHub } = await import("../../packages/access/src/hub");
+const { motivoParaNaoEntrarNoHub, podeRemoverDaSalaDoHub } = await import(
+  "../../packages/access/src/hub"
+);
 
 /**
  * A porta do hub global (fase 2, estagio 4b-1). Cada requisito recusa SOZINHO —
@@ -59,5 +61,47 @@ describe("motivoParaNaoEntrarNoHub", () => {
 
   it("equipe silenciada continua recusada", () => {
     expect(motivo({ equipe: true, silenciadoEm: horasAtras(1) })).toBe("silenciado");
+  });
+});
+
+describe("podeRemoverDaSalaDoHub (estagio 4b-2)", () => {
+  const sala = { hub: true, criadaPor: "criador" };
+
+  it("quem criou a sala do hub remove outra pessoa", () => {
+    expect(
+      podeRemoverDaSalaDoHub({ solicitanteId: "criador", alvoId: "x", sala }),
+    ).toBe(true);
+  });
+
+  it("quem NAO criou nao remove ninguem", () => {
+    expect(
+      podeRemoverDaSalaDoHub({ solicitanteId: "outro", alvoId: "x", sala }),
+    ).toBe(false);
+  });
+
+  it("ninguem remove a si mesmo", () => {
+    expect(
+      podeRemoverDaSalaDoHub({ solicitanteId: "criador", alvoId: "criador", sala }),
+    ).toBe(false);
+  });
+
+  it("fora do hub, criar a sala nao da poder nenhum (servidor comum tem moderacao)", () => {
+    expect(
+      podeRemoverDaSalaDoHub({
+        solicitanteId: "criador",
+        alvoId: "x",
+        sala: { hub: false, criadaPor: "criador" },
+      }),
+    ).toBe(false);
+  });
+
+  it("sala sem criador registrado: ninguem remove", () => {
+    expect(
+      podeRemoverDaSalaDoHub({
+        solicitanteId: "criador",
+        alvoId: "x",
+        sala: { hub: true, criadaPor: null },
+      }),
+    ).toBe(false);
   });
 });
