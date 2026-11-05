@@ -54,6 +54,8 @@ import { copiarTexto } from "@/lib/clipboard";
 import { ChannelMembers } from "./channel-members";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reorderChannelAction } from "@/server/actions/channels";
+import { moverCanalNaArvore, type ArvoreDeCanais } from "@/lib/channels/mover-na-arvore";
+import { toast } from "@/lib/stores/toast-store";
 import { ChannelFormModal } from "@/components/channels/channel-form-modal";
 import { CategoryFormModal } from "@/components/channels/category-form-modal";
 import { InviteButton } from "@/components/servers/invite-button";
@@ -71,8 +73,8 @@ import { ServerMenu } from "@/components/layout/server-menu";
 export function ChannelSidebar({
   serverId,
   serverName,
-  categories,
-  looseChannels,
+  categories: categoriesDoServidor,
+  looseChannels: looseChannelsDoServidor,
   roles,
   viewer,
   channelPermissions,
@@ -86,6 +88,38 @@ export function ChannelSidebar({
   viewer: ViewerContext;
   channelPermissions: ChannelPermissionMap;
 }) {
+  /**
+   * A arvore que a tela MOSTRA. Normalmente e a que veio do servidor; entre
+   * soltar um canal e o servidor responder, e a versao ja reordenada
+   * (`moverCanalNaArvore`) — sem isto o canal voltava ao lugar antigo e so
+   * pulava para o novo ~3 s depois, parecendo que o app tinha travado.
+   *
+   * Quando o servidor manda a arvore nova (refresh, `server:changed`), ela
+   * substitui a local: o servidor continua sendo a fonte da verdade. Padrao
+   * "derivar estado da prop" do React, sem efeito (sem um quadro com a
+   * arvore velha).
+   */
+  const [arvore, setArvore] = useState<ArvoreDeCanais>({
+    categories: categoriesDoServidor,
+    looseChannels: looseChannelsDoServidor,
+  });
+  const [arvoreDoServidor, setArvoreDoServidor] = useState({
+    categories: categoriesDoServidor,
+    looseChannels: looseChannelsDoServidor,
+  });
+  if (
+    arvoreDoServidor.categories !== categoriesDoServidor ||
+    arvoreDoServidor.looseChannels !== looseChannelsDoServidor
+  ) {
+    const nova = {
+      categories: categoriesDoServidor,
+      looseChannels: looseChannelsDoServidor,
+    };
+    setArvoreDoServidor(nova);
+    setArvore(nova);
+  }
+  const { categories, looseChannels } = arvore;
+
   const params = useParams<{ channelId?: string }>();
   const activeChannelId = params?.channelId;
   const navAberta = useShellStore((estado) => estado.navAberta);
@@ -137,12 +171,23 @@ export function ChannelSidebar({
     // Sobre a area vazia: vai para o fim.
     const indice = indiceAlvo === -1 ? irmaos.length : indiceAlvo;
 
-    void reorderChannelAction(
-      serverId,
-      canalId,
-      destino === SOLTOS ? null : destino,
-      indice,
-    );
+    const categoriaDestino = destino === SOLTOS ? null : destino;
+
+    // Na tela JA, antes da resposta; volta como estava se o servidor recusar.
+    const anterior = arvore;
+    setArvore(moverCanalNaArvore(arvore, canalId, categoriaDestino, indice));
+
+    void reorderChannelAction(serverId, canalId, categoriaDestino, indice)
+      .then((r) => {
+        if (!r.ok) {
+          setArvore(anterior);
+          toast.erro(r.error);
+        }
+      })
+      .catch(() => {
+        setArvore(anterior);
+        toast.erro("Nao consegui mover o canal. Tente de novo.");
+      });
   }
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

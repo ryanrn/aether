@@ -3763,6 +3763,49 @@ redesign OpenDesign (o terceiro):
 - **Sem toque:** o `PointerSensor` cobre mouse e caneta; celular nao foi
   verificado.
 
+### Mover canal sem esperar ~3 s (05/11/2026)
+
+**O sintoma, em producao:** arrastar um canal (ou usar as setas) deixava a
+arvore parada ~3 s: o canal voltava ao lugar antigo e so "pulava" para o novo
+depois, parecendo que o app tinha perdido a conexao. O socket nunca caia — era
+espera.
+
+**A causa:** a tela so mudava depois de o servidor terminar TUDO em
+sequencia: gravar a ordem, pedir ao gateway (Vercel -> Fly) o RECALCULO DE
+SALAS de cada socket do servidor (carrega o acesso e as permissoes de canal de
+cada pessoa conectada) e recarregar a arvore.
+
+**A correcao:**
+- **Na tela, na hora.** Ao soltar, `moverCanalNaArvore`
+  (`lib/channels/mover-na-arvore.ts`) monta a arvore ja reordenada; se o
+  servidor recusar, volta a anterior e aparece o erro. A arvore do servidor
+  continua sendo a verdade: quando ela chega (refresh), substitui a local.
+- **A mesma conta dos dois lados.** `reposicionar` (`@aether/shared`) e usado
+  pela tela e por `reorderChannel` no servidor — com contas diferentes, o
+  canal pularia de lugar quando a resposta chegasse.
+- **Menos trabalho no gateway.** Reordenar na MESMA categoria (e as setas, que
+  nunca trocam de categoria) nao muda quem ve o que: o web pede so o aviso
+  (`avisarArvoreMudou` -> `/internal/resync-rooms` com `soAvisar: true`), sem
+  recalculo. Mudar de categoria continua com o recalculo completo, porque pode
+  mudar a visibilidade (categoria privada). Um gateway antigo ignora o campo e
+  faz o completo: a ordem de deploy entre web e gateway nao importa.
+- **Autorizacao igual:** `EDIT_CHANNEL` continua conferido no servidor.
+
+Testes: `tests/unit/mover-canal.test.ts` (a conta, mesma categoria, troca de
+categoria, solto <-> categoria, nada perdido/duplicado, original intacta) e
+`scripts/verify-arvore-aviso.mjs` (gateway real: o aviso leve chega ao membro,
+nao a quem e de fora, e o caminho completo segue igual).
+
+**Limitacoes:**
+- **Os OUTROS ainda veem a mudanca so quando o refresh deles volta** (o
+  `server:changed` dispara um `router.refresh`, com debounce de 300 ms). Ficou
+  mais rapido porque o aviso sai sem o recalculo, mas nao e instantaneo como
+  para quem arrastou.
+- **Trocar de categoria segue mais lento para o gateway** (recalculo
+  completo) — para quem arrastou ja e instantaneo na tela.
+- **Nao medido em producao.** O ganho esperado vem de tirar a espera da tela
+  (otimista) e o recalculo do caminho comum; o tempo real e o teste.
+
 ## Midia avancada: codec da tela e tratamento do microfone
 
 Em Configuracoes > Voz e video, no fim da aba.

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma, type ChannelType } from "@aether/db";
-import { combine } from "@aether/shared";
+import { combine, reposicionar } from "@aether/shared";
 
 /**
  * Camada de dados de canais e categorias.
@@ -286,7 +286,7 @@ export async function reorderChannel(params: {
   channelId: string;
   categoryId: string | null;
   index: number;
-}): Promise<void> {
+}): Promise<{ mudouDeCategoria: boolean }> {
   const { serverId, channelId, categoryId, index } = params;
 
   const canal = await prisma.channel.findFirst({
@@ -314,11 +314,13 @@ export async function reorderChannel(params: {
     select: { id: true },
   });
 
-  // Tira o proprio da lista antes de reinserir: mudando de categoria ele nem
-  // estava ali, e na mesma categoria ficaria duplicado.
-  const semEle = irmaos.map((c) => c.id).filter((id) => id !== channelId);
-  const alvo = Math.max(0, Math.min(index, semEle.length));
-  const ordenados = [...semEle.slice(0, alvo), channelId, ...semEle.slice(alvo)];
+  // A MESMA conta que a tela faz para mostrar a ordem nova antes da resposta
+  // (`reposicionar`, de @aether/shared) — senao o canal pularia de lugar.
+  const ordenados = reposicionar(
+    irmaos.map((c) => c.id),
+    channelId,
+    index,
+  );
 
   await prisma.$transaction([
     // A categoria muda numa escrita separada porque so ela sai da categoria
@@ -331,4 +333,6 @@ export async function reorderChannel(params: {
       prisma.channel.update({ where: { id }, data: { position: posicao } }),
     ),
   ]);
+
+  return { mudouDeCategoria: canal.categoryId !== categoryId };
 }

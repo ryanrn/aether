@@ -16,7 +16,7 @@ import {
   requireChannelPermission,
   requirePermission,
 } from "../guards";
-import { resyncGatewayRooms } from "../realtime-notify";
+import { avisarArvoreMudou, resyncGatewayRooms } from "../realtime-notify";
 import {
   createCategory,
   createChannel,
@@ -169,8 +169,12 @@ export async function moveChannelAction(
   try {
     await requireChannelPermission(serverId, channelId, "EDIT_CHANNEL");
     await moveChannel(channelId, serverId, direction);
-    // Ordem e cosmetica, mas a arvore de todo mundo precisa refletir.
-    await resyncGatewayRooms({ serverId });
+    /**
+     * Ordem e cosmetica (as setas nunca trocam de categoria): a arvore de todo
+     * mundo precisa refletir, mas ninguem passa a ver ou deixar de ver nada —
+     * so o aviso, sem o recalculo de salas.
+     */
+    await avisarArvoreMudou({ serverId });
     refresh(serverId);
     return ok();
   } catch (error) {
@@ -363,13 +367,19 @@ export async function reorderChannelAction(
       return fail("Posicao invalida.");
     }
 
-    await reorderChannel({ serverId, channelId, categoryId, index });
+    const { mudouDeCategoria } = await reorderChannel({
+      serverId,
+      channelId,
+      categoryId,
+      index,
+    });
     /**
-     * Mesmo aviso do mover por setas. Mudar de CATEGORIA pode mexer no que
-     * cada pessoa enxerga (categoria privada), entao nao basta redesenhar a
-     * arvore de quem arrastou.
+     * Mudar de CATEGORIA pode mexer no que cada pessoa enxerga (categoria
+     * privada): recalculo completo das salas. Na MESMA categoria so a ordem
+     * muda — basta o aviso, que e o que deixava o arraste lento (~3 s).
      */
-    await resyncGatewayRooms({ serverId });
+    if (mudouDeCategoria) await resyncGatewayRooms({ serverId });
+    else await avisarArvoreMudou({ serverId });
     refresh(serverId);
     return ok();
   } catch (error) {

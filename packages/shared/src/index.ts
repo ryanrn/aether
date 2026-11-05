@@ -18,6 +18,7 @@ export * from "./convites-de-jogo";
 export * from "./legal";
 export * from "./missoes";
 export * from "./moedas";
+export * from "./ordem";
 export * from "./permissions";
 export * from "./plans";
 export * from "./redis";
