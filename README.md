@@ -592,7 +592,7 @@ coisa social.
 | 3 | **Salas de voz efemeras + "Procurar grupo" (LFG)** — opt-in por servidor. Migracao `20260906150000_salas_de_grupo`. | ✅ |
 | 4a | **Grupos: LFG pelos seus servidores** — pagina `/app/grupos` que cruza os servidores onde voce e membro. Sem migracao. | ✅ |
 | 4b-1 | **Hub global "AETHER · Grupos" — base**: servidor marcado como hub, regras e requisitos de entrada, salas com tamanho, secao em `/app/grupos`. Migracao `20261105120000_hub_de_grupos`. Flag `hub_grupos` DESLIGADA. | ✅ |
-| 4b-2 | Hub — moderacao: bloqueio na entrada, criador remove (com espera), denunciar da call, banir do hub pela equipe | ⬜ |
+| 4b-2 | **Hub — moderacao**: bloqueio na entrada, criador remove (15 min de espera), denunciar da call, banir do hub pela equipe. Sem migracao. | ✅ |
 | 4b-3 | Hub — contexto leve: tela propria da sala, eventos de voz escopados a sala, hub fora do trilho | ⬜ |
 
 ### O que fechou no estagio 1
@@ -810,6 +810,63 @@ Automatizado: `tests/unit/hub-acesso.test.ts` (cada requisito recusa sozinho),
 conectar; recebe depois do `server:join`) — conferido que ele FALHA sem a
 mudanca no `rooms.ts`.
 
+### O que fechou no estagio 4b-2 — Hub: moderacao
+
+**Sem migracao.** Tudo reaproveita `Block`, `Denuncia` e `Ban`.
+
+- **Bloqueio vale na entrada da sala** (`entrar-em-voz.ts`, so salas do hub):
+  se voce bloqueou alguem que esta la dentro, ou alguem la dentro te bloqueou,
+  a entrada e recusada com "Esta sala nao esta disponivel para voce." — sem
+  dizer quem. A sala junta desconhecidos; bloqueio que nao valesse na call
+  seria enfeite. Servidor comum fica como sempre (la quem decide e a moderacao
+  do servidor).
+- **Quem criou a sala remove alguem dela** — evento de socket `hub:remover`,
+  regra `podeRemoverDaSalaDoHub` (@aether/access: so o criador, so no hub,
+  nunca a si mesmo; o alvo tem de estar NA sala). O removido recebe
+  `hub:removido` (a call cai e aparece o aviso) e fica
+  **15 min** sem voltar AQUELA sala (`voz/remocoes-do-hub.ts`: Redis com `PX`
+  quando o gateway tem Redis, memoria quando nao). As outras salas continuam
+  abertas a ele — remover e decisao do dono da sala, nao banimento.
+  Aparece como "Remover da sala" no cartao da pessoa na arvore e no menu de
+  clique direito da call, so para quem criou a sala.
+- **Denunciar da call:** "Denunciar" no cartao e no menu de clique direito de
+  qualquer participante (denuncia do tipo USUARIO, vai para a fila da equipe).
+  Vale em toda call, nao so no hub.
+- **Banir do hub (equipe):** "Banir do hub" na fila de denuncias, para
+  denuncia de usuario ou de mensagem, com duracao (1 dia, 7, 30, permanente).
+  Usa o `Ban` do servidor do hub (o `entrarNoHub` ja recusava banido), tira a
+  pessoa das salas na hora (`evictFromGateway`) e resolve a denuncia. Os
+  servidores da pessoa nao mudam.
+
+**Como testar:** com o hub marcado e a flag ligada, a conta A cria uma sala e
+a conta B entra.
+1. Clique direito em B na call (ou clique em B na arvore) -> "Remover da sala".
+   B cai da call com o aviso e, ao tentar entrar de novo, ve "Voce foi removido
+   desta sala. Pode voltar em 15 min."
+2. A conta C bloqueia A. C tenta entrar na sala: "Esta sala nao esta
+   disponivel para voce."
+3. Qualquer um denuncia alguem da call; na fila da equipe aparece "Banir do
+   hub"; banido, a pessoa sai da call e ve "Voce nao pode entrar no hub."
+
+Automatizado: `tests/unit/hub-acesso.test.ts` (regra de remocao),
+`tests/unit/remocoes-do-hub.test.ts` (prazo), `tests/unit/entrar-em-voz.test.ts`
+(as duas recusas so no hub) e `scripts/verify-hub.mjs` (gateway real: quem nao
+criou nao remove, o criador remove, o removido nao volta, o bloqueio barra).
+
+### Limitacoes conhecidas (estagio 4b-2)
+
+- **Bloqueio so na ENTRADA.** Se A bloqueia B com os dois ja na mesma sala,
+  ninguem e tirado — o bloqueio vale na proxima entrada.
+- **A lista de salas nao esconde as "indisponiveis":** a sala aparece e a
+  recusa vem ao clicar. Esconder exigiria saber quem esta em cada sala na hora
+  de listar (hoje a lista so tem a contagem, de proposito).
+- **O criador que sai da sala continua "dono" dela** (`criadaPor`) enquanto
+  ela existir — se voltar, ainda pode remover. A sala some quando esvazia.
+- **Sem historico de remocoes:** e estado curto (Redis/memoria), so com log
+  estruturado (`gateway.hub.removido`). Ban e denuncia ficam no banco.
+- **Banir do hub nao tem tela de "desbanir"** propria: o ban e um `Ban` comum
+  do servidor do hub, e sai pela aba Banimentos das configuracoes dele.
+
 ### Limitacoes conhecidas (estagio 4b-1)
 
 - **ORDEM DE DEPLOY: a migracao ANTES do codigo.** O gateway
@@ -818,8 +875,9 @@ mudanca no `rooms.ts`.
   para de acender (o erro e logado, a conexao segue) e a tela de Grupos quebra.
   `npm run db:deploy` em producao primeiro; depois o merge.
 
-- **Nao pode ir ao ar ainda.** Sem o 4b-2 nao ha bloqueio na entrada, remocao
-  pelo criador nem denuncia pela call. A flag fica desligada ate la.
+- ~~**Nao pode ir ao ar ainda.**~~ O 4b-2 (moderacao) fechou. O que falta para
+  muita gente e o 4b-3 (escala e tela leve); para um beta pequeno, da para
+  ligar a flag.
 - **O hub aparece no trilho de quem entrou** e abre como servidor comum (arvore
   e painel de membros). Esconder e a tela leve sao o 4b-3.
 - **Abrir o hub ainda recebe os eventos de TODAS as salas dele** (o

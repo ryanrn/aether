@@ -2,14 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  banExpiryFrom,
+  banDurationSchema,
   criarSalaNoHubSchema,
   entrarNoHubSchema,
   type ActionResult,
 } from "@aether/shared";
-import { requireUser } from "../guards";
+import { log } from "@aether/shared/log";
+import { requireUser, sessaoDaEquipe } from "../guards";
+import { writeAudit } from "../audit";
 import { rateLimit } from "../auth/rate-limit";
-import { resyncGatewayRooms } from "../realtime-notify";
-import { criarSalaNoHub, entrarNoHub } from "../services/hub";
+import { evictFromGateway, resyncGatewayRooms } from "../realtime-notify";
+import { banirDoHub, criarSalaNoHub, entrarNoHub } from "../services/hub";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -73,6 +77,55 @@ export async function criarSalaNoHubAction(
       revalidatePath(`/app/s/${r.data.hubId}`, "layout");
     }
     return ok({ hubId: r.data.hubId, channelId: r.data.channelId });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Bane do hub (estagio 4b-2) — so EQUIPE. Chamado da fila de denuncias.
+ *
+ * Quem nao e equipe recebe "Nao encontrado", como em toda acao da equipe: a
+ * resposta nao confirma que a acao existe.
+ */
+export async function banirDoHubAction(input: {
+  userId: string;
+  duracao: string;
+  motivo?: string;
+}): Promise<ActionResult<undefined>> {
+  try {
+    const sessao = await sessaoDaEquipe();
+    if (!sessao) return fail("Nao encontrado");
+
+    const userId = String(input?.userId ?? "");
+    if (!userId) return fail("Usuario invalido");
+    if (userId === sessao.user.id) return fail("Voce nao pode banir a si mesmo.");
+    const duracao = banDurationSchema.safeParse(input?.duracao);
+    if (!duracao.success) return fail("Duracao invalida");
+
+    const ate = banExpiryFrom(duracao.data);
+    const motivo = input?.motivo?.toString().slice(0, 500).trim() || null;
+    const r = await banirDoHub({ userId, porQuem: sessao.user.id, motivo, ate });
+    if (!r.ok) return r;
+
+    // Tira das salas do hub e da call na hora — mesmo caminho do ban comum.
+    await evictFromGateway({ serverId: r.data.hubId, userId });
+
+    log.warn("moderacao.banido_do_hub", "usuario banido do hub", {
+      alvo: userId,
+      por: sessao.user.id,
+      ate: ate?.toISOString() ?? "permanente",
+    });
+    await writeAudit({
+      serverId: r.data.hubId,
+      actorId: sessao.user.id,
+      action: "member.ban",
+      targetType: "user",
+      targetId: userId,
+      metadata: { via: "hub", duracao: duracao.data, motivo },
+    });
+    revalidatePath("/app/equipe");
+    return ok();
   } catch (error) {
     return toActionError(error);
   }

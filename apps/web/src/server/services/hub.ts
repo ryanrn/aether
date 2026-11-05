@@ -147,3 +147,45 @@ export async function criarSalaNoHub(params: {
   });
   return { ok: true, data: { hubId: estado.hubId, channelId, jaExistia } };
 }
+
+/**
+ * Bane do hub (estagio 4b-2) — decisao da EQUIPE, nao do criador da sala.
+ *
+ * Usa o `Ban` de servidor de sempre, no servidor do hub: `entrarNoHub` ja
+ * recusa banido (`banAtivo` -> motivo "banido"), e o `joinServerByCode` tambem.
+ * Funciona mesmo que a pessoa nao seja membro agora (ela nao volta a entrar).
+ *
+ * Quem chama confere que e equipe e tira a pessoa do gateway depois.
+ */
+export async function banirDoHub(params: {
+  userId: string;
+  porQuem: string;
+  motivo: string | null;
+  ate: Date | null;
+}): Promise<ActionResult<{ hubId: string }>> {
+  const hub = await carregarHub();
+  if (!hub) return { ok: false, error: "Nao ha hub marcado." };
+
+  await prisma.$transaction([
+    prisma.ban.upsert({
+      where: { serverId_userId: { serverId: hub.id, userId: params.userId } },
+      create: {
+        serverId: hub.id,
+        userId: params.userId,
+        issuedById: params.porQuem,
+        reason: params.motivo,
+        expiresAt: params.ate,
+      },
+      update: {
+        issuedById: params.porQuem,
+        reason: params.motivo,
+        expiresAt: params.ate,
+        createdAt: new Date(),
+      },
+    }),
+    prisma.serverMember.deleteMany({
+      where: { serverId: hub.id, userId: params.userId },
+    }),
+  ]);
+  return { ok: true, data: { hubId: hub.id } };
+}

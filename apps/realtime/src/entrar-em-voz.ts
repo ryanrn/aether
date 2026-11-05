@@ -1,9 +1,15 @@
 import { prisma } from "@aether/db";
-import { flagLigada, getChannelPermissions, loadMemberAccess } from "@aether/access";
+import {
+  flagLigada,
+  getChannelPermissions,
+  loadBlockedBothWays,
+  loadMemberAccess,
+} from "@aether/access";
 import { has, room, type PublicUser, type VoiceJoinAck } from "@aether/shared";
 import type { AetherServer } from "./types";
 import { createMediaCredentials } from "./livekit";
 import { talvezRemoverSalaEfemera } from "./voz/salas-efemeras";
+import { remocoesDoHub } from "./voz/remocoes-do-hub";
 import { marcarVozAlterada } from "./voz/voz-de-amigos";
 import {
   countInChannel,
@@ -81,7 +87,12 @@ export async function entrarNaVoz(
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: { serverId: true, type: true, userLimit: true },
+    select: {
+      serverId: true,
+      type: true,
+      userLimit: true,
+      server: { select: { hub: true } },
+    },
   });
   if (!channel || channel.type !== "VOICE") {
     return { ok: false, error: "Canal nao encontrado", codigo: "nao_encontrada" };
@@ -105,10 +116,48 @@ export async function entrarNaVoz(
     };
   }
 
+  const current = await voiceParticipant(userId);
+
+  /**
+   * HUB (fase 2, estagio 4b-2) — duas portas a mais, so nas salas do hub, so
+   * para quem entra de fora (quem ja esta dentro nao e barrado ao reconectar).
+   *
+   *  1. Removido pelo criador ha pouco: espera o prazo (`remocoes-do-hub`).
+   *  2. Bloqueio com alguem LA DENTRO, em qualquer direcao. A sala junta
+   *     desconhecidos; bloqueio que nao vale na call seria bloqueio de enfeite.
+   *     A resposta nao diz QUEM — "indisponivel" so —, para nao revelar quem
+   *     te bloqueou nem que a pessoa esta ali.
+   *
+   * Servidor comum fica como sempre: la quem decide e a moderacao do servidor.
+   */
+  if (channel.server.hub && current?.channelId !== channelId) {
+    const espera = await remocoesDoHub.esperaRestante(channelId, userId);
+    if (espera > 0) {
+      return {
+        ok: false,
+        error: `Voce foi removido desta sala. Pode voltar em ${Math.ceil(espera / 60_000)} min.`,
+        codigo: "sem_permissao",
+      };
+    }
+
+    const ocupantes = (await voiceOfServer(channel.serverId))
+      .filter((p) => p.channelId === channelId)
+      .map((p) => p.userId);
+    if (ocupantes.length > 0) {
+      const bloqueados = await loadBlockedBothWays(userId);
+      if (ocupantes.some((id) => bloqueados.has(id))) {
+        return {
+          ok: false,
+          error: "Esta sala nao esta disponivel para voce.",
+          codigo: "sem_permissao",
+        };
+      }
+    }
+  }
+
   // O limite so vale para quem esta entrando de fora: trocar de aba (ou, no
   // bot, pedir de novo) dentro do mesmo canal nao pode ser bloqueado pelo
   // proprio ocupante.
-  const current = await voiceParticipant(userId);
   const canalAnterior = current?.channelId ?? null;
   if (
     channel.userLimit !== null &&

@@ -12,6 +12,7 @@ import { registerPresenceHandlers } from "./handlers/presence";
 import { registerMessageHandlers } from "./handlers/messages";
 import { registerVoiceHandlers } from "./handlers/voice";
 import { registerConviteHandlers } from "./handlers/convites";
+import { registerHubHandlers } from "./handlers/hub";
 import { registerDmHandlers } from "./handlers/dm";
 import { registerDmCallHandlers } from "./handlers/dm-call";
 import { registerReactionHandlers } from "./handlers/reactions";
@@ -198,6 +199,7 @@ io.on("connection", (socket) => {
   registerMessageHandlers(io, socket);
   registerVoiceHandlers(io, socket);
   registerConviteHandlers(io, socket);
+  registerHubHandlers(io, socket);
   registerDmHandlers(socket);
   registerDmCallHandlers(io, socket);
   registerReactionHandlers(io, socket);

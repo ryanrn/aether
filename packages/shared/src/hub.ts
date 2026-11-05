@@ -20,6 +20,13 @@ export const HUB_TAMANHO_PADRAO = 5;
 /** Teto de salas abertas ao mesmo tempo no hub. */
 export const HUB_MAX_SALAS = 50;
 
+/**
+ * Quem o criador remove de uma sala do hub fica este tempo sem poder voltar
+ * AQUELA sala (estagio 4b-2). As outras continuam abertas a ela — remover e
+ * decisao do dono da sala, nao banimento (que e da equipe).
+ */
+export const HUB_ESPERA_APOS_REMOCAO_MIN = 15;
+
 /** Por que alguem nao pode entrar no hub agora. */
 export type MotivoDeRecusaDoHub =
   | "conta_nova"

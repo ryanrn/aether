@@ -295,6 +295,8 @@ export interface PublicServer {
   iconUrl: string | null;
   ownerId: string;
   memberCount: number;
+  /** o hub global (fase 2, 4b); opcional: so a tela do servidor preenche */
+  hub?: boolean;
 }
 
 /**
@@ -344,6 +346,12 @@ export interface ViewerContext {
   permissions: string;
   roleIds: string[];
   highestRolePosition: number;
+  /**
+   * Este servidor e o hub global (fase 2, 4b). So para a tela decidir o que
+   * MOSTRAR (ex.: "Remover da sala" para quem criou a sala) — quem decide e o
+   * gateway/servidor, como sempre.
+   */
+  hub?: boolean;
 }
 
 /** Permissoes efetivas por canal, ja com os overwrites aplicados. */
