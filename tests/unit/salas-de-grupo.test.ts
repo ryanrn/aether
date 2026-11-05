@@ -84,4 +84,44 @@ describe("criarSalaDeGrupo", () => {
     });
     expect(data.name).toBe("Counter-Strike 2");
   });
+
+  it("sem tamanho, a sala nasce sem limite (servidor comum, como sempre)", async () => {
+    channelFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    channelCount.mockResolvedValueOnce(0);
+    channelCreate.mockResolvedValueOnce({ id: "nova" });
+
+    await criarSalaDeGrupo({ serverId: SERVER, jogo: "Valorant", criadaPor: EU });
+    expect(channelCreate.mock.calls[0]![0].data.userLimit).toBeNull();
+  });
+
+  it("hub (4b): o tamanho escolhido vira o userLimit do canal", async () => {
+    channelFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    channelCount.mockResolvedValueOnce(0);
+    channelCreate.mockResolvedValueOnce({ id: "nova" });
+
+    await criarSalaDeGrupo({
+      serverId: SERVER,
+      jogo: "Valorant",
+      criadaPor: EU,
+      tamanho: 5,
+    });
+    expect(channelCreate.mock.calls[0]![0].data.userLimit).toBe(5);
+  });
+
+  it("hub (4b): o teto passado substitui o de servidor comum", async () => {
+    // Acima do teto de servidor comum, abaixo do teto passado: cria.
+    channelFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    channelCount.mockResolvedValueOnce(MAX_SALAS_DE_GRUPO_POR_SERVIDOR + 5);
+    channelCreate.mockResolvedValueOnce({ id: "nova" });
+    await expect(
+      criarSalaDeGrupo({ serverId: SERVER, jogo: "Valorant", criadaPor: EU, teto: 50 }),
+    ).resolves.toEqual({ channelId: "nova", jaExistia: false });
+
+    // No teto passado: recusa.
+    channelFindFirst.mockResolvedValueOnce(null);
+    channelCount.mockResolvedValueOnce(50);
+    await expect(
+      criarSalaDeGrupo({ serverId: SERVER, jogo: "Valorant", criadaPor: EU, teto: 50 }),
+    ).rejects.toThrow();
+  });
 });

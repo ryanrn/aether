@@ -4,8 +4,10 @@ import type { ActionResult } from "@aether/shared";
 import { requireUser } from "../guards";
 import {
   listarGruposDosMeusServidores,
+  listarSalasDoHub,
   type GrupoPorJogo,
 } from "../services/grupos";
+import { estadoDoHub } from "../services/hub";
 import { ok, toActionError } from "./action-result";
 
 /**
@@ -14,11 +16,16 @@ import { ok, toActionError } from "./action-result";
  * ao vivo — ela pergunta de novo a cada ~20s.
  */
 export async function listarGruposAction(): Promise<
-  ActionResult<GrupoPorJogo[]>
+  ActionResult<{ meus: GrupoPorJogo[]; hub: GrupoPorJogo[] | null }>
 > {
   try {
     const session = await requireUser();
-    return ok(await listarGruposDosMeusServidores(session.user.id));
+    const [meus, hub] = await Promise.all([
+      listarGruposDosMeusServidores(session.user.id),
+      estadoDoHub(session.user.id),
+    ]);
+    // `null` = sem hub (flag desligada ou nenhum marcado): a secao some.
+    return ok({ meus, hub: hub ? await listarSalasDoHub(hub.hubId) : null });
   } catch (error) {
     return toActionError(error);
   }

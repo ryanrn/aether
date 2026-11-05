@@ -11,6 +11,7 @@ export * from "./denuncia";
 export * from "./developer";
 export * from "./events";
 export * from "./flags";
+export * from "./hub";
 export * from "./jogos";
 export * from "./adaptadores-de-jogo";
 export * from "./convites-de-jogo";

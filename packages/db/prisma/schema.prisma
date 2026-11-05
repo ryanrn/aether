@@ -363,6 +363,12 @@ model Server {
   /// sala `isTemporary` marcada com o jogo; ela some quando esvazia.
   salasDeGrupo Boolean @default(false)
 
+  /// O hub global "AETHER · Grupos" (fase 2, estagio 4b). No maximo UM
+  /// servidor tem `true` — indice parcial unico na migracao, que o Prisma nao
+  /// sabe declarar. Marcado so por script (`scripts/definir-hub.mjs`), como o
+  /// `oficial`: nenhuma tela da a ninguem o poder de virar "o hub".
+  hub Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

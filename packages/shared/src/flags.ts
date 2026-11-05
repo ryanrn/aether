@@ -22,7 +22,8 @@ export type ChaveDeFlag =
   | "exige_email_verificado"
   | "upload_de_imagem"
   | "voz_habilitada"
-  | "loja_de_cosmeticos";
+  | "loja_de_cosmeticos"
+  | "hub_grupos";
 
 export interface DefinicaoDeFlag {
   /** Nome curto para a tela da equipe. */
@@ -66,6 +67,12 @@ export const FLAGS_CONHECIDAS: Record<ChaveDeFlag, DefinicaoDeFlag> = {
     rotulo: "Loja de cosméticos",
     descricao:
       "A loja de cosméticos para os usuários (comprar/equipar decoração e banner). Desligada até haver cosméticos publicados e a tela da loja pronta. O painel da equipe (cadastro) NÃO depende disto — continua acessível.",
+    padrao: false,
+  },
+  hub_grupos: {
+    rotulo: "Hub AETHER · Grupos",
+    descricao:
+      "Salas de voz por jogo abertas a qualquer conta (o hub global). Desligado até a moderação do hub (estágio 4b-2) estar no ar. Desligar esconde o hub e recusa entrar e criar sala; quem já está numa call termina a call.",
     padrao: false,
   },
 };

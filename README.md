@@ -591,7 +591,9 @@ coisa social.
 | 2 | **Cargo automatico por jogo** — opt-in por servidor. Migracao `20260906140000_cargo_por_jogo`. | ✅ |
 | 3 | **Salas de voz efemeras + "Procurar grupo" (LFG)** — opt-in por servidor. Migracao `20260906150000_salas_de_grupo`. | ✅ |
 | 4a | **Grupos: LFG pelos seus servidores** — pagina `/app/grupos` que cruza os servidores onde voce e membro. Sem migracao. | ✅ |
-| 4b | Hub global "AETHER · Grupos" (matchmaking pra qualquer conta) | ⬜ adiado |
+| 4b-1 | **Hub global "AETHER · Grupos" — base**: servidor marcado como hub, regras e requisitos de entrada, salas com tamanho, secao em `/app/grupos`. Migracao `20261105120000_hub_de_grupos`. Flag `hub_grupos` DESLIGADA. | ✅ |
+| 4b-2 | Hub — moderacao: bloqueio na entrada, criador remove (com espera), denunciar da call, banir do hub pela equipe | ⬜ |
+| 4b-3 | Hub — contexto leve: tela propria da sala, eventos de voz escopados a sala, hub fora do trilho | ⬜ |
 
 ### O que fechou no estagio 1
 
@@ -758,11 +760,79 @@ que cruza servidores e uma consulta de ocupacao.
 Testes: `grupos` (agrupamento, ordenacao, ocupacao nula, nome do criador). 604
 passando, typecheck + check:esm + next build ok.
 
+### O que fechou no estagio 4b-1 — Hub global (base)
+
+**A decisao central: o hub e um SERVIDOR de verdade, marcado (`Server.hub`).**
+Entrar nele e virar membro com o cargo padrao. Dai em diante, voz, permissao,
+lotacao, `Ban` e salas efemeras sao os de qualquer servidor. A alternativa
+("sala publica sem participacao") exigiria uma segunda regra de autorizacao de
+voz — exatamente o que o `CLAUDE.md` proibe. O trabalho novo ficou em porta de
+entrada e escala, nao em permissao.
+
+- **Migracao `20261105120000_hub_de_grupos`:** `Server.hub` + indice unico
+  PARCIAL (`WHERE hub = true`) — no maximo um hub.
+- **`scripts/definir-hub.mjs`:** marca/desmarca, recusa um segundo hub, e
+  confere o cargo padrao (precisa de VIEW_CHANNEL + CONNECT + SPEAK e NAO pode
+  ter ADMINISTRATOR — so avisa, nao muda cargo).
+- **Flag `hub_grupos`, padrao DESLIGADA.** Marcar o servidor nao abre nada:
+  abrir e ligar a flag no painel da equipe, depois do 4b-2.
+- **A porta (`@aether/access`, `motivoParaNaoEntrarNoHub`, pura):** conta com
+  **24 h ou mais**, **e-mail confirmado**, nao silenciada, nao banida do hub.
+  Equipe passa por idade e e-mail (precisa entrar para moderar), nao por ban.
+- **Regras na primeira entrada:** quem nao e membro e clica em Entrar ou Criar
+  ve as regras (inclusive "quem esta na sala te ve, mesmo invisivel") e marca
+  "Li e aceito"; `entrarNoHubAction` exige `aceitouRegras: true` e relê tudo no
+  servidor. Depois, a acao pedida continua sozinha.
+- **Salas:** `criarSalaDeGrupo` ganhou `teto` e `tamanho` (parametros, nao uma
+  segunda funcao). No hub: **2 a 10 pessoas** (vira `Channel.userLimit`, e o
+  "Canal cheio" ja era regra do `entrarNaVoz`), teto de **50** salas, 1 por
+  pessoa, rate limit das salas de grupo. **Sem chat de texto.**
+- **Tela:** secao "AETHER · Grupos" no topo de `/app/grupos`, visivel tambem a
+  quem ainda nao entrou (e assim que se descobre o hub). Mostra "ocupacao/
+  tamanho" e "Cheia"; nunca quem esta dentro. O hub saiu da lista "seus
+  servidores" e do seletor do "Criar grupo", que tem o proprio.
+- **Escala — gateway:** `joinAllServerRooms` PULA o hub. Sem isso, todo membro
+  online receberia cada `voice:update`/`server:changed` do hub o tempo todo.
+  Quem abre o hub entra nas salas dele pelo `server:join`, como sempre.
+
+**Como testar:**
+1. `npx dotenv -e .env -- node scripts/definir-hub.mjs <id> sim` num servidor
+   de teste, e ligue a flag `hub_grupos` no painel da equipe.
+2. Em `/app/grupos`, com uma conta de mais de 24 h e e-mail confirmado: "Criar
+   no hub" abre as regras; aceite; a sala nasce com o tamanho escolhido e voce
+   entra nela. Outra conta ve "1/5" e entra; com a sala cheia, ve "Cheia".
+3. Conta criada agora: a secao aparece com "O hub abre para contas com mais de
+   24 horas" e nada clicavel.
+
+Automatizado: `tests/unit/hub-acesso.test.ts` (cada requisito recusa sozinho),
+`tests/unit/salas-de-grupo.test.ts` (tamanho e teto) e
+`scripts/verify-hub.mjs` (gateway: o membro do hub nao recebe eventos dele ao
+conectar; recebe depois do `server:join`) — conferido que ele FALHA sem a
+mudanca no `rooms.ts`.
+
+### Limitacoes conhecidas (estagio 4b-1)
+
+- **ORDEM DE DEPLOY: a migracao ANTES do codigo.** O gateway
+  (`joinAllServerRooms`) e `/app/grupos` passam a filtrar por `Server.hub`.
+  Num banco sem a coluna, as duas consultas falham: o contador de nao lidas
+  para de acender (o erro e logado, a conexao segue) e a tela de Grupos quebra.
+  `npm run db:deploy` em producao primeiro; depois o merge.
+
+- **Nao pode ir ao ar ainda.** Sem o 4b-2 nao ha bloqueio na entrada, remocao
+  pelo criador nem denuncia pela call. A flag fica desligada ate la.
+- **O hub aparece no trilho de quem entrou** e abre como servidor comum (arvore
+  e painel de membros). Esconder e a tela leve sao o 4b-3.
+- **Abrir o hub ainda recebe os eventos de TODAS as salas dele** (o
+  `server:join` entra na sala do servidor). Escopar por sala e o 4b-3.
+- **A idade minima so vale na entrada.** Quem ja e membro continua membro; e
+  requisito de porta, nao de permanencia.
+- **Sem tela de "sair do hub":** sai-se como de qualquer servidor.
+- **Nao testado com duas pessoas reais** — unitarios, `verify-hub` e build.
+
 ### Limitacoes conhecidas (estagio 4a)
 
 - **So servidores onde voce ja e membro.** Achar gente em qualquer conta do
-  AETHER e o 4b (hub global "AETHER · Grupos"), adiado — precisa de modelo de
-  membership, contexto leve pro hub e moderacao de espaco publico.
+  AETHER e o 4b (hub global "AETHER · Grupos") — base no 4b-1, acima.
 - **Ocupacao e snapshot + polling de 20s**, nao ao vivo. Entrar numa sala que
   acabou de esvaziar so falha na hora do `voice:join` (o gateway recusa /
   a sala ja foi apagada e vira 404).

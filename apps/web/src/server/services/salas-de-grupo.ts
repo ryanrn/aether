@@ -18,6 +18,14 @@ export async function criarSalaDeGrupo(params: {
   serverId: string;
   jogo: string;
   criadaPor: string;
+  /**
+   * Teto de salas abertas neste servidor. O padrao e o de servidor comum; o
+   * hub (4b) passa o dele. Parametro, e nao uma segunda funcao: os limites
+   * (1 por pessoa, teto) sao a mesma regra, e duas copias divergiriam.
+   */
+  teto?: number;
+  /** Lotacao da sala (`Channel.userLimit`). Ausente = sem limite. */
+  tamanho?: number;
 }): Promise<{ channelId: string; jaExistia: boolean }> {
   const jogo = params.jogo.trim().slice(0, 64);
 
@@ -39,7 +47,7 @@ export async function criarSalaDeGrupo(params: {
   const abertas = await prisma.channel.count({
     where: { serverId: params.serverId, isTemporary: true },
   });
-  if (abertas >= MAX_SALAS_DE_GRUPO_POR_SERVIDOR) {
+  if (abertas >= (params.teto ?? MAX_SALAS_DE_GRUPO_POR_SERVIDOR)) {
     throw new Error(
       "Este servidor esta com salas de grupo demais abertas agora. Tente daqui a pouco.",
     );
@@ -61,6 +69,9 @@ export async function criarSalaDeGrupo(params: {
       isTemporary: true,
       jogo,
       criadaPor: params.criadaPor,
+      // "Canal cheio" ja e regra do `entrarNaVoz` — a lotacao do hub nao
+      // precisa de codigo novo no gateway.
+      userLimit: params.tamanho ?? null,
       position: (ultimo?.position ?? -1) + 1,
     },
     select: { id: true },

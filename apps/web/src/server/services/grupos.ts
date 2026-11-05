@@ -25,6 +25,8 @@ export interface SalaDeGrupo {
   criadaPorNome: string | null;
   /** `null` quando o gateway nao respondeu */
   ocupacao: number | null;
+  /** lotacao da sala (`userLimit`); `null` = sem limite */
+  tamanho: number | null;
   criadaEm: string;
 }
 
@@ -36,11 +38,30 @@ export interface GrupoPorJogo {
 export async function listarGruposDosMeusServidores(
   userId: string,
 ): Promise<GrupoPorJogo[]> {
+  /**
+   * O hub fica FORA: quem entrou nele e membro, mas as salas dele tem secao
+   * propria na tela (`listarSalasDoHub`) — misturar faria cada sala do hub
+   * aparecer duas vezes.
+   */
   const memberships = await prisma.serverMember.findMany({
-    where: { userId },
+    where: { userId, server: { hub: false } },
     select: { serverId: true },
   });
-  const serverIds = memberships.map((m) => m.serverId);
+  return await listarSalasDosServidores(memberships.map((m) => m.serverId));
+}
+
+/**
+ * As salas abertas do hub, para QUALQUER conta — inclusive quem ainda nao
+ * entrou nele: e assim que se descobre o hub. So a contagem de pessoas e o
+ * nome de quem abriu; quem esta dentro so se ve entrando.
+ */
+export async function listarSalasDoHub(hubId: string): Promise<GrupoPorJogo[]> {
+  return await listarSalasDosServidores([hubId]);
+}
+
+async function listarSalasDosServidores(
+  serverIds: string[],
+): Promise<GrupoPorJogo[]> {
   if (serverIds.length === 0) return [];
 
   const canais = await prisma.channel.findMany({
@@ -56,6 +77,7 @@ export async function listarGruposDosMeusServidores(
       serverId: true,
       jogo: true,
       criadaPor: true,
+      userLimit: true,
       createdAt: true,
       server: { select: { name: true, iconUrl: true } },
     },
@@ -95,6 +117,7 @@ export async function listarGruposDosMeusServidores(
         ? (nomePorId.get(canal.criadaPor) ?? null)
         : null,
       ocupacao: ocupacao ? (ocupacao[canal.id] ?? 0) : null,
+      tamanho: canal.userLimit,
       criadaEm: canal.createdAt.toISOString(),
     });
     grupos.set(chave, grupo);
@@ -113,7 +136,8 @@ export async function servidoresParaGrupo(
   userId: string,
 ): Promise<{ id: string; nome: string }[]> {
   const membros = await prisma.serverMember.findMany({
-    where: { userId, server: { salasDeGrupo: true } },
+    // O hub tem o proprio "Criar" (com tamanho da sala).
+    where: { userId, server: { salasDeGrupo: true, hub: false } },
     orderBy: { joinedAt: "asc" },
     select: { server: { select: { id: true, name: true } } },
   });

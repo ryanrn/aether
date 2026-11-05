@@ -141,8 +141,15 @@ export async function joinAllServerRooms(
 ): Promise<void> {
   const { userId } = socket.data;
 
+  /**
+   * O HUB fica de fora (fase 2, estagio 4b). Ele tende a ter TODA a base como
+   * membro; entrar na sala dele ao conectar faria cada `voice:update` e cada
+   * `server:changed` do hub ir para todo mundo online, o tempo todo. Quem
+   * esta olhando o hub entra nas salas dele pelo `server:join` da rota, como
+   * sempre. O hub nao tem chat, entao nao ha nao lidas a perder.
+   */
   const membros = await prisma.serverMember.findMany({
-    where: { userId },
+    where: { userId, server: { hub: false } },
     select: { serverId: true },
   });
 

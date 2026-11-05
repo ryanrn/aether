@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/server/auth/session";
 import {
   listarGruposDosMeusServidores,
+  listarSalasDoHub,
   servidoresParaGrupo,
 } from "@/server/services/grupos";
+import { estadoDoHub } from "@/server/services/hub";
 import { GruposScreen } from "@/components/grupos/grupos-screen";
 
 /**
@@ -22,16 +24,21 @@ export default async function GruposPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [grupos, servidores] = await Promise.all([
+  const [grupos, servidores, hub] = await Promise.all([
     listarGruposDosMeusServidores(session.user.id),
     servidoresParaGrupo(session.user.id),
+    estadoDoHub(session.user.id),
   ]);
+  const hubInicial = hub
+    ? { ...hub, salas: await listarSalasDoHub(hub.hubId) }
+    : null;
 
   return (
     <GruposScreen
       inicial={grupos}
       servidores={servidores}
       selfUserId={session.user.id}
+      hubInicial={hubInicial}
     />
   );
 }
