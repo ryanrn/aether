@@ -252,11 +252,16 @@ const csp = [
   "worker-src 'self' blob:",
 
   /**
-   * A lista curta que importa: propria origem, gateway e SFU. Nada mais.
-   * O upload para o Supabase passa pelo servidor (server-only), entao o
-   * navegador nunca fala com o Storage — so le imagem, que e `img-src`.
+   * A lista curta que importa: propria origem, gateway, SFU e os dois
+   * destinos de envio direto do navegador.
+   *
+   * O Supabase entrou para o avatar GIF: ele vai do navegador DIRETO ao bucket
+   * (PUT numa URL assinada de uso unico), porque o corpo de uma server action
+   * nao comporta 10 MB. Sem esta origem o PUT morre como "falha de rede", sem
+   * status — o mesmo sintoma do R2 descrito acima. Escrever exige o token da
+   * URL assinada; a origem aqui so deixa o navegador tentar.
    */
-  ["connect-src 'self'", ...gateway, ...livekit, ...r2Envio]
+  ["connect-src 'self'", ...gateway, ...livekit, ...r2Envio, supabase]
     .filter(Boolean)
     .join(" "),
 

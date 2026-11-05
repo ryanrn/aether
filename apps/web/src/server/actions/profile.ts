@@ -28,7 +28,13 @@ import {
   equiparCosmetico,
 } from "../services/cosmeticos";
 import { notifyProfileChanged, resyncGatewayRooms } from "../realtime-notify";
-import { uploadUserAvatar } from "../storage";
+import {
+  autorizarEnvioDeAvatarAnimado,
+  confirmarAvatarAnimado,
+  uploadUserAvatar,
+  type UploadImageResult,
+} from "../storage";
+import { rateLimit } from "../auth/rate-limit";
 import { fail, ok, toActionError } from "./action-result";
 
 /**
@@ -64,25 +70,90 @@ export async function uploadAvatarAction(
       file,
       podeAvatarAnimado(session.user.plano),
     );
-    if (!result.ok) return fail(result.error);
+    return await gravarAvatar(session.user.id, result);
+  } catch (error) {
+    return toActionError(error);
+  }
+}
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        avatarUrl: result.url,
-        /*
-         * Sempre gravado, inclusive como NULO quando a imagem nova e parada:
-         * sem isso, trocar um avatar animado por uma foto comum deixaria para
-         * tras o gemeo do avatar ANTERIOR, e perder o plano faria aparecer uma
-         * foto que a pessoa ja tinha substituido.
-         */
-        avatarEstaticoUrl: result.urlEstatica ?? null,
-      },
+/**
+ * O que acontece depois que o arquivo foi aceito, nos DOIS caminhos de envio
+ * (pela action e direto ao bucket): grava, avisa todo mundo, revalida.
+ */
+async function gravarAvatar(
+  userId: string,
+  result: UploadImageResult,
+): Promise<ActionResult<{ avatarUrl: string }>> {
+  if (!result.ok) return fail(result.error);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      avatarUrl: result.url,
+      /*
+       * Sempre gravado, inclusive como NULO quando a imagem nova e parada:
+       * sem isso, trocar um avatar animado por uma foto comum deixaria para
+       * tras o gemeo do avatar ANTERIOR, e perder o plano faria aparecer uma
+       * foto que a pessoa ja tinha substituido.
+       */
+      avatarEstaticoUrl: result.urlEstatica ?? null,
+    },
+  });
+
+  await notifyProfileChanged({ userId });
+  revalidatePath("/app", "layout");
+  return ok({ avatarUrl: result.url });
+}
+
+/**
+ * Passo 1 do avatar GIF: autoriza o envio DIRETO do navegador para o bucket.
+ *
+ * Existe porque o GIF vai ate 10 MB e o corpo de uma server action nao passa
+ * de 2 MB aqui (4,5 MB na Vercel, sem configuracao que suba). Ver
+ * `autorizarEnvioDeAvatarAnimado` em `storage.ts`.
+ *
+ * O plano e conferido JA AQUI (sem plano, nem URL de envio sai) e de novo na
+ * confirmacao, pelos bytes — o que vale e a confirmacao.
+ */
+export async function autorizarAvatarAnimadoAction(declarado: {
+  tamanho: number;
+  tipo: string;
+}): Promise<ActionResult<{ urlDeEnvio: string; caminho: string }>> {
+  try {
+    const session = await requireUser();
+    if (!podeAvatarAnimado(session.user.plano)) {
+      return fail("Avatar animado e exclusivo do Olimpo Pro");
+    }
+
+    // Cada autorizacao e um objeto em potencial no bucket: sem teto, um laco
+    // encheria o storage de arquivos nunca confirmados.
+    const limite = await rateLimit(`avatar-gif:${session.user.id}`, 10, 10 * 60_000);
+    if (!limite.ok) return fail("Muitas tentativas de envio. Tente em alguns minutos.");
+
+    const result = await autorizarEnvioDeAvatarAnimado(session.user.id, {
+      tamanho: Number(declarado?.tamanho),
+      tipo: String(declarado?.tipo ?? ""),
     });
+    if (!result.ok) return fail(result.error);
+    return ok({ urlDeEnvio: result.urlDeEnvio, caminho: result.caminho });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
 
-    await notifyProfileChanged({ userId: session.user.id });
-    revalidatePath("/app", "layout");
-    return ok({ avatarUrl: result.url });
+/** Passo 3 do avatar GIF: revalida pelos bytes e so entao grava. */
+export async function confirmarAvatarAnimadoAction(
+  caminho: string,
+): Promise<ActionResult<{ avatarUrl: string }>> {
+  try {
+    const session = await requireUser();
+    if (typeof caminho !== "string") return fail("Envio nao encontrado");
+    const result = await confirmarAvatarAnimado(
+      session.user.id,
+      caminho,
+      podeAvatarAnimado(session.user.plano),
+    );
+    return await gravarAvatar(session.user.id, result);
   } catch (error) {
     return toActionError(error);
   }

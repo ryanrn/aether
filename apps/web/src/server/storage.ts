@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  AVATAR_ANIMADO_MAX_BYTES,
   AVATAR_MIME_TYPES,
   SERVER_ICON_MAX_BYTES,
   SERVER_ICON_MIME_TYPES,
@@ -146,6 +147,39 @@ const REGRAS_DE_ICONE: RegrasDeImagem = {
   erroDeAnimado: "Icone de servidor nao pode ser animado",
 };
 
+/**
+ * As regras de imagem que dependem dos BYTES: tipo real (sniff), teto daquele
+ * tipo e movimento permitido. Um lugar so para os dois caminhos de envio — o
+ * que passa pelo servidor (`uploadImage`) e o que vai direto do navegador ao
+ * bucket e e conferido depois (`confirmarAvatarAnimado`). Duas copias desta
+ * checagem divergiriam, e a que esquecesse o sniff abriria o bucket publico
+ * para arquivo disfarcado.
+ */
+function validarImagem(
+  cabecalho: Uint8Array,
+  tamanho: number,
+  regras: RegrasDeImagem,
+): { ok: true; mime: AvatarMimeType } | { ok: false; error: string } {
+  const mime = sniffMimeType(cabecalho, regras.aceitos);
+  if (!mime) return { ok: false, error: regras.erroDeTipo };
+
+  // Agora que o tipo REAL e conhecido, o teto dele vale.
+  if (tamanho > regras.limite(mime)) {
+    return {
+      ok: false,
+      error: `Imagem maior que ${Math.round(regras.limite(mime) / 1024 / 1024)}MB`,
+    };
+  }
+
+  if (regras.permiteAnimado === false && ehImagemAnimada(cabecalho, mime)) {
+    return {
+      ok: false,
+      error: regras.erroDeAnimado ?? "Esta imagem nao pode ser animada",
+    };
+  }
+  return { ok: true, mime };
+}
+
 async function uploadImage(
   bucket: string,
   pathPrefix: string,
@@ -185,25 +219,9 @@ async function uploadImage(
    * 4 KB cobre o sniff e a busca do bloco `acTL` do APNG.
    */
   const cabecalho = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
-  const mime = sniffMimeType(cabecalho, regras.aceitos);
-  if (!mime) {
-    return { ok: false, error: regras.erroDeTipo };
-  }
-
-  // Agora que o tipo REAL e conhecido, o teto dele vale.
-  if (file.size > regras.limite(mime)) {
-    return {
-      ok: false,
-      error: `Imagem maior que ${Math.round(regras.limite(mime) / 1024 / 1024)}MB`,
-    };
-  }
-
-  if (regras.permiteAnimado === false && ehImagemAnimada(cabecalho, mime)) {
-    return {
-      ok: false,
-      error: regras.erroDeAnimado ?? "Esta imagem nao pode ser animada",
-    };
-  }
+  const validado = validarImagem(cabecalho, file.size, regras);
+  if (!validado.ok) return validado;
+  const { mime } = validado;
 
   const buffer = new Uint8Array(await file.arrayBuffer());
 
@@ -353,13 +371,202 @@ export async function uploadUserAvatar(
     `users/${userId}`,
     file,
     "Upload de foto nao configurado neste ambiente",
-    {
-      aceitos: AVATAR_MIME_TYPES,
-      limite: limiteDoAvatar,
-      erroDeTipo: "Envie PNG, JPEG, WEBP ou GIF",
-      permiteAnimado,
-      erroDeAnimado: "Avatar animado e exclusivo do Olimpo Pro",
-      gerarEstatico: true,
-    },
+    regrasDeAvatar(permiteAnimado),
   );
+}
+
+function regrasDeAvatar(permiteAnimado: boolean): RegrasDeImagem {
+  return {
+    aceitos: AVATAR_MIME_TYPES,
+    limite: limiteDoAvatar,
+    erroDeTipo: "Envie PNG, JPEG, WEBP ou GIF",
+    permiteAnimado,
+    erroDeAnimado: "Avatar animado e exclusivo do Olimpo Pro",
+    gerarEstatico: true,
+  };
+}
+
+/* ------------------------------------------------------------------------
+ * AVATAR GIF: ENVIO DIRETO DO NAVEGADOR PARA O BUCKET.
+ *
+ * Por que existe: o caminho normal (`uploadUserAvatar`) recebe o arquivo numa
+ * server action, e o corpo dela tem teto — 2 MB no `next.config.ts`, e 4,5 MB
+ * na Vercel para qualquer funcao, que nenhuma configuracao nossa sobe. O GIF
+ * pode ter ate 10 MB: acima de 2 MB ele morria antes de chegar ao codigo, e a
+ * tela nao dizia nada.
+ *
+ * Tres passos, no molde dos anexos do chat (R2):
+ *  1. `autorizarEnvioDeAvatarAnimado` — o servidor escolhe o caminho (com o
+ *     id da pessoa e um nome aleatorio) e pede ao Supabase uma URL assinada
+ *     de envio, de uso unico, so para aquele caminho;
+ *  2. o navegador faz PUT do arquivo nessa URL — o corpo nao passa pela
+ *     Vercel;
+ *  3. `confirmarAvatarAnimado` baixa o objeto e REVALIDA PELOS BYTES, com as
+ *     MESMAS regras do caminho normal (`validarImagem`). Reprovou: o objeto e
+ *     apagado. O que o navegador declarou no passo 1 nunca e confiado.
+ * ---------------------------------------------------------------------- */
+
+const BUCKET_DE_AVATAR = "avatars";
+/** `users/<id>/<32 hex>.gif` — o unico formato que o passo 1 gera. */
+const CAMINHO_DE_AVATAR_GIF = /^users\/([^/]+)\/[0-9a-f]{32}\.gif$/;
+
+function configDoStorage(): { url: string; chave: string } | null {
+  const url = process.env.SUPABASE_URL;
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && chave ? { url, chave } : null;
+}
+
+export async function autorizarEnvioDeAvatarAnimado(
+  userId: string,
+  declarado: { tamanho: number; tipo: string },
+): Promise<
+  { ok: true; urlDeEnvio: string; caminho: string } | { ok: false; error: string }
+> {
+  // Conveniencia: recusa cedo o que o passo 3 recusaria de qualquer jeito.
+  if (declarado.tipo !== "image/gif") {
+    return { ok: false, error: "Este envio e so para GIF" };
+  }
+  if (!Number.isFinite(declarado.tamanho) || declarado.tamanho <= 0) {
+    return { ok: false, error: "Arquivo vazio" };
+  }
+  if (declarado.tamanho > AVATAR_ANIMADO_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `Imagem maior que ${Math.round(AVATAR_ANIMADO_MAX_BYTES / 1024 / 1024)}MB`,
+    };
+  }
+
+  const config = configDoStorage();
+  if (!config) {
+    log.error("web.storage.sem_config", "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausente");
+    return { ok: false, error: "Upload de foto nao configurado neste ambiente" };
+  }
+
+  const caminho = `users/${userId}/${randomId()}.gif`;
+  try {
+    const resposta = await fetch(
+      `${config.url}/storage/v1/object/upload/sign/${BUCKET_DE_AVATAR}/${caminho}`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${config.chave}`, apikey: config.chave },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!resposta.ok) {
+      log.error("web.storage.assinar_envio", "Supabase recusou assinar o envio", {
+        status: resposta.status,
+        corpo: await resposta.text().catch(() => ""),
+      });
+      return { ok: false, error: "Falha ao preparar o envio" };
+    }
+    const corpo = (await resposta.json()) as { url?: unknown };
+    if (typeof corpo.url !== "string" || !corpo.url.includes("token=")) {
+      log.error("web.storage.assinar_envio", "resposta de assinatura sem url/token");
+      return { ok: false, error: "Falha ao preparar o envio" };
+    }
+    // O Supabase devolve o caminho relativo a `/storage/v1`.
+    return { ok: true, urlDeEnvio: `${config.url}/storage/v1${corpo.url}`, caminho };
+  } catch (error) {
+    log.error("web.storage.assinar_envio", "assinar envio de avatar falhou", { err: error });
+    return { ok: false, error: "Falha ao preparar o envio" };
+  }
+}
+
+export async function confirmarAvatarAnimado(
+  userId: string,
+  caminho: string,
+  permiteAnimado: boolean,
+): Promise<UploadImageResult> {
+  /*
+   * O caminho vem do navegador: so vale se tem o formato que o passo 1 gera
+   * E e da propria pessoa. Sem isto, alguem confirmaria como SEU o arquivo
+   * de outra conta (ou qualquer objeto do bucket).
+   */
+  const casou = CAMINHO_DE_AVATAR_GIF.exec(caminho);
+  if (!casou || casou[1] !== userId) {
+    return { ok: false, error: "Envio nao encontrado" };
+  }
+
+  const config = configDoStorage();
+  if (!config) return { ok: false, error: "Upload de foto nao configurado neste ambiente" };
+
+  try {
+    const resposta = await fetch(
+      `${config.url}/storage/v1/object/${BUCKET_DE_AVATAR}/${caminho}`,
+      {
+        headers: { authorization: `Bearer ${config.chave}`, apikey: config.chave },
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
+    if (!resposta.ok) {
+      return { ok: false, error: "Envio nao encontrado — tente de novo" };
+    }
+
+    // Teto ANTES de bufferizar, pelo cabecalho; e de novo pelos bytes reais.
+    const declarado = Number(resposta.headers.get("content-length") ?? "0");
+    if (declarado > AVATAR_ANIMADO_MAX_BYTES) {
+      await apagarAvatarEnviado(caminho);
+      return {
+        ok: false,
+        error: `Imagem maior que ${Math.round(AVATAR_ANIMADO_MAX_BYTES / 1024 / 1024)}MB`,
+      };
+    }
+    const bytes = new Uint8Array(await resposta.arrayBuffer());
+    if (bytes.length === 0) {
+      await apagarAvatarEnviado(caminho);
+      return { ok: false, error: "Arquivo vazio" };
+    }
+
+    const validado = validarImagem(
+      bytes.subarray(0, 4096),
+      bytes.length,
+      { ...regrasDeAvatar(permiteAnimado), aceitos: ["image/gif"] },
+    );
+    if (!validado.ok) {
+      await apagarAvatarEnviado(caminho);
+      return validado;
+    }
+
+    const url = `${config.url}/storage/v1/object/public/${BUCKET_DE_AVATAR}/${caminho}`;
+
+    // O gemeo parado — mesma regra e mesma tolerancia a falha do `uploadImage`.
+    if (ehImagemAnimada(bytes.subarray(0, 4096), "image/gif")) {
+      const estatica = await versaoParada(bytes);
+      if (estatica) {
+        const urlEstatica = await enviarObjeto(
+          BUCKET_DE_AVATAR,
+          `users/${userId}/${randomId()}.png`,
+          "image/png",
+          estatica,
+        );
+        if (urlEstatica) return { ok: true, url, urlEstatica };
+      }
+    }
+    return { ok: true, url };
+  } catch (error) {
+    log.error("web.storage.confirmar_avatar", "confirmar avatar animado falhou", {
+      err: error,
+    });
+    return { ok: false, error: "Falha ao enviar a imagem" };
+  }
+}
+
+/** Best-effort: um objeto reprovado que ficar para tras so ocupa espaco. */
+async function apagarAvatarEnviado(caminho: string): Promise<void> {
+  const config = configDoStorage();
+  if (!config) return;
+  try {
+    await fetch(`${config.url}/storage/v1/object/${BUCKET_DE_AVATAR}`, {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${config.chave}`,
+        apikey: config.chave,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ prefixes: [caminho] }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    log.warn("web.storage.apagar_avatar", "nao apaguei o avatar reprovado", { err: error });
+  }
 }

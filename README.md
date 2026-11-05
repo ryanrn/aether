@@ -4006,6 +4006,29 @@ dado da pessoa por causa de uma cobranca vencida.
   fica para o proximo refresh deles.
 - **Nao ha faxina do avatar antigo.** Trocar de foto deixa a anterior no bucket
   para sempre. Ja valia antes; com GIF de ate 10 MB, passa a custar mais.
+- **GIF acima de 2 MB nao subia — corrigido (05/11/2026).** O envio passava
+  por uma server action, cujo corpo para em 2 MB (`bodySizeLimit` no
+  `next.config.ts`) e em 4,5 MB na Vercel, sem configuracao que suba. O Next
+  recusava antes do codigo, a action REJEITAVA em vez de devolver erro, e a
+  tela nao tinha `catch`: o GIF sumia sem mensagem. Agora o GIF vai DIRETO ao
+  bucket, no molde dos anexos:
+  1. `autorizarAvatarAnimadoAction` confere plano e rate limit (10/10 min) e
+     pede ao Supabase uma URL de envio assinada, de uso unico, para
+     `users/<id>/<aleatorio>.gif`;
+  2. o navegador faz PUT nela (por isso o Supabase entrou no `connect-src`);
+  3. `confirmarAvatarAnimadoAction` aceita so esse formato de caminho e da
+     propria pessoa, baixa o objeto e revalida PELOS BYTES com as mesmas
+     regras do envio normal (`validarImagem` em `storage.ts`, agora um so para
+     os dois caminhos). Reprovou: apaga o objeto.
+  PNG/JPEG/WEBP seguem pela action (passam pelo recorte e ficam bem abaixo de
+  2 MB). E a tela agora mostra qualquer falha de envio. Testes:
+  `tests/unit/avatar-gif-direto.test.ts`.
+  - **Nao testado contra o Supabase real** — o `fetch` dos testes e falso. O
+    primeiro GIF de 2-10 MB em producao e o teste; se o PUT voltar 4xx, a
+    mensagem aparece com o status.
+  - **Autorizacao sem confirmacao deixa objeto orfao** no bucket (aba fechada
+    no meio do envio). O rate limit limita o estrago; faxina nao ha, como no
+    avatar antigo.
 - **Banner e badge nao existem.** A estrutura esta pronta — catalogo, resolucao
   por plano e o campo no `PublicUser` sao genericos —, mas nenhum foi
   construido.

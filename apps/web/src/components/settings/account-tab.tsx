@@ -18,6 +18,8 @@ import {
   setNicknameAction,
   updateDisplayNameAction,
   uploadAvatarAction,
+  autorizarAvatarAnimadoAction,
+  confirmarAvatarAnimadoAction,
 } from "@/server/actions/profile";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarDecorado } from "@/components/profile/avatar-decorado";
@@ -198,17 +200,28 @@ export function AccountTab({
 
   function enviarPrevia() {
     if (!previa) return;
-    const formData = new FormData();
-    formData.set("avatar", previa.arquivo);
+    const { arquivo, animado } = previa;
 
     setError(null);
     startTransition(async () => {
-      const result = await uploadAvatarAction(formData);
-      if (result.ok) {
-        setAvatarUrl(result.data.avatarUrl);
-        setPrevia(null);
-      } else {
-        setError(result.error);
+      /*
+       * `try` em volta de TUDO: uma action que falha antes de responder (corpo
+       * acima do limite, rede caiu) REJEITA em vez de devolver `{ ok: false }`.
+       * Sem isto, o GIF grande sumia sem mensagem nenhuma — o defeito que
+       * motivou o envio direto abaixo.
+       */
+      try {
+        const result = animado
+          ? await enviarGifDireto(arquivo)
+          : await uploadAvatarAction(formDataDoAvatar(arquivo));
+        if (result.ok) {
+          setAvatarUrl(result.data.avatarUrl);
+          setPrevia(null);
+        } else {
+          setError(result.error);
+        }
+      } catch {
+        setError("Nao consegui enviar a imagem. Tente de novo.");
       }
     });
   }
@@ -599,4 +612,43 @@ export function AccountTab({
       </div>
     </section>
   );
+}
+
+function formDataDoAvatar(arquivo: File): FormData {
+  const formData = new FormData();
+  formData.set("avatar", arquivo);
+  return formData;
+}
+
+/**
+ * GIF vai DIRETO para o bucket, sem passar pela server action: o corpo de uma
+ * action para em 2 MB (4,5 MB na Vercel), e o GIF vai a 10 MB. O servidor
+ * autoriza (URL assinada, de uso unico), o navegador envia, e o servidor
+ * revalida pelos bytes antes de gravar — ver `confirmarAvatarAnimado`.
+ */
+async function enviarGifDireto(
+  arquivo: File,
+): Promise<{ ok: true; data: { avatarUrl: string } } | { ok: false; error: string }> {
+  const autorizacao = await autorizarAvatarAnimadoAction({
+    tamanho: arquivo.size,
+    tipo: arquivo.type,
+  });
+  if (!autorizacao.ok) return autorizacao;
+
+  const resposta = await fetch(autorizacao.data.urlDeEnvio, {
+    method: "PUT",
+    headers: { "content-type": "image/gif", "x-upsert": "false" },
+    body: arquivo,
+  });
+  if (!resposta.ok) {
+    return {
+      ok: false,
+      error:
+        resposta.status === 413
+          ? "Imagem maior que o permitido"
+          : `O armazenamento recusou o envio (HTTP ${resposta.status})`,
+    };
+  }
+
+  return await confirmarAvatarAnimadoAction(autorizacao.data.caminho);
 }
