@@ -303,6 +303,8 @@ async function main() {
   await push("verify-dm.mjs");
   await push("verify-friends-live.mjs");
   await push("verify-perfil-ao-vivo.mjs");
+  await push("verify-hub.mjs");
+  await push("verify-arvore-aviso.mjs");
   await push("verify-game-activity.mjs");
 
   await push("verify-phase7b.mjs");

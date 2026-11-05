@@ -245,9 +245,25 @@ export async function handleInternalRequest(
       const body = (await readJsonBody(request)) as {
         serverId?: unknown;
         canalExcluidoId?: unknown;
+        soAvisar?: unknown;
       };
       if (typeof body.serverId !== "string") {
         json(response, 400, { ok: false, error: "serverId e obrigatorio" });
+        return true;
+      }
+
+      /**
+       * So o AVISO, sem recalcular salas: a arvore mudou, mas ninguem passou a
+       * ver ou deixou de ver nada (reordenar na mesma categoria). O recalculo
+       * carrega o acesso de cada socket do servidor — caro, e era o que
+       * deixava o arraste de canal lento. Quem chama decide; na duvida, o web
+       * manda sem `soAvisar` e cai no caminho completo abaixo.
+       */
+      if (body.soAvisar === true) {
+        io.to(room.server(body.serverId)).emit("server:changed", {
+          serverId: body.serverId,
+        });
+        json(response, 200, { ok: true });
         return true;
       }
 

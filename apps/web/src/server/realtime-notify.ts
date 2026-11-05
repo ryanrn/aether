@@ -130,6 +130,26 @@ export async function evictFromGateway(params: {
  * Sem isto, quem perdeu VIEW_CHANNEL de um canal continuaria recebendo as
  * mensagens dele ate reconectar.
  */
+/**
+ * So AVISA quem esta no servidor que a arvore de canais mudou — sem recalcular
+ * as salas de ninguem.
+ *
+ * Para mudancas que NAO mexem em quem ve o que: reordenar canal dentro da
+ * mesma categoria. O recalculo completo (`resyncGatewayRooms`) carrega o
+ * acesso de CADA socket do servidor e as permissoes de canal de cada um; era
+ * ele que fazia arrastar um canal levar ~3 s. Na duvida, use o completo.
+ *
+ * Um gateway antigo (sem `soAvisar`) ignora o campo e faz o recalculo
+ * completo — mais lento, mas correto. Por isso a ordem de deploy nao importa.
+ */
+export async function avisarArvoreMudou(params: { serverId: string }): Promise<void> {
+  await callInternal(
+    "/internal/resync-rooms",
+    { ...params, soAvisar: true },
+    "o aviso de arvore alterada",
+  );
+}
+
 export async function resyncGatewayRooms(params: {
   serverId: string;
   /**

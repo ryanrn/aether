@@ -15,6 +15,7 @@ export * from "./dm";
 export * from "./equipe";
 export * from "./flags";
 export * from "./friends";
+export * from "./hub";
 export * from "./member";
 export * from "./moderacao-global";
 export * from "./plan";

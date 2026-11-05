@@ -12,6 +12,7 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
+import { HubSecao, type HubNaTela } from "./hub-secao";
 
 /** De quanto em quanto a tela repergunta a lista (nao ha socket ao vivo aqui). */
 const REFRESH_MS = 20_000;
@@ -20,12 +21,16 @@ export function GruposScreen({
   inicial,
   servidores,
   selfUserId,
+  hubInicial,
 }: {
   inicial: GrupoPorJogo[];
   servidores: { id: string; nome: string }[];
   selfUserId: string;
+  /** `null` = sem hub (flag desligada ou nenhum marcado): a secao nao existe. */
+  hubInicial: HubNaTela | null;
 }) {
   const [grupos, setGrupos] = useState(inicial);
+  const [hub, setHub] = useState(hubInicial);
   const [atualizando, setAtualizando] = useState(false);
   const router = useRouter();
   const { entrar } = useEntrarNaVoz();
@@ -41,7 +46,13 @@ export function GruposScreen({
   const recarregar = useRef(async () => {
     setAtualizando(true);
     const r = await listarGruposAction();
-    if (r.ok) setGrupos(r.data);
+    if (r.ok) {
+      setGrupos(r.data.meus);
+      // O estado de membro/motivo nao muda pelo refresh; so as salas.
+      setHub((atual) =>
+        atual && r.data.hub ? { ...atual, salas: r.data.hub } : r.data.hub ? atual : null,
+      );
+    }
     setAtualizando(false);
   });
 
@@ -81,6 +92,15 @@ export function GruposScreen({
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[720px] flex-col gap-6 px-6 py-6">
+          {hub ? (
+            <HubSecao
+              hub={hub}
+              jogoInicial={meuJogo}
+              jaEmSala={selfVoice?.channelId != null}
+              onAbrir={abrir}
+            />
+          ) : null}
+
           <CriarGrupo
             servidores={servidores}
             jogoInicial={meuJogo}
